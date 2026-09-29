@@ -44,8 +44,9 @@ why its link is broken and the free list head starts at slot 1.
 segment ("I E3140C DIR size = E8"); it loads A5 = 0xE3503C (map "D E3503C
 OLD_DIR") and never uses it, reaching the block absolutely with
 `movea.l #0xe7dc00,A0`.  Any accessor macro built on `__A5_BASE()` is wrong
-inside it - dir_internal.h therefore has `DIR_<X>_OF(blk)` forms plus
-`DIR_$BLOCK_ABS`.
+inside it.  Since source-qiby (2026-09-29) the segment is the MODULE_DATA
+block `DIR_$DATA` (dir/dir_internal.h, field offset = A5 displacement + 8)
+and every routine, DIR_$INIT included, names its fields.
 
 **Original quirk worth not "fixing":** DIR_$CLEANUP's page scan crashes when
 the header's page number *equals* the index it was read at (0x00E53654 `cmp.w

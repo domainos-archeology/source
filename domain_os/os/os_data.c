@@ -109,12 +109,23 @@ _Static_assert(sizeof(BOOT_INFO_TABLE) == 0x188,
  */
 
 /*
- * NULL_PC - 0x00EB07FC.  OS_$INIT stores the address of NULLPROC here
- * (os/sau2/nullproc.s; the map has it as "D E24C60 NULLPROC size = 18").
- * The cell lives in the zero-filled OS_PAGE region, so the image carries no
- * bytes for it and it starts at zero.
+ * NULL_PC (0x00EB07FC) is a field of the STACK segment block below.
  */
-void *NULL_PC = NULL;
+
+/*
+ * ============================================================================
+ * The STACK segment
+ * ============================================================================
+ */
+
+/*
+ * OS_$STACK - map "D EB0000 STACK size = 2C00", 0x00EB0000..0x00EB2BFF
+ * (layout, labels and asserts in os/os.h).  The image carries no bytes for
+ * the segment, so the block is zero-filled; OS_$INIT fills NULL_PC and
+ * clears the interrupt stack, and IO_$USE_INT_STACK writes IO_$SAVED_INT_SR.
+ * Module data block OS_$STACK: Claude Opus 5.5 (source-4k71).
+ */
+MODULE_DATA_DEFINE(os_$stack_t, OS_$STACK, 0x00EB0000);
 
 /*
  * ============================================================================

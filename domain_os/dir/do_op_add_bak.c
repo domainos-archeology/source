@@ -73,7 +73,6 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
                          void *uid_data, uid_t *result_uid, status_$t *status_ret)
 {
     uid_t *backup_uid = (uid_t *)uid_data;
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int32_t bak_name_len;
     char rollback_flag;
     uint32_t local_handle;
@@ -140,10 +139,10 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr, uint16_t name
         int16_t svar = (int16_t)bak_name_len;
         int16_t j = 1;
         do {
-            /* 0x00E50A34 `(0x211f,A5,Dn)` with a 1-based Dn, i.e.
-             * DIR_$BAK_SUFFIX[j - 1]. */
+            /* 0x00E508B4 `lea (0x0,A5,D1w),A0; move.b (0x211f,A0),...` with a 1-based D1: the ".bak"
+             * arm declared from its bias byte. */
             bak_name[(int16_t)(svar - 4 + j)] =
-                (uint8_t)DIR_$BAK_SUFFIX[j - 1];
+                (uint8_t)DIR_$DATA.bak_char[j];
             j++;
             remaining--;
         } while (remaining != -1);

@@ -78,11 +78,10 @@ static void reset_mocks(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 /* The MMU page frame table (0xFFB800 on the target): four bytes per page. */
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base     = test_pft;
 
 
@@ -222,7 +221,7 @@ static void reset_mocks(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(&AST_$AOT, 0, sizeof(AST_$AOT));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));

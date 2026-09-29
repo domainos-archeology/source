@@ -43,7 +43,7 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 /* Records 21..46 of the operation table; only DROP_LINKU's is filled in. */
-dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);   /* DIR_$OP_TAB is its op_tab */
 
 static uint8_t   mock_request[0x400];
 static int16_t   mock_req_size;
@@ -80,7 +80,7 @@ void DIR_$OLD_DROP_LINKU(uid_t *dir_uid, char *name, uint16_t *name_len,
 
 static void reset_mocks(void)
 {
-    memset(DIR_$OP_TAB, 0, sizeof(DIR_$OP_TAB));
+    memset(DIR_$DATA.op_tab, 0, sizeof(DIR_$DATA.op_tab));
     memset(mock_request, 0xCC, sizeof(mock_request));
     mock_do_op_calls = 0;
     mock_old_calls = 0;

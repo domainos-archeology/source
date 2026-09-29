@@ -57,9 +57,8 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 
 static aote_t test_aote;
@@ -127,7 +126,7 @@ void REM_FILE_$PURIFY(uid_t *vol_uid, uid_t *file_uid, uint16_t *flags, int16_t 
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(&s1, 0, sizeof(s1)); memset(&s2, 0, sizeof(s2));
@@ -170,8 +169,8 @@ TEST(local_mark_modified_pass)
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(0, flush_calls);
     ASSERT_EQ(0x0001, test_pft[0x210]);
-    ASSERT_EQ(MMAPE_FLAG2_MODIFIED, test_mmapes[0x210].flags2);
-    ASSERT_EQ(0, test_mmapes[0x211].flags2);
+    ASSERT_EQ(MMAPE_FLAG2_MODIFIED, MMAPE_FOR_VPN(0x210)->flags2);
+    ASSERT_EQ(0, MMAPE_FOR_VPN(0x211)->flags2);
     ASSERT_EQ(1, clock_calls); ASSERT_EQ(1, abs_clock_calls);
     ASSERT_EQ(0x1111, test_aote.dtm_high); ASSERT_EQ(0x1111, test_aote.dta_high);
     ASSERT_EQ(0x3333, test_aote.dtv_high);

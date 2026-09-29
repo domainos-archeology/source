@@ -54,9 +54,8 @@ static int tests_passed = 0;
 MODULE_DATA_DEFINE(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8);
 #define globals_storage NETBUF_$DATA
 
-#define TEST_MMAPE_ENTRIES 512
-static mmape_t mmape_storage[TEST_MMAPE_ENTRIES];
-mmape_t *mmap_mmape_base = mmape_storage;
+
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 
 uint16_t NETBUF_$DELAY_TYPE = 0;
 
@@ -150,7 +149,7 @@ void CRASH_SYSTEM(const status_$t *status)
 static void reset_state(void)
 {
     memset(&globals_storage, 0, sizeof(globals_storage));
-    memset(mmape_storage, 0, sizeof(mmape_storage));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(arena, 0xA5, sizeof(arena));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
@@ -171,11 +170,13 @@ static void reset_state(void)
 }
 
 /* Thread data pages ppn[0..n-1] onto the data free list, head first. */
+/* Data pages are ppns of MMAP_$MMAPE (0x200..0xFFF): the free-list link is
+ * their mmape_t word at +6. */
 static void push_dat_pages(const uint32_t *ppn, int n)
 {
     int i;
     for (i = 0; i < n; i++) {
-        mmape_storage[ppn[i]].prev_vpn = (i + 1 < n) ? (uint16_t)ppn[i + 1] : 0;
+        MMAPE_FOR_VPN(ppn[i])->prev_vpn = (i + 1 < n) ? (uint16_t)ppn[i + 1] : 0;
     }
     globals_storage.dat_top = ppn[0];
     globals_storage.dat_cnt = (uint32_t)n;
@@ -201,23 +202,23 @@ static void push_hdr_buffers(const int *slot, int n)
 
 TEST(get_dat_cond_pops_the_free_list)
 {
-    static const uint32_t pages[3] = { 0x40, 0x17, 0x1FF };
+    static const uint32_t pages[3] = { 0x240, 0x217, 0x3FF };
     uint32_t addr = 0xDEADBEEF;
     reset_state();
     push_dat_pages(pages, 3);
 
     ASSERT_EQ((uint8_t)NETBUF_$GET_DAT_COND(&addr), 0xFF);
-    ASSERT_EQ(addr, 0x40u << 10);
-    ASSERT_EQ(globals_storage.dat_top, 0x17);
+    ASSERT_EQ(addr, 0x240u << 10);
+    ASSERT_EQ(globals_storage.dat_top, 0x217);
     ASSERT_EQ(globals_storage.dat_cnt, 2);
     ASSERT_EQ(lock_calls, 1);
     ASSERT_EQ(unlock_calls, 1);
     ASSERT_EQ(unlock_token_seen, 0x1234);
 
     ASSERT_EQ((uint8_t)NETBUF_$GET_DAT_COND(&addr), 0xFF);
-    ASSERT_EQ(addr, 0x17u << 10);
+    ASSERT_EQ(addr, 0x217u << 10);
     ASSERT_EQ((uint8_t)NETBUF_$GET_DAT_COND(&addr), 0xFF);
-    ASSERT_EQ(addr, 0x1FFu << 10);
+    ASSERT_EQ(addr, 0x3FFu << 10);
     ASSERT_EQ(globals_storage.dat_top, 0);
     ASSERT_EQ(globals_storage.dat_cnt, 0);
 }
@@ -243,12 +244,12 @@ TEST(get_dat_cond_empty_pool_reports_false_and_zero)
 
 TEST(get_dat_takes_from_the_pool_first)
 {
-    static const uint32_t pages[1] = { 0x80 };
+    static const uint32_t pages[1] = { 0x280 };
     uint32_t addr = 0;
     reset_state();
     push_dat_pages(pages, 1);
     CALL_GUARDED(NETBUF_$GET_DAT(&addr));
-    ASSERT_EQ(addr, 0x80u << 10);
+    ASSERT_EQ(addr, 0x280u << 10);
     ASSERT_EQ(calloc_calls, 0);
     ASSERT_EQ(time_wait_calls, 0);
     ASSERT_EQ(globals_storage.dat_allocs, 0);
@@ -270,7 +271,7 @@ TEST(get_dat_non_network_process_wires_a_page)
 
 static void hook_return_dat_page(void)
 {
-    static const uint32_t pages[1] = { 0x77 };
+    static const uint32_t pages[1] = { 0x277 };
     push_dat_pages(pages, 1);
 }
 
@@ -287,7 +288,7 @@ TEST(get_dat_network_process_waits_then_retries)
     ASSERT_EQ(time_wait_type_seen, 0);
     ASSERT_EQ(time_wait_delay_seen == &globals_storage.delay_time, 1);
     ASSERT_EQ(calloc_calls, 0);
-    ASSERT_EQ(addr, 0x77u << 10);
+    ASSERT_EQ(addr, 0x277u << 10);
     ASSERT_EQ(globals_storage.dat_delays, 1);
     ASSERT_EQ(globals_storage.dat_allocs, 0);
 }

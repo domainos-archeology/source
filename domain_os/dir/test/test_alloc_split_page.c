@@ -57,9 +57,6 @@ static int tests_failed = 0;
 /* Mock error string */
 status_$t Naming_bad_request_header_ver_err = 0;
 
-/* Mock DIR_$NAME_OFFSET_TABLE (not directly used by alloc_split_page,
- * but may be referenced via headers) */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = { 0, 4, 16, 20, 12, 0, 0, 0 };
 
 /* CRASH_SYSTEM stub */
 static int crash_called = 0;

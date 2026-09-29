@@ -27,12 +27,13 @@
         .extern FIM_$EXIT
         .extern DI_$Q_HEAD
         .extern IO_$SAVED_OS_SP
+        .extern OS_$STACK
         .extern DAT_00e20606           /* DI in-progress flag */
 
 /*
  * OS stack boundary
  */
-        .set    OS_STACK_LIMIT, 0x00EB2BE8  /* STACK segment (map D EB0000 STACK, 0x18 below INT_STACK_BASE 0xEB2C00), not yet an object: TODO(source-4k71) */
+        .set    OS_STACK_LIMIT, OS_$STACK + 0x2BE8  /* 0xEB2BE8, IO_$USE_INT_STACK's initial SP: the STACK segment block (map D EB0000 STACK size = 2C00; os/os.h), 0x18 below INT_STACK_BASE */
 
 /*
  * PROC1_$INT_ADVANCE - Called after advancing an event count from interrupt

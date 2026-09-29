@@ -3,7 +3,8 @@
  *
  * Tests the directory entry size calculation function.
  * dir_$calc_entry_size is a pure function (aside from the global
- * DIR_$NAME_OFFSET_TABLE lookup), so we mock the table and test directly.
+ * DIR_$NAME_OFFSET_TABLE lookup, a DIR_$DATA field), so the test defines the
+ * block with the image's table and tests directly.
  */
 
 #include <stdio.h>
@@ -32,12 +33,13 @@ static int tests_failed = 0;
     } \
 } while(0)
 
+#include "dir/dir_internal.h"
+
 /*
- * Mock DIR_$NAME_OFFSET_TABLE (normally A5-relative global data on M68K).
- * Indexed by entry type & 7, gives the byte offset from entry start
- * to where the name begins (i.e., the fixed header size for that type).
- *
- * Actual binary values from A5(0xE7DC00)+0x2000 = 0xE7FC00:
+ * DIR_$NAME_OFFSET_TABLE is the DIR block's field at A5+0x2000
+ * (0xE7FC00), DIR_$DATA.name_offset_table; the block carries the image's
+ * words.  Indexed by entry type & 7, it gives the byte offset from entry
+ * start to where the name begins (the fixed header size for that type):
  *   type 0: 0   (unused)
  *   type 1: 4   (internal B-tree pointer: 2 header + 2 child page)
  *   type 2: 16  (file entry: 2 header + 2 reserved + 8 UID + 4 reserved)
@@ -45,13 +47,9 @@ static int tests_failed = 0;
  *   type 4: 12  (soft link: 2 header + 2 link_len + 2 overflow + 6 reserved)
  *   types 5-7: 0 (unused)
  */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = {
-    0, 4, 16, 20, 12, 0, 0, 0,
-};
-
-/* Prevent the real dir_internal.h from being pulled in;
- * we've already provided everything calc_entry_size.c needs. */
-#define DIR_INTERNAL_H
+MODULE_DATA_DEFINE_INIT(dir_$data_t, DIR_$DATA, 0x00E7DBF8, {
+    .name_offset_table = { 0, 4, 16, 20, 12, 0, 0, 0 },
+});
 
 /* Pull in the implementation directly */
 #include "../calc_entry_size.c"

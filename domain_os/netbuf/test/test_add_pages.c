@@ -53,9 +53,8 @@ MODULE_DATA_DEFINE(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8);
 #define globals_storage NETBUF_$DATA
 
 /* The MMAPE table; only the word at entry offset 0x06 is used here. */
-#define TEST_MMAPE_ENTRIES 512
-static mmape_t mmape_storage[TEST_MMAPE_ENTRIES];
-mmape_t *mmap_mmape_base = mmape_storage;
+
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 
 status_$t netbuf_err = 0x00110001;
 uint16_t NETBUF_$DELAY_TYPE = 0;
@@ -166,11 +165,12 @@ static void reset_state(void)
     int i;
 
     memset(&globals_storage, 0, sizeof(globals_storage));
-    memset(mmape_storage, 0, sizeof(mmape_storage));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(arena, 0xA5, sizeof(arena));
 
+    /* page numbers of MMAP_$MMAPE entries (ppn 0x200..0xFFF) */
     for (i = 0; i < NETBUF_MAX_ALLOC; i++) {
-        calloc_pages[i] = (uint32_t)(0x100 + i);
+        calloc_pages[i] = (uint32_t)(0x300 + i);
     }
 
     calloc_calls = 0;
@@ -264,8 +264,8 @@ TEST(header_buffers_are_initialised_and_pushed)
     ADD_PAGES(2, 0);
 
     ASSERT_EQ(2, getva_calls);
-    ASSERT_EQ((0x100u) << 10, getva_pa_seen[0]);
-    ASSERT_EQ((0x101u) << 10, getva_pa_seen[1]);
+    ASSERT_EQ((0x300u) << 10, getva_pa_seen[0]);
+    ASSERT_EQ((0x301u) << 10, getva_pa_seen[1]);
 
     va0 = 1 * NETBUF_HDR_SIZE;
     va1 = 2 * NETBUF_HDR_SIZE;
@@ -278,8 +278,8 @@ TEST(header_buffers_are_initialised_and_pushed)
     ASSERT_EQ(0u, NETBUF_HDR_FIELD(va0, 0x3F8));
 
     /* 0x3FC is the page's physical address */
-    ASSERT_EQ((0x100u) << 10, NETBUF_HDR_PHYS(va0));
-    ASSERT_EQ((0x101u) << 10, NETBUF_HDR_PHYS(va1));
+    ASSERT_EQ((0x300u) << 10, NETBUF_HDR_PHYS(va0));
+    ASSERT_EQ((0x301u) << 10, NETBUF_HDR_PHYS(va1));
 
     /* pushed in order, so the head is the last one */
     ASSERT_EQ(va1, globals_storage.hdr_top);
@@ -348,11 +348,11 @@ TEST(free_list_link_is_at_mmape_offset_6)
     ADD_PAGES(0, 2);
 
     p0 = calloc_pages[0];
-    entry = (const uint8_t *)&mmape_storage[p0];
+    entry = (const uint8_t *)MMAPE_FOR_VPN(p0);
 
     /* the link we wrote must be readable as the big-endian-agnostic field at 6 */
     ASSERT_EQ((uintptr_t)&NETBUF_DAT_NEXT(p0), (uintptr_t)(entry + 6));
-    ASSERT_EQ(0u, mmape_storage[p0].next_vpn);   /* 0x0A untouched */
+    ASSERT_EQ(0u, MMAPE_FOR_VPN(p0)->next_vpn);   /* 0x0A untouched */
 }
 
 /*

@@ -67,8 +67,7 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 int8_t    NETLOG_$OK_TO_LOG;
 int8_t    NETWORK_$REALLY_DISKLESS;
 uid_t     UID_$NIL = { 0, 0 };
@@ -120,7 +119,7 @@ static uint32_t *row(int seg) { return (uint32_t *)PMAP_SEGMAP_ROW(seg); }
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(AST_$AOT.aote, 0, sizeof(AST_$AOT.aote));
     memset(&s1, 0, sizeof(s1)); memset(&s2, 0, sizeof(s2));
     s1.aote = &AST_$AOT.aote[0]; s1.segment = 3; s1.seg_index = 1; s1.fm_block = 0x7770;
@@ -161,9 +160,9 @@ TEST(update_aste_image_and_write)
     r[0] = 0x00001234;                          /* on disk */
     r[1] = 0x00401235;                          /* on disk, bit 22 */
     r[2] = SEGMAP_VALID | 0x300;                /* installed */
-    test_mmapes[0x300].disk_addr = 0x00001236;
+    MMAPE_FOR_VPN(0x300)->disk_addr = 0x00001236;
     r[3] = SEGMAP_VALID | 0x301;
-    test_mmapes[0x301].disk_addr = 0x00401237;
+    MMAPE_FOR_VPN(0x301)->disk_addr = 0x00401237;
     NETLOG_$OK_TO_LOG = -1;
     s1.page_count = 2;
 
@@ -229,7 +228,7 @@ TEST(setup_area_hints_and_extend)
     /* previous entry installed -> MMAPE's address; flags 0x40 -> no TOUCHED */
     reset_state();
     a->attr_flags_hi = 0x10; a->length = 0x100000;
-    r[1] = SEGMAP_VALID | 0x300; test_mmapes[0x300].disk_addr = 0x00C06666;
+    r[1] = SEGMAP_VALID | 0x300; MMAPE_FOR_VPN(0x300)->disk_addr = 0x00C06666;
     ast_$setup_page_read(&s1, &r[2], 2, 1, 0x40, &status);
     ASSERT_EQ(0x006666, alloc_hint);
     ASSERT_EQ(AOTE_FLAG_DIRTY, a->flags);

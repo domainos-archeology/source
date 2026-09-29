@@ -154,7 +154,7 @@ _Static_assert(sizeof(netbuf_globals_t) == 0x338, "netbuf_globals_t must be 0x33
  * + 6 (0x00E0EAA2, 0x00E0EADA, 0x00E0EF64, 0x00E0F086).  It is NOT next_vpn
  * at 0x0A.
  */
-#define NETBUF_DAT_NEXT(ppn) (MMAPE_BASE[(ppn)].prev_vpn)
+#define NETBUF_DAT_NEXT(ppn) (MMAPE_FOR_VPN((ppn))->prev_vpn)
 
 /*
  * Header buffer structure access

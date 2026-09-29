@@ -13,7 +13,7 @@
  * - MMAP global data: 0xE23284
  * - MMAP_$WSL (ws_hdr_t array): 0xE232B0
  * - MMAP_$WSL_HI_MARK (pid-to-wsl map): 0xE23CA6
- * - mmape_t array: 0xEB2800
+ * - mmape_t array MMAP_$MMAPE: 0xEB4800 (ppn 0x200; ppn 0 would be 0xEB2800)
  *
  * Original source was likely Pascal, converted to C.
  */
@@ -40,8 +40,9 @@ struct ws_hdr_t;
 /*
  * Memory Map Page Entry (mmape_t)
  *
- * One entry exists for each physical page. The base address is 0xEB2800
- * and entries are accessed as: mmape_base[vpn] (where each entry is 16 bytes).
+ * One entry exists for each pageable physical page (0x200..0xFFF), in the
+ * table MMAP_$MMAPE at 0xEB4800 (entry for ppn at 0xEB2800 + ppn*16); reach
+ * one with MMAPE_FOR_VPN(ppn).
  *
  * Pages are linked together in doubly-linked lists per working set list.
  */
@@ -388,20 +389,52 @@ MODULE_DATA_DECLARE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 #define MMAP_GLOBALS MMAP_$DATA
 
 /*
- * The MMAP page table is a separate object, not part of the MMAP_ block: the
- * mmape_t array whose element for ppn 0 would be at 0xEB2800 (map MMAP
- * 0xEB4800 in OS_PMAPS is element 0x200 = the first ppn MMAP_$INIT
- * manages).  Still an absolute address on the target and a pointer the host
- * tests set: TODO(source-fyjc) makes it an object declared from its first
- * element, with the bias applied once.  (The PTE spelling at 0xED5000 that
- * used to sit here was unused; that table is PMAP_$SEGMAP, pmap/pmap.h.)
+ * MMAP_$MMAPE - the MMAP page table, one mmape_t per physical page.
+ * Module data block MMAP_$MMAPE: Claude Opus 5.5 (source-fyjc).
+ *
+ * SAU2 map: "D EB4800 OS_PMAPS size = 10000" holds MMAP at 0x00EB4800 and
+ * MMU_$PTTX at 0x00EC2800, so the table is 0x00EB4800..0x00EC27FF, 0xE000
+ * bytes = 0xE00 entries of 0x10.  It is a separate object, not part of the
+ * MMAP_ block.  MMAP_$INIT manages ppn 0x200 (MMAP_$LO_INDX) .. 0xFFF
+ * (MMAP_$HI_INDX), so it is the Pascal array [0x200..0xFFF] of mmape_t and
+ * the compiler folds the lower bound into the displacement: every user
+ * loads the table's own address and reaches entry `ppn' 0x2000 bytes below
+ * it -
+ *   MMAP_$INIT       `movea.l #0xeb4800,A3' / `lea (0x2000,A3),A3' for
+ *                    ppn 0x200 (0x00E319C2-0x00E319CE), then
+ *                    `move.w (-0x2000,A2),D0w' (0x00E319E8, 0x00E31A5C)
+ *   OSINFO_$GET_MMAP `movea.l #0xeb4800,A0' then (-0x1ffb,A0) / (-0x1ffc,A0)
+ *                    (0x00E5C7DE-0x00E5C7FA)
+ *   netbuf           `movea.l #0xeb4800,A0 / lsl.l #0x4,Dn / lea (0,A0,Dn),A1'
+ *                    then (-0x1ffa,A1) (0x00E0EAA2, 0x00E0EADA, ...)
+ * - i.e. entry ppn is at 0xEB2800 + ppn*0x10.  Entry 0 would be 0xEB2800,
+ * inside the STACK segment (OS_$STACK, os/os.h), so the bias cannot be
+ * folded into the block's declaration: like PMAP_SEGMAP_ROW the table is
+ * declared from its first element, ppn 0x200, and MMAPE_FOR_VPN(ppn)
+ * applies the bias once.
+ *
+ * The image carries no bytes for OS_PMAPS (the memory probe and MMAP_$INIT
+ * fill it at boot), so the block is zero-filled.  OS_$INIT frees the pages
+ * of the table that hold no real page by VA (`movea.l #0xeb4800,A3' +
+ * (i-1)*0x400, 0x00E340AA-0x00E340C8) and MMAP_$INIT translates them with
+ * MMU_$VTOP, so the type is page (0x400) aligned as the image's 0xEB4800 is.
  */
-#if defined(ARCH_M68K)
-#define MMAPE_BASE ((mmape_t *)0xEB2800)
-#else
-extern mmape_t *mmap_mmape_base;
-#define MMAPE_BASE mmap_mmape_base
-#endif
+#define MMAP_MMAPE_FIRST_PPN    0x200   /* MMAP_$LO_INDX, the Pascal lower bound */
+#define MMAP_MMAPE_LAST_PPN     0xFFF   /* MMAP_$HI_INDX */
+#define MMAP_MMAPE_COUNT        (MMAP_MMAPE_LAST_PPN - MMAP_MMAPE_FIRST_PPN + 1)
+#define MMAP_$MMAPE_SIZE        0xE000  /* MMAP 0xEB4800 .. MMU_$PTTX 0xEC2800 */
+
+typedef struct __attribute__((aligned(0x400))) mmap_$mmape_table_t {
+    mmape_t entry[MMAP_MMAPE_COUNT];    /* entry[0] = ppn 0x200 */
+} mmap_$mmape_table_t;
+
+_Static_assert(sizeof(mmape_t) == 0x10, "mmape_t stride 0x10 (lsl.l #0x4)");
+_Static_assert(sizeof(mmap_$mmape_table_t) == MMAP_$MMAPE_SIZE,
+               "MMAP: 0xEB4800..MMU_$PTTX 0xEC2800 in OS_PMAPS");
+_Static_assert(MMAP_MMAPE_FIRST_PPN * sizeof(mmape_t) == 0x2000,
+               "the bias: (-0x2000,An) off 0xEB4800 is ppn 0's entry");
+
+MODULE_DATA_DECLARE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 
 /*
  * Every separately named cell of the block, as an accessor over the one
@@ -468,8 +501,16 @@ extern mmape_t *mmap_mmape_base;
 #define MMAP_$WSL_DIRTY_RMT_CNT    (MMAP_WSL[MMAP_WSL_POOL_DIRTY_RMT].page_count)
 #define MMAP_$WSL_WIRED_CNT        (MMAP_WSL[MMAP_WSL_POOL_WIRED].page_count)
 
-/* Get mmape entry for a virtual page number */
-#define MMAPE_FOR_VPN(vpn) (&MMAPE_BASE[(vpn)])
+/*
+ * MMAPE_FOR_VPN(ppn) - the mmape_t of physical page `ppn' (0x200..0xFFF),
+ * the image's 0xEB2800 + ppn*0x10: the table's Pascal lower bound applied
+ * once (see MMAP_$MMAPE above).  The name is the tree's; the index is a
+ * physical page number, taken as a signed 32-bit value so a ppn below 0x200
+ * forms the address the image would (the image's 32-bit arithmetic) rather
+ * than wrapping on a 64-bit host.
+ */
+#define MMAPE_FOR_VPN(ppn) \
+    (&MMAP_$MMAPE.entry[(int32_t)(ppn) - MMAP_MMAPE_FIRST_PPN])
 
 /* Get WSL header for a WSL index */
 #define WSL_FOR_INDEX(idx) (&MMAP_WSL[(idx)])

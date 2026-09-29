@@ -24,7 +24,7 @@ uint16_t dir_$calc_entry_size(uint8_t *entry) {
     uint8_t entry_type = entry[0] & 7;
 
     /* Start with name length (byte 1) plus type-dependent header size */
-    int16_t size = DIR_$NAME_OFFSET_TABLE[entry_type] + (uint16_t)entry[1];
+    int16_t size = DIR_$DATA.name_offset_table[entry_type] + (uint16_t)entry[1];
 
     /* For soft link entries with inline data (overflow_page == -1),
      * add the link data length stored at offset 2 */

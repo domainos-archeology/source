@@ -5,12 +5,14 @@
  * needed, then verify that entries are correctly written to page buffers.
  */
 
+#define uid_t posix_uid_t   /* the system's uid_t; the kernel's is base/base.h's */
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <setjmp.h>
+#undef uid_t
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -41,26 +43,21 @@ static int tests_failed = 0;
     } \
 } while(0)
 
+#include "dir/dir_internal.h"
+
 /*
- * Mock DIR_$NAME_OFFSET_TABLE
- *
- * Actual binary values from A5(0xE7DC00)+0x2000 = 0xE7FC00:
- *   type 0: 0   (unused)
- *   type 1: 4   (internal B-tree pointer: 2 header + 2 child page)
- *   type 2: 16  (file entry: 2 header + 2 reserved + 8 UID + 4 reserved)
- *   type 3: 20  (hard link: 2 header + 2 reserved + 8 UID + 4 extra + 4 reserved)
- *   type 4: 12  (soft link: 2 header + 2 link_len + 2 overflow + 6 reserved)
- *   types 5-7: 0 (unused)
+ * The DIR block with the image's DIR_$NAME_OFFSET_TABLE (A5+0x2000 =
+ * 0xE7FC00, DIR_$DATA.name_offset_table): 0, 4, 16, 20, 12, 0, 0, 0 -
+ * type 1 internal B-tree pointer, 2 file, 3 hard link, 4 soft link.
  */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = {
-    0, 4, 16, 20, 12, 0, 0, 0,
-};
+MODULE_DATA_DEFINE_INIT(dir_$data_t, DIR_$DATA, 0x00E7DBF8, {
+    .name_offset_table = { 0, 4, 16, 20, 12, 0, 0, 0 },
+});
 
 /* CRASH_SYSTEM stub - records that it was called, then longjmps out.
  * In the real system CRASH_SYSTEM never returns; we simulate that with longjmp. */
 static int crash_called = 0;
 static jmp_buf crash_jmpbuf;
-typedef uint32_t status_$t;
 
 /* Mock error status cell (declared status_$t in dir/dir_internal.h) */
 status_$t Naming_bad_request_header_ver_err = 0;
@@ -91,41 +88,6 @@ void dir_$copy_name_cross_page(uint32_t handle, int16_t src_page,
     cross_page_dest_offset = dest_offset;
     cross_page_byte_count = byte_count;
 }
-
-/* Minimal uid_t - avoid conflict with system uid_t */
-#define uid_t dir_uid_t
-typedef struct { uint32_t high; uint32_t low; } dir_uid_t;
-
-/* Minimal dir_insert_ctx_t - enough fields for testing */
-typedef struct {
-    uint32_t    handle;
-    void       *name;
-    uint16_t    name_len;
-    uint16_t    entry_type;
-    uint32_t    extra_val;
-    uid_t      *uid;
-    uint16_t    link_len;
-    void       *link_data;
-    int16_t     overflow_page;
-    int16_t     max_depth;
-    int16_t     path_page[9];
-    int16_t     path_entry[9];
-    uint32_t    dir_uid_high;
-    uint32_t    dir_uid_low;
-    int16_t     split_pages[16];
-    int16_t     page_count;
-    uint8_t    *page_data;
-    uint8_t    *idx_base;
-    uint8_t    *new_page;
-    uint8_t    *inter_page;
-    uint8_t    *temp_entry;
-    int16_t     free_space;
-    uint8_t     fim_data[16];
-    uint8_t     remove_uid[8];
-} dir_insert_ctx_t;
-
-/* Prevent real headers from being included */
-#define DIR_INTERNAL_H
 
 /* Pull in the implementation */
 #include "../write_entry_to_page.c"

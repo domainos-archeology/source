@@ -64,16 +64,15 @@ static int test_failed_flag = 0;
 /* Backing storage for the AST/MMAP/MMU tables the function walks. */
 #define TEST_N_SEGS   4
 #define TEST_N_PAGES  32
-#define TEST_N_FRAMES 64
+#define TEST_N_FRAMES 0x1000  /* the PFT is indexed by ppn, up to 0xFFF */
 
 /* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 
 
@@ -118,7 +117,7 @@ static void reset_mocks(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(&AST_$AOT, 0, sizeof(AST_$AOT));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     AST_$WS_FLT_CNT = 0;
@@ -137,7 +136,7 @@ static void reset_mocks(void)
     mock_install_count = 0xFFFF;
     mock_alloc_calls = 0;
     mock_alloc_arg = 0;
-    mock_alloc_ppn = 7;
+    mock_alloc_ppn = 0x207;
     mock_alloc_result = 1;
     mock_zero_page_calls = 0;
     mock_zero_page_ppn = 0;
@@ -293,18 +292,18 @@ TEST(installed_page_reclaims_and_returns_early)
     reset_mocks();
     memset(ppn_array, 0xEE, sizeof(ppn_array));
 
-    /* SEGMAP_VALID plus PPN 5 in the low word. */
-    *seg_entry(0) = 0x40000000u | 5u;
+    /* SEGMAP_VALID plus PPN 0x205 in the low word. */
+    *seg_entry(0) = 0x40000000u | 0x205u;
 
     AST_$TOUCH_AREA(TEST_AREA, TEST_SEG, 0, 0x20, ppn_array, &st);
 
     CHECK_EQ(status_$ok, st);
     /* 0x00E035DC: the PPN is zero-extended from the segment map's low word. */
-    CHECK_EQ(5, ppn_array[0]);
+    CHECK_EQ(0x205, ppn_array[0]);
     /* 0x00E035C0 "bset.b #5" sets 0x20 in the entry's most significant byte. */
-    CHECK_EQ(0x60000005u, *seg_entry(0));
+    CHECK_EQ(0x60000205u, *seg_entry(0));
     /* 0x00E035CA: PFT_BASE[ppn] low word gains 0x2000. */
-    CHECK_EQ(0x2000u, test_pft[5] & 0xFFFFu);
+    CHECK_EQ(0x2000u, test_pft[0x205] & 0xFFFFu);
     /* 0x00E03600 MMAP_$RECLAIM(ppn_array, 1, 0) */
     CHECK_EQ(1, mock_reclaim_calls);
     CHECK_EQ(1, mock_reclaim_count);
@@ -331,14 +330,14 @@ TEST(installed_run_stops_after_one_page)
     reset_mocks();
     memset(ppn_array, 0xEE, sizeof(ppn_array));
 
-    *seg_entry(0) = 0x40000000u | 5u;
-    *seg_entry(1) = 0x40000000u | 6u;
+    *seg_entry(0) = 0x40000000u | 0x205u;
+    *seg_entry(1) = 0x40000000u | 0x206u;
 
     AST_$TOUCH_AREA(TEST_AREA, TEST_SEG, 0, 0x20, ppn_array, &st);
 
     CHECK_EQ(1, mock_reclaim_count);
     /* The second entry is left completely untouched. */
-    CHECK_EQ(0x40000006u, *seg_entry(1));
+    CHECK_EQ(0x40000206u, *seg_entry(1));
     CHECK_EQ(0xEEEEEEEEu, ppn_array[1]);
 }
 
@@ -352,7 +351,7 @@ TEST(waits_while_first_page_is_in_transition)
     status_$t st = -1;
 
     reset_mocks();
-    *seg_entry(0) = 0x80000000u | 0x40000000u | 5u;
+    *seg_entry(0) = 0x80000000u | 0x40000000u | 0x205u;
     mock_wait_target = seg_entry(0);
     mock_wait_clear_after = 3;
 
@@ -372,7 +371,7 @@ TEST(unbacked_page_is_zero_filled_and_installed)
     status_$t st = -1;
 
     reset_mocks();
-    mock_alloc_ppn = 7;
+    mock_alloc_ppn = 0x207;
     *seg_entry(0) = 0;              /* not valid, no disk address */
 
     AST_$TOUCH_AREA(TEST_AREA, TEST_SEG, 0, 0x20, ppn_array, &st);
@@ -381,18 +380,18 @@ TEST(unbacked_page_is_zero_filled_and_installed)
     /* 0x00E03624: the allocate request is the longword 0x00010001. */
     CHECK_EQ(0x10001u, mock_alloc_arg);
     CHECK_EQ(1, mock_zero_page_calls);
-    CHECK_EQ(7, mock_zero_page_ppn);
+    CHECK_EQ(0x207, mock_zero_page_ppn);
 
     /* 0x00E03942-0x00E03952: the frame's MMAPE is reset and re-flagged. */
-    CHECK_EQ(0, test_mmapes[7].wire_count);
-    CHECK_EQ(MMAPE_FLAG1_IMPURE, test_mmapes[7].flags1);
-    CHECK_EQ(MMAPE_FLAG2_ON_DISK, test_mmapes[7].flags2);
-    CHECK_EQ(0, test_mmapes[7].seg_offset);      /* page + i - 1 == 0 */
-    CHECK_EQ(TEST_SEG, test_mmapes[7].segment);
+    CHECK_EQ(0, MMAPE_FOR_VPN(0x207)->wire_count);
+    CHECK_EQ(MMAPE_FLAG1_IMPURE, MMAPE_FOR_VPN(0x207)->flags1);
+    CHECK_EQ(MMAPE_FLAG2_ON_DISK, MMAPE_FOR_VPN(0x207)->flags2);
+    CHECK_EQ(0, MMAPE_FOR_VPN(0x207)->seg_offset);      /* page + i - 1 == 0 */
+    CHECK_EQ(TEST_SEG, MMAPE_FOR_VPN(0x207)->segment);
 
     /* 0x00E03974-0x00E0399C: PPN planted, referenced+valid set, in-trans off */
-    CHECK_EQ(0x60000007u, *seg_entry(0));
-    CHECK_EQ(0x2000u, test_pft[7] & 0xFFFFu);
+    CHECK_EQ(0x60000207u, *seg_entry(0));
+    CHECK_EQ(0x2000u, test_pft[0x207] & 0xFFFFu);
 
     /* 0x00E039B2 MMAP_$INSTALL_LIST(ppn_array, 1, 0) */
     CHECK_EQ(1, mock_install_calls);
@@ -419,8 +418,8 @@ TEST(installing_a_frame_still_in_a_wsl_crashes)
     status_$t st = -1;
 
     reset_mocks();
-    mock_alloc_ppn = 9;
-    test_mmapes[9].flags1 = MMAPE_FLAG1_IN_WSL;
+    mock_alloc_ppn = 0x209;
+    MMAPE_FOR_VPN(0x209)->flags1 = MMAPE_FLAG1_IN_WSL;
     *seg_entry(0) = 0;
 
     AST_$TOUCH_AREA(TEST_AREA, TEST_SEG, 0, 0x20, ppn_array, &st);

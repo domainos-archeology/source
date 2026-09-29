@@ -39,9 +39,8 @@ static int tests_failed = 0;
 } while (0)
 
 /* module data */
-static mmape_t mmape_store[0x1000];
 static uint32_t pft_store[0x1000];
-mmape_t *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t *mmu_pft_base = pft_store;
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 status_$t status_$t_00e13a14 = 0x00050003;
@@ -101,7 +100,7 @@ static uint32_t segmap[32];
 
 static void reset(void)
 {
-    memset(mmape_store, 0, sizeof mmape_store);
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(pft_store, 0, sizeof pft_store);
     memset(segmap, 0, sizeof segmap);
     memset(&the_aste, 0, sizeof the_aste);
@@ -114,11 +113,15 @@ static void reset(void)
     PMAP_$DATA.shutting_down_flag = 0;
 }
 
-/* page index i holds vpn, pageable, seg_offset matching */
+/* page index i holds vpn, pageable, seg_offset matching.  MMAP_$MMAPE has
+ * entries only for ppn 0x200..0xFFF, so a non-pageable vpn below that gets
+ * no MMAPE (PMAP_$FLUSH never reads one for it). */
 static void map(int i, uint32_t vpn, uint32_t extra)
 {
     segmap[i] = PMAP_SEGMAP_L_VALID | vpn | extra;
-    mmape_store[vpn].seg_offset = (uint8_t)i;
+    if (vpn >= MMAP_MMAPE_FIRST_PPN) {
+        MMAPE_FOR_VPN(vpn)->seg_offset = (uint8_t)i;
+    }
 }
 
 TEST(local_modified_page_is_batched)
@@ -158,7 +161,7 @@ TEST(bit11_page_is_written_directly)
     reset();
     the_aste.flags = 0x0800;
     map(0, 0x400, 0);
-    mmape_store[0x400].flags2 = 0x40;         /* dirty via flags2, PFT clean */
+    MMAPE_FOR_VPN(0x400)->flags2 = 0x40;         /* dirty via flags2, PFT clean */
     r = PMAP_$FLUSH(&the_aste, segmap, 0, 1, 0, &st);
     ASSERT_EQ(1, r);
     ASSERT_EQ(1, writes);
@@ -166,7 +169,7 @@ TEST(bit11_page_is_written_directly)
     ASSERT_EQ(0xFF, (uint8_t)last_write_sync);
     ASSERT_EQ(1, updates);            /* after the write only (0x00E1392A) */
     ASSERT_EQ(0, batches);
-    ASSERT_EQ(0, mmape_store[0x400].flags2);
+    ASSERT_EQ(0, MMAPE_FOR_VPN(0x400)->flags2);
     ASSERT_EQ(0, waits);              /* wrote_direct -> no wait; loop ends? */
     ASSERT_EQ(0, clock_calls);        /* PFT bit never set: not any_modified */
 }
@@ -212,7 +215,7 @@ TEST(wired_page_fails_after_flushing_batch)
     map(0, 0x400, 0);
     pft_store[0x400] = PFT_FLAG_MODIFIED;
     map(1, 0x401, 0);
-    mmape_store[0x401].wire_count = 1;
+    MMAPE_FOR_VPN(0x401)->wire_count = 1;
     (void)PMAP_$FLUSH(&the_aste, segmap, 0, 2, 0, &st);
     ASSERT_EQ(status_$pmap_pages_wired, st);
     ASSERT_EQ(1, batches);
@@ -247,7 +250,7 @@ TEST(seg_offset_mismatch_crashes)
     status_$t st = 0;
     reset();
     map(2, 0x400, 0);
-    mmape_store[0x400].seg_offset = 7;
+    MMAPE_FOR_VPN(0x400)->seg_offset = 7;
     if (setjmp(crash_jmp) == 0) {
         (void)PMAP_$FLUSH(&the_aste, segmap, 2, 1, 0, &st);
         ASSERT_EQ(1, 0);

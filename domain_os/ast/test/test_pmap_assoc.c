@@ -53,9 +53,8 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 
 static aote_t test_aote;
@@ -84,7 +83,7 @@ static uint32_t *row1(void) { return (uint32_t *)PMAP_SEGMAP_ROW(1); }
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(&test_aste, 0, sizeof(test_aste));
@@ -101,21 +100,21 @@ TEST(replace_installed_page)
     status_$t status = 0x55;
 
     row[3] = SEGMAP_VALID | SEGMAP_WIRED | 0x0300;
-    test_mmapes[0x300].disk_addr = 0x00001111;
+    MMAPE_FOR_VPN(0x300)->disk_addr = 0x00001111;
     test_pft[0x400] = 0x0000FFFF;
 
     AST_$PMAP_ASSOC(&test_aste, 3, 0x400, 0, 0, &status);
 
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, remove_calls); ASSERT_EQ(0x300, remove_ppn);
-    ASSERT_EQ(1, free_calls); ASSERT_EQ((uintptr_t)&test_mmapes[0x300], (uintptr_t)free_page);
+    ASSERT_EQ(1, free_calls); ASSERT_EQ((uintptr_t)MMAPE_FOR_VPN(0x300), (uintptr_t)free_page);
     ASSERT_EQ(0x300, free_vpn);
     /* new MMAPE */
-    ASSERT_EQ(1, test_mmapes[0x400].segment);
-    ASSERT_EQ(MMAPE_FLAG1_IMPURE, test_mmapes[0x400].flags1);
-    ASSERT_EQ(3, test_mmapes[0x400].seg_offset);
-    ASSERT_EQ(MMAPE_FLAG2_MODIFIED, test_mmapes[0x400].flags2);
-    ASSERT_EQ(0x1111, test_mmapes[0x400].disk_addr);   /* the old page's address */
+    ASSERT_EQ(1, MMAPE_FOR_VPN(0x400)->segment);
+    ASSERT_EQ(MMAPE_FLAG1_IMPURE, MMAPE_FOR_VPN(0x400)->flags1);
+    ASSERT_EQ(3, MMAPE_FOR_VPN(0x400)->seg_offset);
+    ASSERT_EQ(MMAPE_FLAG2_MODIFIED, MMAPE_FOR_VPN(0x400)->flags2);
+    ASSERT_EQ(0x1111, MMAPE_FOR_VPN(0x400)->disk_addr);   /* the old page's address */
     ASSERT_EQ(1, install_calls); ASSERT_EQ(0x400, install_vpn);
     ASSERT_EQ(1, install_count); ASSERT_EQ(0, install_wired);
     /* entry: low word, bits 30 and 29; the disk addr survives in bits 22..16 only if set */
@@ -131,7 +130,7 @@ TEST(wired_mmape_refuses)
     status_$t status = 0;
 
     row[0] = SEGMAP_VALID | 0x0300;
-    test_mmapes[0x300].wire_count = 1;
+    MMAPE_FOR_VPN(0x300)->wire_count = 1;
 
     AST_$PMAP_ASSOC(&test_aste, 0, 0x400, 0, 0, &status);
 
@@ -177,12 +176,12 @@ TEST(on_disk_entry_keeps_address)
     status_$t status = 0;
 
     row[2] = 0x00012345;
-    test_mmapes[0x400].wire_count = 2;      /* wired: no INSTALL_LIST */
+    MMAPE_FOR_VPN(0x400)->wire_count = 2;      /* wired: no INSTALL_LIST */
 
     AST_$PMAP_ASSOC(&test_aste, 2, 0x400, 0, 0, &status);
 
     ASSERT_EQ(status_$ok, status);
-    ASSERT_EQ(0x12345, test_mmapes[0x400].disk_addr);
+    ASSERT_EQ(0x12345, MMAPE_FOR_VPN(0x400)->disk_addr);
     ASSERT_EQ(0, install_calls);
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x00010400u, row[2]);
 }

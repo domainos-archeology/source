@@ -33,7 +33,7 @@ void DIR_$CLEANUP(void)
      * D2 is the `moveq #0x1f,D2` + `dbf` counter (32 slots), D3 the slot
      * number, and the frame cells (-0x2c,A6) and (-0x30,A6) are two copies of
      * the same A5-based cursor that the image advances by 0x3C per slot; they
-     * are written here as an index into DIR_$HANDLE_TAB.
+     * are written here as an index into DIR_$DATA.handle_tab.
      *
      * D5 and D6 are loaded with 0xE1737C (&UID_$NIL) and 0xE20608
      * (&PROC1_$CURRENT) at 0x00E5358A-0x00E53596 and then never used - both
@@ -52,11 +52,11 @@ void DIR_$CLEANUP(void)
          * this process.  `btst.l D3,D0` on the longword bitmap, then
          * `cmp.w (0x00e20608).l,D1w` against PROC1_$CURRENT.
          */
-        if ((DIR_$HANDLE_IN_USE & (1u << (slot & 0x1F))) != 0 &&
-            DIR_$HANDLE_TAB[slot].owner == (int16_t)PROC1_$CURRENT) {
+        if ((DIR_$DATA.handle_in_use & (1u << (slot & 0x1F))) != 0 &&
+            DIR_$DATA.handle_tab[slot].owner == (int16_t)PROC1_$CURRENT) {
 
             /* 0x00E535BE-0x00E535C6: A1 = &handle, cached in (-0x1c,A6). */
-            dir_$handle_t *h = &DIR_$HANDLE_TAB[slot];
+            dir_$handle_t *h = &DIR_$DATA.handle_tab[slot];
 
             /* 0x00E535CA: tst.b (0xe,A1) / bpl - Domain boolean. */
             if (h->split_busy < 0) {
@@ -204,8 +204,8 @@ void DIR_$CLEANUP(void)
      * 0x00E51B14-0x00E51B22 (`cmp.w (0x2040,A5)` / `clr.w (0x2040,A5)` /
      * ML_$EXCLUSION_STOP with 0xE2C1D8).
      */
-    if ((int16_t)PROC1_$CURRENT == DIR_$LINK_BUF_OWNER) {
-        DIR_$LINK_BUF_OWNER = 0;
+    if ((int16_t)PROC1_$CURRENT == DIR_$DATA.link_buf_owner) {
+        DIR_$DATA.link_buf_owner = 0;
         ML_$EXCLUSION_STOP(&DIR_$LINK_BUF_MUTEX);
     }
 

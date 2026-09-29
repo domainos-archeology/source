@@ -194,8 +194,6 @@ IMAGE_ALIASES = {
     # proc1/proc1_data.c: the crash status reached by `pea (0x3f8,PC)' at
     # 0x00E209EE
     'Bad_atomic_operation_err': 0x00E20DE8,
-    # io/io_data.c
-    'IO_$SAVED_INT_SR': 0x00EB2BF8,
 }
 
 # Sections whose module base register points at a different object in our

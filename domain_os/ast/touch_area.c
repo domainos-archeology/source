@@ -336,7 +336,7 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
          * when pages_done == 0, but MMAP_$INSTALL_LIST is still called. */
         for (i = 1; i <= pages_done; i++) {
             uint32_t vpn = *ppn_out++;
-            mmape_t *m = &MMAPE_BASE[vpn];
+            mmape_t *m = MMAPE_FOR_VPN(vpn);
             uint16_t ppn;
 
             if ((int8_t)m->flags1 < 0) {                   /* 0x00E03930 */

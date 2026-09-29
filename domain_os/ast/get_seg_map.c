@@ -255,7 +255,7 @@ void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset, uint32_t location,
                 if (flags & 1) {
                     present = -1;
                 } else {
-                    mmape = &MMAPE_BASE[*entry & 0xFFFF];
+                    mmape = MMAPE_FOR_VPN(*entry & 0xFFFF);
                     /* bit 6 of the high word of disk_addr = bit 22 */
                     if ((mmape->disk_addr & 0x00400000u) == 0) {
                         present = -1;

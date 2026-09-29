@@ -16,8 +16,9 @@
  * `lea (0xe7dc00).l,A5` at 0x00E4D508, so A5 = 0xE7DC00, the DIR module
  * data base.  The two A5-relative words this routine reads are therefore
  * 0xE7FCAA (A5+0x20AA) and 0xE7FCAE (A5+0x20AE) - the record+0 / record+4
- * pair of the GET_ENTRYU (op 0x44) entry in the DIR operation parameter
- * table, NOT DIR_$OP_TAB (0xE7FC42), which belongs to a different opcode.
+ * pair of the GET_ENTRYU (op 0x44 >> 1 = 0x22) record of DIR_$OP_TAB,
+ * record 0x22 - 21 = 13 of the table at 0xE7FC42 (image 0x0000 / 0x0002):
+ * DIR_$OP_REC(DIR_OP_GET_ENTRYU_OP >> 1).version / .base_size.
  *
  * Original address: 0x00E4D460
  * Original size: 160 bytes
@@ -51,7 +52,7 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
      *   +0x8E  name length      move.w (A0),(-0x12a,A6)    0x00E4D472
      *   +0x90  name bytes       move.b ...,(-0x129,A0)     0x00E4D488
      * DIR_$DO_OP adds 0x8E to req_size (0x00E4C110), so the wire length is
-     * 0x8E + name_len + DIR_$GET_ENTRYU_REQ_LEN = 0x90 + name_len, exactly
+     * 0x8E + name_len + base_size (2) = 0x90 + name_len, exactly
      * through the end of the name.
      */
     dir_$do_op_request_t request;
@@ -93,7 +94,7 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
     request.op = DIR_OP_GET_ENTRYU_OP;
     request.uid.high = local_uid->high;
     request.uid.low = local_uid->low;
-    request.version = DIR_$GET_ENTRYU_REQ_PARM;
+    request.version = DIR_$OP_REC(DIR_OP_GET_ENTRYU_OP >> 1).version; /* (0x20aa,A5) */
 
     /*
      * Send the request.  Argument order and the two constants are taken
@@ -104,7 +105,9 @@ void DIR_$GET_ENTRYU_FUN_00e4d460(uid_t *local_uid, char *name,
      *   (0x20ae,A5) + (-0x12a,A6)             -> req_size
      *   pea (-0x1b8,A6)                       -> request
      */
-    DIR_$DO_OP(&request, (int16_t)(name_len + DIR_$GET_ENTRYU_REQ_LEN), 0x22,
+    DIR_$DO_OP(&request,
+               (int16_t)(name_len + DIR_$OP_REC(DIR_OP_GET_ENTRYU_OP >> 1).base_size),
+               0x22,
                &response, &do_op_rcvd_len);
 
     *status_ret = response.status;

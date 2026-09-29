@@ -185,7 +185,7 @@ top:
 
         /* 0x00E03B5A..0x00E03C38: dbf over got - 1, skipped when got == 0 */
         for (i = 0; i < (int16_t)got; i++) {
-            mmape = &MMAPE_BASE[new_ppns[i]];
+            mmape = MMAPE_FOR_VPN(new_ppns[i]);
             temp_va = ARCH_PTR_TO_VA(AST_$ZERO_BUFF);       /* 0xFF8C00 */
 
             /* 0x00E03B84..0x00E03B94: tst.b (-0x1ffb,A2) = flags1 bit 7 */
@@ -374,7 +374,7 @@ top:
     /* 0x00E03E80..0x00E03F08: install the pages that arrived; dbf over
      * got - 1, skipped when got == 0 */
     for (i = 0; i < (int16_t)got; i++) {
-        mmape = &MMAPE_BASE[new_ppns[i]];
+        mmape = MMAPE_FOR_VPN(new_ppns[i]);
         if ((int8_t)mmape->flags1 < 0) {
             CRASH_SYSTEM(&mmap_$bad_install_00e03544);
         }

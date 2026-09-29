@@ -41,10 +41,12 @@ static int tests_failed = 0;
 
 /* Module data */
 #define TEST_PAGES 64
-static mmape_t  mmape_store[TEST_PAGES];
-static uint32_t pft_store[TEST_PAGES];
+static uint32_t pft_store[0x1000];   /* the PFT is indexed by ppn, up to 0xFFF */
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
+/* The table holds ppn 0x200..0xFFF (mmap/mmap.h), so the test's page n is
+ * ppn VP(n). */
+#define VP(n) (MMAP_MMAPE_FIRST_PPN + (n))
 uint32_t *mmu_pft_base    = pft_store;
 uint16_t PROC1_$CURRENT;
 
@@ -82,7 +84,7 @@ static void build_list(uint16_t pool, const uint16_t *v, int n)
 
 static void reset_module(void)
 {
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     trim_calls = 0;
     PROC1_$CURRENT = 3;
@@ -92,9 +94,9 @@ static void reset_module(void)
 
 TEST(takes_from_pure_then_impure_not_free)
 {
-    static const uint16_t free_v[] = { 1, 2, 3, 4, 5 };
-    static const uint16_t pure_v[] = { 10, 11 };
-    static const uint16_t impure_v[] = { 20, 21, 22 };
+    static const uint16_t free_v[] = { VP(1), VP(2), VP(3), VP(4), VP(5) };
+    static const uint16_t pure_v[] = { VP(10), VP(11) };
+    static const uint16_t impure_v[] = { VP(20), VP(21), VP(22) };
     uint32_t out[8] = { 0 };
     uint16_t got;
 
@@ -106,14 +108,14 @@ TEST(takes_from_pure_then_impure_not_free)
     got = MMAP_$ALLOC_PURE(out, 4);
 
     ASSERT_EQ(4, got);
-    ASSERT_EQ(10, out[0]);
-    ASSERT_EQ(11, out[1]);
-    ASSERT_EQ(20, out[2]);
-    ASSERT_EQ(21, out[3]);
+    ASSERT_EQ(VP(10), out[0]);
+    ASSERT_EQ(VP(11), out[1]);
+    ASSERT_EQ(VP(20), out[2]);
+    ASSERT_EQ(VP(21), out[3]);
     ASSERT_EQ(5, MMAP_$WSL[MMAP_WSL_POOL_FREE].page_count);   /* untouched */
     ASSERT_EQ(0, MMAP_$WSL[MMAP_WSL_POOL_PURE].page_count);
     ASSERT_EQ(1, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
-    ASSERT_EQ(22, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].head_vpn);
+    ASSERT_EQ(VP(22), MMAP_$WSL[MMAP_WSL_POOL_IMPURE].head_vpn);
     ASSERT_EQ(1, MMAP_$ALLOC_CNT);
     ASSERT_EQ(4, MMAP_$ALLOC_PAGES);
     ASSERT_EQ(0, MMAP_$STEAL_CNT);

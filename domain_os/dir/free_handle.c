@@ -18,7 +18,6 @@
 
 void DIR_$FREE_HANDLE(void *handle)
 {
-    char          *blk = DIR_$BLOCK;
     dir_$handle_t *h = (dir_$handle_t *)handle;     /* A2 */
     uint16_t       slot_idx;                        /* D1 */
 
@@ -26,13 +25,13 @@ void DIR_$FREE_HANDLE(void *handle)
 
     /* 0x00E4B998-0x00E4B9A2 */
     slot_idx = h->slot_index;
-    DIR_HANDLE_IN_USE_OF(blk) &= ~(1u << ((uint32_t)slot_idx & 0x1F));
+    DIR_$DATA.handle_in_use &= ~(1u << ((uint32_t)slot_idx & 0x1F));
 
     /* 0x00E4B9A6-0x00E4B9B0: slot 0 is the reserve slot, which is never
      * chained on the free list. */
     if (slot_idx != 0) {
-        h->next = DIR_HANDLE_FREE_OF(blk);
-        DIR_HANDLE_FREE_OF(blk) = ARCH_PTR_TO_VA(h);
+        h->next = DIR_$DATA.handle_free;
+        DIR_$DATA.handle_free = ARCH_PTR_TO_VA(h);
     }
 
     EC_$ADVANCE(&DIR_$WT_FOR_HDNL_EC);              /* 0x00E4B9B4 */

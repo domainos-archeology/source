@@ -18,16 +18,18 @@ Classes (the ones the step's bead defines):
 
 | class | meaning | allowed | guards |
 |---|---|---|---|
-| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 154 |
+| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 153 |
 | b | host fallback body of a routine that is hand-written assembly on the target (`<subsystem>/sau2/*.s`) | yes | 35 |
 | c | `.text.<symbol>` section-attribute macro for the target's link order | yes | 5 |
 | d | hardware register access | only in `arch/` or a per-SAU header | 0 (see below) |
-| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 5 exempt |
+| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 2 exempt |
 | f | anything else (decided per guard below) | yes | 5 |
 
-204 guards in all (213 at source-702z; source-gmxj converted the eleven
+200 guards in all (213 at source-702z; source-gmxj converted the eleven
 AST_ guards and added two assert guards for the AST_$DATA / AST_$AOT
-blocks).  At 2e17a86 there were 255: the first scan found 53 with a
+blocks; source-qiby, source-fyjc and source-4k71 converted the DIR, MMAP
+page table and STACK guards and dropped dir/dir_data.c's `DIR_$OP_TAB`
+assert guard, the table being a DIR_$DATA field asserted unconditionally).  At 2e17a86 there were 255: the first scan found 53 with a
 forbidden form (11 absolute-address macros, 29 with externs, 13 with object
 definitions) and the macro-expanding scan four more (cal/cal.h, time/time.h,
 dir/dir_internal.h, volx/volx_internal.h).
@@ -66,14 +68,13 @@ code touching a SAU2 register defines the `SAU2_` name itself.
 
 `check_guards.py` keeps these in its `EXEMPT` table, keyed by file and a
 name the guard defines; an entry that no longer matches a forbidden guard
-fails the check, so the table shrinks as the beads land.
+fails the check, so the table shrinks as the beads land.  source-qiby
+(`DIR_$DATA`), source-fyjc (`MMAP_$MMAPE`) and source-4k71 (`OS_$STACK`)
+landed on 2026-09-29; the MMU guards remain.
 
 | bead | guards | what |
 |---|---|---|
-| source-qiby | dir/dir_internal.h | `DIR_$BLOCK_BASE`, the DIR segment at A5 = 0xE7DC00 |
-| source-fyjc | mmap/mmap.h | `MMAPE_BASE`, the MMAP page table in OS_PMAPS |
 | source-o56c | mmu/mmu.h, mmu/mmu_data.c | the MMU_ASM cells the mmu/sau2 assembly owns, `MMU_$PTTX`, and the MMU register page |
-| source-4k71 | os/os_internal.h | `INT_STACK_BASE`, the STACK segment shared with io/sau2 and proc1/sau2 |
 
 ## Class f, decided
 
@@ -107,7 +108,7 @@ fails the check, so the table shrinks as the beads land.
 | ast/ast.h:466 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$subject_t` |
 | ast/ast.h:641 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$data_t` (the AST_ block, source-gmxj) |
 | ast/ast.h:766 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aste_t`, `aote_t`, `ast_$aot_t` (the AST_AOT block, source-gmxj) |
-| ast/ast.h:1050 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$acl_attr_t` |
+| ast/ast.h:1051 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$acl_attr_t` |
 | audit/audit_internal.h:159 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_hash_node_t` |
 | audit/audit_internal.h:202 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_event_record_t` |
 | audit/audit_internal.h:332 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_data_t` |
@@ -115,13 +116,11 @@ fails the check, so the table shrinks as the beads land.
 | chksum/get_chksum.c:32 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `CHKSUM_$GET_CHKSUM` |
 | di/di.h:40 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `di_queue_elem_t` |
 | dir/dir.h:694 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_$old_entry_t` |
-| dir/dir_data.c:137 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `DIR_$OP_TAB` |
 | dir/dir_internal.h:110 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `Dir_$OpResponse` |
 | dir/dir_internal.h:514 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_page_hdr_t` |
 | dir/dir_internal.h:542 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_$page_path_t` |
 | dir/dir_internal.h:670 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_$op_tab_entry_t` |
-| dir/dir_internal.h:1810 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `DIR_$BLOCK_BASE`... - source-qiby |
-| dir/dir_internal.h:2401 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_$rep_entry_t` |
+| dir/dir_internal.h:2448 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dir_$rep_entry_t` |
 | disk/disk.h:290 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `disk_$volume_t` |
 | disk/disk.h:364 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `disk_device_entry_t` |
 | disk/disk.h:410 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `disk_jump_table_t` |
@@ -144,9 +143,9 @@ fails the check, so the table shrinks as the beads land.
 | fim/fim.h:355 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `fim_$wired_data_t` |
 | fim/fim.h:942 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `fim_fault_desc_t` |
 | flp/flp.h:170 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `flp_data_t` |
-| io/io.h:52 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dcte_t` |
-| io/io.h:113 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `io_int_ctrl_t` |
-| io/io_data.c:68 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `IO_$INT_CTRL` |
+| io/io.h:53 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `dcte_t` |
+| io/io.h:114 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `io_int_ctrl_t` |
+| io/io_data.c:61 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `IO_$INT_CTRL` |
 | kbd/kbd_data.c:33 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `MNK_$KTT_PTRS` |
 | kbd/kbd_data.c:73 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `DAT_00e2ddec` |
 | kbd/kbd_data.c:96 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `DAT_00e2ddfc` |
@@ -163,10 +162,9 @@ fails the check, so the table shrinks as the beads land.
 | misc/crash_system.h:85 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `crash_report_t` |
 | misc/crash_system.h:97 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `crash_report_t` |
 | ml/ml.h:89 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ml_$lock_event_t` |
-| mmap/mmap.h:62 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `mmape_t` |
-| mmap/mmap.h:104 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ws_hdr_t` |
-| mmap/mmap.h:114 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ws_hdr_t`, `mmape_t` |
-| mmap/mmap.h:399 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `MMAPE_BASE`... - source-fyjc |
+| mmap/mmap.h:63 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `mmape_t` |
+| mmap/mmap.h:105 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ws_hdr_t` |
+| mmap/mmap.h:115 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ws_hdr_t`, `mmape_t` |
 | mmap/mmap_internal.h:64 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aste_t` |
 | mmu/cache_inhibit_va.c:13 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$CACHE_INHIBIT_VA` |
 | mmu/clr_used.c:21 | `#if !defined(ARCH_M68K)` | b | host fallback body of hand-written sau2 assembly: `MMU_$CLR_USED` |
@@ -199,7 +197,6 @@ fails the check, so the table shrinks as the beads land.
 | network/network.h:311 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `network_$page_request_t` |
 | os/init.c:203 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `boot_params_t` |
 | os/init.c:244 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `os_$init_vtoce_t`, `vtoc_$lookup_req_t` |
-| os/os_internal.h:88 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `INT_STACK_BASE`... - source-4k71 |
 | osinfo/osinfo.h:141 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `osinfo_global_info_t` |
 | pacct/pacct_internal.h:49 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `pacct_state_t` |
 | pbu/pbu.h:53 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `pbu_ec_entry_t` |

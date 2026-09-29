@@ -38,10 +38,12 @@ static int tests_failed = 0;
 } while (0)
 
 #define TEST_PAGES 64
-static mmape_t  mmape_store[TEST_PAGES];
-static uint32_t pft_store[TEST_PAGES];
+static uint32_t pft_store[0x1000];   /* the PFT is indexed by ppn, up to 0xFFF */
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
+/* The table holds ppn 0x200..0xFFF (mmap/mmap.h), so the test's page n is
+ * ppn VP(n). */
+#define VP(n) (MMAP_MMAPE_FIRST_PPN + (n))
 uint32_t *mmu_pft_base    = pft_store;
 
 static int lock_calls, unlock_calls, crash_calls;
@@ -86,20 +88,20 @@ static void build_list(uint16_t pool, const uint16_t *v, int n)
 
 static void reset_module(void)
 {
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     lock_calls = unlock_calls = crash_calls = 0;
 }
 
 TEST(two_pages_into_empty_free_pool)
 {
-    static const uint16_t ws[] = { 10, 11 };
-    uint32_t arr[2] = { 10, 11 };
+    static const uint16_t ws[] = { VP(10), VP(11) };
+    uint32_t arr[2] = { VP(10), VP(11) };
 
     reset_module();
     build_list(7, ws, 2);
-    MMAPE_FOR_VPN(10)->flags2 = 0xFF;
-    MMAPE_FOR_VPN(10)->priority = 0xFF;
+    MMAPE_FOR_VPN(VP(10))->flags2 = 0xFF;
+    MMAPE_FOR_VPN(VP(10))->priority = 0xFF;
 
     MMAP_$FREE_PAGES(3, arr, 2);
 
@@ -108,22 +110,22 @@ TEST(two_pages_into_empty_free_pool)
     ASSERT_EQ(0, crash_calls);
     ASSERT_EQ(0, MMAP_$WSL[7].page_count);
     ASSERT_EQ(2, MMAP_$WSL[0].page_count);
-    ASSERT_EQ(10, MMAP_$WSL[0].head_vpn);
-    ASSERT_EQ(11, MMAPE_FOR_VPN(10)->next_vpn);
-    ASSERT_EQ(11, MMAPE_FOR_VPN(10)->prev_vpn);   /* next in array */
-    ASSERT_EQ(10, MMAPE_FOR_VPN(11)->prev_vpn);   /* final splice */
-    ASSERT_EQ(10, MMAPE_FOR_VPN(11)->next_vpn);   /* prev in array */
-    ASSERT_EQ(0, MMAPE_FOR_VPN(10)->wsl_index);
-    ASSERT_EQ(0, MMAPE_FOR_VPN(11)->wsl_index);
-    ASSERT_EQ(0x3F, MMAPE_FOR_VPN(10)->flags2);   /* andi.w #0xFF3F: low byte */
-    ASSERT_EQ(0xFF, MMAPE_FOR_VPN(10)->priority); /* high byte untouched */
+    ASSERT_EQ(VP(10), MMAP_$WSL[0].head_vpn);
+    ASSERT_EQ(VP(11), MMAPE_FOR_VPN(VP(10))->next_vpn);
+    ASSERT_EQ(VP(11), MMAPE_FOR_VPN(VP(10))->prev_vpn);   /* next in array */
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(11))->prev_vpn);   /* final splice */
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(11))->next_vpn);   /* prev in array */
+    ASSERT_EQ(0, MMAPE_FOR_VPN(VP(10))->wsl_index);
+    ASSERT_EQ(0, MMAPE_FOR_VPN(VP(11))->wsl_index);
+    ASSERT_EQ(0x3F, MMAPE_FOR_VPN(VP(10))->flags2);   /* andi.w #0xFF3F: low byte */
+    ASSERT_EQ(0xFF, MMAPE_FOR_VPN(VP(10))->priority); /* high byte untouched */
 }
 
 TEST(single_page_into_populated_free_pool)
 {
-    static const uint16_t ws[] = { 10 };
-    static const uint16_t fp[] = { 20 };
-    uint32_t arr[1] = { 10 };
+    static const uint16_t ws[] = { VP(10) };
+    static const uint16_t fp[] = { VP(20) };
+    uint32_t arr[1] = { VP(10) };
 
     reset_module();
     build_list(7, ws, 1);
@@ -132,21 +134,21 @@ TEST(single_page_into_populated_free_pool)
     MMAP_$FREE_PAGES(3, arr, 1);
 
     ASSERT_EQ(2, MMAP_$WSL[0].page_count);
-    ASSERT_EQ(20, MMAP_$WSL[0].head_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(20)->next_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(20)->prev_vpn);
-    ASSERT_EQ(20, MMAPE_FOR_VPN(10)->next_vpn);
-    ASSERT_EQ(20, MMAPE_FOR_VPN(10)->prev_vpn);
+    ASSERT_EQ(VP(20), MMAP_$WSL[0].head_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(20))->next_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(20))->prev_vpn);
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(10))->next_vpn);
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(10))->prev_vpn);
     /* the source list lost its only page */
     ASSERT_EQ(0, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(10, MMAP_$WSL[7].head_vpn);   /* head = page->prev_vpn (self) */
+    ASSERT_EQ(VP(10), MMAP_$WSL[7].head_vpn);   /* head = page->prev_vpn (self) */
 }
 
 TEST(count_zero_still_locks_and_splices)
 {
-    static const uint16_t fp[] = { 20 };
+    static const uint16_t fp[] = { VP(20) };
     /* arr[0] plays the "vpn_array[-1]" slot the image reads for `last' */
-    uint32_t arr[2] = { 30, 31 };
+    uint32_t arr[2] = { VP(30), VP(31) };
 
     reset_module();
     build_list(0, fp, 1);
@@ -156,20 +158,20 @@ TEST(count_zero_still_locks_and_splices)
     ASSERT_EQ(1, lock_calls);
     ASSERT_EQ(1, unlock_calls);
     ASSERT_EQ(1, MMAP_$WSL[0].page_count);
-    ASSERT_EQ(30, MMAPE_FOR_VPN(20)->next_vpn);   /* head.next = last */
-    ASSERT_EQ(31, MMAPE_FOR_VPN(20)->prev_vpn);   /* tail(=head).prev = first */
-    ASSERT_EQ(20, MMAPE_FOR_VPN(31)->next_vpn);   /* first.next = tail */
-    ASSERT_EQ(20, MMAPE_FOR_VPN(30)->prev_vpn);   /* last.prev = head */
+    ASSERT_EQ(VP(30), MMAPE_FOR_VPN(VP(20))->next_vpn);   /* head.next = last */
+    ASSERT_EQ(VP(31), MMAPE_FOR_VPN(VP(20))->prev_vpn);   /* tail(=head).prev = first */
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(31))->next_vpn);   /* first.next = tail */
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(30))->prev_vpn);   /* last.prev = head */
 }
 
 TEST(page_not_in_wsl_crashes)
 {
-    static const uint16_t ws[] = { 10 };
-    uint32_t arr[1] = { 10 };
+    static const uint16_t ws[] = { VP(10) };
+    uint32_t arr[1] = { VP(10) };
 
     reset_module();
     build_list(7, ws, 1);
-    MMAPE_FOR_VPN(10)->flags1 = 0;
+    MMAPE_FOR_VPN(VP(10))->flags1 = 0;
 
     MMAP_$FREE_PAGES(3, arr, 1);
 

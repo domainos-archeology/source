@@ -82,7 +82,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
 
 /* 0x00E7FCFE is DIR_$OP_TAB[23].base_size (dir_internal.h), so the table
  * itself is what has to exist here (bead source-wk2f). */
-dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);   /* DIR_$OP_TAB is its op_tab */
 
 #include "../resolve.c"
 

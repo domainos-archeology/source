@@ -30,7 +30,6 @@
 
 void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
 {
-    char              *blk = DIR_$BLOCK;    /* the caller's A5 */
     dir_$handle_t     *h = (dir_$handle_t *)handle;   /* A3 */
     dir_$lock_entry_t *lock_entry;                    /* A2 */
     boolean            is_server;           /* D3 */
@@ -61,8 +60,8 @@ void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
     count = DIR_SLOT_COUNT - 1;
     do {
         if (i <= (int16_t)(DIR_SLOT_COUNT - 1) &&
-            (DIR_LOCK_IN_USE_OF(blk) & (1u << ((uint32_t)i & 0x1F))) != 0) {
-            dir_$lock_entry_t *slot = &DIR_LOCK_TAB_OF(blk)[i];
+            (DIR_$DATA.lock_in_use & (1u << ((uint32_t)i & 0x1F))) != 0) {
+            dir_$lock_entry_t *slot = &DIR_$DATA.lock_tab[i];
 
             /* 0x00E4B008-0x00E4B00E: `cmpm.l` over the two UID longwords. */
             if (slot->u.uid.high == h->uid.high &&
@@ -81,7 +80,7 @@ void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
     }
 
     /* 0x00E4B02A-0x00E4B05E: take the head of the free list. */
-    h->lock_entry = DIR_LOCK_FREE_OF(blk);
+    h->lock_entry = DIR_$DATA.lock_free;
     if (h->lock_entry == 0) {
         CRASH_SYSTEM(&Naming_bad_request_header_ver_err);   /* 0x00E4B032 */
     }
@@ -89,10 +88,10 @@ void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
     lock_entry = (dir_$lock_entry_t *)ARCH_VA_TO_PTR(h->lock_entry);
 
     /* 0x00E4B042-0x00E4B04A: mark the slot busy in the bitmap. */
-    DIR_LOCK_IN_USE_OF(blk) |= 1u << ((uint32_t)lock_entry->index & 0x1F);
+    DIR_$DATA.lock_in_use |= 1u << ((uint32_t)lock_entry->index & 0x1F);
 
     /* 0x00E4B04E: unlink it - `next` and `uid` alias, so read it first. */
-    DIR_LOCK_FREE_OF(blk) = lock_entry->u.next;
+    DIR_$DATA.lock_free = lock_entry->u.next;
 
     /* 0x00E4B052-0x00E4B058: the UID overwrites the free-list link. */
     lock_entry->u.uid.high = h->uid.high;
@@ -170,16 +169,16 @@ found:
 
         /* 0x00E4B10A-0x00E4B114: the two wait counters. */
         if (retry_count > 2) {
-            DIR_LK_WAIT_2_OF(blk) += 1;
+            DIR_$DATA.lk_wait_2 += 1;
         }
-        DIR_LK_WAITS_OF(blk) += 1;
+        DIR_$DATA.lk_waits += 1;
 
         /*
          * 0x00E4B118-0x00E4B13C: a naming-server helper whose per-process
          * flags word has bit 1 set waits only 8 ticks.
          */
         if (is_server < 0 &&
-            (DIR_PROC_FLAGS_OF(blk, PROC1_$CURRENT) &
+            (DIR_$DATA.proc_flags[PROC1_$CURRENT] &
              DIR_PROC_FLAG_SHORT_LOCK_WAIT) != 0) {
             timeout = DIR_LOCK_WAIT_TICKS_SHORT;
         } else {
@@ -229,7 +228,7 @@ found:
             if (wake_idx == 0) {
                 /* 0x00E4B1D8-0x00E4B1DC: index 0 is the TIME_$CLOCKH
                  * eventcount, i.e. the wait timed out. */
-                DIR_LK_TIMEOUTS_OF(blk) += 1;
+                DIR_$DATA.lk_timeouts += 1;
                 break;
             }
         }
@@ -246,11 +245,11 @@ found:
         if (lock_entry->lock_count == 0 && lock_entry->waiters == 0) {
             /* 0x00E4B1FE / 0x00E4B202: push it back on the free list.  The
              * link overwrites the first UID longword. */
-            lock_entry->u.next = DIR_LOCK_FREE_OF(blk);
-            DIR_LOCK_FREE_OF(blk) = h->lock_entry;
+            lock_entry->u.next = DIR_$DATA.lock_free;
+            DIR_$DATA.lock_free = h->lock_entry;
 
             /* 0x00E4B208-0x00E4B212 */
-            DIR_LOCK_IN_USE_OF(blk) &=
+            DIR_$DATA.lock_in_use &=
                 ~(1u << ((uint32_t)lock_entry->index & 0x1F));
 
             h->lock_entry = 0;  /* 0x00E4B216 */

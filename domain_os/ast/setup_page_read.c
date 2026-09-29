@@ -67,7 +67,7 @@ void ast_$setup_page_read(aste_t *aste, uint32_t *segmap, uint16_t start_page,
             if ((prev & 0x3FFFFF) == 0) {
                 hint = aste->fm_block >> 4;
             } else if (prev & SEGMAP_VALID) {
-                hint = MMAPE_BASE[prev & 0xFFFF].disk_addr & 0x3FFFFF;
+                hint = MMAPE_FOR_VPN(prev & 0xFFFF)->disk_addr & 0x3FFFFF;
             } else {
                 hint = prev & 0x3FFFFF;
             }

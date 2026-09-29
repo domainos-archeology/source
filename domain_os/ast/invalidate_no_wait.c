@@ -101,7 +101,7 @@ void ast_$invalidate_no_wait(uint32_t end_page, aote_t *aote,
                         /* 0x00E0658A..0x00E065C0: wsl_index 3..4 and
                          * unwired -> impure transfer */
                         ppn = *entry & 0xFFFF;
-                        mmape = &MMAPE_BASE[ppn];
+                        mmape = MMAPE_FOR_VPN(ppn);
                         if (mmape->wsl_index >= 3 && mmape->wsl_index <= 4 &&
                             mmape->wire_count == 0) {
                             MMAP_$IMPURE_TRANSFER(mmape, ppn);

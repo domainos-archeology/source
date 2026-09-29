@@ -48,12 +48,6 @@
 #define PROC1_STACK_HIGH_START  0x00D50000
 
 /*
- * OS stack base address
- * Base address for system/kernel stacks
- */
-#define PROC1_OS_STACK_BASE     0x00EB2000
-
-/*
  * Stack page size and minimum large stack threshold
  */
 #define PROC1_STACK_PAGE_SIZE   0x0400      /* 1KB pages */

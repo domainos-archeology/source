@@ -9,7 +9,7 @@
  * The routine's own A5 is 0x00E3503C (`lea (0xe3503c).l,A5` at 0x00E31414,
  * the map's "D E3503C OLD_DIR size = 4"); it is loaded and never used.  The
  * DIR module block is reached absolutely with `movea.l #0xe7dc00,A0` at
- * 0x00E3141A, i.e. through DIR_$BLOCK_ABS here.
+ * 0x00E3141A - the block DIR_$DATA, as everywhere else.
  *
  * It clears the two in-use bitmaps, then in one 32-iteration loop numbers and
  * chains both tables - dir_$lock_entry_t[32] at A5+0x1680 and
@@ -18,7 +18,7 @@
  * publishes the two list heads, initialises the two mutexes and the
  * wait-for-handle event counter, and calls DIR_$OLD_INIT.
  *
- * Note the image never touches A5+0x2040 (DIR_$LINK_BUF_OWNER); it is zero in
+ * Note the image never touches A5+0x2040 (DIR_$DATA.link_buf_owner); it is zero in
  * the image and only DIR_$CLEANUP and dir_$do_op_cname write it.
  */
 
@@ -26,17 +26,16 @@
 
 void DIR_$INIT(void)
 {
-    char *blk = DIR_$BLOCK_ABS;     /* 0x00E3141A: movea.l #0xe7dc00,A0 */
 
     int16_t  count;                 /* D2: `moveq #0x1f,D2` + dbf        */
     uint16_t i;                     /* D3: slot number                   */
 
-    dir_$lock_entry_t *lock_tab   = DIR_LOCK_TAB_OF(blk);
-    dir_$handle_t     *handle_tab = DIR_HANDLE_TAB_OF(blk);
+    dir_$lock_entry_t *lock_tab   = DIR_$DATA.lock_tab;
+    dir_$handle_t     *handle_tab = DIR_$DATA.handle_tab;
 
     /* 0x00E31420 / 0x00E31424: both bitmaps are cleared as longwords. */
-    DIR_HANDLE_IN_USE_OF(blk) = 0;
-    DIR_LOCK_IN_USE_OF(blk)   = 0;
+    DIR_$DATA.handle_in_use = 0;
+    DIR_$DATA.lock_in_use   = 0;
 
     /*
      * 0x00E3144C-0x00E31494.  The image keeps three cursors that step by
@@ -77,8 +76,8 @@ void DIR_$INIT(void)
     handle_tab[0].next                  = 0;        /* clr.l (0x18b0,A0) */
 
     /* 0x00E314AA/0x00E314B2: the two free-list heads. */
-    DIR_LOCK_FREE_OF(blk)   = ARCH_PTR_TO_VA(&lock_tab[0]);   /* 0x00E7F280 */
-    DIR_HANDLE_FREE_OF(blk) = ARCH_PTR_TO_VA(&handle_tab[1]); /* 0x00E7F4BC */
+    DIR_$DATA.lock_free   = ARCH_PTR_TO_VA(&lock_tab[0]);   /* 0x00E7F280 */
+    DIR_$DATA.handle_free = ARCH_PTR_TO_VA(&handle_tab[1]); /* 0x00E7F4BC */
 
     /* 0x00E314BA: 0xE2C1F0 */
     ML_$EXCLUSION_INIT(&DIR_$MUTEX);

@@ -242,7 +242,7 @@ mark_modified:
                     pft = PFT_FOR_PPN((uint16_t)(*ent & 0xFFFF));
                     if (*pft & PFT_FLAG_MODIFIED) {
                         *pft &= ~(uint32_t)PFT_FLAG_MODIFIED;
-                        mmape = &MMAPE_BASE[*ent & 0xFFFF];
+                        mmape = MMAPE_FOR_VPN(*ent & 0xFFFF);
                         mmape->flags2 |= MMAPE_FLAG2_MODIFIED;  /* bset.b #6,+0x09 */
                         any_modified = -1;
                     }

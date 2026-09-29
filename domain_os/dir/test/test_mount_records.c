@@ -44,7 +44,7 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 /* Records 21..46 of the operation table. */
-dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);   /* DIR_$OP_TAB is its op_tab */
 
 /* 0x00E245A4, the node ID DIR_$ADD_MOUNT stores at request+0x96. */
 uint32_t NODE_$ME;
@@ -86,7 +86,7 @@ void DIR_$OLD_FIX_DIR(uid_t *dir_uid, status_$t *status_ret)
 
 static void reset_mocks(void)
 {
-    memset(DIR_$OP_TAB, 0, sizeof(DIR_$OP_TAB));
+    memset(DIR_$DATA.op_tab, 0, sizeof(DIR_$DATA.op_tab));
     memset(mock_request, 0xCC, sizeof(mock_request));
     mock_do_op_calls = 0;
     mock_req_size = 0;

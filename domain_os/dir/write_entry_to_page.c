@@ -168,7 +168,7 @@ void dir_$write_entry_to_page(dir_insert_ctx_t *ctx, uint8_t flag,
 name_copy:
     /* Common path: copy entry name to appropriate offset */
     {
-        int16_t name_offset = DIR_$NAME_OFFSET_TABLE[entry[0] & 7];
+        int16_t name_offset = DIR_$DATA.name_offset_table[entry[0] & 7];
         uint8_t *name_dest = entry + (int32_t)name_offset;
 
         if (src_name_loc == 0) {

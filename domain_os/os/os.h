@@ -195,4 +195,93 @@ extern void OS_TERM_INIT(uint32_t *term_state, uint32_t *parent_desc,
  */
 extern void OS_$DATA_COPY(const void *src, void *dst, uint32_t len);
 
+/*
+ * ============================================================================
+ * The STACK segment - OS_$STACK
+ * ============================================================================
+ *
+ * Module data block OS_$STACK: Claude Opus 5.5 (source-4k71).
+ *
+ * SAU2 map: "D EB0000 STACK size = 2C00" (loader segment "D64 EB0000 PAGE",
+ * the start of OS_PAGE), 0x00EB0000..0x00EB2BFF, with the symbols
+ *
+ *   EB0000 NULL_STACK_GUARD / OS_PAGE   EB0800 P1_STACK_GUARD
+ *   EB07F4 NULL_STACK                   EB2000 INT_STACK_GUARD / P1_STACK_BASE
+ *   EB07FC NULL_PC                      EB2C00 INT_STACK_BASE (the next
+ *                                              segment, VTOC_CACHE, starts
+ *                                              there: the block's end)
+ *
+ * The image carries no bytes for it (Ghidra cannot read 0xEB0000..0xEB2BFF),
+ * so the block is zero-filled.  What the code does with it:
+ *
+ *   - OS_$INIT frees the three guard pages by VA: `move.l #0xeb0000` /
+ *     `#0xeb0800` / `#0xeb2000,-(SP)` + `jsr os_$free_va_page` at
+ *     0x00E3406C / 0x00E3407A / 0x00E34088.  Pages are 0x400 bytes, so the
+ *     block must start on a page boundary for those three VAs to name its
+ *     own pages: the type is aligned to 0x400 (the image's 0xEB0000 is).
+ *   - OS_$INIT zeroes the 0x400 bytes below INT_STACK_BASE:
+ *     `movea.l #0xeb2c00,A0` / `clr.b -(A0)` x 0x400 (0x00E34096-0x00E340A2).
+ *   - OS_$INIT stores NULLPROC's address in NULL_PC:
+ *     `move.l #0xe24c60,(0x00eb07fc).l` at 0x00E33CE6.
+ *   - PROC1_$INIT gives process 1 the stack whose top is P1_STACK_BASE:
+ *     `move.l #0xeb2000,(0x734,A0)` at 0x00E2F976 (PROC1_$DATA.os_stack_base[1]).
+ *   - IO_$USE_INT_STACK (io/sau2/use_int_stack.s) switches SP to 0xEB2BE8,
+ *     0x18 below INT_STACK_BASE (`movea.l #0xeb2be8,SP` at 0x00E2E83E), after
+ *     saving the interrupted SR at 0xEB2BF8 (`move.w (0x10,SP),(0x00eb2bf8).l`
+ *     at 0x00E2E830); PROC1_$INT_ADVANCE / PROC1_$INT_EXIT
+ *     (proc1/sau2/int_handler.s) compare SP with 0xEB2BE8 to tell whether an
+ *     interrupt came in on the interrupt stack.  Both reach the block through
+ *     `.set NAME, OS_$STACK + off` aliases.
+ *
+ * Page layout (1 KB pages): +0x0000 guard, +0x0400 null process stack,
+ * +0x0800 guard, +0x0C00..+0x2000 process 1 stack, +0x2000 guard,
+ * +0x2400..+0x2C00 interrupt stack.  Every field is pointer-free (NULL_PC
+ * holds a VA), so the asserts are unconditional.
+ */
+#define OS_$STACK_SIZE          0x2C00  /* map: STACK size = 2C00 */
+#define OS_$STACK_INT_SP_OFF    0x2BE8  /* IO_$USE_INT_STACK's initial SP */
+
+typedef struct __attribute__((aligned(0x400))) os_$stack_t {
+    uint8_t  null_stack_guard[0x400];   /* +0x0000 NULL_STACK_GUARD, freed  */
+    uint8_t  null_stack_area[0x3F4];    /* +0x0400                          */
+    uint8_t  null_stack[8];             /* +0x07F4 NULL_STACK               */
+    uint32_t null_pc;                   /* +0x07FC NULL_PC: VA of NULLPROC  */
+    uint8_t  p1_stack_guard[0x400];     /* +0x0800 P1_STACK_GUARD, freed    */
+    uint8_t  p1_stack[0x1400];          /* +0x0C00 .. P1_STACK_BASE +0x2000 */
+    uint8_t  int_stack_guard[0x400];    /* +0x2000 INT_STACK_GUARD, freed   */
+    uint8_t  int_stack[0x7E8];          /* +0x2400 .. initial SP +0x2BE8    */
+    uint8_t  int_stack_top[0x10];       /* +0x2BE8                          */
+    uint16_t saved_int_sr;              /* +0x2BF8 IO_$SAVED_INT_SR         */
+    uint8_t  _2bfa[6];                  /* +0x2BFA .. INT_STACK_BASE +0x2C00 */
+} os_$stack_t;
+
+_Static_assert(__builtin_offsetof(os_$stack_t, null_stack) == 0x07F4,
+               "NULL_STACK 0xEB07F4");
+_Static_assert(__builtin_offsetof(os_$stack_t, null_pc) == 0x07FC,
+               "NULL_PC 0xEB07FC (move.l #0xe24c60,(0x00eb07fc).l)");
+_Static_assert(__builtin_offsetof(os_$stack_t, p1_stack_guard) == 0x0800,
+               "P1_STACK_GUARD 0xEB0800");
+_Static_assert(__builtin_offsetof(os_$stack_t, int_stack_guard) == 0x2000,
+               "INT_STACK_GUARD / P1_STACK_BASE 0xEB2000");
+_Static_assert(__builtin_offsetof(os_$stack_t, int_stack_top) == OS_$STACK_INT_SP_OFF,
+               "interrupt stack initial SP 0xEB2BE8 (movea.l #0xeb2be8,SP)");
+_Static_assert(__builtin_offsetof(os_$stack_t, saved_int_sr) == 0x2BF8,
+               "IO_$SAVED_INT_SR 0xEB2BF8");
+_Static_assert(sizeof(os_$stack_t) == OS_$STACK_SIZE,
+               "STACK: 0xEB0000..INT_STACK_BASE 0xEB2C00");
+
+MODULE_DATA_DECLARE(os_$stack_t, OS_$STACK, 0x00EB0000);
+
+/*
+ * The map's labels, as addresses in the block.  INT_STACK_BASE is the
+ * block's end (the first byte past the interrupt stack); P1_STACK_BASE is the
+ * top of process 1's stack, i.e. the INT_STACK_GUARD page.
+ */
+#define NULL_STACK_GUARD ((char *)OS_$STACK.null_stack_guard)
+#define P1_STACK_GUARD   ((char *)OS_$STACK.p1_stack_guard)
+#define INT_STACK_GUARD  ((char *)OS_$STACK.int_stack_guard)
+#define P1_STACK_BASE    ((char *)OS_$STACK.int_stack_guard)
+#define INT_STACK_BASE   ((char *)&OS_$STACK + OS_$STACK_SIZE)
+#define NULL_PC          (OS_$STACK.null_pc)
+
 #endif /* OS_H */

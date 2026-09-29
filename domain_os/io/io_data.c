@@ -5,7 +5,7 @@
  *
  * Original M68K addresses:
  *   IO_$SAVED_OS_SP:    0x00E2E822 (4 bytes, void pointer)
- *   IO_$SAVED_INT_SR:   0x00EB2BF8 (2 bytes, uint16)
+ *   IO_$SAVED_INT_SR:   0x00EB2BF8 (2 bytes, uint16) - OS_$STACK field
  */
 
 #include "io/io_internal.h"
@@ -29,16 +29,9 @@
 void *IO_$SAVED_OS_SP = NULL;
 
 /*
- * IO_$SAVED_INT_SR - Saved status register from interrupted context
- *
- * When switching to the interrupt stack, the SR value from the
- * interrupted exception frame is saved here so it can be examined
- * during interrupt exit processing (e.g., to determine the interrupted
- * interrupt priority level).
- *
- * Original address: 0x00EB2BF8
+ * IO_$SAVED_INT_SR (0x00EB2BF8) is a field of the STACK segment block,
+ * OS_$STACK (os/os.h, os/os_data.c; source-4k71), not an object of its own.
  */
-uint16_t IO_$SAVED_INT_SR = 0;
 
 
 /*

@@ -57,158 +57,96 @@ int16_t DIR_$OLD_LINK_TEXT_MAX = 0x0100;
 
 /*
  * ============================================================================
- * The DIR module block (map: "D E7DBF8 DIR size = 212C", 0x00E7DBF8..0x00E7FD24)
+ * DIR_$DATA - the DIR segment (map: "D E7DBF8 DIR size = 212C",
+ * 0x00E7DBF8..0x00E7FD23)
  * ============================================================================
  *
- * DIR_$DO_OP establishes it with `lea (0xe7dc00).l,A5` at 0x00E4C030, so A5 is
- * the block base + 8 and the two tables the code reaches through A5 land at
- * A5+0x1F9C and A5+0x2000.
- */
-
-/*
- * 0x00E7FB9C (A5+0x1F9C) is not an object: it is the +0x02 word of the
- * DIR_$OP_TAB record for (opcode >> 1), reached through a virtual table base
- * of 0x00E7FB9A that sits 21 records below DIR_$OP_TAB (see the record
- * comment in dir/dir_internal.h).  For the opcodes DIR_$DO_OP admits,
- * 0x2A..0x5C, the addresses it forms run 0x00E7FC44..0x00E7FD10, all inside
- * DIR_$OP_TAB; the bytes 0x00E7FB9A..0x00E7FC42 that records 0..20 would
- * occupy hold DIR_$NAME_OFFSET_TABLE and the DIR globals below.
- */
-
-/*
- * DIR_$NAME_OFFSET_TABLE - 0x00E7FC00 (A5+0x2000), eight words, one per
- * directory entry type (the index is always masked with 7).  It ends exactly
- * where the map's next symbol, DIR_$ENTRY_CACHE_TOO_LONG_NAME, begins
- * (0x00E7FC10).  Image words: 0000 0004 0010 0014 000C 0000 0000 0000.
- */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = { 0, 4, 16, 20, 12, 0, 0, 0 };
-
-/*
- * The five module globals between DIR_$LK_WAITS (0x00E7FC2C) and DIR_$OP_TAB
- * (0x00E7FC42) are fields of the A5 block, not separate objects, and are
- * reached through the DIR_$LOCK_FREE / DIR_$LOCK_IN_USE / DIR_$HANDLE_FREE /
- * DIR_$HANDLE_IN_USE / DIR_$LINK_BUF_OWNER accessors in dir/dir_internal.h:
+ * Module data block DIR_$DATA: Claude Opus 5.5 (source-qiby).  Layout,
+ * biases and asserts in dir/dir_internal.h; DIR routines load A5 =
+ * 0x00E7DC00, the block + 8.  The image's non-zero bytes
+ * (`gsk read 0xE7DBF8 0x212C`) are exactly the cells initialised below:
  *
- *   0x00E7FC30 (A5+0x2030)  head of the dir_$lock_entry_t free list
- *   0x00E7FC34 (A5+0x2034)  lock-entry in-use bitmap  (DIR_$LOCK_OBJ)
- *   0x00E7FC38 (A5+0x2038)  head of the dir_$handle_t free list
- *   0x00E7FC3C (A5+0x203C)  handle in-use bitmap      (DIR_$ALLOC_HANDLE)
- *   0x00E7FC40 (A5+0x2040)  DIR_$LINK_BUF_MUTEX owner (dir_$do_op_cname)
+ *   00e7dbf8  00 e4 b3 3c 00 e4 b2 30                          A5-0x8 / A5-0x4
+ *   00e7fc00  00 00 00 04 00 10 00 14  00 0c 00 00 00 00 00 00  NAME_OFFSET_TABLE
+ *   00e7fc42  .. DIR_$OP_TAB, 26 records (read with `gsk read 0xE7FC42 0xD0`)
+ *   00e7fd14  00 02 00 01 00 01 00 01  00 00 00 01 2e 62 61 6b  cookies, ".bak"
  *
- * All are zero in the image; DIR_$INIT (0x00E3140C) fills the first four in.
- */
-
-/*
- * DIR_$OP_TAB - 0x00E7FC42, the per-operation parameter table (see the record
- * type and the 21-record bias in dir/dir_internal.h).  26 records of 8 bytes
- * cover 0x00E7FC42..0x00E7FD12, i.e. records 21..46 = opcodes 0x2A..0x5C, the
- * exact range DIR_$DO_OP's jump table admits and every record the DIR_$<op>U
- * wrappers reach (the highest is DIR_$DROP_MOUNT's at 0x00E7FD0A).  Read with
- * `gsk read 0x00E7FC42 0xD0`.
- */
-dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES] = {
-    { 0x0000, 0x0000, 0x000e, 0x0000 },  /* [ 0] 0x00E7FC42 */
-    { 0x0000, 0x0000, 0x000a, 0x0000 },  /* [ 1] 0x00E7FC4A */
-    { 0x0000, 0x0000, 0x0004, 0x0008 },  /* [ 2] 0x00E7FC52 */
-    { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [ 3] 0x00E7FC5A */
-    { 0x0001, 0x0000, 0x0004, 0x0000 },  /* [ 4] 0x00E7FC62 */
-    { 0x0001, 0x0000, 0x000a, 0x0008 },  /* [ 5] 0x00E7FC6A */
-    { 0x0000, 0x0000, 0x0004, 0x0008 },  /* [ 6] 0x00E7FC72 */
-    { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [ 7] 0x00E7FC7A */
-    { 0x0000, 0x0000, 0x0002, 0x0000 },  /* [ 8] 0x00E7FC82 */
-    { 0x0000, 0x0000, 0x0008, 0x0000 },  /* [ 9] 0x00E7FC8A */
-    { 0x0000, 0x0000, 0x0008, 0x000a },  /* [10] 0x00E7FC92 */
-    { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [11] 0x00E7FC9A */
-    { 0x0000, 0x0001, 0x0012, 0x0010 },  /* [12] 0x00E7FCA2 */
-    { 0x0000, 0x0000, 0x0002, 0x000e },  /* [13] 0x00E7FCAA */
-    { 0x0000, 0x0000, 0x000a, 0x0006 },  /* [14] 0x00E7FCB2 */
-    { 0x0000, 0x0000, 0x0000, 0x0000 },  /* [15] 0x00E7FCBA */
-    { 0x0000, 0x0000, 0x0008, 0x0000 },  /* [16] 0x00E7FCC2 */
-    { 0x0000, 0x0000, 0x0010, 0x0000 },  /* [17] 0x00E7FCCA */
-    { 0x0000, 0x0000, 0x0008, 0x0008 },  /* [18] 0x00E7FCD2 */
-    { 0x0000, 0x0000, 0x0002, 0x0000 },  /* [19] 0x00E7FCDA */
-    { 0x0000, 0x0000, 0x0036, 0x0000 },  /* [20] 0x00E7FCE2 */
-    { 0x0000, 0x0000, 0x003c, 0x0000 },  /* [21] 0x00E7FCEA */
-    { 0x0000, 0x0000, 0x003c, 0x0034 },  /* [22] 0x00E7FCF2 */
-    { 0x0000, 0x0001, 0x0022, 0x0020 },  /* [23] 0x00E7FCFA */
-    { 0x0000, 0x0000, 0x000c, 0x0000 },  /* [24] 0x00E7FD02 */
-    { 0x0000, 0x0000, 0x000c, 0x0000 },  /* [25] 0x00E7FD0A */
-};
-#if defined(ARCH_M68K)
-_Static_assert(sizeof(DIR_$OP_TAB) == 0xD0,
-               "DIR_$OP_TAB: 0x00E7FC42..0x00E7FD12");
-#endif
-
-/*
- * The last 0x12 bytes of the DIR segment, 0x00E7FD12..0x00E7FD24 (the map has
- * "D E7DBF8 DIR size = 212C", and OLD_DIR's A5 base is the very next byte:
- * `lea (0xe7fd24).l,A5` in every OLD_DIR routine, e.g. 0x00E54B30).
- */
-
-/*
- * 0x00E7FD12: two bytes of zero fill between DIR_$OP_TAB's last record and
- * the longword constants below, which the compiler placed on a longword
- * boundary.  Nothing reads it.
- */
-uint16_t DIR_$SEG_TAIL_PAD = 0x0000;
-
-/*
- * 0x00E7FD14 / 0x00E7FD18 / 0x00E7FD1C: the three directory-read continuation
- * cookies dir_$do_op_dir_readu compares and stores as whole longwords through
- * A5 = 0x00E7DC00 (`cmp.l (0x211c,A5),D0` at 0x00E4DA00, 0x00E4DA50 and
- * 0x00E4DA60; `move.l (0x2114,A5),(A3)` at 0x00E4DA06, 0x00E4DA3E, 0x00E4DB50;
- * `cmp.l`/`move.l (0x2118,A5)` at 0x00E4DA22, 0x00E4DA56, 0x00E4DAE0).
+ * Everything else is zero: the link buffer (A5+0x000), the entry cache
+ * (A5+0x400), DIR_$MTTAB and its tables (A5+0x1558), the per-process lock
+ * flags (A5+0x15FE), the lock and handle tables (A5+0x1680 / A5+0x1880;
+ * DIR_$INIT builds them), the DIR_$ENTRY_CACHE_* and DIR_$HNDL_WAITS /
+ * DIR_$LK_* counters, the free-list heads and in-use bitmaps and the link
+ * buffer owner (A5+0x2010..0x2041), and the pad word at A5+0x2112.
  *
- *   0x00E7FD1C  the "." pseudo-entry     (a 1-character name of dots)
- *   0x00E7FD18  the ".." pseudo-entry    (2 characters; 0x00E4DA1C compares
- *                                         the name byte against '.' = 0x2E)
- *   0x00E7FD14  the first real entry, the value the cursor moves to once both
- *               pseudo-entries have been emitted (0x00E4DA26 loop exit)
- */
-uint32_t DIR_$READU_COOKIE_FIRST = 0x00020001;
-uint32_t DIR_$READU_COOKIE_DOTDOT = 0x00010001;
-uint32_t DIR_$READU_COOKIE_DOT = 0x00000001;
-
-/*
- * 0x00E7FD20: the four characters ".bak".  No instruction in the image reads
- * it -- there is no absolute reference to 0x00E7FD20 anywhere, and no DIR or
- * OLD_DIR routine forms (0x2120,A5) or (-0x4,A5) -- so it is a constant the
- * Pascal source declared whose only use was compiled away.
- */
-char DIR_$BAK_SUFFIX[4] = { '.', 'b', 'a', 'k' };
-
-/*
- * ============================================================================
- * Objects inside the DIR_$MTTAB region (0x00E7F158..0x00E7FC10)
- * ============================================================================
+ * The three cells the tree used to call 0x00E7F470 / 0x00E7F4B0 /
+ * 0x00E7FBF4 are interior `next' fields of the two tables, which is why
+ * DIR_$INIT clears them one by one after building the chains:
  *
- * The map exports only DIR_$MTTAB at 0x00E7F158; the four objects below are
- * module-local cells inside that span, and their extents come from the
- * addresses the code uses.  All are zero in the image.
- */
-
-/*
- * 0x00E7F280 (A5+0x1680) is dir_$lock_entry_t[32] and 0x00E7F480 (A5+0x1880)
- * is dir_$handle_t[32]; both are declared in dir/dir_internal.h and reached
- * as DIR_$LOCK_TAB / DIR_$HANDLE_TAB.  The three cells the tree used to call
- * 0x00E7F470 / 0x00E7F4B0 / 0x00E7FBF4 are interior `next` fields of
- * those arrays, which is why DIR_$INIT clears them one by one after building
- * the chains:
+ *   0x00E7F470 = A5+0x1870 = lock_tab[31].u.next    (0x00E3149E)
+ *   0x00E7F4B0 = A5+0x18B0 = handle_tab[0].next     (0x00E314A6)
+ *   0x00E7FBF4 = A5+0x1FF4 = handle_tab[31].next    (0x00E314A2)
  *
- *   0x00E7F470 = A5+0x1870 = DIR_$LOCK_TAB[31].u.next    (0x00E3149E)
- *   0x00E7F4B0 = A5+0x18B0 = DIR_$HANDLE_TAB[0].next     (0x00E314A6)
- *   0x00E7FBF4 = A5+0x1FF4 = DIR_$HANDLE_TAB[31].next    (0x00E314A2)
+ * and 0x00E7F4BC = A5+0x18BC = &handle_tab[1], the value DIR_$INIT stores
+ * as the handle free-list head, not a pool of its own.
  *
- * and 0x00E7F4BC = A5+0x18BC = &DIR_$HANDLE_TAB[1], the value DIR_$INIT
- * stores as the handle free-list head, not a pool of its own.
+ * DIR_$OP_TAB (0x00E7FC42, A5+0x2042) is the per-operation parameter table:
+ * 26 records of 8 bytes, records 21..46 = opcodes 0x2A..0x5C, the exact
+ * range DIR_$DO_OP's jump table admits and every record the DIR_$<op>U
+ * wrappers reach (the highest is DIR_$DROP_MOUNT's at 0x00E7FD0A); the
+ * 21-record bias is DIR_$OP_REC's.  The two pointer cells hold the VAs of
+ * code-region constants, so they are link-time addresses on the target
+ * (ARCH_PTR_TO_VA_STATIC) and the image's values on the host.
  */
-
-/*
- * 0x00E7DBFC (A5-0x4): the module block's pointer to the status constant the
- * DIR CRASH_SYSTEM sites push (`move.l (-0x4,A5),-(SP)`).  Image bytes at
- * 0x00E7DBF8: `00 e4 b3 3c 00 e4 b2 30`.
- */
-status_$t *const DIR_$CRASH_STATUS = &Naming_bad_request_header_ver_err;
+MODULE_DATA_DEFINE_INIT(dir_$data_t, DIR_$DATA, 0x00E7DBF8, {
+    /* 0x00E7DBF8 (A5-0x8): AST_$PURIFY's segment-list argument */
+    .purify_seg_list = ARCH_PTR_TO_VA_STATIC(&DIR_$CONST_ZERO_L, 0x00E4B33C),
+    /* 0x00E7DBFC (A5-0x4): what every DIR CRASH_SYSTEM site pushes */
+    .crash_status = ARCH_PTR_TO_VA_STATIC(&Naming_bad_request_header_ver_err,
+                                          0x00E4B230),
+    /* 0x00E7FC00: DIR_$NAME_OFFSET_TABLE, 0000 0004 0010 0014 000C 0 0 0 */
+    .name_offset_table = { 0, 4, 16, 20, 12, 0, 0, 0 },
+    .op_tab = {
+        { 0x0000, 0x0000, 0x000e, 0x0000 },  /* [ 0] 0x00E7FC42 */
+        { 0x0000, 0x0000, 0x000a, 0x0000 },  /* [ 1] 0x00E7FC4A */
+        { 0x0000, 0x0000, 0x0004, 0x0008 },  /* [ 2] 0x00E7FC52 */
+        { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [ 3] 0x00E7FC5A */
+        { 0x0001, 0x0000, 0x0004, 0x0000 },  /* [ 4] 0x00E7FC62 */
+        { 0x0001, 0x0000, 0x000a, 0x0008 },  /* [ 5] 0x00E7FC6A */
+        { 0x0000, 0x0000, 0x0004, 0x0008 },  /* [ 6] 0x00E7FC72 */
+        { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [ 7] 0x00E7FC7A */
+        { 0x0000, 0x0000, 0x0002, 0x0000 },  /* [ 8] 0x00E7FC82 */
+        { 0x0000, 0x0000, 0x0008, 0x0000 },  /* [ 9] 0x00E7FC8A */
+        { 0x0000, 0x0000, 0x0008, 0x000a },  /* [10] 0x00E7FC92 */
+        { 0x0000, 0x0000, 0x0002, 0x0008 },  /* [11] 0x00E7FC9A */
+        { 0x0000, 0x0001, 0x0012, 0x0010 },  /* [12] 0x00E7FCA2 */
+        { 0x0000, 0x0000, 0x0002, 0x000e },  /* [13] 0x00E7FCAA */
+        { 0x0000, 0x0000, 0x000a, 0x0006 },  /* [14] 0x00E7FCB2 */
+        { 0x0000, 0x0000, 0x0000, 0x0000 },  /* [15] 0x00E7FCBA */
+        { 0x0000, 0x0000, 0x0008, 0x0000 },  /* [16] 0x00E7FCC2 */
+        { 0x0000, 0x0000, 0x0010, 0x0000 },  /* [17] 0x00E7FCCA */
+        { 0x0000, 0x0000, 0x0008, 0x0008 },  /* [18] 0x00E7FCD2 */
+        { 0x0000, 0x0000, 0x0002, 0x0000 },  /* [19] 0x00E7FCDA */
+        { 0x0000, 0x0000, 0x0036, 0x0000 },  /* [20] 0x00E7FCE2 */
+        { 0x0000, 0x0000, 0x003c, 0x0000 },  /* [21] 0x00E7FCEA */
+        { 0x0000, 0x0000, 0x003c, 0x0034 },  /* [22] 0x00E7FCF2 */
+        { 0x0000, 0x0001, 0x0022, 0x0020 },  /* [23] 0x00E7FCFA */
+        { 0x0000, 0x0000, 0x000c, 0x0000 },  /* [24] 0x00E7FD02 */
+        { 0x0000, 0x0000, 0x000c, 0x0000 },  /* [25] 0x00E7FD0A */
+    },
+    /*
+     * 0x00E7FD14 / 0x00E7FD18 / 0x00E7FD1C: the directory-read continuation
+     * cookies dir_$do_op_dir_readu compares and stores as whole longwords
+     * (`cmp.l (0x211c,A5),D0` at 0x00E4DA00, 0x00E4DA50 and 0x00E4DA60;
+     * `move.l (0x2114,A5),(A3)` at 0x00E4DA06, 0x00E4DA3E, 0x00E4DB50;
+     * `cmp.l`/`move.l (0x2118,A5)` at 0x00E4DA22, 0x00E4DA56, 0x00E4DAE0):
+     * the first real entry, ".." and ".".
+     */
+    .readu_cookie_first  = 0x00020001,
+    .readu_cookie_dotdot = 0x00010001,
+    .readu_cookie_dot    = 0x00000001,
+    /* 0x00E7FD20: ".bak", copied 1-based by dir_$do_op_add_bak */
+    .bak_suffix = { '.', 'b', 'a', 'k' },
+});
 
 /*
  * ============================================================================

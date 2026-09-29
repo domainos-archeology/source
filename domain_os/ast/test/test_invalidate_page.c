@@ -46,8 +46,7 @@ static void reset_state(void);
 #include "ast/invalidate_page.c"
 
 #define TEST_N_FRAMES 0x400
-static mmape_t test_mmapes[TEST_N_FRAMES];
-mmape_t *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 
 static int remove_calls;
 static uint32_t remove_ppn;
@@ -63,7 +62,7 @@ void MMAP_$FREE_REMOVE(mmape_t *page, uint32_t vpn)
 
 static void reset_state(void)
 {
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     remove_calls = 0; remove_ppn = 0;
     free_calls = 0; free_page = NULL; free_vpn = 0;
 }
@@ -75,7 +74,7 @@ TEST(wired_page)
 
     memset(&aste, 0, sizeof(aste));
     aste.page_count = 3;
-    test_mmapes[0x321].disk_addr = 0x00123456;
+    MMAPE_FOR_VPN(0x321)->disk_addr = 0x00123456;
 
     AST_$INVALIDATE_PAGE(&aste, &entry, 0x321);
 
@@ -84,7 +83,7 @@ TEST(wired_page)
     /* bits 31..23 kept (here: none set), bit 22 dropped by the mask */
     ASSERT_EQ(0x00123456u, entry);
     ASSERT_EQ(1, free_calls);
-    ASSERT_EQ((uintptr_t)&test_mmapes[0x321], (uintptr_t)free_page);
+    ASSERT_EQ((uintptr_t)MMAPE_FOR_VPN(0x321), (uintptr_t)free_page);
     ASSERT_EQ(0x321, free_vpn);
     ASSERT_EQ(2, aste.page_count);
 }
@@ -96,7 +95,7 @@ TEST(unwired_page_keeps_top_bits)
 
     memset(&aste, 0, sizeof(aste));
     aste.page_count = 0;                 /* wraps to 0xFF */
-    test_mmapes[0x210].disk_addr = 0x00ABCDEF;
+    MMAPE_FOR_VPN(0x210)->disk_addr = 0x00ABCDEF;
 
     AST_$INVALIDATE_PAGE(&aste, &entry, 0x210);
 

@@ -41,10 +41,9 @@ static int tests_failed = 0;
 } while (0)
 
 #define TEST_PAGES 0x1000
-static mmape_t  mmape_store[TEST_PAGES];
 static uint32_t pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t *mmu_pft_base    = pft_store;
 mem_range_t DUMP_$ADDRS[DUMP_ADDRS_RANGES];
 
@@ -74,8 +73,8 @@ static uint32_t table[MMAP_INIT_BLOCKS];
 
 static void probe(uint32_t vpn, uint16_t word0)
 {
-    mmape_store[vpn].wire_count = (uint8_t)(word0 >> 8);
-    mmape_store[vpn].seg_offset = (uint8_t)word0;
+    MMAPE_FOR_VPN(vpn)->wire_count = (uint8_t)(word0 >> 8);
+    MMAPE_FOR_VPN(vpn)->seg_offset = (uint8_t)word0;
 }
 
 static void reset_module(void)
@@ -83,7 +82,7 @@ static void reset_module(void)
     uint32_t v;
     int i;
 
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(DUMP_$ADDRS, 0, sizeof(DUMP_$ADDRS));
     memset(table, 0xAA, sizeof(table));
@@ -100,8 +99,8 @@ static void reset_module(void)
     }
     for (i = 0; i < MMAP_WS_OWNER_SLOTS; i++) MMAP_$WS_OWNER[i] = 0x55;
 
-    /* make ARCH_PTR_TO_VA(&mmape_store[vpn]) == 0xEB2800 + vpn*0x10 */
-    ARCH_HOST_VA_BASE = (uintptr_t)mmape_store - 0xEB2800u;
+    /* make ARCH_PTR_TO_VA(MMAPE_FOR_VPN(vpn)) == 0xEB2800 + vpn*0x10 */
+    ARCH_HOST_VA_BASE = (uintptr_t)&MMAP_$MMAPE - 0xEB4800u;
 
     /* two ranges: 0x200..0x37F (first 0x100 pageable) and 0x400..0x43F */
     for (v = 0x200; v < 0x300; v++) probe(v, 0xC000);

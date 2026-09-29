@@ -67,11 +67,10 @@ static int tests_failed = 0;
 #define TEST_PTES       64
 
 #define TEST_WSL        5       /* WSL_INDEX_MIN_USER */
-#define TEST_VPN        3
+#define TEST_VPN        0x203   /* MMAP_$MMAPE holds ppn 0x200..0xFFF */
 #define TEST_SEG        1       /* the table is 1-based */
 
-static mmape_t  mmape_store[TEST_PAGES];
-static uint32_t pft_store[TEST_PAGES];
+static uint32_t pft_store[0x1000];   /* the PFT is indexed by ppn, up to 0xFFF */
 
 /*
  * The MMAP_ module data block (`D E23284 MMAP_ size = AA8').  Every cell the
@@ -81,7 +80,7 @@ static uint32_t pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;
 
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t *mmu_pft_base    = pft_store;
 /*
  * The 0xED4F80 segment map (pmap/pmap.h): MMAP_$WS_SCAN reaches it as
@@ -146,7 +145,7 @@ static aote_t  *aote;
 static void reset_module(uint8_t flags2)
 {
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(pft_store, 0, sizeof(pft_store));
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(AST_$AOT.aste, 0, sizeof(AST_$AOT.aste));

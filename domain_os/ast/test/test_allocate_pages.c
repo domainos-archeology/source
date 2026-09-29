@@ -79,16 +79,15 @@ static void reset_mocks(void);
 
 #define TEST_N_SEGS   4
 #define TEST_N_PAGES  32
-#define TEST_N_FRAMES 64
+#define TEST_N_FRAMES 0x1000  /* the PFT is indexed by ppn, up to 0xFFF */
 
 /* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 
 /* The two counters ast/allocate_pages.c reaches on a non-m68k build. */
@@ -202,7 +201,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
  * ========================================================================== */
 
 #define TEST_SEG   2
-#define TEST_PPN   7
+#define TEST_PPN   0x207   /* >= 0x200: MMAP_$MMAPE starts at ppn 0x200 */
 #define TEST_PAGE  3        /* pmape->seg_offset */
 
 static aote_t test_aote;
@@ -218,7 +217,7 @@ static void reset_mocks(void)
 
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(&AST_$AOT, 0, sizeof(AST_$AOT));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
@@ -242,11 +241,11 @@ static void reset_mocks(void)
     /* Plenty of free memory, so the tail never wakes the purifier. */
     PMAP_$DATA.low_thresh = 0;
 
-    /* One pure page, ppn 7, belonging to segment 2 page 3. */
-    test_mmapes[TEST_PPN].segment = TEST_SEG;
-    test_mmapes[TEST_PPN].seg_offset = TEST_PAGE;
-    test_mmapes[TEST_PPN].flags2 = 0;
-    test_mmapes[TEST_PPN].disk_addr = 0x00012345;
+    /* One pure page, ppn 0x207, belonging to segment 2 page 3. */
+    MMAPE_FOR_VPN(TEST_PPN)->segment = TEST_SEG;
+    MMAPE_FOR_VPN(TEST_PPN)->seg_offset = TEST_PAGE;
+    MMAPE_FOR_VPN(TEST_PPN)->flags2 = 0;
+    MMAPE_FOR_VPN(TEST_PPN)->disk_addr = 0x00012345;
 
     *segmap_entry_of(TEST_SEG, TEST_PAGE) = SEGMAP_FLAG_IN_USE | TEST_PPN;
 
@@ -416,8 +415,8 @@ TEST(log_page_argument_list_local_object)
     pure_ppns[0][0] = TEST_PPN;
     pure_ppns[0][1] = TEST_PPN + 1;
 
-    test_mmapes[TEST_PPN + 1].segment = TEST_SEG;
-    test_mmapes[TEST_PPN + 1].seg_offset = TEST_PAGE + 1;
+    MMAPE_FOR_VPN(TEST_PPN + 1)->segment = TEST_SEG;
+    MMAPE_FOR_VPN(TEST_PPN + 1)->seg_offset = TEST_PAGE + 1;
     *segmap_entry_of(TEST_SEG, TEST_PAGE + 1) =
         SEGMAP_FLAG_IN_USE | (TEST_PPN + 1);
 
@@ -449,7 +448,7 @@ TEST(log_page_remote_object_uses_anon_uid)
     NETLOG_$OK_TO_LOG = (int8_t)-1;
     pure_result[0] = 1;
     pure_ppns[0][0] = TEST_PPN;
-    test_mmapes[TEST_PPN].flags2 = MMAPE_FLAG2_ON_DISK;   /* bit 7 */
+    MMAPE_FOR_VPN(TEST_PPN)->flags2 = MMAPE_FLAG2_ON_DISK;   /* bit 7 */
 
     ast_$allocate_pages(1, 1, ppns);
 
@@ -489,8 +488,8 @@ TEST(log_page_sees_the_running_allocated_count)
     pure_ppns[0][0] = TEST_PPN;
     pure_ppns[0][1] = TEST_PPN + 1;
 
-    test_mmapes[TEST_PPN + 1].segment = TEST_SEG;
-    test_mmapes[TEST_PPN + 1].seg_offset = TEST_PAGE + 1;
+    MMAPE_FOR_VPN(TEST_PPN + 1)->segment = TEST_SEG;
+    MMAPE_FOR_VPN(TEST_PPN + 1)->seg_offset = TEST_PAGE + 1;
     *segmap_entry_of(TEST_SEG, TEST_PAGE + 1) =
         SEGMAP_FLAG_IN_USE | (TEST_PPN + 1);
 

@@ -46,11 +46,13 @@
 
 #include "proc1/proc1_internal.h"
 #include "pmap/pmap.h"
+#include "os/os.h"       /* OS_$STACK: P1_STACK_BASE */
 
 /* 0x00E2F962 / 0x00E2F96A / 0x00E2F976: the boot-time region constants */
 #define PROC1_INIT_STACK_LOW    0x00D00000u
 #define PROC1_INIT_STACK_HIGH   0x00D50000u
-#define PROC1_INIT_OS_STACK_1   0x00EB2000u
+/* 0x00E2F976: `move.l #0xeb2000,(0x734,A0)` - P1_STACK_BASE, the top of
+ * process 1's stack in the STACK segment block (os/os.h; source-4k71) */
 
 void PROC1_$INIT(void)
 {
@@ -61,7 +63,7 @@ void PROC1_$INIT(void)
     PROC1_$DATA.stack_low_water = PROC1_INIT_STACK_LOW;
     PROC1_$DATA.stack_high_water = PROC1_INIT_STACK_HIGH;
     PROC1_$DATA.stack_free_list = 0;
-    PROC1_$DATA.os_stack_base[1] = PROC1_INIT_OS_STACK_1;
+    PROC1_$DATA.os_stack_base[1] = ARCH_PTR_TO_VA(P1_STACK_BASE);
 
     /* 0x00E2F97E: PROC1_$SET_TYPE(2, 3) */
     PROC1_$SET_TYPE(2, 3);

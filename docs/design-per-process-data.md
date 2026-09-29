@@ -379,6 +379,26 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    is `PMAP_SEGMAP_ROW(seg)` and `SEGMAP_BASE` is gone.  Eleven exempted
    guards fewer: five remain (DIR, MMAPE, MMU x2, interrupt stack).
 
+   Amended 2026-09-29 (source-qiby, source-fyjc, source-4k71): blocks
+   `DIR_$DATA` (map DIR 0xE7DBF8, 0x212C: A5 = 0xE7DC00 is the block + 8,
+   so field offset = A5 displacement + 8; the A5-8 / A5-4 VA cells, the
+   link buffer at A5+0, the entry cache, DIR_$MTTAB, the lock and handle
+   tables, DIR_$NAME_OFFSET_TABLE, the map's counters, the free-list heads,
+   DIR_$OP_TAB, the READU cookies and ".bak", with the image contents;
+   the mount tables, the per-process lock flags and ".bak"'s 1-based copy
+   are union arms from their bias slots, DIR_$OP_TAB's 21-record bias stays
+   in `DIR_$OP_REC`; `DIR_$BLOCK_BASE` and the `DIR_<X>_OF` accessors are
+   gone), `MMAP_$MMAPE` (map MMAP 0xEB4800 in OS_PMAPS, 0xE000: `mmape_t`
+   for ppn 0x200..0xFFF; entry 0 would be 0xEB2800 in the STACK segment,
+   so `MMAPE_FOR_VPN(ppn)` applies the bias once; `MMAPE_BASE` and the
+   host pointer are gone) and `OS_$STACK` (map STACK 0xEB0000, 0x2C00,
+   zero-filled: NULL_PC, IO_$SAVED_INT_SR and the map's labels are fields
+   or addresses in it, `INT_STACK_BASE` is its end, and io/sau2 and
+   proc1/sau2 reach 0xEB2BE8 as `OS_$STACK + 0x2BE8`).  The MMAP table and
+   the stack segment are freed / translated page by page by OS_$INIT and
+   MMAP_$INIT, so their types are 0x400-aligned.  Two exempted guards
+   remain (MMU, source-o56c).
+
 Keep the tree green throughout: a subsystem converts in one commit; the
 linker line and the object land together; other subsystems keep compiling
 because the public header still exports the same names (now fields or

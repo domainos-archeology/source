@@ -39,7 +39,6 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                        uint32_t *extra_ret, uint8_t *found_ret,
                        status_$t *status_ret)
 {
-    char *blk = DIR_$BLOCK;         /* 0x00E4CB6A inherits A5 = 0x00E7DC00 */
     uint32_t local_handle;
     uint8_t *entry_ptr;
     /* A6-0x4E: dir_$find_entry's depth_ret, cleared with `clr.w (A0)`
@@ -101,17 +100,17 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
              * `lea (0x1594,A3)` pairs form.
              */
             {
-                int16_t remap_count = DIR_MOUNT_COUNT16(blk) - 1;
+                int16_t remap_count = DIR_MOUNT_COUNT16() - 1;
                 if (remap_count >= 0) {
                     int16_t n = 1;
                     do {
-                        if (uid_ret->high == DIR_MOUNT_UID_OF(blk, n).high &&
-                            uid_ret->low  == DIR_MOUNT_UID_OF(blk, n).low) {
+                        if (uid_ret->high == DIR_$DATA.mount_uid[n].high &&
+                            uid_ret->low  == DIR_$DATA.mount_uid[n].low) {
                             /* 0x00E4CC2E: clr.b (A1) */
                             *found_ret = 0;
                             /* 0x00E4CC42: the target uid replaces it */
-                            uid_ret->high = DIR_MOUNT_TGT_OF(blk, n).high;
-                            uid_ret->low  = DIR_MOUNT_TGT_OF(blk, n).low;
+                            uid_ret->high = DIR_$DATA.mount_tgt[n].high;
+                            uid_ret->low  = DIR_$DATA.mount_tgt[n].low;
                             break;
                         }
                         n++;

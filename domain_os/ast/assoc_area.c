@@ -73,7 +73,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
     if (*entry & SEGMAP_VALID) {
         /* 0x00E04590..0x00E045A0: the installed page's MMAPE */
         old_ppn = *entry & 0xFFFF;
-        mmape = &MMAPE_BASE[old_ppn];
+        mmape = MMAPE_FOR_VPN(old_ppn);
 
         /* 0x00E045A4..0x00E045B8: bit 29 (wired) -> clear it, unmap */
         if (*entry & SEGMAP_WIRED) {
@@ -106,7 +106,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
 
     /* 0x00E0460E..0x00E0461C: unsigned 0x200 <= ppn <= 0xFFF */
     if (ppn >= 0x200 && ppn <= 0xFFF) {
-        mmape = &MMAPE_BASE[ppn];
+        mmape = MMAPE_FOR_VPN(ppn);
 
         /* 0x00E0462C..0x00E0463C: tst.b (-0x1ffb,A3) = flags1 bit 7 */
         if ((int8_t)mmape->flags1 < 0) {

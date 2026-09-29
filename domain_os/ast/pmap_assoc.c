@@ -79,7 +79,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
     if (*entry & SEGMAP_VALID) {
         /* 0x00E04308..0x00E04318 */
         old_ppn = *entry & 0xFFFF;
-        mmape = &MMAPE_BASE[old_ppn];
+        mmape = MMAPE_FOR_VPN(old_ppn);
 
         /* 0x00E0431C..0x00E04330: bit 29 -> unmap */
         if (*entry & SEGMAP_WIRED) {
@@ -120,7 +120,7 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
     /* 0x00E043A2..0x00E043B0: unsigned 0x200 <= ppn <= 0xFFF */
     if (ppn >= 0x200 && ppn <= 0xFFF) {
-        mmape = &MMAPE_BASE[ppn];
+        mmape = MMAPE_FOR_VPN(ppn);
 
         /* 0x00E043C0..0x00E043D0: flags1 bit 7 = already in a WSL */
         if ((int8_t)mmape->flags1 < 0) {

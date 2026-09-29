@@ -680,7 +680,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 
     /* --- 0x00E33CE0-0x00E33D06 --------------------------------------- */
     UID_$INIT();
-    NULL_PC = (void *)NULLPROC;
+    NULL_PC = ARCH_PTR_TO_VA(NULLPROC);   /* move.l #0xe24c60,(0x00eb07fc).l */
     PROC1_$INIT();
     PROC1_$SET_TYPE(PROC1_$CURRENT, 1);
 
@@ -855,9 +855,11 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
 after_paging_file:
     /* --- 0x00E34062-0x00E340A4 --------------------------------------- */
     NETWORK_$REALLY_DISKLESS = NETWORK_$DISKLESS;
-    os_$free_va_page(0x00EB0000);
-    os_$free_va_page(0x00EB0800);
-    os_$free_va_page(0x00EB2000);
+    /* the STACK segment's three guard pages, `move.l #0xeb0000` /
+     * `#0xeb0800` / `#0xeb2000,-(SP)` (OS_$STACK, os/os.h) */
+    os_$free_va_page(ARCH_PTR_TO_VA(NULL_STACK_GUARD));
+    os_$free_va_page(ARCH_PTR_TO_VA(P1_STACK_GUARD));
+    os_$free_va_page(ARCH_PTR_TO_VA(INT_STACK_GUARD));
 
     /* 0x00E34096-0x00E340A2: zero the 1 KB interrupt stack, downwards */
     {
@@ -876,7 +878,9 @@ after_paging_file:
         int16_t idx = 1;
         for (i = 0x37; i >= 0; i--) { /* moveq #0x37 / dbf = 56 */
             if (BOOT_INFO_TABLE[idx - 1] != 0) {
-                os_$free_va_page(0x00EB4800u +
+                /* `movea.l #0xeb4800,A3' + (idx-1)*0x400: the pages of
+                 * the MMAP page table, MMAP_$MMAPE (mmap/mmap.h) */
+                os_$free_va_page(ARCH_PTR_TO_VA(&MMAP_$MMAPE) +
                                  (uint32_t)(idx - 1) * OS_PAGE_SIZE);
             }
             idx++;

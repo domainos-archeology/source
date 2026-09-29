@@ -158,7 +158,7 @@ void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
                     /* Get page index within segment from MMAPE entry.
                      * Original: move.b (-0x1FFF, A1), D2b
                      *   where A1 = 0xEB4800 + vpn*16, so address = 0xEB2801 + vpn*16
-                     *   = MMAPE_BASE[vpn].seg_offset */
+                     *   = MMAPE_FOR_VPN(vpn)->seg_offset */
                     uint8_t page_idx = MMAPE_FOR_VPN((uint32_t)vpn)->seg_offset;
 
                     /* Log the write completion if NETLOG is enabled.

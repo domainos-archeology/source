@@ -36,9 +36,9 @@ int __host_intr_disable_count = 0;
 /* they exist so the translation unit links.                          */
 /* ------------------------------------------------------------------ */
 uint32_t BOOT_INFO_TABLE[512];
-char *INT_STACK_BASE;
-void *NULL_PC;
-void *NULLPROC;
+MODULE_DATA_DEFINE(os_$stack_t, OS_$STACK, 0x00EB0000);   /* NULL_PC, INT_STACK_BASE */
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800); /* the pages OS_$INIT frees */
+void NULLPROC(void) {}
 os_$boot_device_t OS_$BOOT_DEVICE;
 
 /* ------------------------------------------------------------------ */

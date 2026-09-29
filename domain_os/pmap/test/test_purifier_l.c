@@ -67,7 +67,6 @@ static int tests_failed = 0;
 #define TEST_SEGMENTS   8
 #define TEST_PAGES      64
 
-static mmape_t           mmape_store[TEST_PAGES];
 static uint32_t          pft_store[TEST_PAGES];
 
 /*
@@ -79,7 +78,7 @@ static uint32_t          pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-mmape_t           *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t          *mmu_pft_base = pft_store;
 
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
@@ -173,7 +172,7 @@ static void reset_mocks(void)
 {
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(pft_store, 0, sizeof(pft_store));
 
     scan_calls = 0;

@@ -45,11 +45,10 @@ static int tests_failed = 0;
 } while (0)
 
 static aote_t aote_store[8];
-static mmape_t mmape_store[0x1000];
 /* The AST_ module blocks (ast/ast.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
-mmape_t *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uid_t ANON_$UID = { 0xA0A0, 0xB0B0 };
 uint32_t TIME_$CURRENT_CLOCKH = 0x55667788;
@@ -98,7 +97,7 @@ static void reset(void)
     memset(arena, 0, sizeof arena);
     memset(&AST_$AOT, 0, sizeof AST_$AOT);
     memset(aote_store, 0, sizeof aote_store);
-    memset(mmape_store, 0, sizeof mmape_store);
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&PMAP_$SEGMAP, 0, sizeof PMAP_$SEGMAP);
     memset(DISK_$DATA, 0, sizeof DISK_$DATA);
     locks = unlocks = allocs = logs = removes = 0;
@@ -121,9 +120,9 @@ static void reset(void)
 
 static void page(uint32_t vpn, uint16_t seg, uint8_t idx, uint32_t daddr)
 {
-    mmape_store[vpn].segment = seg;
-    mmape_store[vpn].seg_offset = idx;
-    mmape_store[vpn].disk_addr = daddr;
+    MMAPE_FOR_VPN(vpn)->segment = seg;
+    MMAPE_FOR_VPN(vpn)->seg_offset = idx;
+    MMAPE_FOR_VPN(vpn)->disk_addr = daddr;
 }
 
 TEST(header_fields_for_a_page_with_an_address)
@@ -153,7 +152,7 @@ TEST(anonymous_page_uses_anon_uid)
     int32_t pages[1] = { 0x300 };
     reset();
     page(0x300, 3, 4, 0x1234);
-    mmape_store[0x300].flags2 = 0x80;
+    MMAPE_FOR_VPN(0x300)->flags2 = 0x80;
     pmap_$fill_write_qblks(pages, qb(0), 1);
     ASSERT_EQ(0xA0A0, qb(0)[8]);
     ASSERT_EQ(0x1234, qb(0)[9]);           /* the word at aote+0x2a */
@@ -176,8 +175,8 @@ TEST(allocates_for_the_run_of_unaddressed_pages)
     ASSERT_EQ(0x789, alloc_hint);
     ASSERT_EQ(2, alloc_n);
     ASSERT_EQ(1, alloc_reserved);
-    ASSERT_EQ(0x2000, mmape_store[0x300].disk_addr);
-    ASSERT_EQ(0x2001, mmape_store[0x301].disk_addr);
+    ASSERT_EQ(0x2000, MMAPE_FOR_VPN(0x300)->disk_addr);
+    ASSERT_EQ(0x2001, MMAPE_FOR_VPN(0x301)->disk_addr);
     ASSERT_EQ(0x2000, AST_$AOT.aste[2].flags);   /* bset.b #5 on the HIGH byte of the flags word */
     ASSERT_EQ(0x2000, qb(0)[1]);
     ASSERT_EQ(0x2001, qb(1)[1]);

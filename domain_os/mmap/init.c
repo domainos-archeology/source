@@ -211,7 +211,7 @@ void MMAP_$INIT(void *param)
         if (table[i - 1] != 0) {                                /* 0x00E31B10 */
             /* 0xEB4800 + (i-1)*0x400 = &mmape[0x200 + (i-1)*64] */
             table[i - 1] = mmu_$vtop_or_crash(
-                ARCH_PTR_TO_VA(&MMAPE_BASE[MMAP_INIT_FIRST_VPN + (i - 1) * 64]));
+                ARCH_PTR_TO_VA(MMAPE_FOR_VPN(MMAP_INIT_FIRST_VPN + (i - 1) * 64)));
         }
     }
 

@@ -2,19 +2,34 @@
  * dir/test/test_compact_page_entries.c - Unit tests for dir_$compact_page_entries
  *
  * Tests the directory page compaction function that reclaims space from
- * dead entries. We mock the globals, set up page buffers with dead entries,
- * and verify the compaction shifts data and updates indices correctly.
+ * dead entries.  The DIR block supplies the globals; we set up page buffers
+ * with dead entries and verify the compaction shifts data and updates indices correctly.
  *
  * Note: page flags use byte-level operations for portability across
  * endiannesses. The reclaimable flag is bit 5 of byte 0 (0x20), and the
  * dead entry flag is bit 7 of byte 0 (0x80).
  */
 
+/* Suppress POSIX uid_t so base/base.h can define Apollo's uid_t struct */
+#define uid_t posix_uid_t
 #include <stdio.h>
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#undef uid_t
+
+/*
+ * The function under test sizes entries with dir_$calc_entry_size, which
+ * reads DIR_$NAME_OFFSET_TABLE from the DIR module block DIR_$DATA
+ * (dir/dir_data.c; the image's 0xE7FC00: 0, 4, 16, 20, 12, 0, 0, 0 - type 2
+ * is a 16-byte file entry header).  Both are compiled in, so the test runs
+ * against the real table and the real dir_insert_ctx_t.
+ */
+#include "dir/dir_internal.h"
+#include "../dir_data.c"
+#include "../calc_entry_size.c"
+#include "../compact_page_entries.c"
 
 /* Test result tracking */
 static int tests_passed = 0;
@@ -45,68 +60,7 @@ static int tests_failed = 0;
     } \
 } while(0)
 
-/*
- * Mock DIR_$NAME_OFFSET_TABLE
- *
- * Actual binary values from 0xE7FC00:
- *   type 0: 0   (unused)
- *   type 1: 4   (internal B-tree pointer: 2 header + 2 child page)
- *   type 2: 16  (file entry: 2 header + 2 reserved + 8 UID + 4 reserved)
- *   type 3: 20  (hard link: 2 header + 2 reserved + 8 UID + 4 extra + 4 reserved)
- *   type 4: 12  (soft link: 2 header + 2 link_len + 2 overflow + 6 reserved)
- *   types 5-7: 0 (unused)
- */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = {
-    0, 4, 16, 20, 12, 0, 0, 0,
-};
 
-/*
- * Minimal dir_insert_ctx_t matching the fields used by compact_page_entries.
- * We only need page_data and idx_base.
- */
-typedef uint32_t status_$t;
-typedef struct {
-    uint32_t    handle;
-    void       *name;
-    uint16_t    name_len;
-    uint16_t    entry_type;
-    uint32_t    extra_val;
-    void       *uid;
-    uint16_t    link_len;
-    void       *link_data;
-    int16_t     overflow_page;
-    int16_t     max_depth;
-    int16_t     path_page[9];
-    int16_t     path_entry[9];
-    uint32_t    dir_uid_high;
-    uint32_t    dir_uid_low;
-    int16_t     split_pages[16];
-    int16_t     page_count;
-    uint8_t    *page_data;
-    uint8_t    *idx_base;
-    uint8_t    *new_page;
-    uint8_t    *inter_page;
-    uint8_t    *temp_entry;
-    int16_t     free_space;
-    uint8_t     fim_data[16];
-    uint8_t     remove_uid[8];
-} dir_insert_ctx_t;
-
-/* dir_$calc_entry_size - included directly for testing */
-uint16_t dir_$calc_entry_size(uint8_t *entry) {
-    uint8_t entry_type = entry[0] & 7;
-    int16_t size = DIR_$NAME_OFFSET_TABLE[entry_type] + (uint16_t)entry[1];
-    if (entry_type == 4 && *(int16_t *)(entry + 4) == -1) {
-        size += *(int16_t *)(entry + 2);
-    }
-    return (uint16_t)((size + 3) & ~3);
-}
-
-/* Include the function under test */
-#define DIR_INTERNAL_H  /* prevent header inclusion */
-#define DIR_H
-#define BASE_H
-#include "../compact_page_entries.c"
 
 /*
  * Helper: create a 1KB page buffer (zeroed).

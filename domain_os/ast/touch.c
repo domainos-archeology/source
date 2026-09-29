@@ -314,7 +314,7 @@ release_rest:
             if (ppn == 0) {
                 CRASH_SYSTEM(&pmap_$mismatch_00e00eac);
             }
-            mmape = &MMAPE_BASE[ppn];
+            mmape = MMAPE_FOR_VPN(ppn);
             if ((int8_t)mmape->flags1 < 0) {
                 CRASH_SYSTEM(&mmap_$bad_install_00e03544);
             }

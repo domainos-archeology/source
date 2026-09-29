@@ -46,7 +46,7 @@ static int tests_failed = 0;
 /* ------------------------------------------------------------------ */
 
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 /* The AST_ module blocks (ast/ast.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
@@ -97,7 +97,6 @@ uint16_t PROC2_$GET_PID(uid_t *proc_uid, status_$t *status_ret)
 /* Fixtures                                                            */
 /* ------------------------------------------------------------------ */
 
-static mmape_t mmape_pages[16];
 static aote_t  aote_entries[4];
 static uint8_t flags_rec[4];
 static osinfo_global_info_t info;
@@ -110,7 +109,7 @@ static status_$t status;
 static void reset_state(void)
 {
     memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
-    memset(mmape_pages, 0, sizeof(mmape_pages));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(aote_entries, 0, sizeof(aote_entries));
     memset(flags_rec, 0, sizeof(flags_rec));
@@ -120,7 +119,6 @@ static void reset_state(void)
     memset(ws_data, 0xEE, sizeof(ws_data));
     memset(&uid_out, 0, sizeof(uid_out));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
-    mmap_mmape_base = mmape_pages;
     for (int i = 0; i < 4; i++) {
         AST_$AOT.aste[i].aote = &aote_entries[i];
     }
@@ -234,50 +232,51 @@ static void test_find_page_invalid_asid(void)
 static void test_find_page_above_hppn(void)
 {
     info.asid = 1;
-    info.set_value = 12;
-    MMAP_$LPPN = 2;
-    MMAP_$HPPN = 10;
+    info.set_value = 0x20C;
+    MMAP_$LPPN = 0x202;
+    MMAP_$HPPN = 0x20A;
     call(MMAP_FLAG_FIND_PAGE | MMAP_FLAG_GET_PID);
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(0xFFFFFFFFu, info.set_value);
     ASSERT_EQ(0, mock_get_pid_calls);
 }
 
-/* The scan starts at max(start, LPPN); an in-use page of the ASID that is
+/* Page numbers are MMAP_$MMAPE ppns (0x200..0xFFF).  The scan starts at
+ * max(start, LPPN); an in-use page of the ASID that is
  * not wired reports its owner's UID and the page number after it. */
 static void test_find_page_found(void)
 {
     info.asid = 3;
     info.set_value = 0;
-    MMAP_$LPPN = 2;
-    MMAP_$HPPN = 10;
-    mmape_pages[4].flags1 = 0x80;
-    mmape_pages[4].wsl_index = 3;
-    mmape_pages[4].flags2 = 0x80;             /* wired: reported as such */
-    mmape_pages[6].flags1 = 0x80;
-    mmape_pages[6].wsl_index = 3;
-    mmape_pages[6].segment = 2;
+    MMAP_$LPPN = 0x202;
+    MMAP_$HPPN = 0x20A;
+    MMAPE_FOR_VPN(0x204)->flags1 = 0x80;
+    MMAPE_FOR_VPN(0x204)->wsl_index = 3;
+    MMAPE_FOR_VPN(0x204)->flags2 = 0x80;             /* wired: reported as such */
+    MMAPE_FOR_VPN(0x206)->flags1 = 0x80;
+    MMAPE_FOR_VPN(0x206)->wsl_index = 3;
+    MMAPE_FOR_VPN(0x206)->segment = 2;
     aote_entries[1].uid.high = 0x11112222;
     aote_entries[1].uid.low = 0x33334444;
 
-    /* page 4 matches first and is wired */
+    /* page 0x204 matches first and is wired */
     call(MMAP_FLAG_FIND_PAGE);
     ASSERT_EQ(status_$os_info_page_wired, status);
-    ASSERT_EQ(5, info.set_value);
+    ASSERT_EQ(0x205, info.set_value);
 
-    /* start at 5: page 6 is the hit, ASTE 2 -> AST_$AOT.aste[1] -> its AOTE */
-    info.set_value = 5;
+    /* start at 0x205: page 0x206 is the hit, ASTE 2 -> AST_$AOT.aste[1] -> its AOTE */
+    info.set_value = 0x205;
     call(MMAP_FLAG_FIND_PAGE);
     ASSERT_EQ(status_$os_info_page_found, status);
-    ASSERT_EQ(7, info.set_value);
+    ASSERT_EQ(0x207, info.set_value);
     ASSERT_EQ(0x11112222, uid_out.high);
     ASSERT_EQ(0x33334444, uid_out.low);
 
-    /* start at 7: nothing up to HPPN, set_value ends one past it */
-    info.set_value = 7;
+    /* start at 0x207: nothing up to HPPN, set_value ends one past it */
+    info.set_value = 0x207;
     call(MMAP_FLAG_FIND_PAGE);
     ASSERT_EQ(status_$ok, status);
-    ASSERT_EQ(11, info.set_value);
+    ASSERT_EQ(0x20B, info.set_value);
 }
 
 static void test_get_pid(void)

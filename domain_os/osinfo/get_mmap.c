@@ -143,9 +143,9 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
         }
 
         /* 0x00E5C7DE .. 0x00E5C850: `movea.l #0xeb4800,A0` with -0x2000
-         * displacements = MMAPE_BASE (0xEB2800) + ppn*16; the loop runs
+         * displacements = MMAPE_FOR_VPN(ppn) (0xEB2800 + ppn*16); the loop runs
          * while ppn <= MMAP_$HPPN */
-        page_entry = &MMAPE_BASE[ppn];
+        page_entry = MMAPE_FOR_VPN(ppn);
         while (ppn <= MMAP_$HPPN) {
             /* 0x00E5C7F2 `tst.b (-0x1ffb,A0)` / bpl: flags1 sign;
              * 0x00E5C7FA `move.b (-0x1ffc,A0),D0b` / cmp.w D1w: wsl_index */

@@ -71,7 +71,6 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
     int32_t *offset_ret = (int32_t *)offset_ret_ptr;
     int32_t *count_ret = (int32_t *)count_ret_ptr;
 
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int16_t local_name_len;
     int32_t word_idx;       /* Running output word index */
     uint16_t *last_entry;   /* Pointer to last written entry */
@@ -130,8 +129,8 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
         }
         if (local_name_len == 0) {
             /* Check if continuation matches a special A5-relative value */
-            if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT) {
-                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_FIRST;
+            if (*(int32_t *)cont == (int32_t)DIR_$DATA.readu_cookie_dot) {
+                *(int32_t *)cont = (int32_t)DIR_$DATA.readu_cookie_first;
             }
         }
     } else {
@@ -140,10 +139,10 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
             /* Named continuation */
             if (local_name_len == 1 && name[0] == '.') {
                 /* "." -> dot continuation */
-                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_DOTDOT;
+                *(int32_t *)cont = (int32_t)DIR_$DATA.readu_cookie_dotdot;
             } else if (local_name_len == 2 && name[0] == '.' && name[1] == '.') {
                 /* ".." -> parent continuation */
-                *(int32_t *)cont = (int32_t)DIR_$READU_COOKIE_FIRST;
+                *(int32_t *)cont = (int32_t)DIR_$DATA.readu_cookie_first;
             } else {
                 goto start_named_search;
             }
@@ -153,12 +152,12 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
 
     /* Check for dot/dotdot virtual entries */
     if (local_name_len == 0) {
-        if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT ||
-            *(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOTDOT) {
+        if (*(int32_t *)cont == (int32_t)DIR_$DATA.readu_cookie_dot ||
+            *(int32_t *)cont == (int32_t)DIR_$DATA.readu_cookie_dotdot) {
             /* Emit "." and ".." virtual entries */
             do {
                 uint16_t virt_name_len;
-                if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOT) {
+                if (*(int32_t *)cont == (int32_t)DIR_$DATA.readu_cookie_dot) {
                     virt_name_len = 1;  /* "." */
                 } else {
                     virt_name_len = 2;  /* ".." */
@@ -195,7 +194,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                 last_entry[1] = 1;
 
                 /* Resolve UID for ".." */
-                if (*(int32_t *)cont == (int32_t)DIR_$READU_COOKIE_DOTDOT) {
+                if (*(int32_t *)cont == (int32_t)DIR_$DATA.readu_cookie_dotdot) {
                     /* ".." entry - get parent UID */
                     if (uid->high == NAME_$NODE_UID.high &&
                         uid->low == NAME_$NODE_UID.low) {
@@ -225,7 +224,7 @@ void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
                 /* Advance continuation */
                 cont[0] = cont[0] + 1;
 
-            } while (*(int32_t *)cont != (int32_t)DIR_$READU_COOKIE_FIRST);
+            } while (*(int32_t *)cont != (int32_t)DIR_$DATA.readu_cookie_first);
         }
     }
 
@@ -320,7 +319,7 @@ start_named_search:
             }
 
             /* Get name pointer for this entry */
-            entry_name = entry_ptr + DIR_$NAME_OFFSET_TABLE[(*entry_ptr & 7)];
+            entry_name = entry_ptr + DIR_$DATA.name_offset_table[(*entry_ptr & 7)];
             last_entry = (uint16_t *)((char *)buf_ptr + word_idx * 2);
             word_idx += (entry_size >> 1);
             *count_ret = *count_ret + 1;
@@ -365,18 +364,18 @@ start_named_search:
                      * reach TGT_TAB[n]. */
                     {
                         int16_t remaining =
-                            (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
+                            (int16_t)(DIR_MOUNT_COUNT16() - 1);
                         int16_t n;
 
                         for (n = 1; remaining >= 0; n++, remaining--) {
                             if (*(uint32_t *)(last_entry + 2) ==
-                                    DIR_MOUNT_UID_OF(blk, n).high &&
+                                    DIR_$DATA.mount_uid[n].high &&
                                 *(uint32_t *)(last_entry + 4) ==
-                                    DIR_MOUNT_UID_OF(blk, n).low) {
+                                    DIR_$DATA.mount_uid[n].low) {
                                 *(uint32_t *)(last_entry + 2) =
-                                    DIR_MOUNT_TGT_OF(blk, n).high;
+                                    DIR_$DATA.mount_tgt[n].high;
                                 *(uint32_t *)(last_entry + 4) =
-                                    DIR_MOUNT_TGT_OF(blk, n).low;
+                                    DIR_$DATA.mount_tgt[n].low;
                                 break;
                             }
                         }

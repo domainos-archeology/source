@@ -55,10 +55,8 @@ uint16_t PROC1_$AS_ID;
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uid_t    UID_$NIL = { 0, 0 };
 
-/* The dir module data area DIR_$DO_OP establishes as A5 (0xE7DC00).  The host
- * arch.h stub returns NULL, so the .c under test is compiled against this
- * buffer instead - the #define comes after every header include. */
-static uint8_t a5_area[0x2200];
+/* The DIR module block; DIR_$DO_OP's A5 (0xE7DC00) is the block + 8. */
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                                */
@@ -239,9 +237,6 @@ void FILE_$DELETE_OBJ(uid_t *file_uid, int8_t force, void *param_3,
 /* Code under test                                                      */
 /* ------------------------------------------------------------------ */
 
-/* Point the whole DIR module block at our own buffer (source-yv13). */
-#undef DIR_$BLOCK_BASE
-#define DIR_$BLOCK_BASE ((void *)a5_area)
 
 #include "../do_op_delete.c"
 
@@ -254,7 +249,7 @@ static uid_t deleted_uid_ret;
 
 static void reset(void)
 {
-    memset(a5_area, 0, sizeof(a5_area));
+    memset(&DIR_$DATA, 0, sizeof(DIR_$DATA));
     memset(handle_obj, 0, sizeof(handle_obj));
     memset(fe_entry, 0, sizeof(fe_entry));
     memset(&ca_out, 0, sizeof(ca_out));
@@ -467,9 +462,9 @@ TEST(mount_source_directory_is_refused)
 {
     reset();
     ca_out.sub_type = 2;
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
+    DIR_$DATA.mttab_count = 3;
     {
-        uint32_t *row = (uint32_t *)(a5_area + 8 + 0x1554 + 2 * 8);
+        uint32_t *row = &DIR_$DATA.mount_uid[3].high;   /* A5+8+0x1554+2*8 */
         row[0] = ENTRY_UID.high;
         row[1] = ENTRY_UID.low;
     }
@@ -479,16 +474,16 @@ TEST(mount_source_directory_is_refused)
     /* A row that does not match lets the delete proceed. */
     reset();
     ca_out.sub_type = 2;
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
+    DIR_$DATA.mttab_count = 3;
     ASSERT_EQ(status_$ok, (uint32_t)call(false, false, true));
     ASSERT_EQ(1, ar_calls);
 
     /* A non-directory never consults the table. */
     reset();
     ca_out.sub_type = 0;
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 3;
+    DIR_$DATA.mttab_count = 3;
     {
-        uint32_t *row = (uint32_t *)(a5_area + 8 + 0x1554 + 8);
+        uint32_t *row = &DIR_$DATA.mount_uid[2].high;   /* A5+8+0x1554+8 */
         row[0] = ENTRY_UID.high;
         row[1] = ENTRY_UID.low;
     }

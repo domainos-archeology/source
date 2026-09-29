@@ -87,8 +87,9 @@ uint16_t PROC1_$CURRENT;
 /* NETLOG */
 int8_t NETLOG_$OK_TO_LOG;
 
-/* MMAPE array */
-#define MOCK_MMAPE_SIZE 4096
+/* MMAPE array: the shape of MMAP_$MMAPE (mmap/mmap.h), entries for ppn
+ * 0x200..0xFFF, which this header-free test mirrors */
+#define MOCK_MMAPE_SIZE 0xE00
 static mmape_t mock_mmape[MOCK_MMAPE_SIZE];
 
 /* AST event count */
@@ -216,8 +217,7 @@ static void reset_mocks(void)
 
 /* Provide macros the source needs */
 #define PMAP_LOCK_ID 0x14
-#define MMAPE_BASE mock_mmape
-#define MMAPE_FOR_VPN(vpn) (&mock_mmape[(vpn)])
+#define MMAPE_FOR_VPN(ppn) (&mock_mmape[(int32_t)(ppn) - 0x200])
 #define AST_$PMAP_IN_TRANS_EC mock_pmap_in_trans_ec
 
 void ML_$LOCK(uint16_t id) {
@@ -339,7 +339,7 @@ TEST(single_page_success)
     uint32_t segmap[32] = { 0 };
     status_$t status = 0;
 
-    mock_mmape[0x300].seg_offset = 5;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
@@ -395,9 +395,9 @@ TEST(multi_page_batch)
     uint32_t segmap[32] = { 0 };
     status_$t status = 0;
 
-    mock_mmape[0x300].seg_offset = 5;
-    mock_mmape[0x301].seg_offset = 6;
-    mock_mmape[0x302].seg_offset = 7;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
+    MMAPE_FOR_VPN(0x301)->seg_offset = 6;
+    MMAPE_FOR_VPN(0x302)->seg_offset = 7;
 
     setup_qblk(0, 0x300, 0);
     setup_qblk(1, 0x301, 0);
@@ -421,8 +421,8 @@ TEST(write_error_propagates)
     uint32_t segmap[32] = { 0 };
     status_$t status = 0;
 
-    mock_mmape[0x300].seg_offset = 5;
-    mock_mmape[0x301].seg_offset = 6;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
+    MMAPE_FOR_VPN(0x301)->seg_offset = 6;
 
     /* First page succeeds, second has error */
     setup_qblk(0, 0x300, 0);
@@ -466,6 +466,9 @@ TEST(write_multi_failure_crashes)
     status_$t status = 0;
 
     mock_write_multi_result = 0xDEAD;
+    /* the mocked CRASH_SYSTEM returns, so the completion loop still runs:
+     * give it a real page (MMAPE entries start at ppn 0x200) */
+    setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
     pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
@@ -505,7 +508,7 @@ TEST(netlog_when_enabled)
     status_$t status = 0;
 
     NETLOG_$OK_TO_LOG = -1;  /* bit 7 set = enabled */
-    mock_mmape[0x300].seg_offset = 5;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
@@ -524,7 +527,7 @@ TEST(netlog_when_disabled)
     status_$t status = 0;
 
     NETLOG_$OK_TO_LOG = 0;  /* disabled */
-    mock_mmape[0x300].seg_offset = 5;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 
@@ -542,8 +545,8 @@ TEST(process_stats_tracking)
     status_$t status = 0;
 
     PROC1_$CURRENT = 3;
-    mock_mmape[0x300].seg_offset = 5;
-    mock_mmape[0x301].seg_offset = 6;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 5;
+    MMAPE_FOR_VPN(0x301)->seg_offset = 6;
 
     setup_qblk(0, 0x300, 0);
     setup_qblk(1, 0x301, 0);
@@ -564,7 +567,7 @@ TEST(lock_ordering)
     uint32_t segmap[32] = { 0 };
     status_$t status = 0;
 
-    mock_mmape[0x300].seg_offset = 0;
+    MMAPE_FOR_VPN(0x300)->seg_offset = 0;
     setup_qblk(0, 0x300, 0);
     setup_mock_qblk_chain();
 

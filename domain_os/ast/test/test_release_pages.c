@@ -57,9 +57,8 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 uint16_t        PROC1_$CURRENT;
 
@@ -89,7 +88,7 @@ static uint32_t *row(int seg) { return (uint32_t *)PMAP_SEGMAP_ROW(seg); }
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(&test_aote, 0, sizeof(test_aote));
@@ -110,7 +109,7 @@ TEST(release_collects_and_unmaps)
     r[0] = SEGMAP_VALID | SEGMAP_WIRED | 0x300;          /* unwired MMAPE */
     r[1] = SEGMAP_VALID | 0x301;                         /* not wired: skipped */
     r[2] = SEGMAP_VALID | SEGMAP_WIRED | 0x302;          /* MMAPE wired */
-    test_mmapes[0x302].wire_count = 1;
+    MMAPE_FOR_VPN(0x302)->wire_count = 1;
     r[31] = SEGMAP_VALID | SEGMAP_WIRED | 0x303;
     row(3)[0] = SEGMAP_VALID | SEGMAP_WIRED | 0x304;     /* next row: untouched */
 
@@ -148,9 +147,9 @@ TEST(release_no_pool_and_nothing)
 
 static void setup_corrupt(uint32_t ppn, int seg, int page)
 {
-    test_mmapes[ppn].flags1 = MMAPE_FLAG1_IN_WSL;
-    test_mmapes[ppn].segment = (uint16_t)seg;
-    test_mmapes[ppn].seg_offset = (uint8_t)page;
+    MMAPE_FOR_VPN(ppn)->flags1 = MMAPE_FLAG1_IN_WSL;
+    MMAPE_FOR_VPN(ppn)->segment = (uint16_t)seg;
+    MMAPE_FOR_VPN(ppn)->seg_offset = (uint8_t)page;
     row(seg)[page] = SEGMAP_VALID | ppn;
     AST_ASTE_ENTRY(seg)->aote = &test_aote;
 }
@@ -184,7 +183,7 @@ TEST(corrupted_modified_page_saved)
 
     reset_state();
     setup_corrupt(0x350, 2, 9);
-    test_mmapes[0x350].flags2 = MMAPE_FLAG2_MODIFIED;
+    MMAPE_FOR_VPN(0x350)->flags2 = MMAPE_FLAG2_MODIFIED;
     r = AST_$REMOVE_CORRUPTED_PAGE(0x350);
     ASSERT_EQ(0, r);
     ASSERT_EQ(1, save_calls);
@@ -203,13 +202,13 @@ TEST(corrupted_gates)
     ASSERT_EQ(0, AST_$REMOVE_CORRUPTED_PAGE(0x1FF));
     ASSERT_EQ(0, AST_$REMOVE_CORRUPTED_PAGE(0x1000));
 
-    test_mmapes[0x350].flags1 = 0;                      /* not in a WSL */
+    MMAPE_FOR_VPN(0x350)->flags1 = 0;                      /* not in a WSL */
     ASSERT_EQ(0, AST_$REMOVE_CORRUPTED_PAGE(0x350));
-    test_mmapes[0x350].flags1 = MMAPE_FLAG1_IN_WSL;
+    MMAPE_FOR_VPN(0x350)->flags1 = MMAPE_FLAG1_IN_WSL;
 
-    test_mmapes[0x350].segment = 0;
+    MMAPE_FOR_VPN(0x350)->segment = 0;
     ASSERT_EQ(0, AST_$REMOVE_CORRUPTED_PAGE(0x350));
-    test_mmapes[0x350].segment = 2;
+    MMAPE_FOR_VPN(0x350)->segment = 2;
 
     row(2)[9] |= SEGMAP_IN_TRANS;
     ASSERT_EQ(0, AST_$REMOVE_CORRUPTED_PAGE(0x350));

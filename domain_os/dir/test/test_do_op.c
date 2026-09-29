@@ -64,7 +64,7 @@ int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
 /* 0x00E7FC66 is DIR_$OP_TAB[4].base_size and DIR_$OP_VERSION /
  * DIR_$OP_REPLY_SIZE are DIR_$OP_REC(half).reply_version / .reply_size, so
  * the one biased table is all that has to exist here (bead source-wk2f). */
-dir_$op_tab_entry_t DIR_$OP_TAB[DIR_$OP_TAB_ENTRIES];
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);   /* DIR_$OP_TAB is its op_tab */
 uint32_t DIR_$CONST_ZERO_L;   /* 0x00E4B33C is a longword (dir_internal.h) */
 uid_t    ACL_$DIRIN_ACL = { 0x00000603u, 0x00000000u };  /* 0xE1745C */
 status_$t Naming_bad_request_header_ver_err;
@@ -423,7 +423,7 @@ static void reset(uint8_t op_code)
 {
     memset(req_buf, 0, sizeof(req_buf));
     memset(resp_buf, 0, sizeof(resp_buf));
-    memset(DIR_$OP_TAB, 0, sizeof(DIR_$OP_TAB));
+    memset(DIR_$DATA.op_tab, 0, sizeof(DIR_$DATA.op_tab));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     reply_len = 0;
 

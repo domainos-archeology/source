@@ -41,7 +41,7 @@ void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool)
         /* btst.l #0xe / #0xd on the high word = bits 30 and 29 */
         if ((*entry & SEGMAP_VALID) && (*entry & SEGMAP_WIRED)) {
             ppn = *entry & 0xFFFF;
-            if (MMAPE_BASE[ppn].wire_count == 0) {
+            if (MMAPE_FOR_VPN(ppn)->wire_count == 0) {
                 /* 0x00E06FEC..0x00E06FF4 */
                 *entry &= ~SEGMAP_WIRED;        /* bclr.b #0x5,(A2) */
                 list[count] = ppn;

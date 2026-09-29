@@ -64,16 +64,10 @@ FORBIDDEN = ('object', 'extern', 'absaddr', 'record')
 # cites the bead that removes it.  Keep this list short: it is the
 # remainder of source-0i3, not a place for new guards.
 EXEMPT = [
-    # DIR segment (A5 = 0xE7DC00): the block-base hook
-    ('dir/dir_internal.h', 'DIR_$BLOCK_BASE', 'source-qiby'),
-    # MMAP page table in OS_PMAPS (element for ppn 0 at 0xEB2800)
-    ('mmap/mmap.h', 'MMAPE_BASE', 'source-fyjc'),
     # MMU_ASM cells the hand-written mmu/sau2 code owns, MMU_$PTTX, and the
     # MMU register page (moves to arch/m68k/sau2/hw.h with them)
     ('mmu/mmu.h', 'PTT_BASE', 'source-o56c'),
     ('mmu/mmu_data.c', 'mmu_ptt_base', 'source-o56c'),
-    # interrupt stack in the STACK segment, shared with the .s files
-    ('os/os_internal.h', 'INT_STACK_BASE', 'source-4k71'),
 ]
 
 # A cast of an integer literal to a pointer type:

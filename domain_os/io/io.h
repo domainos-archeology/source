@@ -11,6 +11,7 @@
 #define IO_H
 
 #include "base/base.h"
+#include "os/os.h"      /* OS_$STACK: IO_$SAVED_INT_SR is one of its fields */
 
 /*
  * Status codes (module 0x10 = OS / I/O manager)
@@ -178,9 +179,12 @@ extern void *IO_$SAVED_OS_SP;
  * stack switch, used during interrupt exit to determine the interrupted
  * priority level.
  *
- * Original address: 0x00EB2BF8
+ * Original address: 0x00EB2BF8, 8 bytes below INT_STACK_BASE in the SAU2
+ * map's STACK segment, so it is a field of that block, OS_$STACK (os/os.h;
+ * source-4k71).  io/sau2/use_int_stack.s reaches it as
+ * `.set IO_$SAVED_INT_SR, OS_$STACK + 0x2BF8`.
  */
-extern uint16_t IO_$SAVED_INT_SR;
+#define IO_$SAVED_INT_SR (OS_$STACK.saved_int_sr)
 
 
 /*

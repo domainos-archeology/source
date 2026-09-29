@@ -77,7 +77,6 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
      * caller builds (0x00E4C466 `move.w (0xe,A2),-(SP)`). */
     (void)req_version;
 
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t local_handle;
     void *entry_ptr;
     uint16_t extra_buf[2];
@@ -147,20 +146,23 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                 }
             }
 
-            /* Check directory lock list - prevent rename of locked entries */
+            /* Check directory lock list - prevent rename of locked entries.
+             * The list is DIR_$MTTAB's source-uid table: the cursor starts at
+             * A5 and steps 8, comparing (0x155c / 0x1560,cursor), i.e.
+             * mount_uid[1..count] (A5 + 0x1554 + n*8). */
             {
-                int16_t lock_count = DIR_MOUNT_COUNT16(blk);
+                int16_t lock_count = DIR_MOUNT_COUNT16();
                 int16_t i = lock_count - 1;
-                char *lock_base = blk;
+                int16_t n = 1;
                 if (i >= 0) {
                     do {
-                        if (entry_uid.high == *(uint32_t *)(lock_base + 0x155C) &&
-                            entry_uid.low == *(uint32_t *)(lock_base + 0x1560)) {
+                        if (entry_uid.high == DIR_$DATA.mount_uid[n].high &&
+                            entry_uid.low == DIR_$DATA.mount_uid[n].low) {
                             *status_ret = status_$naming_directory_locked;
                             goto done;
                         }
                         i--;
-                        lock_base += 8;
+                        n++;
                     } while (i != -1);
                 }
             }
@@ -207,7 +209,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
 
             /* Acquire link buffer mutex */
             ML_$EXCLUSION_START(&DIR_$LINK_BUF_MUTEX);
-            DIR_LINK_BUF_OWNER_OF(blk) = PROC1_$CURRENT;
+            DIR_$DATA.link_buf_owner = PROC1_$CURRENT;
 
             if (*(int16_t *)(ep + 4) == -1) {
                 /* Inline link data: starts at entry + name_len + 0x0C */
@@ -220,10 +222,11 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                 link_data = (char *)(ovf + 1);
             }
 
-            /* Copy link data to the link buffer (A5-relative) */
+            /* Copy link data to the link buffer, A5+0 (DIR_$DATA.link_buf,
+             * guarded by DIR_$LINK_BUF_MUTEX) */
             {
                 int16_t remaining = link_len - 1;
-                char *dest = blk;
+                char *dest = (char *)DIR_$DATA.link_buf;
                 if (remaining >= 0) {
                     do {
                         *dest = *link_data;
@@ -233,8 +236,9 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                     } while (remaining != -1);
                 }
             }
-            /* Now link_data points to A5 (the link buffer copy) */
-            link_data = blk;
+            /* Now link_data points to A5 (the link buffer copy): `pea (A5)'
+             * at 0x00E51AEE */
+            link_data = (char *)DIR_$DATA.link_buf;
             break;
 
         default:
@@ -248,8 +252,8 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
                    entry_extra, &entry_uid, link_len, link_data, status_ret);
 
     /* Release link buffer mutex if we acquired it */
-    if (PROC1_$CURRENT == DIR_LINK_BUF_OWNER_OF(blk)) {
-        DIR_LINK_BUF_OWNER_OF(blk) = 0;
+    if (PROC1_$CURRENT == DIR_$DATA.link_buf_owner) {
+        DIR_$DATA.link_buf_owner = 0;
         ML_$EXCLUSION_STOP(&DIR_$LINK_BUF_MUTEX);
     }
 

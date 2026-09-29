@@ -39,10 +39,12 @@ static int tests_failed = 0;
 } while (0)
 
 #define TEST_PAGES 64
-static mmape_t  mmape_store[TEST_PAGES];
-static uint32_t pft_store[TEST_PAGES];
+static uint32_t pft_store[0x1000];   /* the PFT is indexed by ppn, up to 0xFFF */
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
+/* The table holds ppn 0x200..0xFFF (mmap/mmap.h), so the test's page n is
+ * ppn VP(n). */
+#define VP(n) (MMAP_MMAPE_FIRST_PPN + (n))
 uint32_t *mmu_pft_base    = pft_store;
 /* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
@@ -56,7 +58,7 @@ void MMU_$REMOVE(uint32_t ppn) { (void)ppn; }
 
 static void reset_module(void)
 {
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     MMAP_$PAGEABLE_PAGES = 100;
 }
@@ -71,78 +73,78 @@ static uint32_t walk(uint16_t wsl, int n)
 
 TEST(three_pages_into_empty_list)
 {
-    uint32_t arr[3] = { 10, 11, 12 };
+    uint32_t arr[3] = { VP(10), VP(11), VP(12) };
 
     reset_module();
-    MMAPE_FOR_VPN(11)->priority = 0x55;
+    MMAPE_FOR_VPN(VP(11))->priority = 0x55;
 
     mmap_$add_pages_to_wsl(arr, 3, 7);
 
     ASSERT_EQ(3, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(10, MMAP_$WSL[7].head_vpn);
-    ASSERT_EQ(11, walk(7, 1));
-    ASSERT_EQ(12, walk(7, 2));
-    ASSERT_EQ(10, walk(7, 3));
-    ASSERT_EQ(12, MMAPE_FOR_VPN(10)->next_vpn);   /* tail */
-    ASSERT_EQ(10, MMAPE_FOR_VPN(11)->next_vpn);
-    ASSERT_EQ(11, MMAPE_FOR_VPN(12)->next_vpn);
-    ASSERT_EQ(7, MMAPE_FOR_VPN(11)->wsl_index);
-    ASSERT_EQ(0, MMAPE_FOR_VPN(11)->priority);
-    ASSERT_EQ(MMAPE_FLAG1_IN_WSL, MMAPE_FOR_VPN(12)->flags1);
+    ASSERT_EQ(VP(10), MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(VP(11), walk(7, 1));
+    ASSERT_EQ(VP(12), walk(7, 2));
+    ASSERT_EQ(VP(10), walk(7, 3));
+    ASSERT_EQ(VP(12), MMAPE_FOR_VPN(VP(10))->next_vpn);   /* tail */
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(11))->next_vpn);
+    ASSERT_EQ(VP(11), MMAPE_FOR_VPN(VP(12))->next_vpn);
+    ASSERT_EQ(7, MMAPE_FOR_VPN(VP(11))->wsl_index);
+    ASSERT_EQ(0, MMAPE_FOR_VPN(VP(11))->priority);
+    ASSERT_EQ(MMAPE_FLAG1_IN_WSL, MMAPE_FOR_VPN(VP(12))->flags1);
     ASSERT_EQ(103, MMAP_$PAGEABLE_PAGES);
 }
 
 TEST(run_spliced_at_tail_of_populated_list)
 {
-    uint32_t arr[3] = { 10, 11, 12 };
-    mmape_t *p20 = MMAPE_FOR_VPN(20);
+    uint32_t arr[3] = { VP(10), VP(11), VP(12) };
+    mmape_t *p20 = MMAPE_FOR_VPN(VP(20));
 
     reset_module();
     MMAP_$WSL[7].page_count = 1;
-    MMAP_$WSL[7].head_vpn = 20;
-    p20->prev_vpn = 20;
-    p20->next_vpn = 20;
+    MMAP_$WSL[7].head_vpn = VP(20);
+    p20->prev_vpn = VP(20);
+    p20->next_vpn = VP(20);
 
     mmap_$add_pages_to_wsl(arr, 3, 7);
 
     ASSERT_EQ(4, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(20, MMAP_$WSL[7].head_vpn);
-    ASSERT_EQ(10, walk(7, 1));
-    ASSERT_EQ(11, walk(7, 2));
-    ASSERT_EQ(12, walk(7, 3));
-    ASSERT_EQ(20, walk(7, 4));
-    ASSERT_EQ(12, p20->next_vpn);                  /* head.next = last */
-    ASSERT_EQ(20, MMAPE_FOR_VPN(10)->next_vpn);   /* first.next = tail */
-    ASSERT_EQ(20, MMAPE_FOR_VPN(12)->prev_vpn);   /* last.prev = head */
+    ASSERT_EQ(VP(20), MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(VP(10), walk(7, 1));
+    ASSERT_EQ(VP(11), walk(7, 2));
+    ASSERT_EQ(VP(12), walk(7, 3));
+    ASSERT_EQ(VP(20), walk(7, 4));
+    ASSERT_EQ(VP(12), p20->next_vpn);                  /* head.next = last */
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(10))->next_vpn);   /* first.next = tail */
+    ASSERT_EQ(VP(20), MMAPE_FOR_VPN(VP(12))->prev_vpn);   /* last.prev = head */
 }
 
 TEST(single_page_links_to_itself)
 {
-    uint32_t arr[1] = { 10 };
+    uint32_t arr[1] = { VP(10) };
 
     reset_module();
 
     mmap_$add_pages_to_wsl(arr, 1, 7);
 
     ASSERT_EQ(1, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(10, MMAP_$WSL[7].head_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(10)->next_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(10)->prev_vpn);
+    ASSERT_EQ(VP(10), MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(10))->next_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(10))->prev_vpn);
 }
 
 TEST(two_pages_skip_middle_loop)
 {
-    uint32_t arr[2] = { 10, 11 };
+    uint32_t arr[2] = { VP(10), VP(11) };
 
     reset_module();
 
     mmap_$add_pages_to_wsl(arr, 2, 7);
 
     ASSERT_EQ(2, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(11, MMAPE_FOR_VPN(10)->prev_vpn);
-    ASSERT_EQ(11, MMAPE_FOR_VPN(10)->next_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(11)->next_vpn);
-    ASSERT_EQ(10, MMAPE_FOR_VPN(11)->prev_vpn);
+    ASSERT_EQ(VP(11), MMAPE_FOR_VPN(VP(10))->prev_vpn);
+    ASSERT_EQ(VP(11), MMAPE_FOR_VPN(VP(10))->next_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(11))->next_vpn);
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(11))->prev_vpn);
 }
 
 int main(void)

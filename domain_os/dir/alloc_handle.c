@@ -9,7 +9,7 @@
  *     slot, handle table entry 0 at A5+0x1880, provided bit 0 of the in-use
  *     bitmap is still clear (the image spells that test as a byte operation
  *     on A5+0x203F, the bitmap's least significant byte);
- *   - everyone else counts a wait in DIR_$HNDL_WAITS and blocks on
+ *   - everyone else counts a wait in DIR_$DATA.hndl_waits and blocks on
  *     DIR_$WT_FOR_HDNL_EC, then retries from the top.
  *
  * Returns: the handle, or NULL.
@@ -23,26 +23,25 @@
 /* `cmpi.w #0x9,(-0x2,A0,D0w*0x1)` at 0x00E4B8A0 against PROC1_$TYPE. */
 #define DIR_PROC_TYPE_NS_HELPER     9
 
-/* Bit 0 of DIR_$HANDLE_IN_USE marks handle table slot 0, the reserve slot
+/* Bit 0 of DIR_$DATA.handle_in_use marks handle table slot 0, the reserve slot
  * `lea (0x1880,A5),A2` hands out at 0x00E4B8E2. */
 #define DIR_HANDLE_RESERVE_BIT      0x00000001u
 
 void *DIR_$ALLOC_HANDLE(void)
 {
-    char          *blk = DIR_$BLOCK;
     dir_$handle_t *handle = NULL;       /* A2 */
 
     while (1) {
         ML_$EXCLUSION_START(&DIR_$MUTEX);       /* 0x00E4B878 */
 
         /* 0x00E4B886 */
-        handle = (dir_$handle_t *)ARCH_VA_TO_PTR(DIR_HANDLE_FREE_OF(blk));
+        handle = (dir_$handle_t *)ARCH_VA_TO_PTR(DIR_$DATA.handle_free);
 
         if (handle != NULL) {
             /* 0x00E4B92E-0x00E4B93A: mark it busy and unlink it. */
-            DIR_HANDLE_IN_USE_OF(blk) |=
+            DIR_$DATA.handle_in_use |=
                 1u << ((uint32_t)handle->slot_index & 0x1F);
-            DIR_HANDLE_FREE_OF(blk) = handle->next;
+            DIR_$DATA.handle_free = handle->next;
             break;
         }
 
@@ -62,11 +61,11 @@ void *DIR_$ALLOC_HANDLE(void)
 
             do {
                 /* 0x00E4B8B8: the bitmap is re-read on every iteration. */
-                if ((DIR_HANDLE_IN_USE_OF(blk) &
+                if ((DIR_$DATA.handle_in_use &
                      (1u << ((uint32_t)idx & 0x1F))) != 0) {
                     /* 0x00E4B8C0: `(0x1888,A1)` with A1 = A5 + idx*0x3C is
                      * handle table entry idx's owner word. */
-                    if (DIR_HANDLE_TAB_OF(blk)[idx].owner ==
+                    if (DIR_$DATA.handle_tab[idx].owner ==
                         (int16_t)PROC1_$CURRENT) {
                         found = true;   /* 0x00E4B8C8 `st D0b` */
                         break;
@@ -78,9 +77,9 @@ void *DIR_$ALLOC_HANDLE(void)
 
             if (found < 0) {    /* 0x00E4B8D6 `tst.b D0b` / `bpl` */
                 /* 0x00E4B8DA-0x00E4B8EC: hand out the reserve slot once. */
-                if ((DIR_HANDLE_IN_USE_OF(blk) & DIR_HANDLE_RESERVE_BIT) == 0) {
-                    handle = &DIR_HANDLE_TAB_OF(blk)[0];
-                    DIR_HANDLE_IN_USE_OF(blk) |= DIR_HANDLE_RESERVE_BIT;
+                if ((DIR_$DATA.handle_in_use & DIR_HANDLE_RESERVE_BIT) == 0) {
+                    handle = &DIR_$DATA.handle_tab[0];
+                    DIR_$DATA.handle_in_use |= DIR_HANDLE_RESERVE_BIT;
                     goto done;
                 }
             }
@@ -89,7 +88,7 @@ void *DIR_$ALLOC_HANDLE(void)
         /* 0x00E4B8EE-0x00E4B92A: wait for somebody to free a handle. */
         {
             int32_t wait_val = (int32_t)DIR_$WT_FOR_HDNL_EC.value + 1;
-            DIR_HNDL_WAITS_OF(blk) += 1;            /* 0x00E4B8FA */
+            DIR_$DATA.hndl_waits += 1;            /* 0x00E4B8FA */
 
             ML_$EXCLUSION_STOP(&DIR_$MUTEX);        /* 0x00E4B8FE */
 

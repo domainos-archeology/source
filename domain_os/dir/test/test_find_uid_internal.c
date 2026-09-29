@@ -51,9 +51,7 @@ static int tests_failed = 0;
 
 /* ===== Type Definitions ===== */
 
-#include "name/name.h"   /* status_$t, status_$ok, the 0x000Exxxx codes */
-
-typedef uid_t dir_uid_t;
+#include "dir/dir_internal.h"
 
 /* Status codes used by find_uid_internal */
 #define file_$bad_reply_received_from_remote_node  0x000F0003
@@ -85,33 +83,15 @@ static uid_t old_find_net_dir;
 static uint32_t old_find_net_index = 0;
 static uint32_t old_find_net_return_value = 0;
 
-/* ===== Mock A5 Data ===== */
-
-/* Simulated per-process data area (A5-relative).
- * For testing, we only need the two words at offsets 0x20b2 and 0x20b6. */
-static char mock_a5_data[0x20c0];
+/* ===== The DIR module block ===== */
 
 /*
- * Point the whole DIR module block at our own buffer (source-yv13), and
- * overlay DIR_$OP_TAB on it at the offset the image uses: DIR_$OP_TAB is
- * 0x00E7FC42, i.e. A5+0x2042, so record 14 (opcode 0x46 >> 1 = 0x23, minus
- * the table's 21-record bias) lands on A5+0x20B2 / A5+0x20B6 - exactly the
- * two cells reset_mocks() below fills in.
+ * DIR_$DATA; DIR_$OP_TAB is its op_tab at A5+0x2042 (0x00E7FC42), so the
+ * FIND_UID record (opcode 0x46 >> 1 = 0x23, minus the table's 21-record
+ * bias: record 14) is A5+0x20B2 / A5+0x20B6 - the two cells reset_mocks()
+ * below fills in.
  */
-#undef DIR_$BLOCK_BASE
-#define DIR_$BLOCK_BASE ((void *)mock_a5_data)
-
-#define DIR_OP_FIND_UID             0x46
-#define DIR_$OP_TAB_BASE_INDEX      21
-typedef struct dir_$op_tab_entry_t {
-    uint16_t version;        /* +0x00 */
-    uint16_t reply_version;  /* +0x02 */
-    uint16_t base_size;      /* +0x04 */
-    uint16_t reply_size;     /* +0x06 */
-} dir_$op_tab_entry_t;
-#define DIR_$OP_TAB \
-    ((dir_$op_tab_entry_t *)((char *)DIR_$BLOCK_BASE + 0x2042))
-#define DIR_$OP_REC(half) (DIR_$OP_TAB[(half) - DIR_$OP_TAB_BASE_INDEX])
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
 
 /* ===== Mock Functions ===== */
 
@@ -128,7 +108,7 @@ typedef struct dir_$op_tab_entry_t {
  * the packed struct in find_uid_internal reads the right values.
  */
 void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
-                void *response, void *resp_buf)
+                void *response, uint16_t *resp_buf)
 {
     (void)request;
     (void)resp_buf;
@@ -207,16 +187,11 @@ static void reset_mocks(void)
     old_find_net_index = 0;
     old_find_net_return_value = 0;
 
-    /* Set up A5 data: version at +0x20b2 and req_size at +0x20b6 */
-    memset(mock_a5_data, 0, sizeof(mock_a5_data));
-    *(uint16_t *)(mock_a5_data + 0x20b2) = 0x0001;  /* version */
-    *(int16_t *)(mock_a5_data + 0x20b6) = 0x000a;   /* req_size = 10 */
+    /* The FIND_UID record: version at A5+0x20b2 and req_size at A5+0x20b6 */
+    memset(&DIR_$DATA, 0, sizeof(DIR_$DATA));
+    DIR_$OP_REC(DIR_OP_FIND_UID >> 1).version = 0x0001;
+    DIR_$OP_REC(DIR_OP_FIND_UID >> 1).base_size = 0x000a;   /* req_size = 10 */
 }
-
-/* Prevent the real headers from being included */
-#define DIR_INTERNAL_H
-#define DIR_H
-#define BASE_H
 
 /* Pull in the implementation directly */
 #include "../find_uid_internal.c"

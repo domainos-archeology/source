@@ -47,6 +47,7 @@ safely.
 
 Host tests: `aste_t.aote` is a real pointer, so an mmap host test needs **no**
 `ARCH_HOST_VA_BASE` arena — just an `aste_t MMAP_$SEG_ASTE[]` array (segment 1
-is slot 0) plus `mmap_wsl` / `mmap_mmape_base` / `mmu_pft_base` /
+is slot 0) plus `mmap_wsl` / the `MMAP_$MMAPE` block (ppn >= 0x200 only,
+since source-fyjc) / `mmu_pft_base` /
 `mmap_pte_base` / `mmap_pid_to_wsl`.  See
 `mmap/test/test_ws_scan.c` and `mmap/test/test_release_pages.c`.

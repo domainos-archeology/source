@@ -24,7 +24,7 @@ void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn)
     mmape_t *mmape;             /* A3 - 0x2000 */
 
     /* 0x00E00F26..0x00E00F30 */
-    mmape = &MMAPE_BASE[ppn];
+    mmape = MMAPE_FOR_VPN(ppn);
 
     /* 0x00E00F34..0x00E00F4C: btst.l #0xd on the high word = bit 29;
      * bclr.b #0x5,(A1) clears it */

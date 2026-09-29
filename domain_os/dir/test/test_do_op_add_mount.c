@@ -37,11 +37,12 @@ static int current_failed = 0;
 #include "dir/dir_internal.h"
 
 /* ------------------------------------------------------------------ */
-/* The host stand-in for the DIR module block                           */
+/* The DIR module block                                                  */
 /* ------------------------------------------------------------------ */
 
-/* Must cover A5+0x400 + 0x28*111 = 0x1348 as well as the mount tables. */
-static uint8_t a5_area[0x2200];
+/* A5 = 0x00E7DC00 is the block + 8; the entry cache and the mount tables
+ * are its fields. */
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
 
 uid_t UID_$NIL = { 0, 0 };
 ml_$exclusion_t DIR_$MUTEX;
@@ -81,16 +82,12 @@ void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
     *status = mock_cattr_status;
 }
 
-/* Point the whole DIR module block at our own buffer (source-yv13). */
-#undef DIR_$BLOCK_BASE
-#define DIR_$BLOCK_BASE ((void *)a5_area)
-
 #include "../do_op_add_mount.c"
 #include "../do_op_drop_mount.c"
 
 static void reset_mocks(void)
 {
-    memset(a5_area, 0, sizeof(a5_area));
+    memset(&DIR_$DATA, 0, sizeof(DIR_$DATA));
     mock_enter_super = mock_exit_super = 0;
     mock_excl_start = mock_excl_stop = 0;
     mock_open_status = status_$ok;
@@ -101,15 +98,15 @@ static void reset_mocks(void)
 
 static uint32_t *mount_uid_slot(int n)
 {
-    return (uint32_t *)(a5_area + DIR_MOUNT_UID_TAB_OFF + n * 8);
+    return &DIR_$DATA.mount_uid[n].high;
 }
 static uint32_t *mount_tgt_slot(int n)
 {
-    return (uint32_t *)(a5_area + DIR_MOUNT_TGT_TAB_OFF + n * 8);
+    return &DIR_$DATA.mount_tgt[n].high;
 }
 static uint32_t *mount_node_slot(int n)
 {
-    return (uint32_t *)(a5_area + DIR_MOUNT_NODE_TAB_OFF + n * 4);
+    return &DIR_$DATA.mount_node[n];
 }
 
 /* ------------------------------------------------------------------ */
@@ -129,7 +126,7 @@ TEST(add_mount_writes_the_one_based_slot)
     dir_$do_op_add_mount(&dir_uid, &mnt_uid, 0x1234, &status);
 
     ASSERT_EQ(status_$ok, status);
-    ASSERT_EQ(1, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(1, DIR_$DATA.mttab_count);
     ASSERT_EQ(0xD1, mount_uid_slot(1)[0]);
     ASSERT_EQ(0xD2, mount_uid_slot(1)[1]);
     ASSERT_EQ(0xE1, mount_tgt_slot(1)[0]);
@@ -154,7 +151,7 @@ TEST(add_mount_is_idempotent)
     dir_$do_op_add_mount(&dir_uid, &mnt_uid, 0x1234, &status);
     dir_$do_op_add_mount(&dir_uid, &mnt_uid, 0x1234, &status);
 
-    ASSERT_EQ(1, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(1, DIR_$DATA.mttab_count);
     /* The second call never reaches the mutex. */
     ASSERT_EQ(1, mock_excl_start);
 }
@@ -167,11 +164,11 @@ TEST(add_mount_rejects_an_eighth_entry)
     status_$t status;
 
     reset_mocks();
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = DIR_MOUNT_MAX - 1;
+    DIR_$DATA.mttab_count = DIR_MOUNT_MAX - 1;
     dir_$do_op_add_mount(&dir_uid, &mnt_uid, 0x1234, &status);
 
     ASSERT_EQ(status_$directory_is_full, status);
-    ASSERT_EQ(DIR_MOUNT_MAX - 1, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(DIR_MOUNT_MAX - 1, DIR_$DATA.mttab_count);
 }
 
 /*
@@ -199,21 +196,20 @@ TEST(add_mount_cache_walk_runs_exactly_111_records)
     ASSERT_EQ(111, DIR_CACHE_COUNT);
     /* The record just past the last one overlays the mount count. */
     ASSERT_EQ(DIR_MOUNT_COUNT_OFF,
-              DIR_CACHE_STRIDE * DIR_CACHE_COUNT + DIR_CACHE_UID_BASE);
+              DIR_DATA_OFF(entry_cache[DIR_CACHE_COUNT]));
 
     /* Plant the directory uid in every in-range record's match field. */
     for (j = 0; j < DIR_CACHE_COUNT; j++) {
-        uint8_t *rec = a5_area + DIR_CACHE_STRIDE * j;
-        *(uint32_t *)(rec + DIR_CACHE_MATCH_OFF) = 0xD1;
-        *(uint32_t *)(rec + DIR_CACHE_MATCH_OFF + 4) = 0xD1;
-        *(uint32_t *)(rec + DIR_CACHE_UID_BASE) = 0xFFFFFFFFu;
-        *(uint32_t *)(rec + DIR_CACHE_UID_BASE + 4) = 0xFFFFFFFFu;
+        dir_$entry_cache_t *rec = &DIR_$DATA.entry_cache[j];
+        rec->entry_uid.high = 0xD1;
+        rec->entry_uid.low = 0xD1;
+        rec->dir_uid.high = 0xFFFFFFFFu;
+        rec->dir_uid.low = 0xFFFFFFFFu;
     }
 
     /* The trap for record 111: its match field is A5+0x1560 (which the add
      * fills with dir_uid.low) and A5+0x1564, which nothing else writes. */
-    *(uint32_t *)(a5_area + DIR_CACHE_STRIDE * DIR_CACHE_COUNT
-                  + DIR_CACHE_MATCH_OFF + 4) = 0xD1;
+    DIR_$DATA.mount_uid[2].high = 0xD1;     /* A5+0x1564 */
 
     dir_$do_op_add_mount(&dir_uid, &mnt_uid, 0x1234, &status);
 
@@ -221,13 +217,12 @@ TEST(add_mount_cache_walk_runs_exactly_111_records)
 
     /* Every one of the 111 records was cleared to UID_$NIL. */
     for (j = 0; j < DIR_CACHE_COUNT; j++) {
-        uint8_t *rec = a5_area + DIR_CACHE_STRIDE * j;
-        ASSERT_EQ(0, *(uint32_t *)(rec + DIR_CACHE_UID_BASE));
-        ASSERT_EQ(0, *(uint32_t *)(rec + DIR_CACHE_UID_BASE + 4));
+        ASSERT_EQ(0, DIR_$DATA.entry_cache[j].dir_uid.high);
+        ASSERT_EQ(0, DIR_$DATA.entry_cache[j].dir_uid.low);
     }
 
     /* No 112th record: the count and the entry it indexes survive. */
-    ASSERT_EQ(1, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(1, DIR_$DATA.mttab_count);
     ASSERT_EQ(0xD1, mount_uid_slot(1)[0]);
     ASSERT_EQ(0xD1, mount_uid_slot(1)[1]);
 }
@@ -257,7 +252,7 @@ TEST(drop_mount_moves_the_last_entry_down)
     status_$t status;
 
     reset_mocks();
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 2;
+    DIR_$DATA.mttab_count = 2;
     mount_uid_slot(1)[0] = 0xA1; mount_uid_slot(1)[1] = 0xA2;
     mount_tgt_slot(1)[0] = 0xE1; mount_tgt_slot(1)[1] = 0xE2;
     *mount_node_slot(1) = 0x1111;
@@ -268,7 +263,7 @@ TEST(drop_mount_moves_the_last_entry_down)
     dir_$do_op_drop_mount(&match, 0x9999, &status);
 
     ASSERT_EQ(status_$ok, status);
-    ASSERT_EQ(1, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(1, DIR_$DATA.mttab_count);
     ASSERT_EQ(0xB1, mount_uid_slot(1)[0]);
     ASSERT_EQ(0xF1, mount_tgt_slot(1)[0]);
     ASSERT_EQ(0x2222, *mount_node_slot(1));
@@ -281,13 +276,13 @@ TEST(drop_mount_matches_on_the_node_id_too)
     status_$t status;
 
     reset_mocks();
-    *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF) = 1;
+    DIR_$DATA.mttab_count = 1;
     mount_tgt_slot(1)[0] = 0xE1; mount_tgt_slot(1)[1] = 0xE2;
     *mount_node_slot(1) = 0x4242;
 
     dir_$do_op_drop_mount(&no_match, 0x4242, &status);
 
-    ASSERT_EQ(0, *(int32_t *)(a5_area + DIR_MOUNT_COUNT_OFF));
+    ASSERT_EQ(0, DIR_$DATA.mttab_count);
 }
 
 int main(void)

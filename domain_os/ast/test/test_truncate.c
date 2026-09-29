@@ -55,8 +55,7 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint16_t  PROC1_$CURRENT;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
@@ -139,7 +138,7 @@ void REM_FILE_$TRUNCATE(uid_t *vol, uid_t *uid, uint32_t size, uint8_t del, cloc
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(lookup_uid, 0, sizeof(lookup_uid));
     memset(lookup_result, 0, sizeof(lookup_result));

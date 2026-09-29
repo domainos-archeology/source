@@ -57,9 +57,8 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint32_t       *mmu_pft_base    = test_pft;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
@@ -117,7 +116,7 @@ static uint32_t *row1(void) { return (uint32_t *)PMAP_SEGMAP_ROW(1); }
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(test_pft, 0, sizeof(test_pft));
     memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
@@ -196,9 +195,9 @@ TEST(bit22_run_counted)
      * is replaced, so bit 22 survives */
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x00400000u | 0x500, m[2]);
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x00400000u | 0x501, m[3]);
-    ASSERT_EQ(MMAPE_FLAG1_IMPURE, test_mmapes[0x500].flags1);
-    ASSERT_EQ(3, test_mmapes[0x501].seg_offset);
-    ASSERT_EQ(1, test_mmapes[0x500].segment);
+    ASSERT_EQ(MMAPE_FLAG1_IMPURE, MMAPE_FOR_VPN(0x500)->flags1);
+    ASSERT_EQ(3, MMAPE_FOR_VPN(0x501)->seg_offset);
+    ASSERT_EQ(1, MMAPE_FOR_VPN(0x500)->segment);
     ASSERT_EQ(0x2000, test_pft[0x500]);
     ASSERT_EQ(1, install_calls); ASSERT_EQ(2, install_count); ASSERT_EQ(0, install_wired);
     ASSERT_EQ(2, test_aste.page_count);
@@ -278,7 +277,7 @@ TEST(empty_local_then_disk_read)
     ASSERT_EQ(2, PROC1_$DATA.stats[3].stat[0]); ASSERT_EQ(0, PROC1_$DATA.stats[3].stat[1]);
     ASSERT_EQ(AOTE_FLAG_BUSY | AOTE_FLAG_TOUCHED, test_aote.flags);
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x600, m[3]);
-    ASSERT_EQ(0x11, test_mmapes[0x600].disk_addr);
+    ASSERT_EQ(0x11, MMAPE_FOR_VPN(0x600)->disk_addr);
     ASSERT_EQ(2, log_kind);
 
     /* short read: the unfilled entry is released */
@@ -288,7 +287,7 @@ TEST(empty_local_then_disk_read)
     ASSERT_EQ(1, r); ASSERT_EQ(3, rap_count);
     ASSERT_EQ(1, ctb_calls); ASSERT_EQ((uintptr_t)&m[4], (uintptr_t)ctb_entry); ASSERT_EQ(2, ctb_count);
     ASSERT_EQ(1, PROC1_$DATA.stats[3].stat[1]);
-    ASSERT_EQ(MMAPE_FLAG1_IMPURE, test_mmapes[0x600].flags1);
+    ASSERT_EQ(MMAPE_FLAG1_IMPURE, MMAPE_FOR_VPN(0x600)->flags1);
 }
 
 TEST(remote_read)

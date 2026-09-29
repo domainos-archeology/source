@@ -54,7 +54,6 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
                            uint16_t *type_ret, uid_t *uid_ret,
                            uint32_t *extra_ret, status_$t *status_ret)
 {
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint8_t *name_bytes = (uint8_t *)name;
     uint8_t found_ret;
     uint32_t dtv_data[2];  /* 6 bytes: 4-byte + 2-byte */
@@ -62,13 +61,13 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
 
     /* 0x00E4CD9E: names longer than 17 bytes bypass the cache entirely. */
     if (name_len > DIR_ENTRY_CACHE_MAX_NAME) {
-        DIR_ENTRY_CACHE_TOO_LONG_NAME_OF(blk) += 1;
+        DIR_$DATA.entry_cache_too_long_name += 1;
         dir_$lookup_entry(uid, name, name_len, type_ret, uid_ret,
                           extra_ret, &found_ret, status_ret);
         return;
     }
 
-    DIR_ENTRY_CACHE_TRIES_OF(blk) += 1;
+    DIR_$DATA.entry_cache_tries += 1;
 
     /* Get DTV (directory tree version) for comparison.
      * 0x00E4CDCC pushes the enclosing frame's UID *pointer*
@@ -101,7 +100,7 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     /* 0x00E4CE32-0x00E4CE42: the slot is hash % 111 and the record base is
      * A5 + 0x400 + slot * 0x28. */
     int cache_idx = (uint32_t)hash_val % DIR_ENTRY_CACHE_SLOTS;
-    dir_$entry_cache_t *cache_entry = &DIR_ENTRY_CACHE_OF(blk, cache_idx);
+    dir_$entry_cache_t *cache_entry = &DIR_$DATA.entry_cache[cache_idx];
 
     /* 0x00E4CE3E-0x00E4CE4A: `and.b #0xfc` then `lsr.w #0x2`. */
     uint8_t cached_name_len =
@@ -151,13 +150,13 @@ void dir_$get_entry_cached(uid_t *uid, void *name, uint16_t name_len,
     uid_ret->high = cache_entry->entry_uid.high;
     uid_ret->low  = cache_entry->entry_uid.low;
     *extra_ret = 0;
-    DIR_ENTRY_CACHE_HITS_OF(blk) += 1;
+    DIR_$DATA.entry_cache_hits += 1;
 
     /* 0x00E4CED4-0x00E4CEDC: `btst.l #0x8` on the WORD at record+0x16 is
      * bit 0 of the len_flags BYTE. */
     if ((cache_entry->len_flags & DIR_ENTRY_CACHE_ACL_OK) != 0) {
         /* ACL already checked - done */
-        DIR_ENTRY_CACHE_SKIPPED_ACL_OF(blk) += 1;
+        DIR_$DATA.entry_cache_skipped_acl += 1;
         ML_$EXCLUSION_STOP(&DIR_$MUTEX);
         return;
     }

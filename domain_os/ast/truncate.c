@@ -263,7 +263,7 @@ retry:
                 /* 0x00E05EE4..0x00E05F5C: an installed page is dropped */
                 if (*entry & SEGMAP_VALID) {
                     ppn = *entry & 0xFFFF;
-                    mmape = &MMAPE_BASE[ppn];
+                    mmape = MMAPE_FOR_VPN(ppn);
                     if (mmape->wire_count != 0) {
                         local_status = status_$pmap_pages_wired;    /* 0x50007 */
                         break;                                      /* 0x00E05F96 */

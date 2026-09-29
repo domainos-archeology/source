@@ -56,7 +56,7 @@ void dir_$refind_entry(uint32_t local_handle, uint8_t *page_data,
         *entry_ptr_ret = entry;
 
         /* Compute name pointer using name offset table */
-        uint8_t *entry_name = entry + DIR_$NAME_OFFSET_TABLE[*entry & 7];
+        uint8_t *entry_name = entry + DIR_$DATA.name_offset_table[*entry & 7];
         *entry_name_ret = entry_name;
 
         /* Get name length from entry byte 1 */

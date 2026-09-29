@@ -95,7 +95,7 @@ char dir_$find_entry(void *handle, void *name, int16_t name_len,
             *entry_ret = entry;
 
             /* Get entry's name offset based on type */
-            name_offset = DIR_$NAME_OFFSET_TABLE[(*entry & 7)];
+            name_offset = DIR_$DATA.name_offset_table[(*entry & 7)];
             entry_name_len = (int16_t)(uint8_t)entry[1];
 
             /* Compare names byte by byte */

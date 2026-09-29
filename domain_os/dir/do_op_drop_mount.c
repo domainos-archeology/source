@@ -28,7 +28,6 @@
 void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id,
                            status_$t *status_ret)
 {
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     int16_t remaining;
     int16_t n;
 
@@ -36,57 +35,57 @@ void dir_$do_op_drop_mount(uid_t *mount_uid, uint32_t node_id,
     ML_$EXCLUSION_START(&DIR_$MUTEX);
 
     /* 0x00E53404: `move.w (0x155a,A5),D0w` / `subq.w #1` / `bmi`. */
-    remaining = (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
+    remaining = (int16_t)(DIR_MOUNT_COUNT16() - 1);
 
     for (n = 1; remaining >= 0; n++, remaining--) {
         int matched;
 
         /* 0x00E53418-0x00E53426: the target uid first ... */
         matched = (mount_uid->high ==
-                       DIR_MOUNT_TGT_OF(blk, n).high &&
+                       DIR_$DATA.mount_tgt[n].high &&
                    mount_uid->low ==
-                       DIR_MOUNT_TGT_OF(blk, n).low);
+                       DIR_$DATA.mount_tgt[n].low);
         if (!matched) {
             /* 0x00E53428: ... otherwise the node id. */
             matched = (node_id ==
-                       DIR_MOUNT_NODE_OF(blk, n));
+                       DIR_$DATA.mount_node[n]);
         }
 
         if (matched) {
             /* 0x00E5342E: `cmpi.l #0x1,(0x1558,A5)` / `ble` - a table with
              * one entry left only has its count dropped. */
-            if (DIR_MOUNT_COUNT_OF(blk) > 1) {
+            if (DIR_$DATA.mttab_count > 1) {
                 int32_t last;
 
                 /* 0x00E53444: `clr.l (0x1554,A0)` clears only the HIGH
                  * longword of this slot's source uid; 0x00E5346C
                  * overwrites it again a few instructions later. */
-                DIR_MOUNT_UID_OF(blk, n).high = 0;
+                DIR_$DATA.mount_uid[n].high = 0;
 
                 /* 0x00E53448-0x00E5345A: the count is re-read for every
                  * one of the three moves. */
-                last = DIR_MOUNT_COUNT_OF(blk);
-                DIR_MOUNT_TGT_OF(blk, n).high =
-                    DIR_MOUNT_TGT_OF(blk, last).high;
-                DIR_MOUNT_TGT_OF(blk, n).low =
-                    DIR_MOUNT_TGT_OF(blk, last).low;
+                last = DIR_$DATA.mttab_count;
+                DIR_$DATA.mount_tgt[n].high =
+                    DIR_$DATA.mount_tgt[last].high;
+                DIR_$DATA.mount_tgt[n].low =
+                    DIR_$DATA.mount_tgt[last].low;
 
                 /* 0x00E5345E-0x00E53470 */
-                last = DIR_MOUNT_COUNT_OF(blk);
-                DIR_MOUNT_UID_OF(blk, n).high =
-                    DIR_MOUNT_UID_OF(blk, last).high;
-                DIR_MOUNT_UID_OF(blk, n).low =
-                    DIR_MOUNT_UID_OF(blk, last).low;
+                last = DIR_$DATA.mttab_count;
+                DIR_$DATA.mount_uid[n].high =
+                    DIR_$DATA.mount_uid[last].high;
+                DIR_$DATA.mount_uid[n].low =
+                    DIR_$DATA.mount_uid[last].low;
 
                 /* 0x00E53474-0x00E53486: `(0x15d8,A4) = (0x15d8,A3)` with
                  * A4 = A5 + n*4 and A3 = A5 + count*4. */
-                last = DIR_MOUNT_COUNT_OF(blk);
-                DIR_MOUNT_NODE_OF(blk, n) =
-                    DIR_MOUNT_NODE_OF(blk, last);
+                last = DIR_$DATA.mttab_count;
+                DIR_$DATA.mount_node[n] =
+                    DIR_$DATA.mount_node[last];
             }
 
             /* 0x00E5348C */
-            DIR_MOUNT_COUNT_OF(blk) -= 1;
+            DIR_$DATA.mttab_count -= 1;
             break;                      /* 0x00E53490 */
         }
     }

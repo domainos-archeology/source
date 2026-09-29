@@ -18,7 +18,6 @@
 
 void DIR_$UNLOCK_OBJ(void *handle)
 {
-    char              *blk = DIR_$BLOCK;    /* the caller's A5 */
     dir_$handle_t     *h = (dir_$handle_t *)handle;      /* A2 */
     dir_$lock_entry_t *lock_entry;                       /* A3 */
     int16_t            mode;                             /* D0 */
@@ -78,10 +77,10 @@ void DIR_$UNLOCK_OBJ(void *handle)
         if (lock_entry->lock_count == 0) {
             /* The link overwrites the first UID longword; `next` and `uid`
              * alias by design. */
-            lock_entry->u.next = DIR_LOCK_FREE_OF(blk);
-            DIR_LOCK_FREE_OF(blk) = h->lock_entry;
+            lock_entry->u.next = DIR_$DATA.lock_free;
+            DIR_$DATA.lock_free = h->lock_entry;
 
-            DIR_LOCK_IN_USE_OF(blk) &=
+            DIR_$DATA.lock_in_use &=
                 ~(1u << ((uint32_t)lock_entry->index & 0x1F));
         }
     }

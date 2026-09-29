@@ -49,7 +49,7 @@ uint8_t AST_$REMOVE_CORRUPTED_PAGE(uint32_t ppn)
 
     /* 0x00E072C8..0x00E072E4: the MMAPE must be in a WSL (flags1 bit 7)
      * and name a segment */
-    mmape = &MMAPE_BASE[ppn];
+    mmape = MMAPE_FOR_VPN(ppn);
     seg = mmape->segment;
     if ((int8_t)mmape->flags1 >= 0) {
         goto done;

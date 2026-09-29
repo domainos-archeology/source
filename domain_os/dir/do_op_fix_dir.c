@@ -61,10 +61,9 @@
 #define DIR_ENTRY_TYPE_SOFTLINK 4
 
 /*
- * Per-type entry header size table offset (A5-relative)
- * Located at A5+0x2000, indexed by entry_type * 2
+ * The per-type entry header size table at A5+0x2000, indexed by
+ * entry_type * 2, is DIR_$NAME_OFFSET_TABLE (DIR_$DATA.name_offset_table).
  */
-#define DIR_TYPE_SIZE_TABLE_OFF 0x2000
 
 /* DIR_$ONE_PAGE_L - truncation size parameter (value = 0x00000400, one page)
  * In the original binary, this is a 32-bit constant at address 0x00E52040.
@@ -73,7 +72,6 @@
 
 void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
 {
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t orig_handle = 0;
     uint32_t new_handle = 0;
     uid_t new_dir_uid;
@@ -203,9 +201,8 @@ void dir_$do_op_fix_dir(uid_t *dir_uid, status_$t *status_ret)
                             }
 
                             /* Look up per-type header size */
-                            int16_t hdr_size = *(int16_t *)(blk
-                                + DIR_TYPE_SIZE_TABLE_OFF
-                                + (int16_t)(etype * 2));
+                            int16_t hdr_size =
+                                DIR_$DATA.name_offset_table[etype];
                             int16_t entry_size = (uint8_t)entry[1] + hdr_size;
 
                             if ((int)(entry + entry_size) > (int)page_end) {

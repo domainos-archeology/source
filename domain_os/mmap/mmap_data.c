@@ -37,6 +37,16 @@ MODULE_DATA_DEFINE_INIT(mmap_globals_t, MMAP_$DATA, 0x00E23284, {
 });
 
 /*
+ * MMAP_$MMAPE - the MMAP page table, map MMAP 0x00EB4800..0x00EC27FF in
+ * "D EB4800 OS_PMAPS size = 10000" (the rest of the segment is MMU_$PTTX,
+ * mmu/'s).  0xE00 mmape_t entries for ppn 0x200..0xFFF; layout, bias and
+ * asserts in mmap/mmap.h.  The image carries no bytes for OS_PMAPS, so the
+ * block is zero-filled; MMAP_$INIT fills it.
+ * Module data block MMAP_$MMAPE: Claude Opus 5.5 (source-fyjc).
+ */
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
+
+/*
  * DUMP_$ADDRS - the two physical memory ranges MMAP_$INIT records for the
  * crash-dump code.  This one cell is image-initialised.
  *

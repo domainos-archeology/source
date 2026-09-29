@@ -18,7 +18,7 @@
  * - PMAP_$DATA, the PMAP_ module block (A5): 0xE24D44, 0x7A4 bytes
  * - PMAP_$SEGMAP, the segment map (map AST_PMAPS): 0xED5000, 0xFC00 bytes
  * - Hardware page table: 0xFFB802
- * - PMAPE base: 0xEB2800
+ * - the mmape_t table MMAP_$MMAPE (mmap/mmap.h): 0xEB4800, ppn 0x200..0xFFF
  *
  * Module data blocks PMAP_$DATA / PMAP_$SEGMAP: Claude Opus 5.5 (source-iq58).
  */

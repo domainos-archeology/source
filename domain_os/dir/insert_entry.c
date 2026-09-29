@@ -92,7 +92,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
     /* 0xE4F462: required entry size depends on the page kind */
     if (dir_page_kind(page) == 0) {
         /* Leaf page - size depends on entry type */
-        local_entry_size = DIR_$NAME_OFFSET_TABLE[ctx->entry_type] + name_len;
+        local_entry_size = DIR_$DATA.name_offset_table[ctx->entry_type] + name_len;
         if (ctx->entry_type == 4 && ctx->overflow_page == -1) {
             local_entry_size += ctx->link_len;
         }
@@ -281,7 +281,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
             uint8_t *first_child_entry = ctx->new_page +
                 (int32_t)*(int16_t *)first_child_idx;
             uint8_t *first_child_name = first_child_entry +
-                DIR_$NAME_OFFSET_TABLE[*first_child_entry & 7];
+                DIR_$DATA.name_offset_table[*first_child_entry & 7];
 
             /* Allocate space for second internal entry */
             page->heap_base = (uint16_t)(((int16_t)page->heap_base - 4 -
@@ -333,7 +333,7 @@ void dir_$insert_entry(dir_insert_ctx_t *ctx, int16_t slot_idx,
                     (int32_t)*(int16_t *)(ctx->idx_base + split_entry * 2);
                 /* 0xE4FA9C: the page number is read from the page again. */
                 recursive_param =
-                    (int32_t)DIR_$NAME_OFFSET_TABLE[*ctx->temp_entry & 7] +
+                    (int32_t)DIR_$DATA.name_offset_table[*ctx->temp_entry & 7] +
                     (uint32_t)page->page_no * DIR_PAGE_SIZE +
                     (int32_t)*(int16_t *)(ctx->idx_base + split_entry * 2);
                 recursive_name_len = (uint16_t)*(ctx->temp_entry + 1);

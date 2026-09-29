@@ -41,10 +41,12 @@ static int tests_failed = 0;
 
 #define TEST_PAGES 128
 #define TEST_SEGMENTS 4
-static mmape_t  mmape_store[TEST_PAGES];
-static uint32_t pft_store[TEST_PAGES];
+static uint32_t pft_store[0x1000];   /* the PFT is indexed by ppn, up to 0xFFF */
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
-mmape_t  *mmap_mmape_base = mmape_store;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
+/* The table holds ppn 0x200..0xFFF (mmap/mmap.h), so the test's page n is
+ * ppn VP(n). */
+#define VP(n) (MMAP_MMAPE_FIRST_PPN + (n))
 uint32_t *mmu_pft_base    = pft_store;
 /* The AST_ module blocks (ast/ast.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
@@ -72,7 +74,7 @@ static void build_list(int n)
     ws_hdr_t *wsl = &MMAP_$WSL[7];
     int i;
 
-    for (i = 0; i < n; i++) list_v[i] = (uint16_t)(10 + i);
+    for (i = 0; i < n; i++) list_v[i] = (uint16_t)VP(10 + i);
     wsl->head_vpn = list_v[0];
     wsl->page_count = (uint32_t)n;
     for (i = 0; i < n; i++) {
@@ -91,7 +93,7 @@ static void reset_module(void)
 {
     int s;
 
-    memset(mmape_store, 0, sizeof(mmape_store));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     memset(pft_store, 0, sizeof(pft_store));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(AST_$AOT.aste, 0, sizeof(AST_$AOT.aste));
@@ -112,31 +114,31 @@ TEST(trims_two_pages_to_pools)
     reset_module();
     build_list(4);
     /* page 10 dirty and on disk, object modified remotely -> pool 4 */
-    MMAPE_FOR_VPN(10)->flags2 = MMAPE_FLAG2_MODIFIED | MMAPE_FLAG2_ON_DISK;
+    MMAPE_FOR_VPN(VP(10))->flags2 = MMAPE_FLAG2_MODIFIED | MMAPE_FLAG2_ON_DISK;
     aote_store[0].dtm_high = 0x00010000;
 
     mmap_$trim_wsl(7, 2);
 
     ASSERT_EQ(2, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(12, MMAP_$WSL[7].head_vpn);
-    ASSERT_EQ(13, MMAPE_FOR_VPN(12)->prev_vpn);
-    ASSERT_EQ(12, MMAPE_FOR_VPN(13)->prev_vpn);
-    ASSERT_EQ(12, MMAPE_FOR_VPN(13)->next_vpn);
-    ASSERT_EQ(13, MMAPE_FOR_VPN(12)->next_vpn);
+    ASSERT_EQ(VP(12), MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(VP(13), MMAPE_FOR_VPN(VP(12))->prev_vpn);
+    ASSERT_EQ(VP(12), MMAPE_FOR_VPN(VP(13))->prev_vpn);
+    ASSERT_EQ(VP(12), MMAPE_FOR_VPN(VP(13))->next_vpn);
+    ASSERT_EQ(VP(13), MMAPE_FOR_VPN(VP(12))->next_vpn);
 
     ASSERT_EQ(2, remove_calls);
-    ASSERT_EQ(10, remove_ppn[0]);
-    ASSERT_EQ(11, remove_ppn[1]);
+    ASSERT_EQ(VP(10), remove_ppn[0]);
+    ASSERT_EQ(VP(11), remove_ppn[1]);
     ASSERT_EQ(0x80, PMAP_SEGMAP_ROW(1)[0].flags);    /* bit 5 cleared, bit 7 kept */
     ASSERT_EQ(0x80, PMAP_SEGMAP_ROW(1)[1].flags);
     ASSERT_EQ(0xA0, PMAP_SEGMAP_ROW(1)[2].flags);
 
     /* collected list is 11 then 10 */
     ASSERT_EQ(1, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
-    ASSERT_EQ(11, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].head_vpn);
+    ASSERT_EQ(VP(11), MMAP_$WSL[MMAP_WSL_POOL_IMPURE].head_vpn);
     ASSERT_EQ(1, MMAP_$WSL[MMAP_WSL_POOL_DIRTY_RMT].page_count);
-    ASSERT_EQ(10, MMAP_$WSL[MMAP_WSL_POOL_DIRTY_RMT].head_vpn);
-    ASSERT_EQ(4, MMAPE_FOR_VPN(10)->wsl_index);
+    ASSERT_EQ(VP(10), MMAP_$WSL[MMAP_WSL_POOL_DIRTY_RMT].head_vpn);
+    ASSERT_EQ(4, MMAPE_FOR_VPN(VP(10))->wsl_index);
     ASSERT_EQ(100, MMAP_$PAGEABLE_PAGES);       /* -2 unlinked, +2 pooled */
     ASSERT_EQ(0x77, MMAP_$WSL[7].owner);
 }
@@ -145,15 +147,15 @@ TEST(wired_page_is_dropped_not_pooled)
 {
     reset_module();
     build_list(4);
-    MMAPE_FOR_VPN(10)->wire_count = 1;
+    MMAPE_FOR_VPN(VP(10))->wire_count = 1;
 
     mmap_$trim_wsl(7, 1);
 
     ASSERT_EQ(3, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(11, MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(VP(11), MMAP_$WSL[7].head_vpn);
     ASSERT_EQ(0, remove_calls);
     ASSERT_EQ(0xA0, PMAP_SEGMAP_ROW(1)[0].flags);
-    ASSERT_EQ(0, MMAPE_FOR_VPN(10)->flags1 & MMAPE_FLAG1_IN_WSL);
+    ASSERT_EQ(0, MMAPE_FOR_VPN(VP(10))->flags1 & MMAPE_FLAG1_IN_WSL);
     ASSERT_EQ(0, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
     ASSERT_EQ(99, MMAP_$PAGEABLE_PAGES);
 }
@@ -162,8 +164,8 @@ TEST(purge_clears_owner_and_stamps_clock)
 {
     reset_module();
     build_list(4);
-    MMAPE_FOR_VPN(12)->wire_count = 1;
-    MMAPE_FOR_VPN(13)->flags1 |= MMAPE_FLAG1_IMPURE;   /* -> pool 1 */
+    MMAPE_FOR_VPN(VP(12))->wire_count = 1;
+    MMAPE_FOR_VPN(VP(13))->flags1 |= MMAPE_FLAG1_IMPURE;   /* -> pool 1 */
 
     mmap_$trim_wsl(7, MMAP_TRIM_PURGE_ALL);
 
@@ -174,7 +176,7 @@ TEST(purge_clears_owner_and_stamps_clock)
     ASSERT_EQ(3, remove_calls);
     ASSERT_EQ(2, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
     ASSERT_EQ(1, MMAP_$WSL[MMAP_WSL_POOL_PURE].page_count);
-    ASSERT_EQ(13, MMAP_$WSL[MMAP_WSL_POOL_PURE].head_vpn);
+    ASSERT_EQ(VP(13), MMAP_$WSL[MMAP_WSL_POOL_PURE].head_vpn);
     ASSERT_EQ(99, MMAP_$PAGEABLE_PAGES);         /* -4 + 3 */
 }
 
@@ -182,18 +184,18 @@ TEST(referenced_pages_skipped_inside_window)
 {
     reset_module();
     build_list(40);
-    PMAPE_FOR_VPN(10)[1] = PMAPE_FLAG_REFERENCED;
+    PMAPE_FOR_VPN(VP(10))[1] = PMAPE_FLAG_REFERENCED;
 
     mmap_$trim_wsl(7, 2);
 
     ASSERT_EQ(38, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(13, MMAP_$WSL[7].head_vpn);
-    ASSERT_EQ(7, MMAPE_FOR_VPN(10)->wsl_index);
+    ASSERT_EQ(VP(13), MMAP_$WSL[7].head_vpn);
+    ASSERT_EQ(7, MMAPE_FOR_VPN(VP(10))->wsl_index);
     /* 11 and 12 were re-pooled (add_to_wsl sets IN_WSL again) */
-    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(11)->wsl_index);
-    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(12)->wsl_index);
-    ASSERT_EQ(13, MMAPE_FOR_VPN(10)->prev_vpn);   /* relinked around 11,12 */
-    ASSERT_EQ(10, MMAPE_FOR_VPN(13)->next_vpn);
+    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(VP(11))->wsl_index);
+    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(VP(12))->wsl_index);
+    ASSERT_EQ(VP(13), MMAPE_FOR_VPN(VP(10))->prev_vpn);   /* relinked around 11,12 */
+    ASSERT_EQ(VP(10), MMAPE_FOR_VPN(VP(13))->next_vpn);
     ASSERT_EQ(2, remove_calls);
 }
 
@@ -201,12 +203,12 @@ TEST(no_skip_window_when_request_is_close_to_size)
 {
     reset_module();
     build_list(4);
-    PMAPE_FOR_VPN(10)[1] = PMAPE_FLAG_REFERENCED;   /* 2 + 0x20 >= 4: no window */
+    PMAPE_FOR_VPN(VP(10))[1] = PMAPE_FLAG_REFERENCED;   /* 2 + 0x20 >= 4: no window */
 
     mmap_$trim_wsl(7, 2);
 
     ASSERT_EQ(2, MMAP_$WSL[7].page_count);
-    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(10)->wsl_index);
+    ASSERT_EQ(MMAP_WSL_POOL_IMPURE, MMAPE_FOR_VPN(VP(10))->wsl_index);
 }
 
 int main(void)

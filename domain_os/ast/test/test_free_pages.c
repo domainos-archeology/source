@@ -57,10 +57,9 @@ static void reset_state(void);
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
-static mmape_t        test_mmapes[TEST_N_FRAMES];
 
 /* the segment map is 1-based by segment: row n at base + n*0x80 - 0x80 */
-mmape_t        *mmap_mmape_base = test_mmapes;
+MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 uint16_t        PROC1_$CURRENT;
 
 static int lock_calls, unlock_calls;
@@ -127,7 +126,7 @@ void CRASH_SYSTEM(const status_$t *status_p) { (void)status_p; crash_calls++; }
 static void reset_state(void)
 {
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(test_mmapes, 0, sizeof(test_mmapes));
+    memset(&MMAP_$MMAPE, 0, sizeof(MMAP_$MMAPE));
     lock_calls = unlock_calls = 0;
     wait_calls = 0; wait_entry_to_clear = NULL;
     remove_calls = 0; memset(remove_counts, 0, sizeof(remove_counts));
@@ -150,11 +149,11 @@ TEST(mixed_entries_dirty_and_blocks)
     aste.page_count = 5;
 
     row[0] = SEGMAP_VALID | 0x210;              /* installed, ppn 0x210 */
-    test_mmapes[0x210].disk_addr = 0xC0001234;  /* & 0x3FFFFF = 0x1234 */
+    MMAPE_FOR_VPN(0x210)->disk_addr = 0xC0001234;  /* & 0x3FFFFF = 0x1234 */
     row[1] = 0x00005678;                        /* on disk */
     row[2] = 0;                                 /* empty */
     row[3] = SEGMAP_VALID | 0x211;              /* installed, no disk addr */
-    test_mmapes[0x211].disk_addr = 0;
+    MMAPE_FOR_VPN(0x211)->disk_addr = 0;
 
     AST_$FREE_PAGES(&aste, 0, 3, 4);
 

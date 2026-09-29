@@ -66,7 +66,7 @@ void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page,
             if (*entry & SEGMAP_VALID) {
                 /* 0x00E04088..0x00E040A0: installed - the disk address
                  * comes from the MMAPE (0x3FFFFF of +0x0C) */
-                mmape = &MMAPE_BASE[*entry & 0xFFFF];
+                mmape = MMAPE_FOR_VPN(*entry & 0xFFFF);
                 disk_addr = mmape->disk_addr & 0x3FFFFF;
                 /* 0x00E040A4..0x00E040B4: installed[count++] = ppn (the
                  * store is at (-0x104 + count*4) after the increment, so

@@ -90,7 +90,7 @@ void ast_$update_aste(aste_t *aste, segmap_entry_t *segmap, boolean write_now,
         } else {
             /* 0x00E01608..0x00E0164A: the MMAPE's address, its bit 22
              * likewise */
-            addr = MMAPE_BASE[ent[i] & 0xFFFF].disk_addr;
+            addr = MMAPE_FOR_VPN(ent[i] & 0xFFFF)->disk_addr;
             disk[i] = addr & 0x3FFFFF;
             if (addr & 0x00400000u) {
                 disk[i] |= 0x80000000u;

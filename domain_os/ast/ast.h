@@ -788,7 +788,8 @@ MODULE_DATA_DECLARE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 /*
  * Note: Physical page attributes are tracked using mmape_t from mmap/mmap.h.
- * The MMAPE array is located at 0xEB2800, with 16 bytes per physical page.
+ * The MMAPE array is MMAP_$MMAPE (0xEB4800, ppn 0x200..0xFFF, 16 bytes per
+ * physical page), reached with MMAPE_FOR_VPN(ppn).
  * AST uses mmape_t fields like seg_offset (page index), segment (seg_index),
  * and disk_addr for page mapping.
  */

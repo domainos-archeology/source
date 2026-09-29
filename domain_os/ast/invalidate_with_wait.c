@@ -104,7 +104,7 @@ status_$t ast_$invalidate_with_wait(uint32_t end_page, aote_t *aote,
                 if (*entry & SEGMAP_VALID) {
                     /* 0x00E063DC..0x00E063F4 */
                     ppn = *entry & 0xFFFF;
-                    mmape = &MMAPE_BASE[ppn];
+                    mmape = MMAPE_FOR_VPN(ppn);
                     if (mmape->wire_count != 0) {
                         /* 0x00E063F6..0x00E063FE */
                         local_status = status_$pmap_pages_wired;

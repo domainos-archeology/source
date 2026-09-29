@@ -53,11 +53,18 @@ SMD code segment; the count is in the summary line, so a new one shows.
 | class | count |
 |---|---|
 | 1 hardware/PROM | 51 |
-| 2 data object | 15 |
+| 2 data object | 20 |
 | 3 code in tree | 21 |
-| 4 not yet translated | 37 |
+| 4 not yet translated | 32 |
 | 5 not an address | 43 |
 | total | 167 |
+
+(2026-09-29: a row moves from class 4 to class 2 when its cell becomes a
+field of a MODULE_DATA block and the .s file spells it `BLOCK + offset` -
+the two interrupt-stack rows (source-4k71, `OS_$STACK`), MMAP_$HPPN /
+MMAP_$LPPN (source-alpj, `MMAP_$DATA`) and the PEB owner ASID byte
+(source-i1uu, `PEB_$INFO`).  The counts above and the per-subsystem table
+include all five; the class-4 rows left are the ones no block covers yet.)
 
 Per subsystem (class: count):
 
@@ -67,11 +74,11 @@ Per subsystem (class: count):
 | ec | 0 | 0 | 0 | 0 | 1 |
 | fim | 6 | 7 | 14 | 5 | 17 |
 | fp | 1 | 0 | 0 | 0 | 0 |
-| io | 1 | 1 | 0 | 1 | 0 |
+| io | 1 | 2 | 0 | 0 | 0 |
 | misc | 1 | 1 | 0 | 0 | 3 |
-| mmu | 32 | 3 | 1 | 29 | 5 |
-| peb | 3 | 0 | 5 | 1 | 1 |
-| proc1 | 1 | 0 | 0 | 1 | 1 |
+| mmu | 32 | 5 | 1 | 27 | 5 |
+| peb | 3 | 1 | 5 | 0 | 1 |
+| proc1 | 1 | 1 | 0 | 0 | 1 |
 | smd | 3 | 3 | 1 | 0 | 4 |
 | svc | 0 | 0 | 0 | 0 | 11 |
 | time | 1 | 0 | 0 | 0 | 0 |
@@ -102,7 +109,7 @@ Per subsystem (class: count):
 | source-nojc | 0xE0DD40 MST_$TOUCH | fim/sau2/bus_err.s |
 | source-o56c | 0xE23D2C MMU_$PID_PRIV, 0xE23D2E M68020, 0xE23D30 VA_TO_PTT_OFFSET_MASK, 0xE23D34 MMU_$VA_SHIFT, 0xE23D36 MMU_$PTT_SHIFT, 0xEC2800 MMU_$PTTX | mmu/sau2/*.s (15 files) |
 | source-alpj (closed 2026-09-29) | 0xE23C8C MMAP_$HPPN, 0xE23C90 MMAP_$LPPN: now `MMAP_$DATA + 0xA08 / + 0xA0C` (source-702z) | mmu/sau2/remove_asid.s |
-| source-4k71 | 0xEB2BE8 interrupt stack top | io/sau2/use_int_stack.s, proc1/sau2/int_handler.s |
+| source-4k71 (closed 2026-09-29) | 0xEB2BE8 interrupt stack top: now `OS_$STACK + 0x2BE8`, the map's STACK segment as a MODULE_DATA block (os/os.h); IO_$SAVED_INT_SR (0xEB2BF8) is `OS_$STACK + 0x2BF8` | io/sau2/use_int_stack.s, proc1/sau2/int_handler.s |
 | source-i1uu (closed 2026-09-29) | 0xE24C8E PEB owner ASID byte: now `PEB_$INFO + 0x16` (source-702z) | peb/sau2/int.s |
 
 Structural deviations the gate reports instead of failing (not address
@@ -168,7 +175,7 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | fp/sau2/fp_context.s:55 | `.set    FP_HW_OWNER, 0x00FFB402` | 0xFFB402 | 1 hardware/PROM | MMU power / FPU owner register | kept (.equ/.set or literal, commented) |
 | io/sau2/probe.s:58 | `.equ    BUS_ERROR_SWITCH,   0x00E218CC` | 0xE218CC | 2 data object | void * cell in bus_err.s; move.l/clr.l | -> BUS_ERROR_SWITCH |
 | io/sau2/probe.s:59 | `.equ    MMU_STATUS_REG,     0x00FFB403` | 0xFFB403 | 1 hardware/PROM | MMU status register | kept (.equ/.set or literal, commented) |
-| io/sau2/use_int_stack.s:51 | `.set    IO_INT_STACK_BASE, 0x00EB2BE8` | 0xEB2BE8 | 4 not yet translated | interrupt stack top (STACK segment) | kept, TODO(source-4k71) |
+| io/sau2/use_int_stack.s:51 | `.set    IO_INT_STACK_BASE, 0x00EB2BE8` | 0xEB2BE8 | 2 data object | interrupt stack top (STACK segment) | -> OS_$STACK + 0x2BE8 (source-4k71) |
 | misc/sau2/crash_system.s:48 | `cmpi.l  #0x001b0008, 0x10(%a5)` | 0x1B0008 | 5 not an address | status code / mask / magic constant | kept |
 | misc/sau2/crash_system.s:56 | `lea     0x00e00000, %a1` | 0xE00000 | 2 data object | crash_$record_t, 12 bytes; writes +0/+4/+8 | -> CRASH_$RECORD |
 | misc/sau2/crash_system.s:60 | `cmpi.l  #0x001b0008, 0x10(%a5)` | 0x1B0008 | 5 not an address | status code / mask / magic constant | kept |
@@ -215,8 +222,8 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | mmu/sau2/remove.s:24 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
 | mmu/sau2/remove.s:25 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:35 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/remove_asid.s:36 | `.equ    MMAP_$HPPN,     0x00E23C8C` | 0xE23C8C | 4 not yet translated | MMAP_$HPPN | kept, TODO(source-alpj); 2026-09-29 -> MMAP_$DATA + 0xA08 |
-| mmu/sau2/remove_asid.s:37 | `.equ    MMAP_$LPPN,     0x00E23C90` | 0xE23C90 | 4 not yet translated | MMAP_$LPPN | kept, TODO(source-alpj); 2026-09-29 -> MMAP_$DATA + 0xA0C |
+| mmu/sau2/remove_asid.s:36 | `.equ    MMAP_$HPPN,     0x00E23C8C` | 0xE23C8C | 2 data object | MMAP_$HPPN, a field of the MMAP_ block | -> MMAP_$DATA + 0xA08 (source-alpj, source-702z) |
+| mmu/sau2/remove_asid.s:37 | `.equ    MMAP_$LPPN,     0x00E23C90` | 0xE23C90 | 2 data object | MMAP_$LPPN, a field of the MMAP_ block | -> MMAP_$DATA + 0xA0C (source-alpj, source-702z) |
 | mmu/sau2/remove_asid.s:38 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:39 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:57 | `move.l  #0xfe000000,%d6` | 0xFE000000 | 5 not an address | status code / mask / magic constant | kept |
@@ -246,7 +253,7 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | peb/sau2/int.s:83 | `.set    PEB_CTL_BYTE,       0x00FF7001` | 0xFF7001 | 1 hardware/PROM | PEB control byte | kept (.equ/.set or literal, commented) |
 | peb/sau2/int.s:84 | `.set    PEB_ACK_BYTE,       0x00FF73FC` | 0xFF73FC | 1 hardware/PROM | PEB acknowledge byte | kept (.equ/.set or literal, commented) |
 | peb/sau2/int.s:85 | `.set    PEB_EXC_STATUS,     0x000070F4` | 0x0070F4 | 1 hardware/PROM | PEB exception status (abs.w) | kept (.equ/.set or literal, commented) |
-| peb/sau2/int.s:86 | `.set    PEB_$OWNER_ASID_B,  0x00E24C8E` | 0xE24C8E | 4 not yet translated | PEB owner ASID byte (PEB_PARITY) | kept, TODO(source-i1uu); 2026-09-29 -> PEB_$INFO + 0x16 |
+| peb/sau2/int.s:86 | `.set    PEB_$OWNER_ASID_B,  0x00E24C8E` | 0xE24C8E | 2 data object | PEB owner ASID byte (PEB_PARITY), a field of PEB_$INFO | -> PEB_$INFO + 0x16 (source-i1uu, source-702z) |
 | peb/sau2/int.s:87 | `.set    FIM_$SPURIOUS_INT,  0x00E21F20` | 0xE21F20 | 3 code in tree | routine | -> FIM_$SPURIOUS_INT |
 | peb/sau2/int.s:88 | `.set    IO_$USE_INT_STACK,  0x00E2E826` | 0xE2E826 | 3 code in tree | routine | -> IO_$USE_INT_STACK |
 | peb/sau2/int.s:89 | `.set    CRASH_SYSTEM,       0x00E1E700` | 0xE1E700 | 3 code in tree | routine | -> CRASH_SYSTEM |
@@ -254,7 +261,7 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | peb/sau2/int.s:91 | `.set    FIM_$EXIT,          0x00E208FE` | 0xE208FE | 3 code in tree | PROC1_$INT_EXIT (fim.s called it IO_HANDLER, peb/int.s FIM_$EXIT) | -> PROC1_$INT_EXIT |
 | peb/sau2/int.s:148 | `.long   0x00240002` | 0x240002 | 5 not an address | status code / mask / magic constant | kept |
 | proc1/sau2/dispatch.s:49 | `.set    MMU_STATUS_REG, 0x00FFB403` | 0xFFB403 | 1 hardware/PROM | MMU status register | kept (.equ/.set or literal, commented) |
-| proc1/sau2/int_handler.s:31 | `.set    OS_STACK_LIMIT, 0x00EB2BE8` | 0xEB2BE8 | 4 not yet translated | interrupt stack top (STACK segment) | kept, TODO(source-4k71) |
+| proc1/sau2/int_handler.s:31 | `.set    OS_STACK_LIMIT, 0x00EB2BE8` | 0xEB2BE8 | 2 data object | interrupt stack top (STACK segment) | -> OS_$STACK + 0x2BE8 (source-4k71) |
 | proc1/sau2/set_lock.s:108 | `.long   0x000A0002` | 0x0A0002 | 5 not an address | status code / mask / magic constant | kept |
 | smd/sau2/blink_cursor_1.s:80 | `.set    SMD_UNIT1_CTRL_REGS,    0x00FF9800` | 0xFF9800 | 1 hardware/PROM | display controller registers (hw.h SAU2_DISPLAY_CTRL_REGS) | kept (.equ/.set or literal, commented) |
 | smd/sau2/blink_cursor_1.s:81 | `.set    SMD_UNIT1_DISPLAY_BASE, 0x00FC0000` | 0xFC0000 | 1 hardware/PROM | display frame buffer / I/O window base (hw.h SAU2_DISPLAY_MEM_BASE) | kept (.equ/.set or literal, commented) |

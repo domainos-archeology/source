@@ -95,7 +95,7 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
                 /*
                  * 0x00E00DAC-0x00E00DB4.  A3 is a BIASED cursor:
                  * 0xEB4800 + ppn*0x10, and every field is read at
-                 * -0x2000 from it, i.e. MMAPE_BASE (0xEB2800) + ppn*0x10.
+                 * -0x2000 from it, i.e. MMAPE_FOR_VPN(ppn) = 0xEB2800 + ppn*0x10.
                  */
                 ppn = *ppn_array;
                 pmape = MMAPE_FOR_VPN(ppn);

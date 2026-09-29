@@ -61,7 +61,6 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     uint16_t *name_len_ret = (uint16_t *)len_ret;
     uint32_t *extra_ret = (uint32_t *)uid_ret;
 
-    char *blk = DIR_$BLOCK;   /* the routine's own A5 = 0x00E7DC00 */
     uint32_t local_handle[4];
     uint32_t search_uid_high;
     uint32_t search_uid_low;
@@ -101,18 +100,18 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
     {
         /* The mount tables are ONE-BASED - see DIR_MOUNT_UID_TAB_OFF. */
         int16_t remaining =
-            (int16_t)(DIR_MOUNT_COUNT16(blk) - 1);
+            (int16_t)(DIR_MOUNT_COUNT16() - 1);
         int16_t n;
 
         for (n = 1; remaining >= 0; n++, remaining--) {
             if (target_uid->high ==
-                    DIR_MOUNT_TGT_OF(blk, n).high &&
+                    DIR_$DATA.mount_tgt[n].high &&
                 target_uid->low ==
-                    DIR_MOUNT_TGT_OF(blk, n).low) {
+                    DIR_$DATA.mount_tgt[n].low) {
                 search_uid_high =
-                    DIR_MOUNT_UID_OF(blk, n).high;
+                    DIR_$DATA.mount_uid[n].high;
                 search_uid_low =
-                    DIR_MOUNT_UID_OF(blk, n).low;
+                    DIR_$DATA.mount_uid[n].low;
                 break;
             }
         }
@@ -187,7 +186,7 @@ found_entry:
             }
         } else {
             /* find_uid: return the entry name */
-            int16_t name_offset = DIR_$NAME_OFFSET_TABLE[(*entry & 7)];
+            int16_t name_offset = DIR_$DATA.name_offset_table[(*entry & 7)];
             uint8_t *ename = entry + name_offset;
             uint8_t nlen = entry[1];
             *name_len_ret = (uint16_t)nlen;

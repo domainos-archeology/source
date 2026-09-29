@@ -45,14 +45,20 @@
  * External references
  */
         .extern IO_$SAVED_OS_SP
-        .extern IO_$SAVED_INT_SR
+        .extern OS_$STACK
+
+/*
+ * IO_$SAVED_INT_SR (0xEB2BF8) is a field of the STACK segment block OS_$STACK
+ * (map D EB0000 STACK size = 2C00; os/os.h), 0x2BF8 into it.
+ */
+        .set    IO_$SAVED_INT_SR, OS_$STACK + 0x2BF8
 
 /*
  * Interrupt stack base address
  * On M68K, the stack grows downward, so this is the top of the
  * interrupt stack region. SP is set to this value when switching.
  */
-        .set    IO_INT_STACK_BASE, 0x00EB2BE8  /* STACK segment (map D EB0000 STACK, 0x18 below INT_STACK_BASE 0xEB2C00), not yet an object: TODO(source-4k71) */
+        .set    IO_INT_STACK_BASE, OS_$STACK + 0x2BE8  /* 0xEB2BE8: 0x18 below INT_STACK_BASE (OS_$STACK + 0x2C00) */
 
         .globl  IO_$USE_INT_STACK
         .globl  _IO_$USE_INT_STACK

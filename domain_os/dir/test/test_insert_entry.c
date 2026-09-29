@@ -56,10 +56,13 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 /*
- * DIR_$NAME_OFFSET_TABLE (0xE7FC00 + type*2, reached through A5 in the
- * original): the fixed part of an entry, by entry type.
+ * The DIR block with the image's DIR_$NAME_OFFSET_TABLE (0xE7FC00 + type*2,
+ * reached through A5 in the original, DIR_$DATA.name_offset_table): the
+ * fixed part of an entry, by entry type.
  */
-int16_t DIR_$NAME_OFFSET_TABLE[8] = { 0, 4, 16, 20, 12, 0, 0, 0 };
+MODULE_DATA_DEFINE_INIT(dir_$data_t, DIR_$DATA, 0x00E7DBF8, {
+    .name_offset_table = { 0, 4, 16, 20, 12, 0, 0, 0 },
+});
 
 status_$t Naming_bad_request_header_ver_err;
 

@@ -11,6 +11,7 @@
 #include "base/base.h"
 #include "proc1/proc1.h"
 #include "pmap/pmap.h"
+#include "os/os.h"
 
 int __host_intr_disable_count = 0;
 
@@ -20,6 +21,8 @@ proc1_t *PROC1_$CURRENT_PCB;
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$ATOMIC_OP_DEPTH;
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
+/* the STACK segment block: PROC1_$INIT stores P1_STACK_BASE (os/os.h) */
+MODULE_DATA_DEFINE(os_$stack_t, OS_$STACK, 0x00EB0000);
 
 static int n_dispatch_int, ipl_at_dispatch_int, depth_at_dispatch_int;
 void PROC1_$DISPATCH_INT(void)
@@ -158,7 +161,11 @@ static void test_init_fresh_pcb(void)
     p->pri_max = PROC1_FLAG_SUSPENDED;      /* & 0xB != 8 */
     p->resource_locks_held = 0xFFFFFFFF;
 
+    /* lay the VA space over the STACK block at its image address, so
+     * P1_STACK_BASE reads back as the image's 0x00EB2000 */
+    ARCH_HOST_VA_BASE = (uintptr_t)&OS_$STACK - 0x00EB0000u;
     PROC1_$INIT();
+    ARCH_HOST_VA_BASE = 0;
 
     ASSERT_EQ(PROC1_$DATA.stack_low_water, 0x00D00000);
     ASSERT_EQ(PROC1_$DATA.stack_high_water, 0x00D50000);

@@ -55,15 +55,13 @@ uid_t    UID_$NIL = { 0, 0 };
 
 ml_$exclusion_t DIR_$LINK_BUF_MUTEX;
 status_$t Naming_bad_request_header_ver_err = 0x000E0025;
-status_$t *const DIR_$CRASH_STATUS = &Naming_bad_request_header_ver_err;
 
 /*
- * The DIR module block.  The image's A5 is 0x00E7DC00 and the routine reaches
- * 0x0000..0x2124 above it plus -0x8..-0x1 below it, so the buffer carries a
- * head of 8 bytes and the base pointer sits inside it.
+ * The DIR module block (dir/dir_internal.h).  The image's A5 is 0x00E7DC00,
+ * the block + 8; the routine reaches 0x0000..0x2124 above it plus -0x8..-0x1
+ * below it, all fields of DIR_$DATA.
  */
-static uint8_t block_store[8 + 0x2200];
-#define A5_AREA (block_store + 8)
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                                */
@@ -141,9 +139,6 @@ void *dir_$map_page(void *handle, int16_t page_idx)
 
 /* ------------------------------------------------------------------ */
 
-/* Point the whole DIR module block at our own buffer (source-yv13). */
-#undef DIR_$BLOCK_BASE
-#define DIR_$BLOCK_BASE ((void *)A5_AREA)
 
 #include "../cleanup.c"
 
@@ -163,7 +158,9 @@ static uint8_t wired_buf[DIR_PAGE_SIZE];
 
 static void reset(void)
 {
-    memset(block_store, 0, sizeof(block_store));
+    memset(&DIR_$DATA, 0, sizeof(DIR_$DATA));
+    /* A5-0x4 carries the image value, the VA of the crash status cell */
+    DIR_$DATA.crash_status = 0x00E4B230u;
     memset(pages, 0, sizeof(pages));
     memset(wired_buf, 0, sizeof(wired_buf));
     ARCH_HOST_VA_BASE = (uintptr_t)wired_buf - WIRED_BUF_VA;
@@ -214,20 +211,20 @@ static void make_page(int idx, uint16_t page_no)
 TEST(the_block_layout_matches_the_image)
 {
     /* The two tables and the four scalars the image addresses. */
-    ASSERT_EQ(0x00E7F280u, DIR_A5_BASE_VA + DIR_LOCK_TAB_OFF);
-    ASSERT_EQ(0x00E7F480u, DIR_A5_BASE_VA + DIR_HANDLE_TAB_OFF);
-    ASSERT_EQ(0x00E7FC30u, DIR_A5_BASE_VA + DIR_LOCK_FREE_OFF);
-    ASSERT_EQ(0x00E7FC34u, DIR_A5_BASE_VA + DIR_LOCK_IN_USE_OFF);
-    ASSERT_EQ(0x00E7FC38u, DIR_A5_BASE_VA + DIR_HANDLE_FREE_OFF);
-    ASSERT_EQ(0x00E7FC3Cu, DIR_A5_BASE_VA + DIR_HANDLE_IN_USE_OFF);
-    ASSERT_EQ(0x00E7FC40u, DIR_A5_BASE_VA + DIR_LINK_BUF_OWNER_OFF);
+    ASSERT_EQ(0x00E7F280u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_LOCK_TAB_OFF);
+    ASSERT_EQ(0x00E7F480u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_HANDLE_TAB_OFF);
+    ASSERT_EQ(0x00E7FC30u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_LOCK_FREE_OFF);
+    ASSERT_EQ(0x00E7FC34u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_LOCK_IN_USE_OFF);
+    ASSERT_EQ(0x00E7FC38u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_HANDLE_FREE_OFF);
+    ASSERT_EQ(0x00E7FC3Cu, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_HANDLE_IN_USE_OFF);
+    ASSERT_EQ(0x00E7FC40u, (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_LINK_BUF_OWNER_OFF);
 
     ASSERT_EQ(0x10u, sizeof(dir_$lock_entry_t));
     ASSERT_EQ(0x3Cu, sizeof(dir_$handle_t));
 
     /* The handle table ends exactly on DIR_$NAME_OFFSET_TABLE (0x00E7FC00). */
     ASSERT_EQ(0x00E7FC00u,
-              DIR_A5_BASE_VA + DIR_HANDLE_TAB_OFF + DIR_SLOT_COUNT * 0x3C);
+              (MODULE_DATA_ADDR(DIR_$DATA) + DIR_A5_BIAS) + DIR_HANDLE_TAB_OFF + DIR_SLOT_COUNT * 0x3C);
     /* ...and the lock table ends where the handle table starts. */
     ASSERT_EQ((unsigned long)DIR_HANDLE_TAB_OFF,
               (unsigned long)(DIR_LOCK_TAB_OFF + DIR_SLOT_COUNT * 0x10));
@@ -246,7 +243,7 @@ TEST(the_block_layout_matches_the_image)
 TEST(no_slots_in_use_runs_only_the_mutex_check_and_old_cleanup)
 {
     reset();
-    DIR_$HANDLE_IN_USE = 0;
+    DIR_$DATA.handle_in_use = 0;
 
     ASSERT_EQ(0, run_cleanup());
 
@@ -262,10 +259,10 @@ TEST(no_slots_in_use_runs_only_the_mutex_check_and_old_cleanup)
 TEST(a_slot_owned_by_another_process_is_skipped)
 {
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 3);
-    DIR_$HANDLE_TAB[3].owner = 9;           /* not PROC1_$CURRENT (7) */
-    DIR_$HANDLE_TAB[3].split_busy = (int8_t)0xFF;
-    DIR_$HANDLE_TAB[3].max_slots = 0;       /* would crash if visited */
+    DIR_$DATA.handle_in_use = (1u << 3);
+    DIR_$DATA.handle_tab[3].owner = 9;           /* not PROC1_$CURRENT (7) */
+    DIR_$DATA.handle_tab[3].split_busy = (int8_t)0xFF;
+    DIR_$DATA.handle_tab[3].max_slots = 0;       /* would crash if visited */
 
     ASSERT_EQ(0, run_cleanup());
 
@@ -278,10 +275,10 @@ TEST(a_slot_owned_by_another_process_is_skipped)
 TEST(an_owned_slot_with_split_busy_clear_takes_the_short_path)
 {
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 5);
-    DIR_$HANDLE_TAB[5].owner = 7;
-    DIR_$HANDLE_TAB[5].split_busy = 0;      /* >= 0: bpl at 0x00E535CE */
-    DIR_$HANDLE_TAB[5].max_slots = 2;       /* the value 0x00E536CC wants */
+    DIR_$DATA.handle_in_use = (1u << 5);
+    DIR_$DATA.handle_tab[5].owner = 7;
+    DIR_$DATA.handle_tab[5].split_busy = 0;      /* >= 0: bpl at 0x00E535CE */
+    DIR_$DATA.handle_tab[5].max_slots = 2;       /* the value 0x00E536CC wants */
 
     ASSERT_EQ(0, run_cleanup());
 
@@ -291,40 +288,41 @@ TEST(an_owned_slot_with_split_busy_clear_takes_the_short_path)
     ASSERT_EQ(0, rw_calls);
     ASSERT_EQ(0, crash_calls);
     ASSERT_EQ(1, rh_calls);
-    ASSERT_TRUE(rh_handle_seen == (void *)&DIR_$HANDLE_TAB[5]);
+    ASSERT_TRUE(rh_handle_seen == (void *)&DIR_$DATA.handle_tab[5]);
     ASSERT_EQ(1, old_cleanup_calls);
 }
 
 TEST(split_busy_clear_with_a_page_still_wired_crashes)
 {
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 5);
-    DIR_$HANDLE_TAB[5].owner = 7;
-    DIR_$HANDLE_TAB[5].split_busy = 0;
-    DIR_$HANDLE_TAB[5].max_slots = 1;       /* != 2 -> 0x00E536D4 */
+    DIR_$DATA.handle_in_use = (1u << 5);
+    DIR_$DATA.handle_tab[5].owner = 7;
+    DIR_$DATA.handle_tab[5].split_busy = 0;
+    DIR_$DATA.handle_tab[5].max_slots = 1;       /* != 2 -> 0x00E536D4 */
 
     ASSERT_EQ(1, run_cleanup());
 
     ASSERT_EQ(1, crash_calls);
-    /* The pushed argument is the longword at A5-0x4 (0x00E7DBFC). */
-    ASSERT_TRUE(crash_arg == &Naming_bad_request_header_ver_err);
+    /* The pushed argument is the CONTENTS of the longword at A5-0x4
+     * (0x00E7DBFC), not the address of a cell. */
+    ASSERT_TRUE(crash_arg == ARCH_VA_TO_PTR(0x00E4B230u));
     ASSERT_TRUE(crash_arg == DIR_$CRASH_STATUS);
 }
 
 TEST(split_busy_with_max_slots_2_skips_straight_to_validate_pages)
 {
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 0);
-    DIR_$HANDLE_TAB[0].owner = 7;
-    DIR_$HANDLE_TAB[0].split_busy = (int8_t)0xFF;
-    DIR_$HANDLE_TAB[0].max_slots = 2;       /* beq at 0x00E535D8 */
+    DIR_$DATA.handle_in_use = (1u << 0);
+    DIR_$DATA.handle_tab[0].owner = 7;
+    DIR_$DATA.handle_tab[0].split_busy = (int8_t)0xFF;
+    DIR_$DATA.handle_tab[0].max_slots = 2;       /* beq at 0x00E535D8 */
 
     ASSERT_EQ(0, run_cleanup());
 
     ASSERT_EQ(0, mp_calls);
     ASSERT_EQ(0, rw_calls);
     ASSERT_EQ(1, vp_calls);
-    ASSERT_TRUE(vp_handle == (void *)&DIR_$HANDLE_TAB[0]);
+    ASSERT_TRUE(vp_handle == (void *)&DIR_$DATA.handle_tab[0]);
     /* `st -(SP)` at 0x00E536BE - the crash_flag is Domain true. */
     ASSERT_EQ(0xFF, (unsigned char)vp_flag);
     ASSERT_EQ(1, rh_calls);
@@ -336,8 +334,8 @@ TEST(the_backwards_scan_restores_the_wired_page_and_unwires_it)
     unsigned i;
 
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 2);
-    h = &DIR_$HANDLE_TAB[2];
+    DIR_$DATA.handle_in_use = (1u << 2);
+    h = &DIR_$DATA.handle_tab[2];
     h->owner = 7;
     h->split_busy = (int8_t)0xFF;
     h->max_slots = 1;                       /* a page is still wired */
@@ -385,8 +383,8 @@ TEST(a_page_whose_number_equals_its_index_crashes)
     dir_$handle_t *h;
 
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 2);
-    h = &DIR_$HANDLE_TAB[2];
+    DIR_$DATA.handle_in_use = (1u << 2);
+    h = &DIR_$DATA.handle_tab[2];
     h->owner = 7;
     h->split_busy = (int8_t)0xFF;
     h->max_slots = 1;
@@ -408,8 +406,8 @@ TEST(running_off_the_front_of_the_directory_crashes)
     dir_$handle_t *h;
 
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 1);
-    h = &DIR_$HANDLE_TAB[1];
+    DIR_$DATA.handle_in_use = (1u << 1);
+    h = &DIR_$DATA.handle_tab[1];
     h->owner = 7;
     h->split_busy = (int8_t)0xFF;
     h->max_slots = 1;
@@ -432,8 +430,8 @@ TEST(a_bad_page_header_crashes)
     dir_$handle_t *h;
 
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 1);
-    h = &DIR_$HANDLE_TAB[1];
+    DIR_$DATA.handle_in_use = (1u << 1);
+    h = &DIR_$DATA.handle_tab[1];
     h->owner = 7;
     h->split_busy = (int8_t)0xFF;
     h->max_slots = 1;
@@ -454,8 +452,8 @@ TEST(the_first_page_visited_fixes_the_directory_uid)
     dir_$handle_t *h;
 
     reset();
-    DIR_$HANDLE_IN_USE = (1u << 1);
-    h = &DIR_$HANDLE_TAB[1];
+    DIR_$DATA.handle_in_use = (1u << 1);
+    h = &DIR_$DATA.handle_tab[1];
     h->owner = 7;
     h->split_busy = (int8_t)0xFF;
     h->max_slots = 1;
@@ -477,18 +475,18 @@ TEST(the_first_page_visited_fixes_the_directory_uid)
 TEST(the_link_buffer_mutex_is_released_only_by_its_owner)
 {
     reset();
-    DIR_$LINK_BUF_OWNER = 7;                /* == PROC1_$CURRENT */
+    DIR_$DATA.link_buf_owner = 7;                /* == PROC1_$CURRENT */
     ASSERT_EQ(0, run_cleanup());
     ASSERT_EQ(1, excl_stop_calls);
     ASSERT_TRUE(excl_stop_arg == &DIR_$LINK_BUF_MUTEX);
-    ASSERT_EQ(0, DIR_$LINK_BUF_OWNER);
+    ASSERT_EQ(0, DIR_$DATA.link_buf_owner);
     ASSERT_EQ(1, old_cleanup_calls);
 
     reset();
-    DIR_$LINK_BUF_OWNER = 8;                /* someone else */
+    DIR_$DATA.link_buf_owner = 8;                /* someone else */
     ASSERT_EQ(0, run_cleanup());
     ASSERT_EQ(0, excl_stop_calls);
-    ASSERT_EQ(8, DIR_$LINK_BUF_OWNER);
+    ASSERT_EQ(8, DIR_$DATA.link_buf_owner);
     ASSERT_EQ(1, old_cleanup_calls);
 }
 
@@ -498,10 +496,10 @@ TEST(every_owned_slot_in_the_bitmap_is_visited)
 
     reset();
     for (s = 0; s < DIR_SLOT_COUNT; s++) {
-        DIR_$HANDLE_IN_USE |= (1u << s);
-        DIR_$HANDLE_TAB[s].owner = 7;
-        DIR_$HANDLE_TAB[s].split_busy = 0;
-        DIR_$HANDLE_TAB[s].max_slots = 2;
+        DIR_$DATA.handle_in_use |= (1u << s);
+        DIR_$DATA.handle_tab[s].owner = 7;
+        DIR_$DATA.handle_tab[s].split_busy = 0;
+        DIR_$DATA.handle_tab[s].max_slots = 2;
     }
 
     ASSERT_EQ(0, run_cleanup());

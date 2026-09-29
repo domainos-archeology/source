@@ -6,7 +6,8 @@
  * stamps into the request and the request-length delta, and passed 0x1c as
  * DIR_$DO_OP's resp_size.  The assembly does none of that.  With A5 = 0xE7DC00
  * (established by the parent, DIR_$GET_ENTRYU, at 0x00E4D508) the two words are
- * separate cells in the GET_ENTRYU record of the DIR operation parameter table:
+ * separate cells in the GET_ENTRYU record of the DIR operation parameter table
+ * (DIR_$OP_TAB record 13, not record 0):
  *
  *   0x00E4D4A6  move.w (0x20aa,A5),(-0x1aa,A6)   0xE7FCAA -> request+0x0E
  *   0x00E4D4B4  move.w #0x22,-(SP)               resp_size = 0x22, not 0x1c
@@ -47,9 +48,13 @@ static int current_failed = 0;
 
 #include "dir/dir_internal.h"
 
-/* The two parameter-table cells the routine reads through A5. */
-uint16_t DIR_$GET_ENTRYU_REQ_PARM;
-uint16_t DIR_$GET_ENTRYU_REQ_LEN;
+/*
+ * The DIR block: the two cells the routine reads through A5 are the
+ * GET_ENTRYU record of DIR_$OP_TAB (op 0x44 >> 1 = 0x22, record 13 at
+ * 0xE7FCAA), whose image words are version 0x0000 and base_size 0x0002.
+ */
+MODULE_DATA_DEFINE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
+#define GET_ENTRYU_REC DIR_$OP_REC(DIR_OP_GET_ENTRYU_OP >> 1)
 
 /* ------------------------------------------------------------------ */
 /* Mocked DIR_$DO_OP                                                     */
@@ -152,8 +157,8 @@ TEST(request_bytes_match_the_stores)
     size_t i;
 
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_PARM = 0x1357;
-    DIR_$GET_ENTRYU_REQ_LEN = 0x0002;
+    GET_ENTRYU_REC.version = 0x1357;
+    GET_ENTRYU_REC.base_size = 0x0002;
     memset(entry, 0, sizeof(entry));
 
     scrub_stack();
@@ -185,8 +190,9 @@ TEST(request_bytes_match_the_stores)
 }
 
 /*
- * req_size = name_len + DIR_$GET_ENTRYU_REQ_LEN (0x00E4D4B8..0x00E4D4C0) and
- * resp_size = 0x22 (0x00E4D4B4).  The old code used DIR_$OP_TAB and 0x1c.
+ * req_size = name_len + the record's base_size (0x00E4D4B8..0x00E4D4C0) and
+ * resp_size = 0x22 (0x00E4D4B4).  The old code used record 0 of DIR_$OP_TAB
+ * and 0x1c.
  */
 TEST(length_and_response_size_arguments)
 {
@@ -196,8 +202,8 @@ TEST(length_and_response_size_arguments)
     char name[4] = "xy";
 
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_PARM = 0x0000;
-    DIR_$GET_ENTRYU_REQ_LEN = 0x0002;   /* the value in the SR10.4 image */
+    GET_ENTRYU_REC.version = 0x0000;
+    GET_ENTRYU_REC.base_size = 0x0002;   /* the value in the image, 0xE7FCAE */
 
     scrub_stack();
     DIR_$GET_ENTRYU_FUN_00e4d460(&dir_uid, name, 2, entry, &status);
@@ -207,7 +213,7 @@ TEST(length_and_response_size_arguments)
 
     /* The delta really comes from the cell, not from a constant. */
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_LEN = 0x0007;
+    GET_ENTRYU_REC.base_size = 0x0007;
     scrub_stack();
     DIR_$GET_ENTRYU_FUN_00e4d460(&dir_uid, name, 200, entry, &status);
     ASSERT_EQ(200 + 7, mock_req_size);
@@ -218,7 +224,7 @@ TEST(length_and_response_size_arguments)
      * the wire length is exactly through the end of the name.
      */
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_LEN = 0x0002;
+    GET_ENTRYU_REC.base_size = 0x0002;
     scrub_stack();
     DIR_$GET_ENTRYU_FUN_00e4d460(&dir_uid, name, 2, entry, &status);
     ASSERT_EQ(0x90 + 2, 0x8E + mock_req_size);
@@ -233,8 +239,8 @@ TEST(zero_length_name_copies_nothing)
     char name[4] = "zz";
 
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_PARM = 0;
-    DIR_$GET_ENTRYU_REQ_LEN = 2;
+    GET_ENTRYU_REC.version = 0;
+    GET_ENTRYU_REC.base_size = 2;
 
     scrub_stack();
     DIR_$GET_ENTRYU_FUN_00e4d460(&dir_uid, name, 0, entry, &status);
@@ -255,8 +261,8 @@ TEST(entry_fields_are_copied_only_on_success)
     char name[4] = "a";
 
     reset_mock();
-    DIR_$GET_ENTRYU_REQ_PARM = 0;
-    DIR_$GET_ENTRYU_REQ_LEN = 2;
+    GET_ENTRYU_REC.version = 0;
+    GET_ENTRYU_REC.base_size = 2;
     memset(entry, 0xEE, sizeof(entry));
     mock_reply[PL(0x00)] = 0x9A;    /* +0x14 word, high byte */
     mock_reply[PL(0x01)] = 0xBC;
