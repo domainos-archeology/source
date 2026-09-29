@@ -1,27 +1,21 @@
 /*
  * NETBUF - Global Data
  *
- * This file contains global data declarations for the NETBUF subsystem.
- * On m68k, these are at fixed addresses. On other platforms, they are
- * allocated here.
+ * This file contains global data declarations for the NETBUF subsystem,
+ * the same on every build (source-702z).
  */
 
 #include "netbuf/netbuf_internal.h"
 
-#if !defined(ARCH_M68K)
-
 /*
- * Global data structure for non-m68k platforms
+ * NETBUF_$DATA, 0x00E245A8..0x00E248DF (`gsk read 0xE245A8 0x338`): zero
+ * except the delay NETBUF_$GET_HDR / _GET_DAT hand TIME_$WAIT,
+ *
+ *   +0x300  00 00 00 00 80 00      delay_time = { high 0, low 0x8000 }
  */
-static netbuf_globals_t netbuf_globals_storage;
-netbuf_globals_t *netbuf_globals = &netbuf_globals_storage;
-
-/*
- * VA base address
- */
-uint32_t netbuf_va_base = 0xD64C00;
-
-#endif /* !M68K */
+MODULE_DATA_DEFINE_INIT(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8, {
+    .delay_time = { .high = 0, .low = 0x8000 },
+});
 
 /*
  * TIME_$WAIT's delay-type constant: the zero word at 0x00E0EEB2, in the code

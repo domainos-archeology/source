@@ -45,9 +45,8 @@ static int tests_failed = 0;
 /* The globals the routine reads and writes                            */
 /* ------------------------------------------------------------------ */
 
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 mmape_t  *mmap_mmape_base;
-uint16_t *mmap_pte_base;
 aste_t   *ast_aste_base;
 uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt, ast_alloc_too_few_cnt, ast_alloc_cnt;
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
@@ -110,7 +109,7 @@ static status_$t status;
 
 static void reset_state(void)
 {
-    memset(&MMAP_GLOBALS_STORAGE, 0, sizeof(MMAP_GLOBALS_STORAGE));
+    memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
     memset(mmape_pages, 0, sizeof(mmape_pages));
     memset(aste_table, 0, sizeof(aste_table));
     memset(aote_entries, 0, sizeof(aote_entries));

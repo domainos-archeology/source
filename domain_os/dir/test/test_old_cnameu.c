@@ -11,6 +11,7 @@
  * (0x00E5769A); and the unlock tail keeps a nonzero status (0x00E576D0).
  */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -54,8 +55,23 @@ name_$data_t NAME_$DATA;
 /* The directory the handle points at, and the entry find_entry returns  */
 /* ------------------------------------------------------------------ */
 
-static uint8_t dir_buf[0x1000];
-static uint8_t entry_rec[0x40];
+/*
+ * Both are reached through 32-bit target addresses (the directory handle
+ * NAME_$LOCK_DIR returns, the entry address dir_$old_find_entry returns), so
+ * they live in one arena that ARCH_HOST_VA_BASE (arch/host/arch.h) points
+ * at: the directory at VA TEST_HANDLE, the entry record at VA ENTRY_VA.
+ * Offset 0 stays unused, because VA 0 is nil.
+ */
+typedef struct test_arena_t {
+    uint8_t nil[0x10];
+    uint8_t dir[0x1000];
+    uint8_t entry[0x40];
+} test_arena_t;
+static test_arena_t arena;
+#define dir_buf     (arena.dir)
+#define entry_rec   (arena.entry)
+#define TEST_HANDLE ((uint32_t)offsetof(test_arena_t, dir))
+#define ENTRY_VA    ((uint32_t)offsetof(test_arena_t, entry))
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                                */
@@ -78,20 +94,6 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
     return r;
 }
 
-/*
- * A directory handle is a 32-bit target virtual address, so a host pointer
- * does not survive the round trip; name/handle_map.c keeps a registry for
- * that and the test supplies its own one-entry version.
- */
-#define TEST_HANDLE 0x00100000u
-void *name_$handle_to_ptr(uint32_t handle)
-{
-    return handle == TEST_HANDLE ? (void *)dir_buf : (void *)0;
-}
-uint32_t name_$ptr_to_handle(const void *ptr)
-{
-    return ptr == (const void *)dir_buf ? TEST_HANDLE : 0u;
-}
 
 static int       lock_calls;
 static status_$t lock_status;
@@ -119,7 +121,6 @@ void ACL_$EXIT_SUPER(void) { exit_super_calls++; }
 static int8_t   fe_result;
 static uint16_t fe_slot;
 static uint16_t fe_chain;
-#define ENTRY_VA 0x00200000
 int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
                            int32_t *entry_ret, uint16_t *slot_idx,
                            uint16_t *chain_level)
@@ -225,11 +226,8 @@ static void reset(void)
     dir = OTHER;
     memset(dir_buf, 0, sizeof(dir_buf));
     *(uint16_t *)(dir_buf + 2) = 0x0101;     /* the bucket count word */
-    /*
-     * dir_$old_find_entry returns a 32-bit target address, so the test points
-     * ARCH_HOST_VA_BASE at its own arena (arch/host/arch.h).
-     */
-    ARCH_HOST_VA_BASE = (uintptr_t)entry_rec - ENTRY_VA;
+    /* The directory handle and the entry address are arena offsets. */
+    ARCH_HOST_VA_BASE = (uintptr_t)&arena;
     memset(entry_rec, 0, sizeof(entry_rec));
     entry_rec[0x27] = 3;                     /* the entry's type byte */
     *(uint32_t *)(entry_rec + 0x20) = 0xFEEDFACEu;

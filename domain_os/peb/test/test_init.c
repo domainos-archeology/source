@@ -61,11 +61,13 @@ static int tests_failed = 0;
  * Host storage for the globals PEB_$INIT touches
  * ========================================================================== */
 
-peb_globals_t     peb_globals;
-volatile int8_t   m68881_exists;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
+volatile int8_t   M68881_EXISTS;
 
 static uint16_t   host_peb_ctl;
-volatile uint16_t *peb_ctl_reg = &host_peb_ctl;
+/* The PEB control page stands in for SAU2_PEB_CTL (arch/m68k/sau2/hw.h). */
+#define SAU2_PEB_CTL peb_ctl_reg
+static volatile uint16_t *peb_ctl_reg = &host_peb_ctl;
 
 /* A small arena the vector writes and PEB_CTL land in.  ARCH_VA_TO_PTR maps a
  * target VA into it, so `*(void (**)(void))ARCH_VA_TO_PTR(0x2C)` is safe. */
@@ -142,12 +144,12 @@ void PEB_$INT(void)   { }
 
 static void reset(void)
 {
-    memset(&peb_globals, 0, sizeof(peb_globals));
+    memset(&PEB_$INFO, 0, sizeof(PEB_$INFO));
     memset(host_low_memory, 0, sizeof(host_low_memory));
     memset(PEB_$WIRED_DATA_START, 0xA5,
            sizeof(peb_fp_state_t) * PEB_MAX_PROCESSES);
     host_peb_ctl = 0xBEEF;
-    m68881_exists = 0;
+    M68881_EXISTS = 0;
 
     probe_calls = 0;
     probe_type_arg = NULL;
@@ -245,7 +247,7 @@ TEST(hardware_found_installs_vector_and_clears_ctl)
     PEB_$INIT();
 
     ASSERT_PTR_EQ((void *)PEB_$INT, vector_at(0x70));
-    ASSERT_EQ(0xFF, PEB_$INSTALLED);
+    ASSERT_EQ(-1, PEB_$INSTALLED);
     ASSERT_EQ(0, host_peb_ctl);
 }
 
@@ -253,11 +255,11 @@ TEST(hardware_found_installs_vector_and_clears_ctl)
 TEST(m68881_path_installs_the_fline_vector_only)
 {
     reset();
-    m68881_exists = -1;
+    M68881_EXISTS = -1;
     PEB_$INIT();
 
     ASSERT_PTR_EQ((void *)FIM_$FLINE, vector_at(0x2C));
-    ASSERT_EQ(0xFF, PEB_$M68881_SAVE_FLAG);
+    ASSERT_EQ(-1, PEB_$M68881_SAVE_FLAG);
     ASSERT_EQ(0, probe_calls);
     ASSERT_EQ(0, install_calls);
     ASSERT_EQ(0, remove_calls);

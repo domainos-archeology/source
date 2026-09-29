@@ -41,7 +41,7 @@ static int tests_failed = 0;
 #define TEST_PAGES 64
 static mmape_t  mmape_store[TEST_PAGES];
 static uint32_t pft_store[TEST_PAGES];
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
 aste_t MMAP_$SEG_ASTE[4];

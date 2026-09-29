@@ -241,43 +241,37 @@ _Static_assert(sizeof(hint_globals_t) == 0x28, "hint_globals_t size");
  * ============================================================================
  */
 
-#if defined(ARCH_M68K)
+/*
+ * HINT_$DATA - the HINT_ data segment (SAU2 map "D E7DB50 HINT_ size = 28",
+ * no interior symbols) as a MODULE_DATA block (source-702z; the target used
+ * absolute-address macros, the host separate objects).  HINT_$INIT_CACHE,
+ * HINT_$LOOKUP_CACHE, HINT_$ADD_CACHE and HINT_$add_internal run with A5 =
+ * 0xE7DB50; HINT_$INIT reaches it through A1.  Image contents: all zero
+ * except bucket_index = 1 (0xE7DB76: 00 01).  The macros below are the
+ * names the HINT code uses for its fields.
+ */
+MODULE_DATA_DECLARE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 
-/* Base of HINT globals */
-#define HINT_GLOBALS_BASE 0xE7DB50
+#define HINT_$GLOBALS       (&HINT_$DATA)
+#define HINT_$CACHE         (HINT_$DATA.cache)          /* 0xE7DB50 */
+#define HINT_$HINTFILE_UID  (HINT_$DATA.hintfile_uid)   /* 0xE7DB68 */
+#define HINT_$CACHE_INDEX   (HINT_$DATA.cache_index)    /* 0xE7DB74 */
+#define HINT_$BUCKET_INDEX  (HINT_$DATA.bucket_index)   /* 0xE7DB76 */
 
-/* Pointer to mapped hint file (at 0xE2459C) */
-#define HINT_$HINTFILE_PTR (*(hint_file_t **)0xE2459C)
-
-/* UID of the hint file (at 0xE7DB68) */
-#define HINT_$HINTFILE_UID (*(uid_t *)0xE7DB68)
-
-/* Exclusion lock for hint operations (at 0xE2C034) */
-#define HINT_$EXCLUSION_LOCK (*(ml_$exclusion_t *)0xE2C034)
-
-/* Whole HINT_ data segment (SAU2 map: "D    E7DB50  HINT_   size = 28") */
-#define HINT_$GLOBALS ((hint_globals_t *)HINT_GLOBALS_BASE)
-
-/* Local cache array (at 0xE7DB50) */
-#define HINT_$CACHE ((hint_cache_entry_t *)0xE7DB50)
-
-/* Cache index (at 0xE7DB74) */
-#define HINT_$CACHE_INDEX (*(int16_t *)0xE7DB74)
-
-/* Bucket round-robin index (at 0xE7DB76) */
-#define HINT_$BUCKET_INDEX (*(int16_t *)0xE7DB76)
-
-#else
-/* Non-m68k: extern declarations */
-extern hint_globals_t HINT_$GLOBALS_BLOCK;
-#define HINT_$GLOBALS (&HINT_$GLOBALS_BLOCK)
+/*
+ * HINT_$HINTFILE_PTR - the mapped hint file as a native pointer, a
+ * map-named cell of the NET_ASM segment (map "D E2459C NET_ASM size = C",
+ * symbol HINT_$HINTFILE_PTR at its start).  Zero in the image.  A plain
+ * object: ordering map-named plain globals is source-91vs.
+ */
 extern hint_file_t *HINT_$HINTFILE_PTR;
-extern uid_t HINT_$HINTFILE_UID;
+
+/*
+ * HINT_$EXCLUSION_LOCK - the HINT_WIRED segment (map "D E2C034 HINT_WIRED
+ * size = 14", symbol HINT_$EXCLUSION_LOCK at its start).  Zero in the
+ * image.  A plain object (source-91vs).
+ */
 extern ml_$exclusion_t HINT_$EXCLUSION_LOCK;
-extern hint_cache_entry_t HINT_$CACHE[];
-extern int16_t HINT_$CACHE_INDEX;
-extern int16_t HINT_$BUCKET_INDEX;
-#endif
 
 /*
  * ============================================================================

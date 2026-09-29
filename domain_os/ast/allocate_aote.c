@@ -47,6 +47,7 @@ static const status_$t ast_$no_replaceable_astes_00e01f18 = 0x80030003;
  * same way; the scan position and the two counters are only used here.
  * AST_$AOTE_LIMIT (0x3F4) and AST_$SIZE_AOT (0x46E) come from ast/ast.h.
  */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define AST_$FREE_AOTE_HEAD   (*(aote_t **)0xE1E06C)    /* A5+0x3EC */
 #define AST_$AOTE_SCAN_POS    (*(aote_t **)0xE1E070)    /* A5+0x3F0 */

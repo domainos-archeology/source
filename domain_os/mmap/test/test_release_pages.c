@@ -72,7 +72,7 @@ static uint32_t pft_store[TEST_PAGES];
  * words this test writes are MMAP_$WS_OWNER reached through the -2 bias, so
  * they are fields of this one object rather than a separate array.
  */
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;

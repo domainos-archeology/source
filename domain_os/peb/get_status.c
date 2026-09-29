@@ -54,10 +54,10 @@ status_$t PEB_$GET_STATUS(void)
     /* Select register address based on MMU installed state */
     if (PEB_$MMU_INSTALLED < 0) {
         /* Use private mirror address */
-        status_reg = (volatile uint32_t *)(0xFF7400 + PEB_STATUS_OFFSET);
+        status_reg = (volatile uint32_t *)(uintptr_t)(SAU2_PEB_DCMD_PAGE + PEB_STATUS_OFFSET);
     } else {
         /* Use base address */
-        status_reg = (volatile uint32_t *)(0x7000 + PEB_STATUS_OFFSET);
+        status_reg = (volatile uint32_t *)(PEB_REG_PAGE_7000 + PEB_STATUS_OFFSET);
     }
 
     /* Read the exception status */

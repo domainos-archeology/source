@@ -9,7 +9,7 @@ int __host_intr_disable_count = 0;
 
 #include "peb/peb_internal.h"
 
-peb_globals_t peb_globals;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 uint16_t      PROC1_$CURRENT;
 uint16_t      PROC1_$AS_ID;
 
@@ -39,7 +39,7 @@ static int tests_failed = 0;
 
 TEST(first_assoc_installs_three_pages)
 {
-    memset(&peb_globals, 0, sizeof peb_globals);
+    memset(&PEB_$INFO, 0, sizeof PEB_$INFO);
     install_calls = 0;
     PROC1_$CURRENT = 0x1234; PROC1_$AS_ID = 0x0009;
     PEB_$ASSOC();
@@ -54,8 +54,8 @@ TEST(first_assoc_installs_three_pages)
 
 TEST(second_assoc_only_records_owner)
 {
-    memset(&peb_globals, 0, sizeof peb_globals);
-    PEB_$MMU_INSTALLED = 0xFF;
+    memset(&PEB_$INFO, 0, sizeof PEB_$INFO);
+    PEB_$MMU_INSTALLED = -1;
     install_calls = 0;
     PROC1_$CURRENT = 5; PROC1_$AS_ID = 6;
     PEB_$ASSOC();
@@ -66,8 +66,8 @@ TEST(second_assoc_only_records_owner)
 
 TEST(dissoc_removes_mirror_and_clears)
 {
-    memset(&peb_globals, 0, sizeof peb_globals);
-    PEB_$MMU_INSTALLED = 0xFF; PEB_$OWNER_PID = 5; PEB_$OWNER_ASID = 6;
+    memset(&PEB_$INFO, 0, sizeof PEB_$INFO);
+    PEB_$MMU_INSTALLED = -1; PEB_$OWNER_PID = 5; PEB_$OWNER_ASID = 6;
     remove_calls = 0;
     PEB_$DISSOC();
     ASSERT_EQ(1, remove_calls);

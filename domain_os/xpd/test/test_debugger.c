@@ -45,8 +45,7 @@ MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uid_t UID_$NIL = { 0, 0 };
 #include "fim/fim.h"
 MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
-int8_t peb_$installed_flag;
-int8_t m68881_$save_flag;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 
 /* ==========================================================================
  * Mocks

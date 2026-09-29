@@ -36,7 +36,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t TIME_$CLOCKH;
 uint32_t win_$host_clockh(void) { return TIME_$CLOCKH; }
 
@@ -50,9 +50,9 @@ static uint8_t va_arena[ARENA_SIZE];
 #define REQ_B ((win_$request_t *)(va_arena + REQ_B_OFF))
 #define VOL   ((disk_$volume_t *)(va_arena + VOL_OFF))
 #define VA(off) (ARENA_VA_BASE + (off))
-disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
+_Alignas(16) uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 #define PER_PROC(pid) (DISK_$PER_PROC[pid])
-#define WIN_STATUS (*(status_$t *)(WIN_$DATA + WIN_STATUS_OFFSET))
+#define WIN_STATUS (*(status_$t *)(WIN_$DATA.bytes + WIN_STATUS_OFFSET))
 
 static int lock_calls, unlock_calls;
 static int16_t lock_id;
@@ -112,9 +112,9 @@ static int8_t result;
 
 static void reset(void)
 {
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(va_arena, 0, sizeof(va_arena));
-    *(int16_t *)(WIN_$DATA + WIN_DEV_TYPE_OFFSET) = 0x31;
+    *(int16_t *)(WIN_$DATA.bytes + WIN_DEV_TYPE_OFFSET) = 0x31;
     WIN_UNIT_EC(0)->value = 100;
     TIME_$CLOCKH = 5000;
     VOL->dev_unit = 3;
@@ -204,7 +204,7 @@ TEST(timeout_retries_then_fails)
     ASSERT_EQ(status_$disk_controller_timeout, REQ_A->status);
     ASSERT_EQ(0, PER_PROC(9).io_pending);
     ASSERT_EQ(0, WIN_CUR_REQ_VA);
-    ASSERT_EQ(0, WIN_$DATA[WIN_FLAG_OFFSET]);
+    ASSERT_EQ(0, WIN_$DATA.bytes[WIN_FLAG_OFFSET]);
 }
 
 /* DMA overrun uses its own 500-count budget and does not consume the dbf

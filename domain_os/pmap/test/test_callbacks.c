@@ -37,7 +37,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint32_t TIME_$CLOCKH;
 ec_$eventcount_t AST_$PMAP_IN_TRANS_EC;
@@ -73,7 +73,7 @@ void CRASH_SYSTEM(const status_$t *s) { crash_status = *s; longjmp(crash_jmp, 1)
 
 static void reset(void)
 {
-    memset(&MMAP_GLOBALS_STORAGE, 0, sizeof MMAP_GLOBALS_STORAGE);
+    memset(&MMAP_$DATA, 0, sizeof MMAP_$DATA);
     locks = unlocks = purges = scans = advances = waitns = free_wsls = 0;
     PMAP_$DATA.ws_interval = 5;
     TIME_$CLOCKH = 0x10000;

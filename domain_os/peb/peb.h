@@ -25,6 +25,7 @@
 #define PEB_H
 
 #include "base/base.h"
+#include "ec/ec.h"     /* ec_$eventcount_t, in PEB_$INFO */
 
 /*
  * ============================================================================
@@ -99,59 +100,41 @@ _Static_assert(__builtin_offsetof(peb_fp_state_t, instr_counter) == 0x18, "peb_f
  * ============================================================================
  */
 
-#if defined(ARCH_M68K)
+/*
+ * The PEB board's register pages are SAU2 hardware (arch/m68k/sau2/hw.h,
+ * map IODEFS: PEB_CTL / PEB_$M_CTRL_PAGE 0xFF7000, PEB_$M_DCMD_PAGE
+ * 0xFF7400, PEB_$M_CS_PAGE 0xFF7800).  A host test that runs code using one
+ * defines the SAU2_ name itself, as a pointer to its own cells.
+ */
+
 /* PEB control register - main control/status interface */
-#define PEB_CTL (*(volatile uint16_t *)0xFF7000)
+#define PEB_CTL (*SAU2_PEB_CTL)
 
-/* PEB status register byte (read status bits) */
-#define PEB_STATUS_BYTE (*(volatile uint8_t *)0xFF7001)
-
-/* PEB private mirror - per-process mapping for register access */
-#define PEB_PRIVATE_BASE ((volatile uint32_t *)0xFF7400)
+/* PEB status register byte (read status bits): the low byte of PEB_CTL,
+ * 0xFF7001 */
+#define PEB_STATUS_BYTE (((volatile uint8_t *)SAU2_PEB_CTL)[1])
 
 /* PEB status register offset from base */
 #define PEB_STATUS_OFFSET 0xF4
 
 /* WCS (Writable Control Store) base address */
-#define PEB_WCS_BASE ((volatile uint16_t *)0xFF7800)
+#define PEB_WCS_BASE SAU2_PEB_CS_PAGE
 
 /* Byte 0x3FC of the PEB_CTL page (0x00FF73FC): PEB_$LOAD_WCS reads it once
  * after enabling the board (0x00E3226A) and discards the value. */
-#define PEB_CTL_PAGE_BYTE_3FC (*(volatile uint8_t *)0xFF73FC)
+#define PEB_CTL_PAGE_BYTE_3FC (((volatile uint8_t *)SAU2_PEB_CTL)[0x3FC])
 
 /*
  * PEB register page at virtual address 0x7000: PEB_$LOAD_REGS and
  * PEB_$UNLOAD_REGS address the board's data/status/control registers as
  * byte offsets from this base (a local holds #0x7000 in both routines,
  * 0x00E5AE6A / 0x00E5AEB0), and PEB_$TOUCH's range check is 0x7000..0x73FF.
+ * It is a virtual address in the process's own space (the page PEB_$TOUCH
+ * maps the board into), so it goes through ARCH_VA_TO_PTR; a host test
+ * points ARCH_HOST_VA_BASE at a stand-in page.
  */
-#define PEB_REG_PAGE_7000 ((volatile uint8_t *)0x7000)
-
-/* Global PEB data area base (contains flags and state) */
-#define PEB_GLOBALS_BASE 0xE24C78
-
-/* Wired data start - per-process FP state storage */
-#define PEB_WIRED_DATA_ADDR 0xE84E80
-#else
-/* For non-m68k platforms, these will be provided by platform init */
-extern volatile uint16_t *peb_ctl_reg;
-extern volatile uint8_t *peb_status_byte;
-extern volatile uint32_t *peb_private_base;
-extern volatile uint16_t *peb_wcs_base;
-extern volatile uint8_t *peb_reg_page_7000;
-extern uint32_t peb_globals_base;
-extern uint32_t peb_wired_data_addr;
-
-#define PEB_CTL (*peb_ctl_reg)
-#define PEB_STATUS_BYTE (*peb_status_byte)
-#define PEB_PRIVATE_BASE peb_private_base
-#define PEB_STATUS_OFFSET 0xF4
-#define PEB_WCS_BASE peb_wcs_base
-#define PEB_CTL_PAGE_BYTE_3FC (((volatile uint8_t *)peb_ctl_reg)[0x3FC])
-#define PEB_REG_PAGE_7000 peb_reg_page_7000
-#define PEB_GLOBALS_BASE peb_globals_base
-#define PEB_WIRED_DATA_ADDR peb_wired_data_addr
-#endif
+#define PEB_REG_PAGE_VA   0x00007000u
+#define PEB_REG_PAGE_7000 ((volatile uint8_t *)ARCH_VA_TO_PTR(PEB_REG_PAGE_VA))
 
 /*
  * ============================================================================
@@ -416,31 +399,99 @@ void PEB_$PROC_CLEANUP(void);
 
 /*
  * ============================================================================
+ * Global Data Structures
+ * ============================================================================
+ *
+ * PEB global data: the PEB_PARITY data segment (SAU2 map "D E24C78
+ * PEB_PARITY size = 24", symbol PEB_$INFO at its start), a MODULE_DATA
+ * block since source-702z (the target had an absolute-address macro, the
+ * host a separate object).  Layout:
+ *   +0x00: Reserved (8 bytes)
+ *   +0x08: Event counter (12 bytes, EC_$INIT'd at 00e31d12)
+ *   +0x14: Current owner process ID (2 bytes)
+ *   +0x16: Current owner AS ID (2 bytes)
+ *   +0x18: PEB CTL shadow register (2 bytes)
+ *   +0x1A: PEB_$INSTALLED flag (1 byte)
+ *   +0x1B: PEB_$WCS_LOADED flag (1 byte)
+ *   +0x1C: PEB_$SAVEP_FLAG (1 byte)
+ *   +0x1D: Unknown flag (1 byte)
+ *   +0x1E: PEB info byte (1 byte)
+ *   +0x1F: PEB_$MMU_INSTALLED flag (1 byte)
+ *   +0x20: M68881_$SAVE_FLAG (1 byte)
+ *   +0x21: Unknown flag (1 byte)
+ */
+
+typedef struct peb_globals_t {
+  /* PEB_$INIT calls EC_$INIT with 0xE24C80 (00e31d12 `pea (0xe24c80).l`),
+   * i.e. globals + 0x08, and ec_$eventcount_t is 12 bytes -- so the counter
+   * runs 0x08..0x13 and owner_pid follows at 0x14 (00e5ad42
+   * `move.w (0x00e20608).l,(0x14,A0)`).  The earlier layout put the counter
+   * at 0x00 and reserved1 at 0x08, which overlapped both. */
+  uint8_t reserved0[8];        /* +0x00: Reserved */
+  ec_$eventcount_t eventcount; /* +0x08: PEB event counter */
+  uint16_t owner_pid;          /* +0x14: Current owner process ID */
+  uint16_t owner_asid;         /* +0x16: Current owner AS ID */
+  uint16_t ctl_shadow;         /* +0x18: PEB_CTL shadow register */
+  /* The seven flags are Domain booleans: 0xFF true, tested with tst.b +
+   * bpl/bmi on the SIGNED byte (0x00E12004 (0x1a,A5); PEB_$GET_INFO
+   * 0x00E709F2..0x00E70A28 the five it reports; 0x00E5ADCE / 0x00E7083A
+   * (0xE24C97) mmu_installed), so they are int8_t and `< 0' is "true"
+   * (source-uw36; they were uint8_t, which made those tests constant). */
+  int8_t installed;            /* +0x1A: PEB hardware installed */
+  int8_t wcs_loaded;           /* +0x1B: WCS microcode loaded */
+  int8_t savep_flag;           /* +0x1C: Save pending flag */
+  int8_t flag_1d;              /* +0x1D: Unknown flag */
+  uint8_t info_byte;           /* +0x1E: Info byte (copied with move.b) */
+  int8_t mmu_installed;        /* +0x1F: MMU mappings installed */
+  int8_t m68881_save_flag;     /* +0x20: MC68881 save flag */
+  int8_t flag_21;              /* +0x21: Unknown flag */
+  uint8_t _unknown_22[2];      /* +0x22: to the map's segment size 0x24 */
+} peb_globals_t;
+
+/* Layout recovered from the disassembly -- see the field comments above.
+ * Guarded: the embedded ec_$eventcount_t holds two native pointers, so the
+ * record is 8 bytes longer from +0x14 on a 64-bit host. */
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(peb_globals_t, reserved0) == 0x00, "peb_globals_t.reserved0");
+_Static_assert(__builtin_offsetof(peb_globals_t, eventcount) == 0x08, "peb_globals_t.eventcount");
+_Static_assert(__builtin_offsetof(peb_globals_t, owner_pid) == 0x14, "peb_globals_t.owner_pid");
+_Static_assert(__builtin_offsetof(peb_globals_t, owner_asid) == 0x16, "peb_globals_t.owner_asid");
+_Static_assert(__builtin_offsetof(peb_globals_t, ctl_shadow) == 0x18, "peb_globals_t.ctl_shadow");
+_Static_assert(__builtin_offsetof(peb_globals_t, installed) == 0x1A, "peb_globals_t.installed");
+_Static_assert(__builtin_offsetof(peb_globals_t, wcs_loaded) == 0x1B, "peb_globals_t.wcs_loaded");
+_Static_assert(__builtin_offsetof(peb_globals_t, savep_flag) == 0x1C, "peb_globals_t.savep_flag");
+_Static_assert(__builtin_offsetof(peb_globals_t, flag_1d) == 0x1D, "peb_globals_t.flag_1d");
+_Static_assert(__builtin_offsetof(peb_globals_t, info_byte) == 0x1E, "peb_globals_t.info_byte");
+_Static_assert(__builtin_offsetof(peb_globals_t, mmu_installed) == 0x1F, "peb_globals_t.mmu_installed");
+_Static_assert(__builtin_offsetof(peb_globals_t, m68881_save_flag) == 0x20, "peb_globals_t.m68881_save_flag");
+_Static_assert(__builtin_offsetof(peb_globals_t, flag_21) == 0x21, "peb_globals_t.flag_21");
+_Static_assert(__builtin_offsetof(peb_globals_t, _unknown_22) == 0x22,
+               "peb_globals_t: fields end at 0x21 (flag_21)");
+_Static_assert(sizeof(peb_globals_t) == 0x24, "PEB_PARITY: map size 0x24");
+#endif
+
+MODULE_DATA_DECLARE(peb_globals_t, PEB_$INFO, 0x00E24C78);
+
+/*
+ * ============================================================================
  * Exported PEB feature flags
  * ============================================================================
  *
  * Two Domain booleans (0xFF = true; test with `< 0`) inside the PEB global
- * block at 0x00E24C78 (full layout: peb/peb_internal.h, peb_globals_t):
+ * block PEB_$INFO at 0x00E24C78 (layout above, peb_globals_t):
  *
- *   0x00E24C92  PEB_$INSTALLED_FLAG  = PEB_GLOBALS.installed        (+0x1A)
+ *   0x00E24C92  PEB_$INSTALLED_FLAG  = PEB_$INFO.installed        (+0x1A)
  *               peripheral (PEB) floating-point board present
- *   0x00E24C98  M68881_$SAVE_FLAG    = PEB_GLOBALS.m68881_save_flag (+0x20)
+ *   0x00E24C98  M68881_$SAVE_FLAG    = PEB_$INFO.m68881_save_flag (+0x20)
  *               MC68881/68882 present, its context must be saved
  *
  * Both are set by PEB_$INIT and read by subsystems that only see this public
- * header (xpd/registers.c tests them when saving/restoring FP state).  On
- * ARCH_M68K the macros below are the very same storage the peb_globals_t
- * fields name; on a host build they are stand-alone objects defined in
- * peb/peb_data.c.
+ * header (xpd/registers.c tests them when saving/restoring FP state).  They
+ * are the peb_globals_t fields, read as signed bytes, on every build
+ * (source-702z; the target had absolute-address macros, the host stand-alone
+ * objects).
  */
-#if defined(ARCH_M68K)
-#define PEB_$INSTALLED_FLAG (*(volatile int8_t *)0x00E24C92)
-#define M68881_$SAVE_FLAG (*(volatile int8_t *)0x00E24C98)
-#else
-extern int8_t peb_$installed_flag;
-extern int8_t m68881_$save_flag;
-#define PEB_$INSTALLED_FLAG peb_$installed_flag
-#define M68881_$SAVE_FLAG m68881_$save_flag
-#endif
+#define PEB_$INSTALLED_FLAG (*(volatile int8_t *)&PEB_$INFO.installed)
+#define M68881_$SAVE_FLAG   (*(volatile int8_t *)&PEB_$INFO.m68881_save_flag)
 
 #endif /* PEB_H */

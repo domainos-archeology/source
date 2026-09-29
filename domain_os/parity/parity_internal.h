@@ -91,22 +91,13 @@ _Static_assert(__builtin_offsetof(parity_log_entry_t, virt_addr) == 0x06, "parit
  */
 extern int8_t PARITY_$DURING_DMA;
 
-#if defined(ARCH_M68K)
-
-/* Memory Error Registers */
-#define MEM_ERR_STATUS_LONG (*(volatile uint32_t *)0xFFB404)
-#define MEM_ERR_STATUS_WORD (*(volatile uint16_t *)0xFFB406)
-
-#else /* !M68K */
-
-/* For non-m68k platforms, these will be provided by platform init */
-extern volatile uint32_t *mem_err_status_long;
-extern volatile uint16_t *mem_err_status_word;
-
-#define MEM_ERR_STATUS_LONG (*mem_err_status_long)
-#define MEM_ERR_STATUS_WORD (*mem_err_status_word)
-
-#endif /* M68K */
+/*
+ * Memory error status registers: SAU2 hardware (arch/m68k/sau2/hw.h).  A
+ * host test that runs PARITY_$CHK defines SAU2_MEM_ERR_STATUS_LONG / _WORD
+ * as pointers to its own cells.
+ */
+#define MEM_ERR_STATUS_LONG (*SAU2_MEM_ERR_STATUS_LONG)
+#define MEM_ERR_STATUS_WORD (*SAU2_MEM_ERR_STATUS_WORD)
 
 /*
  * The MEM_ module's parity-log cells are the one A5 block MEM_DATA
@@ -120,16 +111,12 @@ extern volatile uint16_t *mem_err_status_word;
 /*
  * Scratch page for parity error recovery
  *
- * A temporary page at 0xFF9000 is used to re-read data during
- * parity error diagnosis. This page is installed via MMU_$INSTALL
- * to allow reading the corrupted page without triggering another fault.
+ * A temporary page at 0xFF9000 (map PAR_BUFF, an IODEFS page: SAU2_PAR_BUFF
+ * in arch/m68k/sau2/hw.h) is used to re-read data during parity error
+ * diagnosis. This page is installed via MMU_$INSTALL to allow reading the
+ * corrupted page without triggering another fault.
  */
-#if defined(ARCH_M68K)
-#define PARITY_SCRATCH_PAGE ((uint16_t *)0xFF9000)
-#else
-extern uint16_t *parity_scratch_page;
-#define PARITY_SCRATCH_PAGE parity_scratch_page
-#endif
+#define PARITY_SCRATCH_PAGE ((uint16_t *)(uintptr_t)SAU2_PAR_BUFF)
 
 /* Protection value for scratch page installation */
 #define PARITY_SCRATCH_PROT 0x16 /* Supervisor read/write */

@@ -379,31 +379,28 @@ _Static_assert(sizeof(mmap_globals_t) == 0xAA8,
                "MMAP_ block is 0xE23284..0xE23D2C (`D E23284 MMAP_ size = AA8')");
 
 /*
- * The block itself.  On the target it is the fixed A5 base every MMAP_ entry
- * point loads; on the host it is a single definition in mmap/mmap_data.c
- * (unit tests that drive one MMAP_ function supply their own).
+ * The block itself, MMAP_$DATA: the A5 base every MMAP_ entry point loads, a
+ * MODULE_DATA block defined in mmap/mmap_data.c (source-702z; the target
+ * had an absolute-address macro, the host a separate object).  MMAP_GLOBALS
+ * is the name the MMAP code uses for it.
  */
-#if defined(ARCH_M68K)
-#define MMAP_GLOBALS (*(mmap_globals_t *)0xE23284)
-#else
-extern mmap_globals_t MMAP_GLOBALS_STORAGE;
-#define MMAP_GLOBALS MMAP_GLOBALS_STORAGE
-#endif
+MODULE_DATA_DECLARE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
+#define MMAP_GLOBALS MMAP_$DATA
 
 /*
- * The other two page tables are separate objects, not part of the MMAP_
- * block: the mmape_t array at 0xEB2800 and the PTEs at 0xED5000.
+ * The MMAP page table is a separate object, not part of the MMAP_ block: the
+ * mmape_t array whose element for ppn 0 would be at 0xEB2800 (map MMAP
+ * 0xEB4800 in OS_PMAPS is element 0x200 = the first ppn MMAP_$INIT
+ * manages).  Still an absolute address on the target and a pointer the host
+ * tests set: TODO(source-fyjc) makes it an object declared from its first
+ * element, with the bias applied once.  (The PTE spelling at 0xED5000 that
+ * used to sit here was unused; that table is PMAP_$SEGMAP, pmap/pmap.h.)
  */
 #if defined(ARCH_M68K)
 #define MMAPE_BASE ((mmape_t *)0xEB2800)
-#define PTE_BASE ((uint16_t *)0xED5000)
 #else
-/* For non-m68k platforms, these will be provided by platform init */
 extern mmape_t *mmap_mmape_base;
-extern uint16_t *mmap_pte_base;
-
 #define MMAPE_BASE mmap_mmape_base
-#define PTE_BASE mmap_pte_base
 #endif
 
 /*

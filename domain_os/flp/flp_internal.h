@@ -44,14 +44,10 @@
  * The DN300 DMAC: FLP_DO_IO (0x00E3DE5E `move.l #0xffa000,D4`) and
  * FLP_FORMAT_TRACK (0x00E3DD54) address it from 0xFFA000 with the channel-3
  * offsets 0xC5 (OCR), 0xC7 (CCR), 0xCA (MTC), 0xCC (MAR) and 0xE9 (MFC).
- * Host tests substitute a plain 0x100-byte array.
+ * A SAU2 hardware address (arch/m68k/sau2/hw.h); a host test defines
+ * SAU2_DMAC_BASE as the address of a plain 0x100-byte array.
  */
-#if defined(ARCH_HOST)
-extern volatile uint8_t flp_$dmac_cells[0x100];
-#define FLP_DMAC_BASE   (flp_$dmac_cells)
-#else
-#define FLP_DMAC_BASE   ((volatile uint8_t *)DN300_DMAC_BASE_ADDRESS)
-#endif
+#define FLP_DMAC_BASE   ((volatile uint8_t *)SAU2_DMAC_BASE)
 
 #define FLP_DMAC_CHAN3  (3 * DN300_DMAC_CHANNEL_SIZE)               /* 0xC0 */
 #define FLP_DMAC_OCR    (*(FLP_DMAC_BASE + FLP_DMAC_CHAN3 + M68450_REG_OCR))   /* 0xC5 */
@@ -69,8 +65,7 @@ extern volatile uint8_t flp_$dmac_cells[0x100];
  * indexed by the process id at req+0x1E (FLP_FORMAT_TRACK 0x00E3DD98-
  * 0x00E3DDB0, FLP_DO_IO 0x00E3DFA6-0x00E3DFBC; WIN uses the same code).
  */
-#define FLP_IO_PENDING(pid) \
-    (((disk_$per_proc_t *)ARCH_VA_TO_PTR(DISK_PER_PROC_VA))[(pid)].io_pending)
+#define FLP_IO_PENDING(pid) (DISK_$PER_PROC[(pid)].io_pending)
 
 /*
  * ============================================================================

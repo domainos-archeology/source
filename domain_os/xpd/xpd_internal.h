@@ -100,7 +100,7 @@ _Static_assert(__builtin_offsetof(xpd_$debug_state_t, fp_modified) == 0x10, "xpd
  * ============================================================================
  */
 extern uint16_t xpd_$wire_limit;            /* 0x00E3238A: 3 */
-extern void *PTR_XPD_$DATA;                 /* 0x00E32390: 0x00EA5034 */
+extern uint32_t PTR_XPD_$DATA;              /* 0x00E32390: 0x00EA5034, a stored VA */
 extern int8_t xpd_$find_asid_flag;          /* 0x00E5BDBE: 0 */
 extern xpd_$response_t xpd_$response_two;   /* 0x00E5BDC0: 2 */
 extern xpd_$response_t xpd_$unreg_response; /* 0x00E75044: 2 */

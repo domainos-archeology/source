@@ -6,15 +6,14 @@
  * the map symbol for every cell in it and the accessor macro for each of
  * those cells all live in mmap/mmap.h.
  *
- * On the target the block is the fixed A5 base at 0xE23284 that every MMAP_
- * entry point loads, so it has no C storage there.  On the host it needs
- * storage, and this is its one definition; the image seeds below are the
- * bytes at 0xE23284 and 0xE23C88 (`gsk read`).
+ * The block is the A5 base (0xE23284 in the image) that every MMAP_ entry
+ * point loads: a MODULE_DATA block, linked in the SAU2 map's order, with the
+ * image's bytes at 0xE23284 and 0xE23C88 (`gsk read`) as its initial
+ * contents (source-702z).
  */
 
 #include "mmap/mmap_internal.h"
 
-#if !defined(ARCH_M68K)
 /*
  * The MMAP_ block, seeded with the image's initial values:
  *
@@ -26,7 +25,7 @@
  * inverted (1 and 0xFFF) because MMAP_$INIT narrows them as it walks the
  * PMAP entries (mmap/init.c).
  */
-mmap_globals_t MMAP_GLOBALS_STORAGE = {
+MODULE_DATA_DEFINE_INIT(mmap_globals_t, MMAP_$DATA, 0x00E23284, {
     .hi_indx = 0x00000FFF,                    /* 0xE23288 */
     .lo_indx = 0x00000200,                    /* 0xE2328C */
     .min_rmt_pool = 0x00000042,               /* 0xE23C88 */
@@ -35,8 +34,7 @@ mmap_globals_t MMAP_GLOBALS_STORAGE = {
     .pageable_pages_lower_limit = 0x00000042, /* 0xE23C94 */
     .format = 0x0001,                         /* 0xE23CA4 */
     .wsl_hi_mark = 0x0008,                    /* 0xE23CA6 */
-};
-#endif
+});
 
 /*
  * DUMP_$ADDRS - the two physical memory ranges MMAP_$INIT records for the

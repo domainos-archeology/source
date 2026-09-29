@@ -17,24 +17,11 @@
  */
 
 /*
- * IO_$INT_STACK_BASE - M68K interrupt stack top address
- *
- * On the original M68K hardware, the interrupt stack occupies a fixed
- * region with its top (highest address, since the stack grows downward)
- * at 0x00EB2BE8.
+ * The interrupt stack (top 0x00EB2BE8, in the SAU2 map's STACK segment) is
+ * reached only by the hand-written io/sau2/use_int_stack.s and
+ * proc1/sau2/int_handler.s, which still carry the image address
+ * (TODO(source-4k71)).  source-702z removed an unused C spelling of it and a
+ * host-only stand-in buffer.
  */
-#if defined(ARCH_M68K)
-#define IO_$INT_STACK_BASE 0x00EB2BE8
-#endif
-
-/*
- * IO_$INT_STACK_SIZE - Size of interrupt stack buffer (non-M68K builds)
- *
- * 1024 bytes should be sufficient for interrupt handlers, which are
- * expected to be brief and delegate to deferred processing.
- */
-#if !defined(ARCH_M68K)
-#define IO_$INT_STACK_SIZE 1024
-#endif
 
 #endif /* IO_INTERNAL_H */

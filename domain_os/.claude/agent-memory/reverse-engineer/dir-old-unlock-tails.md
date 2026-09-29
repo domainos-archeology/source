@@ -48,9 +48,10 @@ level 0.
 
 ## Host-testing 32-bit entry/handle words
 
-Two different mechanisms, both already in the tree:
-- a directory handle -> `NAME_$HANDLE_TO_PTR` (name/handle_map.c registry);
-- a raw 32-bit entry address -> `ARCH_VA_TO_PTR` with the test setting
-  `ARCH_HOST_VA_BASE` (arch/host/arch.h).
+One mechanism (source-702z retired the handle registry, 2026-09-29):
+- a directory handle -> `NAME_$HANDLE_TO_PTR`, which is `ARCH_VA_TO_PTR`;
+- a raw 32-bit entry address -> `ARCH_VA_TO_PTR`;
+  in both cases the test keeps the target in an arena `ARCH_HOST_VA_BASE`
+  (arch/host/arch.h) points at.
 A plain `(char *)(uintptr_t)` cast segfaults every host test that dereferences
 one.

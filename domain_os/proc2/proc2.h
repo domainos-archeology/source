@@ -592,7 +592,9 @@ MODULE_DATA_DECLARE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
  *             +0x3E58 (0x00E304D8 `clr.w 0xEA92A2' = entry(70)+0x12).
  *             PROC2_$DETACH_FROM_PARENT writes entry(0)->pad_14 when a
  *             zombie is last on the allocated list (see detach_from_parent.c):
- *             in the image that store lands in XPD_$DATA (source-c6cy).
+ *             in the image and in our link (XPD_$DATA is the MODULE_DATA
+ *             block ordered directly before this one, source-c6cy) that
+ *             store lands in XPD_$DATA's tail.
  * pid_to_index[pid]: A = 0xEA551C + pid*2, `move.w (0x3eb6,A1),...'
  *             (0x00E3F53A..0x00E3F53E), so element 0 is at +0x3EB6.
  *             PROC2_$INIT clears pids 2..64 (0x00E30466..0x00E30476, first

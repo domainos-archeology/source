@@ -117,15 +117,15 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
     /* Check if packet is too large for inline processing */
     if (total_size + 0x18 >= APP_MAX_INLINE_SIZE) {
         /* Need to use temp buffer - acquire lock */
-        ML_$EXCLUSION_START(&APP_$EXCLUSION_LOCK);
+        ML_$EXCLUSION_START(&APP_$DATA.exclusion_lock);
         holding_lock = -1;
 
         /* Copy header portion to temp buffer */
-        OS_$DATA_COPY(local_pkt, APP_$TEMP_BUFFER, hdr_offset);
+        OS_$DATA_COPY(local_pkt, APP_$DATA.temp_buffer, hdr_offset);
 
         /* Update header pointer to use original packet location */
         res->hdr_ptr = local_pkt;
-        pkt_ptr = APP_$TEMP_BUFFER;
+        pkt_ptr = APP_$DATA.temp_buffer;
     } else {
         /* Inline processing */
         res->hdr_ptr = local_pkt + total_size;
@@ -197,6 +197,6 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
 
     /* Release lock if we were holding it */
     if (holding_lock < 0) {
-        ML_$EXCLUSION_STOP(&APP_$EXCLUSION_LOCK);
+        ML_$EXCLUSION_STOP(&APP_$DATA.exclusion_lock);
     }
 }

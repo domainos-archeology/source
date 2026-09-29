@@ -168,11 +168,16 @@ _Static_assert(XPD_DATA_SIZE == 0x4E8, "XPD_$DATA: map size 4E8");
 #define XPD_STATE_EVENT     0x01E0  /* bits 5-8: the pending event code */
 #define XPD_STATE_EVENT_SHIFT 5
 
-#if defined(ARCH_M68K)
-#define XPD_$DATA ((uint8_t *)0x00EA5034)
-#else
-extern uint8_t XPD_$DATA[XPD_DATA_SIZE];
-#endif
+/*
+ * XPD_$DATA - the XPD_$DATA data segment (map "D68 EA5034 XPD_$DATA size =
+ * 4E8"): the target table and the debugger table, addressed as byte
+ * offsets through XPD_TARGET / XPD_DEBUGGER.  A MODULE_DATA block since
+ * source-702z (source-c6cy), so it links, as in the image, directly before
+ * PROC2_$DATA, whose P2_INFO_ENTRY(0) lies in its tail
+ * (proc2/detach_from_parent.c).
+ */
+typedef uint8_t xpd_$data_t[XPD_DATA_SIZE];
+MODULE_DATA_DECLARE(xpd_$data_t, XPD_$DATA, 0x00EA5034);
 
 #define XPD_TARGET(idx) \
     ((xpd_$target_t *)(XPD_$DATA + (uint32_t)(uint16_t)(idx) * XPD_TARGET_RECORD_SIZE))

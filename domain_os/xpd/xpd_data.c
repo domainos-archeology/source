@@ -2,9 +2,8 @@
  * xpd/xpd_data.c - XPD subsystem data definitions
  *
  * Original M68K addresses:
- *   XPD_$DATA            0x00EA5034  `D68 EA5034 XPD_$DATA size = 4E8` (host
- *                        builds get a real array; the target uses the
- *                        fixed address, see xpd/xpd.h)
+ *   XPD_$DATA            0x00EA5034  `D68 EA5034 XPD_$DATA size = 4E8`, a
+ *                        MODULE_DATA block (xpd/xpd.h)
  *   xpd_$wire_limit      0x00E3238A  00 03
  *   PTR_PROC2_$DATA      0x00E3238C  00 EA 55 1C  (proc2/proc2.h)
  *   PTR_XPD_$DATA        0x00E32390  00 EA 50 34
@@ -17,9 +16,9 @@
 
 #include "xpd/xpd_internal.h"
 
-#if !defined(ARCH_M68K)
-uint8_t XPD_$DATA[XPD_DATA_SIZE];
-#endif
+/* XPD_$DATA: Ghidra holds no bytes for it (uninitialised in the image);
+ * XPD_$INIT zeroes it (xpd/init.c). */
+MODULE_DATA_DEFINE(xpd_$data_t, XPD_$DATA, 0x00EA5034);
 
 /*
  * 0x00E32388: 4e 75 | 00 03 | 00 ea 55 1c | 00 ea 50 34 - the tail of the
@@ -27,7 +26,9 @@ uint8_t XPD_$DATA[XPD_DATA_SIZE];
  * pointer cells (the range to wire) and of the word 3 (its page limit).
  */
 uint16_t xpd_$wire_limit = 0x0003;
-void *PTR_XPD_$DATA = (void *)XPD_$DATA;
+/* The image cell holds the 32-bit VA of the block: as PTR_PROC2_$DATA
+ * (proc2/proc2_data.c), ARCH_PTR_TO_VA_STATIC, not a host pointer. */
+uint32_t PTR_XPD_$DATA = ARCH_PTR_TO_VA_STATIC(&XPD_$DATA, 0x00EA5034);
 
 /*
  * 0x00E5BDBE: 00 00 00 02 - the tail of XPD_$SET_DEBUGGER (rts at

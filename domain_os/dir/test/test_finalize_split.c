@@ -48,7 +48,19 @@ static int tests_failed = 0;
  * Mock globals
  * ================================================================ */
 
-static uint8_t mock_handle[32];
+/*
+ * The directory handle is a 32-bit target VA (name/name.h), so the mock
+ * directories live in an arena that ARCH_HOST_VA_BASE (arch/host/arch.h)
+ * points at, and a handle is an offset into it (offset 0 unused: VA 0 is
+ * nil).
+ */
+static struct {
+    uint8_t nil[0x10];
+    uint8_t mock_handle[32];
+    uint8_t other_handle[32];
+} arena;
+#define mock_handle  (arena.mock_handle)
+#define other_handle (arena.other_handle)
 
 /* dir_$purify_split_pages mock */
 static int purify_called = 0;
@@ -76,13 +88,6 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
     return 0;
 }
 
-/*
- * dir/finalize_split.c turns the 32-bit directory handle back into a pointer
- * with NAME_$HANDLE_TO_PTR (name/name.h).  On a 64-bit host that is the
- * registry in name/handle_map.c, so it is compiled in here and the tests
- * register mock_handle with NAME_$PTR_TO_HANDLE.
- */
-#include "../../name/handle_map.c"
 
 /* Pull in the implementation */
 #include "../finalize_split.c"
@@ -91,6 +96,7 @@ uint32_t dir_$truncate_pages(void *handle, uint16_t new_page_count,
  * Helper: reset all test state
  * ================================================================ */
 static void reset_test_state(void) {
+    ARCH_HOST_VA_BASE = (uintptr_t)&arena;
     memset(mock_handle, 0, sizeof(mock_handle));
     purify_called = 0;
     purify_status = 0;
@@ -339,7 +345,6 @@ TEST(truncate_failure_propagates) {
 TEST(handle_passed_to_truncate) {
     reset_test_state();
 
-    static uint8_t other_handle[32];
     memset(other_handle, 0xAB, sizeof(other_handle));
 
     dir_insert_ctx_t ctx;

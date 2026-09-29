@@ -28,10 +28,11 @@
 
 /*
  * DMA controller base address: a SAU2 hardware address, so it lives in
- * arch/m68k/sau2/hw.h (SAU2_RING_DMA_BASE, 0xFFA000).  The host build has no
- * such device; only the two byte-count registers below have host cells.
+ * arch/m68k/sau2/hw.h (SAU2_DMAC_BASE, 0xFFA000; channels 0..2 are the
+ * ring's).  The host build has no such device: a test that runs code using
+ * it defines SAU2_DMAC_BASE as the address of its own register array.
  */
-#define RING_DMA_BASE           SAU2_RING_DMA_BASE
+#define RING_DMA_BASE           SAU2_DMAC_BASE
 
 /* DMA channel offsets (0x40 bytes per channel) */
 #define RING_DMA_CHAN0          0x00    /* Receive header */
@@ -66,22 +67,15 @@
  * RING_DMA_RX_WORDS bytes, so the transferred length is
  * RING_DMA_RX_WORDS - count*2.
  *
- * The host unit tests substitute plain memory cells for the memory mapped
- * registers; this is the only arch-specific hook the receive path needs.
+ * The host unit tests stand a plain register array in for the controller
+ * (they define SAU2_DMAC_BASE, see RING_DMA_BASE above).
  */
 #define RING_DMA_RX_WORDS       0x400
 
-#if defined(ARCH_HOST)
-extern volatile uint16_t ring_$dma_chan0_count_cell;
-extern volatile uint16_t ring_$dma_chan1_count_cell;
-#define RING_DMA_CHAN0_COUNT    (&ring_$dma_chan0_count_cell)
-#define RING_DMA_CHAN1_COUNT    (&ring_$dma_chan1_count_cell)
-#else
 #define RING_DMA_CHAN0_COUNT \
     ((volatile uint16_t *)(RING_DMA_BASE + RING_DMA_CHAN0 + RING_DMA_BYTECOUNT))
 #define RING_DMA_CHAN1_COUNT \
     ((volatile uint16_t *)(RING_DMA_BASE + RING_DMA_CHAN1 + RING_DMA_BYTECOUNT))
-#endif
 
 /*
  * ============================================================================

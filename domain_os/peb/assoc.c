@@ -51,7 +51,7 @@ void PEB_$ASSOC(void)
     /* 0x00E5AD52-0x00E5AD56: Domain boolean, 0xFF tested with bmi */
     if ((int8_t)PEB_$MMU_INSTALLED >= 0) {
         /* 0x00E5AD58 */
-        PEB_$MMU_INSTALLED = 0xFF;
+        PEB_$MMU_INSTALLED = -1;   /* st: 0xFF */
 
         /* 0x00E5AD5C-0x00E5AD9A: three page installs, all with flags 6 */
         MMU_$INSTALL(0x2E, 0xFF7800, 6);

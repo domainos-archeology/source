@@ -30,7 +30,7 @@
  */
 
 /* Hardware timer register base address */
-#define TIME_TIMER_BASE     0xFFAC00
+#define TIME_TIMER_BASE     SAU2_TIMER_BASE   /* 0xFFAC00, arch/m68k/sau2/hw.h */
 
 /* Timer control/status register offsets */
 #define TIME_TIMER_CTRL     0x03    /* Control/status byte */
@@ -53,23 +53,14 @@
  * TIME_$ABS_CLOCK 0x00E2B026, TIME_$GET_TIME_OF_DAY 0x00E2B06A) all do
  *   lea (0xffac00).l,A0 / movep.w (0x5,A0),D0w / btst.b #0,(0x3,A0)
  * i.e. a byte read of 0xFFAC05 and 0xFFAC07 (movep assembles the word from
- * the two odd bytes) and a byte read of 0xFFAC03.  On m68k the macros are the
- * volatile MMIO accesses; on a host build the test supplies
- * time_$timer_read_reg()/time_$timer_write_reg() so the real functions can be
- * driven against a modelled timer (same shape as CAL_$RTC_READ in cal/cal.h).
+ * the two odd bytes) and a byte read of 0xFFAC03.  The macros are
+ * ARCH_IO_READ8 / ARCH_IO_WRITE8 (arch/arch.h): the volatile MMIO accesses on
+ * the target, hooks the test supplies on the host so the real functions can
+ * be driven against a modelled timer (same shape as CAL_$RTC_READ in
+ * cal/cal.h).
  */
-#if defined(ARCH_M68K)
-#define TIME_$TIMER_READ(off) \
-    (*(volatile uint8_t *)(uintptr_t)(TIME_TIMER_BASE + (off)))
-#define TIME_$TIMER_WRITE(off, val) \
-    (*(volatile uint8_t *)(uintptr_t)(TIME_TIMER_BASE + (off)) = (uint8_t)(val))
-#else
-uint8_t time_$timer_read_reg(uint16_t offset);
-void time_$timer_write_reg(uint16_t offset, uint8_t value);
-#define TIME_$TIMER_READ(off) time_$timer_read_reg((uint16_t)(off))
-#define TIME_$TIMER_WRITE(off, val) \
-    time_$timer_write_reg((uint16_t)(off), (uint8_t)(val))
-#endif
+#define TIME_$TIMER_READ(off)       ARCH_IO_READ8(TIME_TIMER_BASE + (off))
+#define TIME_$TIMER_WRITE(off, val) ARCH_IO_WRITE8(TIME_TIMER_BASE + (off), (val))
 
 /* `movep.w (0x5,A0),D0w`: high byte from +5, low byte from +7 */
 #define TIME_$READ_RTE_TIMER() \

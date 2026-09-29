@@ -42,7 +42,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t win_$host_clockh(void) { return 0; }
 
 static int8_t probe_result;
@@ -96,7 +96,7 @@ static dcte_t dcte;
 
 static void reset(void)
 {
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(&dcte, 0, sizeof(dcte));
     dcte.cnum = 2;
     dcte.disk_dinit = 0x00FFDD00;
@@ -124,20 +124,20 @@ TEST(cinit_probe)
 TEST(cinit_registers)
 {
     reset();
-    WIN_$DATA[WIN_FLAGS_OFFSET] = 0x01;
+    WIN_$DATA.bytes[WIN_FLAGS_OFFSET] = 0x01;
     ASSERT_EQ(status_$ok, WIN_$CINIT(&dcte));
-    ASSERT_EQ(ARCH_PTR_TO_VA(&dcte), *(uint32_t *)(WIN_$DATA + WIN_CTRL_INFO_OFFSET));
-    ASSERT_EQ(0x00FFDD00, *(uint32_t *)(WIN_$DATA + WIN_BASE_ADDR_OFFSET));
-    ASSERT_EQ(0x0045, *(uint16_t *)(WIN_$DATA + WIN_DEV_TYPE_OFFSET));
-    ASSERT_EQ(0x29, WIN_$DATA[WIN_FLAGS_OFFSET]);
+    ASSERT_EQ(ARCH_PTR_TO_VA(&dcte), *(uint32_t *)(WIN_$DATA.bytes + WIN_CTRL_INFO_OFFSET));
+    ASSERT_EQ(0x00FFDD00, *(uint32_t *)(WIN_$DATA.bytes + WIN_BASE_ADDR_OFFSET));
+    ASSERT_EQ(0x0045, *(uint16_t *)(WIN_$DATA.bytes + WIN_DEV_TYPE_OFFSET));
+    ASSERT_EQ(0x29, WIN_$DATA.bytes[WIN_FLAGS_OFFSET]);
     ASSERT_PTR_EQ(WIN_UNIT_EC(2), ec_init_ec);
     ASSERT_EQ(1, reg_calls);
     ASSERT_PTR_EQ(&WIN_TYPE, reg_type);
     ASSERT_PTR_EQ(&WIN_TYPE, reg_ctlr);
     ASSERT_EQ(0, WIN_TYPE);
-    ASSERT_PTR_EQ(WIN_$DATA + WIN_FLAGS_OFFSET, reg_units);
-    ASSERT_PTR_EQ(WIN_$DATA + WIN_DEV_TYPE_OFFSET, reg_flags);
-    ASSERT_EQ(ARCH_PTR_TO_VA(WIN_$DATA + WIN_JUMP_TABLE_OFFSET), *(uint32_t *)reg_jt);
+    ASSERT_PTR_EQ(WIN_$DATA.bytes + WIN_FLAGS_OFFSET, reg_units);
+    ASSERT_PTR_EQ(WIN_$DATA.bytes + WIN_DEV_TYPE_OFFSET, reg_flags);
+    ASSERT_EQ(ARCH_PTR_TO_VA(WIN_$DATA.bytes + WIN_JUMP_TABLE_OFFSET), *(uint32_t *)reg_jt);
 }
 
 /* 0x00E19CF6-0x00E19D48: the CONTROLLER word picks the lock record and is
@@ -174,7 +174,7 @@ TEST(get_stats)
     uint8_t out[24];
     int i;
     reset();
-    for (i = 0; i < 0x16; i++) WIN_$DATA[WIN_CNT_OFFSET + i] = (uint8_t)(0xA0 + i);
+    for (i = 0; i < 0x16; i++) WIN_$DATA.bytes[WIN_CNT_OFFSET + i] = (uint8_t)(0xA0 + i);
     memset(out, 0xEE, sizeof(out));
     WIN_$GET_STATS(0, 0, out);
     for (i = 0; i < 0x16; i++) ASSERT_EQ(0xA0 + i, out[i]);

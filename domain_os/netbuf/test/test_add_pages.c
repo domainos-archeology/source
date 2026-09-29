@@ -49,9 +49,8 @@ static int tests_run = 0;
 #include "netbuf/netbuf_internal.h"
 
 /* The netbuf globals. */
-static netbuf_globals_t globals_storage;
-netbuf_globals_t *netbuf_globals = &globals_storage;
-uint32_t netbuf_va_base = 0xD64C00;
+MODULE_DATA_DEFINE(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8);
+#define globals_storage NETBUF_$DATA
 
 /* The MMAPE table; only the word at entry offset 0x06 is used here. */
 #define TEST_MMAPE_ENTRIES 512

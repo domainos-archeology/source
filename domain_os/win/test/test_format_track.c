@@ -30,9 +30,9 @@
 /* ------------------------------------------------------------------ */
 /* Module data and the globals WIN reaches                             */
 /* ------------------------------------------------------------------ */
-uint8_t  WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 /* The disk subsystem's per-process slot array; WIN clears one byte of it. */
-disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
+_Alignas(16) uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 uint32_t TIME_$CLOCKH;
 
 static uint8_t regs[0x10];
@@ -160,8 +160,8 @@ static void setup(void)
 {
     int i;
 
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
-    memset(DISK_$PER_PROC, 0xAA, sizeof(DISK_$PER_PROC));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
+    memset(DISK_$DATA, 0xAA, sizeof(DISK_$DATA));
     memset(regs, 0, sizeof(regs));
     memset(dev_entry, 0, sizeof(dev_entry));
     memset(&req, 0, sizeof(req));

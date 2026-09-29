@@ -18,8 +18,14 @@
 #include "ast/ast_internal.h"
 #include "hint/hint.h"
 
-/* Net info flags structure for NETWORK_$AST_GET_INFO */
-#define NET_INFO_FLAGS ((void *)0xE01D64)
+/*
+ * NETWORK_$AST_GET_INFO's flags word: the constant 00 08 at 0x00E01D64, just
+ * past this routine's rts, reached with `pea (0x70,PC)' at 0x00E01CF2.  A
+ * file-static constant with the image bytes (source-702z; it was spelled as
+ * the image address, which names different memory in our link).
+ */
+static uint16_t ast_$get_info_flags_00e01d64 = 0x0008;
+#define NET_INFO_FLAGS (&ast_$get_info_flags_00e01d64)
 
 /* Status codes */
 #define file_$object_not_found 0x000F0001

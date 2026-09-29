@@ -6,7 +6,6 @@
  * Original M68K addresses:
  *   IO_$SAVED_OS_SP:    0x00E2E822 (4 bytes, void pointer)
  *   IO_$SAVED_INT_SR:   0x00EB2BF8 (2 bytes, uint16)
- *   IO_$INT_STACK:      below 0x00EB2BE8 (interrupt stack, grows downward)
  */
 
 #include "io/io_internal.h"
@@ -41,19 +40,6 @@ void *IO_$SAVED_OS_SP = NULL;
  */
 uint16_t IO_$SAVED_INT_SR = 0;
 
-#if !defined(ARCH_M68K)
-/*
- * IO_$INT_STACK - Dedicated interrupt stack buffer
- *
- * On M68K hardware, the interrupt stack is at a fixed address (top at
- * 0x00EB2BE8, growing downward). For non-M68K builds, we allocate a
- * buffer to serve as the interrupt stack.
- *
- * The stack is relatively small since interrupt handlers should be brief
- * and delegate heavier work to deferred interrupt processing.
- */
-uint8_t IO_$INT_STACK[IO_$INT_STACK_SIZE];
-#endif /* !M68K */
 
 /*
  * ============================================================================

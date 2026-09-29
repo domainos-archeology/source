@@ -30,6 +30,22 @@ SECTIONS {
      * Program sections - VMA at load address, LMA immediately after header
      * The AT() directive places these at file offset 12 (0x0C) onward,
      * but addresses are resolved as if loaded at 0x00e00000
+     *
+     * The RFC image is contiguous (settled 2026-09-29, source-702z): .text
+     * (code and MODULE_DATA blocks, in map order), .rodata and .data each
+     * start where the previous one ends, apart from alignment padding, and
+     * their load addresses follow the same way, so the flat binary has no
+     * holes and .bss follows it.  Nothing is placed at a fixed address any
+     * more (the owner's decision of 2026-09-28 replaced pinning with map
+     * order), so the question of sparse VMAs in a flat RFC image, which
+     * pinning blocks at their original addresses would have raised, does
+     * not arise.  The only absolute addresses left are hardware / PROM
+     * cells, and the image addresses that the guards exempted in
+     * tools/check_guards.py and the class-4 literals of the hand-written
+     * assembly (tools/asm_abs_addrs.md) still use; those name memory this
+     * link gives to something else (in the 2026-09-29 scratch link .text
+     * covers 0xE1DC80 and 0xE7DC00, .bss 0xEB2800..0xEB2C00) and are tracked
+     * by their beads.
      */
 
     .text _rfc_load_addr : AT(0x0C) {

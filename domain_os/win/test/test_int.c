@@ -36,7 +36,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t win_$host_clockh(void) { return 0; }
 
 static uint8_t va_arena[0x400];
@@ -48,7 +48,7 @@ static uint8_t va_arena[0x400];
 #define REQ_B ((win_$request_t *)(va_arena + REQ_B_OFF))
 #define VOL   ((disk_$volume_t *)(va_arena + VOL_OFF))
 #define REGS  (va_arena + REGS_OFF)
-#define WIN_STATUS (*(status_$t *)(WIN_$DATA + WIN_STATUS_OFFSET))
+#define WIN_STATUS (*(status_$t *)(WIN_$DATA.bytes + WIN_STATUS_OFFSET))
 
 static status_$t check_status;
 static int check_calls;
@@ -84,7 +84,7 @@ static dcte_t dcte;
 
 static void reset(void)
 {
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(va_arena, 0, sizeof(va_arena));
     memset(&dcte, 0, sizeof(dcte));
     dcte.cnum = 1;
@@ -126,12 +126,12 @@ TEST(no_chain_just_wakes)
 TEST(seek_done_starts_transfer)
 {
     reset();
-    WIN_$DATA[WIN_FLAG_OFFSET] = 0xFF;
+    WIN_$DATA.bytes[WIN_FLAG_OFFSET] = 0xFF;
     rw_status = status_$ok;
     ASSERT_EQ(-1, WIN_$INT(&dcte));
     ASSERT_EQ(1, __host_intr_disable_count);   /* move #0x2500,SR */
-    ASSERT_EQ(0, WIN_$DATA[WIN_FLAG_OFFSET]);
-    ASSERT_EQ(0x123, *(uint16_t *)(WIN_$DATA + WIN_CUR_CYL_OFFSET));
+    ASSERT_EQ(0, WIN_$DATA.bytes[WIN_FLAG_OFFSET]);
+    ASSERT_EQ(0x123, *(uint16_t *)(WIN_$DATA.bytes + WIN_CUR_CYL_OFFSET));
     ASSERT_EQ(0, dma_calls);
     ASSERT_EQ(0, seek_calls);
     ASSERT_EQ(1, rw_calls);
@@ -145,7 +145,7 @@ TEST(seek_done_starts_transfer)
 TEST(transfer_failure_is_posted_and_wakes)
 {
     reset();
-    WIN_$DATA[WIN_FLAG_OFFSET] = 0xFF;
+    WIN_$DATA.bytes[WIN_FLAG_OFFSET] = 0xFF;
     rw_status = (status_$t)-5;                  /* negative: still posted */
     WIN_$INT(&dcte);
     ASSERT_EQ((status_$t)-5, WIN_STATUS);
@@ -156,10 +156,10 @@ TEST(transfer_failure_is_posted_and_wakes)
 TEST(seek_done_with_error)
 {
     reset();
-    WIN_$DATA[WIN_FLAG_OFFSET] = 0xFF;
+    WIN_$DATA.bytes[WIN_FLAG_OFFSET] = 0xFF;
     check_status = status_$disk_not_ready;
     WIN_$INT(&dcte);
-    ASSERT_EQ(0, WIN_$DATA[WIN_FLAG_OFFSET]);
+    ASSERT_EQ(0, WIN_$DATA.bytes[WIN_FLAG_OFFSET]);
     ASSERT_EQ(0, rw_calls);
     ASSERT_EQ(status_$disk_not_ready, WIN_STATUS);
     ASSERT_EQ(1, advance_calls);

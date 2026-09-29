@@ -113,7 +113,7 @@ void PEB_$INIT(void)
     /* Check if MC68881 is present instead of PEB */
     if (M68881_EXISTS < 0) {
         /* MC68881 mode - set save flag and install F-line handler */
-        PEB_$M68881_SAVE_FLAG = 0xFF;
+        PEB_$M68881_SAVE_FLAG = -1;   /* st (0xE24C98): 0xFF */
 
         /* Install FIM F-line handler at vector 0x2C (F-line exception) */
         /* Vector 0x2C = interrupt vector for F-line (0xB * 4 = 0x2C) */
@@ -155,7 +155,7 @@ void PEB_$INIT(void)
             *(void (**)(void))ARCH_VA_TO_PTR(PEB_INT_VECTOR) = PEB_$INT;
 
             /* Mark PEB as installed */
-            PEB_$INSTALLED = 0xFF;
+            PEB_$INSTALLED = -1;   /* st (0xE24C92): 0xFF */
 
             /* Install MMU mapping for WCS at 0xFF7800 */
             /* PPN 0x2E maps to VA 0xFF7800 with flags 0x16 */

@@ -15,7 +15,7 @@ void APP_$STD_OPEN(void)
     status_$t status;                   /* A6-0x2C */
     xns_$os_open_opt_t opt;             /* A6-0x28 */
 
-    ML_$EXCLUSION_INIT(&APP_$EXCLUSION_LOCK);           /* 0x00E00BA0 */
+    ML_$EXCLUSION_INIT(&APP_$DATA.exclusion_lock);           /* 0x00E00BA0 */
 
     /*
      * 0x00E00BA8 "move.l #0x4990002,(-0x28,A6)" writes both halves of the
@@ -39,6 +39,6 @@ void APP_$STD_OPEN(void)
     if (status == status_$ok) {                         /* 0x00E00BD2 */
         /* 0x00E00BD8 "move.w (-0x26,A6),(0x14,A5)": the record's +0x02 now
          * holds the channel index. */
-        APP_$STD_IDP_CHANNEL = opt.flags_channel;
+        APP_$DATA.std_idp_channel = opt.flags_channel;
     }
 }

@@ -111,6 +111,21 @@ uint8_t cal_$rtc_read_reg(uint16_t offset)
  * Code under test
  * ============================================================================ */
 
+/*
+ * The calendar registers are SAU2 hardware (SAU2_CALENDAR_BASE, arch/m68k/sau2/hw.h); on the host
+ * ARCH_IO_READ8 / ARCH_IO_WRITE8 call these two hooks, which hand the
+ * register offset to the model above.
+ */
+#define SAU2_CALENDAR_BASE 0x00FFA800u
+uint8_t arch_$io_read8(uint32_t addr)
+{
+    return cal_$rtc_read_reg((uint16_t)(addr - SAU2_CALENDAR_BASE));
+}
+void arch_$io_write8(uint32_t addr, uint8_t val)
+{
+    cal_$rtc_write_reg((uint16_t)(addr - SAU2_CALENDAR_BASE), val);
+}
+
 #include "../read_cal.c"
 
 /* ============================================================================

@@ -71,6 +71,24 @@ aote_t *AST_$DISMOUNT_FAILED_PTR;
 uid_t ast_$clobbered_uid;
 
 /*
+ * ast_$not_found - AST_$NOT_FOUND, block + 0x478: UID and flags of the last
+ * failed object lookup (ast_$validate_uid writes it).  Named by the SAU2 map.
+ * Zero in the image.
+ *
+ * Original address: 0xE1E0F8
+ */
+ast_$not_found_t ast_$not_found;
+
+/*
+ * ast_$attr_timestamp_mask - block + 0x48C: attribute types whose update
+ * also refreshes the absolute clock (AST_$SET_ATTR_DISPATCH, 0x00E0511E).
+ * Image bytes at 0xE1E10C: 02 78 30 1C.
+ *
+ * Original address: 0xE1E10C
+ */
+uint32_t ast_$attr_timestamp_mask = 0x0278301Cu;
+
+/*
  * ============================================================================
  * Wired buffers and in-code constants
  * ============================================================================

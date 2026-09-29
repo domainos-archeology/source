@@ -190,7 +190,6 @@ void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
 /* ------------------------------------------------------------------ */
 
 #include "../name_data.c"
-#include "../handle_map.c"
 #include "../lock_dir.c"
 
 /* ------------------------------------------------------------------ */
@@ -202,12 +201,24 @@ void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
 
 static const uid_t TEST_DIR_UID = { 0x11223344u, 0x55667788u };
 
-/* A directory page: the first word is the object type (1 == directory). */
-static int16_t dir_page[64];
-static int16_t not_a_dir_page[64];
+/*
+ * A directory page: the first word is the object type (1 == directory).
+ * NAME_$LOCK_DIR hands the page back as a 32-bit target VA (the handle,
+ * name/name.h), so the pages live in an arena ARCH_HOST_VA_BASE
+ * (arch/host/arch.h) points at and a handle is an offset into it (offset 0
+ * unused: VA 0 is nil).
+ */
+static struct {
+    int16_t nil[8];
+    int16_t dir_page[64];
+    int16_t not_a_dir_page[64];
+} arena;
+#define dir_page       (arena.dir_page)
+#define not_a_dir_page (arena.not_a_dir_page)
 
 static void reset(void)
 {
+    ARCH_HOST_VA_BASE = (uintptr_t)&arena;
     memset(&NAME_$DATA, 0, sizeof(NAME_$DATA));
     memset(NAME_$OLD_DIR_DATA.lock_slot, 0, sizeof(NAME_$OLD_DIR_DATA.lock_slot));
     memset(NAME_$OLD_DIR_DATA.lock_mode, 0, sizeof(NAME_$OLD_DIR_DATA.lock_mode));

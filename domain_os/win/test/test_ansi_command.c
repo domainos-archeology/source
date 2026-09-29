@@ -32,7 +32,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t win_$host_clockh(void) { return 0; }
 
 static int wait_calls;
@@ -55,7 +55,7 @@ status_$t WAIT_FOR_CONTROLLER(uint16_t unit)
 
 static void reset(void)
 {
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(regs, 0, sizeof(regs));
     *(volatile uint8_t **)(WIN_UNIT(0) + WIN_BASE_ADDR_OFFSET) = regs[0];
     *(volatile uint8_t **)(WIN_UNIT(1) + WIN_BASE_ADDR_OFFSET) = regs[1];

@@ -22,7 +22,8 @@ memory** for the same variable:
   0xE7FD60..), `stop/stop_data.c` (A5 = 0xE81814 block), `proc1/proc1_data.c:67`
   `PROC1_$TYPE[65]` (0xE2612A).
 - **Register read**: `arch/m68k/arch.h:62` `__A5_BASE()` with byte-offset
-  arithmetic, used by a handful of callers.
+  arithmetic, used by a handful of callers (removed 2026-09-29,
+  source-702z).
 - **Hand-rolled 1-based indexing**: `proc2/proc2.h:398` `P2_INFO_ENTRY(idx)
   = &P2_INFO_TABLE[(idx)-1]`, `proc2_internal.h:79` `PROC_FORK_EC(idx)`,
   `SOCK_$EVENT_COUNTERS[sock-1]`, `smd_$unit_info(unit) = &SMD_DISPLAY_INFO[unit-1]`,
@@ -161,6 +162,10 @@ Stored virtual addresses (fields that are `uint32_t` VAs in the image)
 keep `ARCH_VA_TO_PTR`/`ARCH_PTR_TO_VA` (`arch/m68k/arch.h:49`,
 `arch/host/arch.h:86`). `NAME_$HANDLE_TO_PTR` (`name/name.h:245`) is the same
 idea for handles and should be re-expressed on top of it (bead below).
+(Done 2026-09-29, source-702z: `NAME_$HANDLE_TO_PTR` / `NAME_$PTR_TO_HANDLE`
+are `ARCH_VA_TO_PTR` / `ARCH_PTR_TO_VA` on every build, the host handle
+registry `name/handle_map.c` is gone, and the dir and name tests keep their
+directories in an `ARCH_HOST_VA_BASE` arena.)
 
 ## 4. Host tests
 
@@ -172,7 +177,12 @@ dereferences stored VAs) set `ARCH_HOST_VA_BASE` to an arena as
 The remaining per-subsystem fallbacks (`XNS_IDP_BASE` pointer,
 `pmap_segmap` pointer, `ROUTE_$WIRED_AREA_START_SYM[]`, the
 `DISK_VOLUME_BASE` `#undef` idiom in `disk/test/test_io.c`) disappear once
-the block is an object.
+the block is an object.  (2026-09-29: `DISK_VOLUME_BASE` is now `DISK_$DATA`
+on every build, so the tests' `#undef` only redirects it to their own
+buffer.  A host test that runs code touching a SAU2 register defines the
+`SAU2_` name from `arch/m68k/sau2/hw.h` itself, or the `arch_$io_read8` /
+`arch_$io_write8` hooks, `arch_$vector_table`, `arch_$prom_machine_id` the
+host arch header declares.)
 
 ## 5. Migration order
 
@@ -301,6 +311,53 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
 5. **Sweep**: remove `__A5_BASE()` callers, then the macro; ban
    `#if defined(ARCH_M68K)` around data declarations by a grep in the
    Makefile's `check` target.
+   Amended 2026-09-29 (source-702z): `__A5_BASE()` is gone from both arch
+   headers; its one caller (AST_$SET_ATTR_DISPATCH's timestamp mask at
+   A5+0x48C) reads `ast_$attr_timestamp_mask`, a plain object with the
+   image value 0x0278301C until the AST_ block exists.  The ban is
+   `make check-guards` (`tools/check_guards.py`, part of `make check`): it
+   scans every header and source outside `arch/` and fails on an
+   architecture guard (any spelling, `ARCH_M68K` or `ARCH_HOST`) that holds
+   an object declaration or definition, an `extern`, a `#define` casting an
+   absolute address to a pointer (a literal or a macro that expands to one)
+   or a struct / union definition; asserts, host fallback bodies of
+   hand-written routines and section macros stay allowed.
+   `tools/arch_m68k_guards.md` classifies all 213 remaining guards.  The
+   sweep converted to blocks `APP_$DATA`, `HINT_$DATA`, `NETBUF_$DATA`,
+   `PEB_$INFO` (PEB_PARITY), `WIN_$DATA` (with the image's driver entry
+   table as code VAs), `XPD_$DATA` (closing source-c6cy), `VOLX_$DATA`,
+   `MMAP_$DATA` (the MMAP_ segment; `mmu/sau2/remove_asid.s` and
+   `peb/sau2/int.s` now reach it and `PEB_$INFO` through `.set` aliases,
+   closing source-alpj and source-i1uu) and `DXM_$SIGNAL_ROUTINES`
+   (DXM_WIRED_), bringing the block count to 42; made the ML lock arrays,
+   `HINT_$HINTFILE_PTR`, `HINT_$EXCLUSION_LOCK` and `M68881_EXISTS` plain
+   objects on both builds; pointed the FILE_ lock-table bases,
+   `DISK_$PER_PROC` and `DISK_VOLUME_BASE` at the objects that already
+   existed; moved hardware addresses to `arch/m68k/sau2/hw.h` (DMAC, memory
+   error status, PAR_BUFF, PEB pages, calendar, timer) and PROM / vector
+   cells to the arch headers (`ARCH_PROM_MACHINE_ID`, `ARCH_VECTOR`,
+   `ARCH_IO_READ8/WRITE8`); and deleted unused spellings and host-only
+   definitions from the kernel's `_data.c` files.  Sixteen guards remain,
+   each listed in the script's `EXEMPT` table with its bead (an entry that
+   stops matching fails the check): the AST_ block and tables
+   (source-gmxj), the DIR block (source-qiby), the MMAP page table
+   (source-fyjc), the MMU_ASM cells and registers (source-o56c) and the
+   interrupt stack (source-4k71).
+
+   *Closing note, 2026-09-29.*  With source-702z the five steps are done;
+   what remains under source-0i3 is follow-up beads, all P3 unless noted:
+   blocks not yet converted - source-gmxj (AST_ segment and AST / AOT
+   tables), source-qiby (DIR segment), source-fyjc (MMAP page table),
+   source-tfcy (NAME segment), source-ppgz (PARITY), source-dn79 (SMD
+   0xE2E060), source-bqdf (the `MMAP_$WS_OWNER` bias; the MMAP_ block
+   itself is done), source-avdg (AST `SEGMAP_BASE`); ordering of map-named
+   plain globals - source-91vs; link-time values of image cells -
+   source-82cs, source-2e9k, source-h5ro; hand-written assembly still
+   carrying image addresses - source-o56c, source-4k71, source-k79b,
+   source-nojc; assembly fidelity - source-kt66 (P2), source-c573,
+   source-9jiy; untranslated code the blocks refer to - source-m5y2 (P2),
+   source-6co (P2); host-test hygiene - source-ivp9 (P4).  (The PEB boolean
+   typing bug the sweep exposed, source-uw36, was fixed in the step's review.)
 
 Keep the tree green throughout: a subsystem converts in one commit; the
 linker line and the object land together; other subsystems keep compiling
@@ -313,7 +370,17 @@ because the public header still exports the same names (now fields or
   it replaces pinning at original addresses, whose risks were overlap with
   the linker's `.data/.bss` and a sparse RFC image): blocks now sit inside
   the one `.text` output region among the code, so the image stays dense
-  and nothing can overlap. The risks that remain: (a) a hand-written file
+  and nothing can overlap.  *Resolved 2026-09-29 (source-702z):* the
+  sparse-VMA question is obsolete, because nothing is pinned: `.text`,
+  `.rodata` and `.data` each start where the previous one ends (the scratch
+  link has `.text` 0xE00000..0xE9FC8C, `.rodata` to 0xEA0AB6, `.data`
+  0xEA0AB8..0xEA3BB4, `.bss` after it; the 2026-09-29 review link, and
+  the figures move with every build), so the flat RFC image is contiguous
+  and needs neither sparse-VMA support nor padding; `sau2.ld` says so.  The
+  converse risk remains for the exempted guards (section 5, step 5): an
+  image address still used on the target now lies inside our own `.text`
+  (0xE1DC80 AST_, 0xE7DC00 DIR) or `.bss` (0xEB2800 MMAPE_BASE, 0xEB2BE8
+  interrupt stack), which is why those beads matter. The risks that remain: (a) a hand-written file
   whose routines interleave with other code in the image and cannot be
   split without changing its bytes holds some map symbols out of order
   (today `fim/sau2/fim.s`, placed with its largest run at `FIM_$UII`; the
@@ -348,6 +415,6 @@ because the public header still exports the same names (now fields or
 | P2 | netlog/xns/pmap: replace `NETLOG_DATA`, `XNS_IDP_BASE`, `PMAP_SEGMAP` base macros with blocks | M |
 | P2 | route/rip/asknode/ring/sock/pkt/msg: same, one bead per subsystem (7) | M each |
 | P2 | proc1/fim/acl/proc2 per-process arrays: declaration-side bias, direct indexing, stride asserts | M |
-| P3 | Re-express `NAME_$HANDLE_TO_PTR` on `ARCH_VA_TO_PTR` and retire the host registry | S |
-| P3 | Remove `__A5_BASE()` and add the Makefile check that forbids `#if ARCH_M68K` around data declarations | S |
-| P3 | RFC/linker: confirm sparse VMA support or add padding; document in sau2.ld | S |
+| P3 | Re-express `NAME_$HANDLE_TO_PTR` on `ARCH_VA_TO_PTR` and retire the host registry (done 2026-09-29, source-702z) | S |
+| P3 | Remove `__A5_BASE()` and add the Makefile check that forbids `#if ARCH_M68K` around data declarations (done 2026-09-29, source-702z: `make check-guards`) | S |
+| P3 | RFC/linker: confirm sparse VMA support or add padding; document in sau2.ld (resolved 2026-09-29 by the map-order decision: the image is contiguous, nothing to confirm or pad; sau2.ld documents it) | S |

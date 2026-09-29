@@ -649,5 +649,5 @@ void PEB_$LOAD_WCS(void)
     ctl_page_byte = PEB_CTL_PAGE_BYTE_3FC;
     (void)ctl_page_byte;
     PEB_CTL = ctl;
-    PEB_$WCS_LOADED = 0xFF;
+    PEB_$WCS_LOADED = -1;            /* st: 0xFF, a true boolean */
 }

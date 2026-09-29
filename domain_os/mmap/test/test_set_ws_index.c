@@ -35,7 +35,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 const status_$t mmap_$illegal_pid_00e0d1c4 = status_$mmap_illegal_pid;
 const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;
 

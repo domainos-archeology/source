@@ -27,7 +27,7 @@
 #include "os/os_internal.h"
 
 /* The host stand-in for the m68k exception vector table (os_internal.h) */
-uint32_t os_$vector_table[256];
+void *arch_$vector_table[ARCH_VECTOR_COUNT];
 
 int __host_intr_disable_count = 0;
 
@@ -379,7 +379,7 @@ static int current_failed;
         printf("  %-40s", #fn);                                                \
         current_failed = 0;                                                    \
         tests_run++;                                                           \
-        memset(os_$vector_table, 0, sizeof(os_$vector_table));                 \
+        memset(arch_$vector_table, 0, sizeof(arch_$vector_table));                 \
         memset(BOOT_INFO_TABLE, 0, sizeof(BOOT_INFO_TABLE));                   \
         fn();                                                                  \
         if (current_failed) {                                                  \
@@ -419,7 +419,7 @@ static void test_vectors_empty(void)
 {
     put_group(1, 64, 0, NULL);
     os_$install_vectors(BOOT_INFO_TABLE);
-    CHECK_EQ(0u, os_$vector_table[64]);
+    CHECK_EQ(0u, (uint32_t)(uintptr_t)arch_$vector_table[64]);
 }
 
 /*
@@ -434,10 +434,10 @@ static void test_vectors_one_group(void)
     put_group(1, 64, 3, vals);
     os_$install_vectors(BOOT_INFO_TABLE);
 
-    CHECK_EQ(0x11111111u, os_$vector_table[64]);
-    CHECK_EQ(0x22222222u, os_$vector_table[65]);
-    CHECK_EQ(0x33333333u, os_$vector_table[66]);
-    CHECK_EQ(0u, os_$vector_table[67]);
+    CHECK_EQ(0x11111111u, (uint32_t)(uintptr_t)arch_$vector_table[64]);
+    CHECK_EQ(0x22222222u, (uint32_t)(uintptr_t)arch_$vector_table[65]);
+    CHECK_EQ(0x33333333u, (uint32_t)(uintptr_t)arch_$vector_table[66]);
+    CHECK_EQ(0u, (uint32_t)(uintptr_t)arch_$vector_table[67]);
 }
 
 /* 0x00E338B8: a zero value leaves the vector alone */
@@ -445,13 +445,13 @@ static void test_vectors_zero_skipped(void)
 {
     static const uint32_t vals[3] = {0x11111111u, 0u, 0x33333333u};
 
-    os_$vector_table[65] = 0xAAAAAAAAu;
+    arch_$vector_table[65] = (void *)(uintptr_t)0xAAAAAAAAu;
     put_group(1, 64, 3, vals);
     os_$install_vectors(BOOT_INFO_TABLE);
 
-    CHECK_EQ(0x11111111u, os_$vector_table[64]);
-    CHECK_EQ(0xAAAAAAAAu, os_$vector_table[65]); /* untouched */
-    CHECK_EQ(0x33333333u, os_$vector_table[66]);
+    CHECK_EQ(0x11111111u, (uint32_t)(uintptr_t)arch_$vector_table[64]);
+    CHECK_EQ(0xAAAAAAAAu, (uint32_t)(uintptr_t)arch_$vector_table[65]); /* untouched */
+    CHECK_EQ(0x33333333u, (uint32_t)(uintptr_t)arch_$vector_table[66]);
 }
 
 /* Two groups back to back, the second starting where the first left off */
@@ -465,9 +465,9 @@ static void test_vectors_two_groups(void)
     put_group(next, 100, 1, b);
     os_$install_vectors(BOOT_INFO_TABLE);
 
-    CHECK_EQ(0xA0u, os_$vector_table[32]);
-    CHECK_EQ(0xA1u, os_$vector_table[33]);
-    CHECK_EQ(0xB0u, os_$vector_table[100]);
+    CHECK_EQ(0xA0u, (uint32_t)(uintptr_t)arch_$vector_table[32]);
+    CHECK_EQ(0xA1u, (uint32_t)(uintptr_t)arch_$vector_table[33]);
+    CHECK_EQ(0xB0u, (uint32_t)(uintptr_t)arch_$vector_table[100]);
 }
 
 /*
@@ -481,14 +481,14 @@ static void test_vectors_index_bound(void)
 
     put_group(41, 200, 1, vals);
     os_$install_vectors(BOOT_INFO_TABLE);
-    CHECK_EQ(0u, os_$vector_table[200]);
+    CHECK_EQ(0u, (uint32_t)(uintptr_t)arch_$vector_table[200]);
 
     /* entry 40 is still inside the bound */
     memset(BOOT_INFO_TABLE, 0, sizeof(BOOT_INFO_TABLE));
-    memset(os_$vector_table, 0, sizeof(os_$vector_table));
+    memset(arch_$vector_table, 0, sizeof(arch_$vector_table));
     put_group(40, 200, 1, vals);
     os_$install_vectors(BOOT_INFO_TABLE);
-    CHECK_EQ(0xDEADBEEFu, os_$vector_table[200]);
+    CHECK_EQ(0xDEADBEEFu, (uint32_t)(uintptr_t)arch_$vector_table[200]);
 }
 
 /* 0x00E338D8-0x00E338EE */

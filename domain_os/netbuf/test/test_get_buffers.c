@@ -51,9 +51,8 @@ static int tests_passed = 0;
 #include "netbuf/netbuf_internal.h"
 #include "proc1/proc1.h"
 
-static netbuf_globals_t globals_storage;
-netbuf_globals_t *netbuf_globals = &globals_storage;
-uint32_t netbuf_va_base = 0xD64C00;
+MODULE_DATA_DEFINE(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8);
+#define globals_storage NETBUF_$DATA
 
 #define TEST_MMAPE_ENTRIES 512
 static mmape_t mmape_storage[TEST_MMAPE_ENTRIES];

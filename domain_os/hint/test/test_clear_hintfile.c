@@ -58,9 +58,8 @@ static int tests_run = 0;
 
 #include "hint/hint_internal.h"
 
-hint_globals_t HINT_$GLOBALS_BLOCK;
+MODULE_DATA_DEFINE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 hint_file_t   *HINT_$HINTFILE_PTR;
-uid_t          HINT_$HINTFILE_UID;
 uint32_t       NODE_$ME;
 uint32_t       ROUTE_$PORT;
 route_$port_t  ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];

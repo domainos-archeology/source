@@ -38,79 +38,11 @@
 extern uint16_t peb_$const_word_1;
 
 /*
- * ============================================================================
- * Global Data Structures
- * ============================================================================
- *
- * PEB global data is located at 0xE24C78.
- * Layout:
- *   +0x00: Reserved (8 bytes)
- *   +0x08: Event counter (12 bytes, EC_$INIT'd at 00e31d12)
- *   +0x14: Current owner process ID (2 bytes)
- *   +0x16: Current owner AS ID (2 bytes)
- *   +0x18: PEB CTL shadow register (2 bytes)
- *   +0x1A: PEB_$INSTALLED flag (1 byte)
- *   +0x1B: PEB_$WCS_LOADED flag (1 byte)
- *   +0x1C: PEB_$SAVEP_FLAG (1 byte)
- *   +0x1D: Unknown flag (1 byte)
- *   +0x1E: PEB info byte (1 byte)
- *   +0x1F: PEB_$MMU_INSTALLED flag (1 byte)
- *   +0x20: M68881_$SAVE_FLAG (1 byte)
- *   +0x21: Unknown flag (1 byte)
+ * PEB global data: the block PEB_$INFO (peb_globals_t) is in peb/peb.h,
+ * because the two feature flags other subsystems test are its fields.
+ * PEB_GLOBALS is the name the PEB code uses for it.
  */
-
-typedef struct peb_globals_t {
-  /* PEB_$INIT calls EC_$INIT with 0xE24C80 (00e31d12 `pea (0xe24c80).l`),
-   * i.e. globals + 0x08, and ec_$eventcount_t is 12 bytes -- so the counter
-   * runs 0x08..0x13 and owner_pid follows at 0x14 (00e5ad42
-   * `move.w (0x00e20608).l,(0x14,A0)`).  The earlier layout put the counter
-   * at 0x00 and reserved1 at 0x08, which overlapped both. */
-  uint8_t reserved0[8];        /* +0x00: Reserved */
-  ec_$eventcount_t eventcount; /* +0x08: PEB event counter */
-  uint16_t owner_pid;          /* +0x14: Current owner process ID */
-  uint16_t owner_asid;         /* +0x16: Current owner AS ID */
-  uint16_t ctl_shadow;         /* +0x18: PEB_CTL shadow register */
-  uint8_t installed;           /* +0x1A: PEB hardware installed */
-  uint8_t wcs_loaded;          /* +0x1B: WCS microcode loaded */
-  uint8_t savep_flag;          /* +0x1C: Save pending flag */
-  uint8_t flag_1d;             /* +0x1D: Unknown flag */
-  uint8_t info_byte;           /* +0x1E: Info byte */
-  uint8_t mmu_installed;       /* +0x1F: MMU mappings installed */
-  uint8_t m68881_save_flag;    /* +0x20: MC68881 save flag */
-  uint8_t flag_21;             /* +0x21: Unknown flag */
-} peb_globals_t;
-
-/* Layout recovered from the disassembly -- see the field comments above.
- * Guarded: the embedded ec_$eventcount_t holds two native pointers, so the
- * record is 8 bytes longer from +0x14 on a 64-bit host. */
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(peb_globals_t, reserved0) == 0x00, "peb_globals_t.reserved0");
-_Static_assert(__builtin_offsetof(peb_globals_t, eventcount) == 0x08, "peb_globals_t.eventcount");
-_Static_assert(__builtin_offsetof(peb_globals_t, owner_pid) == 0x14, "peb_globals_t.owner_pid");
-_Static_assert(__builtin_offsetof(peb_globals_t, owner_asid) == 0x16, "peb_globals_t.owner_asid");
-_Static_assert(__builtin_offsetof(peb_globals_t, ctl_shadow) == 0x18, "peb_globals_t.ctl_shadow");
-_Static_assert(__builtin_offsetof(peb_globals_t, installed) == 0x1A, "peb_globals_t.installed");
-_Static_assert(__builtin_offsetof(peb_globals_t, wcs_loaded) == 0x1B, "peb_globals_t.wcs_loaded");
-_Static_assert(__builtin_offsetof(peb_globals_t, savep_flag) == 0x1C, "peb_globals_t.savep_flag");
-_Static_assert(__builtin_offsetof(peb_globals_t, flag_1d) == 0x1D, "peb_globals_t.flag_1d");
-_Static_assert(__builtin_offsetof(peb_globals_t, info_byte) == 0x1E, "peb_globals_t.info_byte");
-_Static_assert(__builtin_offsetof(peb_globals_t, mmu_installed) == 0x1F, "peb_globals_t.mmu_installed");
-_Static_assert(__builtin_offsetof(peb_globals_t, m68881_save_flag) == 0x20, "peb_globals_t.m68881_save_flag");
-_Static_assert(__builtin_offsetof(peb_globals_t, flag_21) == 0x21, "peb_globals_t.flag_21");
-_Static_assert(sizeof(peb_globals_t) == 0x22,
-               "peb_globals_t: fields end at 0x21 (flag_21)");
-#endif
-
-/*
- * Global PEB data
- * Address: 0xE24C78
- */
-#if defined(ARCH_M68K)
-#define PEB_GLOBALS (*(peb_globals_t *)0xE24C78)
-#else
-extern peb_globals_t peb_globals;
-#define PEB_GLOBALS peb_globals
-#endif
+#define PEB_GLOBALS PEB_$INFO
 
 /*
  * Convenience macros for global fields
@@ -129,14 +61,12 @@ extern peb_globals_t peb_globals;
 /*
  * MC68881 existence flag
  * Set negative (<0) if MC68881 is present instead of PEB
- * Address: 0xE8180C
+ * Address: 0xE8180C, the first byte of the PEB_UNWIRED segment (map "D
+ * E8180C PEB_UNWIRED size = 4", symbol M68881_EXISTS).  Zero in the image;
+ * PEB_$INIT reads it (0x00E31D20).  A plain object on every build since
+ * source-702z (ordering map-named plain globals is source-91vs).
  */
-#if defined(ARCH_M68K)
-#define M68881_EXISTS (*(volatile int8_t *)0xE8180C)
-#else
-extern volatile int8_t m68881_exists;
-#define M68881_EXISTS m68881_exists
-#endif
+extern volatile int8_t M68881_EXISTS;
 
 /*
  * ============================================================================

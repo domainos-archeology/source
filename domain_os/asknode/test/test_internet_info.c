@@ -75,7 +75,7 @@ uint32_t NODE_$ME;
 uint32_t TIME_$BOOT_TIME;
 uint32_t TIME_$CURRENT_CLOCKH;
 uint32_t ROUTE_$PORT;
-mmap_globals_t MMAP_GLOBALS_STORAGE;    /* MMAP_$REAL_PAGES lives in here */
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);    /* MMAP_$REAL_PAGES lives in here */
 mem_data_t MEM_DATA;
 MODULE_DATA_DEFINE(ring_global_t, RING_$CTL, 0x00E86400);
 MODULE_DATA_DEFINE(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC);  /* stats[0]: the 15-longword copy source */
@@ -122,7 +122,7 @@ MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 
 uint32_t MMU_$SYSTEM_REV;
 int8_t   GPU_$PRESENT;
-uint32_t PROM_$MACHINE_ID;
+uint32_t arch_$prom_machine_id;     /* PROM_$MACHINE_ID (prom/prom.h) */
 os_$boot_device_t OS_$BOOT_DEVICE;
 int16_t  CAL_$BOOT_VOLX;
 
@@ -170,7 +170,7 @@ static void reset_mocks(void)
     memset(&RING_$CTL, 0, sizeof(RING_$CTL));
     memset(RING_$WIRED_DATA.stats, 0, sizeof(RING_$WIRED_DATA.stats));
     memset(&CAL_$TIMEZONE, 0, sizeof(CAL_$TIMEZONE));
-    memset(&MMAP_GLOBALS_STORAGE, 0, sizeof(MMAP_GLOBALS_STORAGE));
+    memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
     NODE_$ME = 0x00012345;
     TIME_$BOOT_TIME = 0;
     TIME_$CURRENT_CLOCKH = 0;

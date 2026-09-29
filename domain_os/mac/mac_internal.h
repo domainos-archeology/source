@@ -47,21 +47,11 @@
  * ============================================================================
  */
 
-#if defined(ARCH_M68K)
-/* MAC exclusion lock (ml_$exclusion_t at base + 0x868) */
-#define mac_$exclusion_lock (*(ml_$exclusion_t *)(MAC_$DATA_BASE + 0x868))
-
-/* Port info table (at 0xE2E0A0, entries of 0x5C bytes) */
-#define MAC_$PORT_INFO_BASE 0xE2E0A0
-#define MAC_$PORT_INFO(port)                                                   \
-  ((void *)(MAC_$PORT_INFO_BASE + (port) * MAC_PORT_INFO_SIZE))
-
-/* Socket pointer array */
-#define MAC_$SOCK_PTR_ARRAY ((void **)0xE28DB0)
-#else
-extern ml_$exclusion_t mac_$exclusion_lock;
-extern void *mac_$port_info_table;
-extern void **mac_$sock_ptr_array;
-#endif
+/*
+ * source-702z removed three unused absolute-address spellings and their
+ * host stand-ins: the exclusion lock at MAC_OS + 0x868 (0xE231F8), the port
+ * table at 0xE2E0A0 (ROUTE_$PORT_ARRAY, route/route.h) and the socket
+ * pointer array at 0xE28DB0 (the SOCK_$DATA block, sock/sock.h).
+ */
 
 #endif /* MAC_INTERNAL_H */

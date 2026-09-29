@@ -369,18 +369,16 @@ extern uint16_t FILE_$LOCK_CONFLICT_TABLE[8];
  *                         0x00E935CC is entry 1)
  *   process ASID slot I   at 0x00E9F9CA + ASID*300 + I*2 (so the array base
  *                         0x00E9F9CC is slot 1)
- * On a host build we address the C globals instead so the code is testable.
+ * Both builds address the C objects (file/file_data.c), which tile the
+ * FILE_$LOT_DATA segment as the image does: FILE_$LOCK_ENTRIES at 0xE935CC,
+ * FILE_$LOCK_TABLE at 0xE9F9CC, FILE_$LOCK_TABLE2 at 0xEA3DC4.  (Until
+ * source-702z the target spelled them as absolute addresses, which named
+ * different memory from the linked objects.)
  * ----------------------------------------------------------------------------
  */
-#if defined(ARCH_M68K)
-#define FILE_$LOT_BASE          ((file_lock_entry_detail_t *)0x00E935CCUL)
-#define FILE_$PROC_LOT_BASE     ((uint8_t *)0x00E9F9CCUL)
-#define FILE_$PROC_LOT_CNT_BASE ((uint16_t *)0x00EA3DC4UL)
-#else
 #define FILE_$LOT_BASE          ((file_lock_entry_detail_t *)FILE_$LOCK_ENTRIES)
 #define FILE_$PROC_LOT_BASE     ((uint8_t *)FILE_$LOCK_TABLE)
 #define FILE_$PROC_LOT_CNT_BASE (FILE_$LOCK_TABLE2)
-#endif
 
 #define FILE_$LOT_ENTRY(n)      (&FILE_$LOT_BASE[(int32_t)(n) - 1])
 #define FILE_$PROC_LOT_SLOT(asid, idx)                                        \

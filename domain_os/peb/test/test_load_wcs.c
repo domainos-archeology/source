@@ -28,16 +28,19 @@ int __host_intr_disable_count = 0;
 
 /* ---- host storage ------------------------------------------------------ */
 
-peb_globals_t     peb_globals;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 uid_t             UID_$NIL;
 m68k_ptr_t        FP_$SAVEP;
 void             *arch_$vector_table[ARCH_VECTOR_COUNT];
 uint16_t          peb_$const_word_1 = 0x0001;   /* peb/init.c's 0x00E31DCE cell */
 
 static uint8_t    host_ctl_page[0x400];          /* 0xFF7000..0xFF73FF */
-volatile uint16_t *peb_ctl_reg = (volatile uint16_t *)host_ctl_page;
+/* The PEB control page stands in for SAU2_PEB_CTL (arch/m68k/sau2/hw.h). */
+#define SAU2_PEB_CTL peb_ctl_reg
+static volatile uint16_t *peb_ctl_reg = (volatile uint16_t *)host_ctl_page;
 static uint8_t    host_wcs[0x400];               /* one WCS page, 128 x 8 */
-volatile uint16_t *peb_wcs_base = (volatile uint16_t *)host_wcs;
+#define SAU2_PEB_CS_PAGE peb_wcs_base
+static volatile uint16_t *peb_wcs_base = (volatile uint16_t *)host_wcs;
 
 /* ---- mocks --------------------------------------------------------------- */
 
@@ -161,7 +164,7 @@ static int tests_failed = 0;
 
 static void reset(void)
 {
-    memset(&peb_globals, 0, sizeof peb_globals);
+    memset(&PEB_$INFO, 0, sizeof PEB_$INFO);
     memset(host_ctl_page, 0, sizeof host_ctl_page);
     memset(host_wcs, 0, sizeof host_wcs);
     memset(map_arena, 0, sizeof map_arena);
@@ -200,7 +203,7 @@ TEST(neither_flag_nor_board_does_nothing)
 TEST(save_area_arm_creates_locks_and_maps)
 {
     reset();
-    PEB_$M68881_SAVE_FLAG = 0xFF;
+    PEB_$M68881_SAVE_FLAG = -1;
     PEB_$LOAD_WCS();
     ASSERT_EQ(1, create_calls);
     ASSERT_EQ(1, lock_calls);
@@ -223,8 +226,8 @@ TEST(save_area_arm_creates_locks_and_maps)
 TEST(savep_flag_alone_selects_save_area_arm)
 {
     reset();
-    PEB_$SAVEP_FLAG = 0xFF;
-    PEB_$INSTALLED = 0xFF;
+    PEB_$SAVEP_FLAG = -1;
+    PEB_$INSTALLED = -1;
     PEB_$LOAD_WCS();
     ASSERT_EQ(1, create_calls);
     ASSERT_EQ(0, resolve_calls);
@@ -233,7 +236,7 @@ TEST(savep_flag_alone_selects_save_area_arm)
 TEST(check_err_68881_branch_disables_68881)
 {
     reset();
-    PEB_$M68881_SAVE_FLAG = 0xFF;
+    PEB_$M68881_SAVE_FLAG = -1;
     FP_$SAVEP = 0x1234;
     create_status = 0x00010002;             /* low word non-zero */
     PEB_$LOAD_WCS();
@@ -251,7 +254,7 @@ TEST(check_err_68881_branch_disables_68881)
 TEST(check_err_ignores_high_word_of_status)
 {
     reset();
-    PEB_$M68881_SAVE_FLAG = 0xFF;
+    PEB_$M68881_SAVE_FLAG = -1;
     create_status = 0x00010000;             /* tst.w of the low word sees zero */
     PEB_$LOAD_WCS();
     ASSERT_EQ(1, lock_calls);
@@ -261,7 +264,7 @@ TEST(check_err_ignores_high_word_of_status)
 TEST(check_err_peb_branch_only_prints)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     resolve_status = 5;
     PEB_$LOAD_WCS();
     ASSERT_EQ(1, resolve_calls);
@@ -282,7 +285,7 @@ TEST(microcode_arm_loads_verifies_wires_enables)
         { 0x9999, 0xAAAA, 0xBBBBCCCCu },
     };
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     PEB_$CTL_SHADOW = 0x0003;
     set_microcode(0x0085, 3, e);            /* page 1, offsets 5..7 */
     PEB_$LOAD_WCS();
@@ -328,7 +331,7 @@ TEST(wcs_page_bits_replace_bits_4_to_9_only)
 {
     static const peb_wcs_entry_t e[1] = { { 1, 2, 3 } };
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     PEB_$CTL_SHADOW = 0xFFFF;
     set_microcode(0x1F80, 1, e);            /* page 0x3F, offset 0 */
     PEB_$LOAD_WCS();
@@ -349,7 +352,7 @@ TEST(verify_mismatch_crashes_and_continues)
         { 0x0004, 0x0005, 0x00000006u },
     };
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     peb_ctl_reg = (volatile uint16_t *)host_wcs;
     set_microcode(0x0000, 2, e);
     PEB_$LOAD_WCS();
@@ -368,7 +371,7 @@ TEST(verify_mismatch_crashes_and_continues)
 TEST(zero_entries_skips_both_loops)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     set_microcode(0x0010, 0, NULL);
     PEB_$LOAD_WCS();
     ASSERT_EQ(0, crash_calls);

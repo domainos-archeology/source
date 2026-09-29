@@ -58,8 +58,7 @@ FILE_$LOCK_CONTROL+0x40 is a lock-mode canonicalisation table
 (`FILE_$LOCK_MODE_MAP`), not an ASID map - FILE_$LOCAL_LOCK_VERIFY indexes it
 with the *entry's* mode at 0x00E608C8.
 
-**`__A5_BASE()` in a host test**: arch/host/arch.h defines it as a `static inline`
-returning NULL, so a test that needs a real A5 area must `#undef __A5_BASE` and
-define a macro **after** all header includes but before `#include "../x.c"`.
+**`__A5_BASE()` is gone** (source-702z, 2026-09-29): A5 areas are MODULE_DATA
+blocks, which a host test defines with MODULE_DATA_DEFINE like any object.
 
 See [[acl-rights-abi]] and [[feedback_fidelity_gates]].

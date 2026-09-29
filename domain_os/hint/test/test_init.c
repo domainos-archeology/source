@@ -47,7 +47,7 @@ static int tests_run = 0;
 
 #include "hint/hint_internal.h"
 
-hint_globals_t HINT_$GLOBALS_BLOCK;
+MODULE_DATA_DEFINE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 hint_file_t *HINT_$HINTFILE_PTR;
 uid_t UID_$NIL = { 0, 0 };
 
@@ -186,7 +186,7 @@ static void reset_state(void)
      */
     ARCH_HOST_VA_BASE = (uintptr_t)&test_hintfile - 0x1000;
 
-    memset(&HINT_$GLOBALS_BLOCK, 0xA5, sizeof(HINT_$GLOBALS_BLOCK));
+    memset(&HINT_$DATA, 0xA5, sizeof(HINT_$DATA));
     memset(&test_hintfile, 0, sizeof(test_hintfile));
     memset(&test_port0, 0, sizeof(test_port0));
     ROUTE_$WIRED_DATA.portp[0] = &test_port0;

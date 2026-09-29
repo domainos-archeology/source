@@ -53,17 +53,9 @@ static int tests_run = 0;
  * hint-file UID and the two round-robin indices sit at the offsets the image
  * uses.  The SAU2 link map gives the segment as "D E7DB50 HINT_ size = 28".
  */
-hint_globals_t HINT_$GLOBALS_BLOCK;
+MODULE_DATA_DEFINE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 
-hint_cache_entry_t *const HINT_$CACHE_PTR = HINT_$GLOBALS_BLOCK.cache;
-
-/* The macros in hint_internal.h resolve these on the host. */
-#define HINT_$CACHE (HINT_$GLOBALS->cache)
-#define HINT_$CACHE_INDEX (HINT_$GLOBALS->cache_index)
-#define HINT_$BUCKET_INDEX (HINT_$GLOBALS->bucket_index)
-#define HINT_$EXCLUSION_LOCK (hint_test_lock)
-
-static ml_$exclusion_t hint_test_lock;
+ml_$exclusion_t HINT_$EXCLUSION_LOCK;
 
 uint32_t TIME_$CLOCKH;
 
@@ -102,7 +94,7 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 
 static void poison_globals(void)
 {
-    memset(&HINT_$GLOBALS_BLOCK, POISON, sizeof(HINT_$GLOBALS_BLOCK));
+    memset(&HINT_$DATA, POISON, sizeof(HINT_$DATA));
     excl_init_calls = 0;
     excl_start_calls = 0;
     excl_stop_calls = 0;
@@ -111,7 +103,7 @@ static void poison_globals(void)
 /* The bytes that follow the two cache entries, i.e. globals+0x18 onwards. */
 static int tail_is_poisoned(void)
 {
-    const uint8_t *p = (const uint8_t *)&HINT_$GLOBALS_BLOCK;
+    const uint8_t *p = (const uint8_t *)&HINT_$DATA;
     size_t i;
 
     for (i = sizeof(hint_cache_entry_t) * HINT_CACHE_SIZE;
@@ -359,7 +351,7 @@ TEST(lookup_cache_scan_runs_exactly_twice)
 {
     uint32_t key = 0x00088888;
     uint8_t out = 0xFF;
-    uint8_t *raw = (uint8_t *)&HINT_$GLOBALS_BLOCK;
+    uint8_t *raw = (uint8_t *)&HINT_$DATA;
     uint32_t planted = key;
 
     poison_globals();

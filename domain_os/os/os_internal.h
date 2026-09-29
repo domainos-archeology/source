@@ -84,6 +84,7 @@ extern uint32_t BOOT_INFO_TABLE[];
  * VTOC_CACHE segment at 0x00EB2C00).  It is an address, not a cell holding
  * one: OS_$INIT reaches it with `lea`, then zeroes the 0x400 bytes below it.
  */
+/* TODO(source-4k71): the STACK segment is not an object yet (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define INT_STACK_BASE ((char *)0x00EB2C00)
 #else
@@ -99,14 +100,10 @@ extern char *INT_STACK_BASE;
  * walk at 0x00E33876 (`move.l (0xdc,A1),(A4)` with A4 = vector * 4), and by
  * two absolute stores, `move.l #0xe21f84,(0x7c).l` (vector 31, the parity
  * trap) and `move.l #0xe218e8,(0x8).l` (vector 2, bus error).  All three go
- * through the array below so the addressing is in one place.
+ * through ARCH_VECTOR(n) (arch/arch.h), the architecture's vector-table
+ * entry; on the host a test defines arch_$vector_table.  (source-702z: this
+ * was an OS_$VECTOR_TABLE macro chosen by an architecture guard.)
  */
-#if defined(ARCH_M68K)
-#define OS_$VECTOR_TABLE ((volatile uint32_t *)0)
-#else
-extern uint32_t os_$vector_table[256];
-#define OS_$VECTOR_TABLE os_$vector_table
-#endif
 
 /*
  * ============================================================================

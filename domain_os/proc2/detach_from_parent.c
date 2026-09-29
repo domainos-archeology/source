@@ -76,8 +76,9 @@ void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx)
          * UNCONDITIONALLY (a zero next_index writes entry(0)+0x14).
          * Entry 0 is not part of PROC2_$DATA: in the image the store lands
          * at 0xEA544C, inside the preceding XPD_$DATA segment, and in our
-         * link 0xE4 bytes before the PROC2_$DATA block (see proc2/proc2.h;
-         * what precedes it there is source-c6cy).
+         * link 0xE4 bytes before the PROC2_$DATA block, which is the tail of
+         * the XPD_$DATA block linked directly before it (see proc2/proc2.h;
+         * source-c6cy).
          */
         other = P2_INFO_ENTRY((int16_t)entry->next_index);
         other->pad_14 = entry->pad_14;

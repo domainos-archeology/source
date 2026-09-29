@@ -12,7 +12,12 @@
  *
  * Addresses move here as their modules are converted, not in one sweep.
  * Included by arch/m68k/arch.h.  The host build does not define these
- * names (arch/host/arch.h): code that dereferences them is not host-testable.
+ * names (arch/host/arch.h): a host test that runs code dereferencing one
+ * defines the name itself, before the code is included, as the address of
+ * a cell or array standing in for the device (e.g. ring/test/test_rcv.c,
+ * flp/test/test_flp_do_io.c).  Subsystem headers never test the
+ * architecture to choose between the device and a stand-in
+ * (tools/check_guards.py).
  */
 
 #ifndef ARCH_M68K_SAU2_HW_H
@@ -39,14 +44,64 @@
 #define SAU2_DISPLAY_MEM_BASE   0x00FC0000u
 
 /*
- * Token ring DMA controller
+ * DMA controller (M68450 DMAC, four channels 0x40 bytes apart)
  *
- * SAU2_RING_DMA_BASE - three DMA channels 0x40 bytes apart (0: receive
- *   header, 1: receive data, 2: transmit); the register layout within a
- *   channel is the ring driver's (ring/ring_internal.h).  Loaded as
- *   "movea.l #0xffa000,An" by ring_$clear_dma_channel 0x00E757F2,
- *   ring_$setup_tx_dma 0x00E75868 and ring_$setup_rx_dma 0x00E758CC.
+ * SAU2_DMAC_BASE - channels 0..2 belong to the token ring (0: receive
+ *   header, 1: receive data, 2: transmit; the register layout within a
+ *   channel is the ring driver's, ring/ring_internal.h), channel 3 to the
+ *   floppy (flp/flp_internal.h).  Loaded as "movea.l #0xffa000,An" by
+ *   ring_$clear_dma_channel 0x00E757F2, ring_$setup_tx_dma 0x00E75868 and
+ *   ring_$setup_rx_dma 0x00E758CC, and as "move.l #0xffa000,D4" by FLP_DO_IO
+ *   0x00E3DE5E.  dma/dma.h's DN300_DMAC_BASE_ADDRESS is this address.
  */
-#define SAU2_RING_DMA_BASE      0x00FFA000u
+#define SAU2_DMAC_BASE          0x00FFA000u
+
+/*
+ * Calendar (OKI MSM5832 real-time clock interface) and interval timer
+ *
+ * SAU2_CALENDAR_BASE - map CALENDAR 0xFFA800: control at +0x20, write data
+ *   at +0x22, read data at +0x24 (cal/cal.h).  TIME_$READ_CAL loads it from
+ *   the constant long at 0x00E2AF66; CAL_$WRITE_CALENDAR spells the three
+ *   registers out absolutely.
+ * SAU2_TIMER_BASE - map TIMR 0xFFAC00: the timer registers the TIME_ASM
+ *   clock readers address as `lea (0xffac00).l,A0' (time/time.h).
+ */
+#define SAU2_CALENDAR_BASE      0x00FFA800u
+#define SAU2_TIMER_BASE         0x00FFAC00u
+
+/*
+ * Peripheral floating-point board (PEB) register pages (map IODEFS)
+ *
+ * SAU2_PEB_CTL - map PEB_CTL / PEB_$M_CTRL_PAGE 0xFF7000: the control
+ *   word (its low byte, 0xFF7001, the status byte; byte 0x3FC of the page
+ *   is the acknowledge cell PEB_$INT touches).
+ * SAU2_PEB_DCMD_PAGE - map PEB_$M_DCMD_PAGE / FPU_CMD 0xFF7400: the
+ *   privileged mirror of the register page PEB_$GET_STATUS reads when the
+ *   PEB MMU mappings are installed.
+ * SAU2_PEB_CS_PAGE - map PEB_$M_CS_PAGE / FPU_CS 0xFF7800: the writable
+ *   control store PEB_$LOAD_WCS fills.
+ */
+#define SAU2_PEB_CTL            ((volatile uint16_t *)0x00FF7000u)
+#define SAU2_PEB_DCMD_PAGE      0x00FF7400u
+#define SAU2_PEB_CS_PAGE        ((volatile uint16_t *)0x00FF7800u)
+
+/*
+ * Memory error status (the MMU register page, map MMU 0xFFB400)
+ *
+ * SAU2_MEM_ERR_STATUS_LONG / _WORD - the latched memory error status,
+ *   read as a longword at 0xFFB404 and as a word at 0xFFB406 and cleared
+ *   through the word by PARITY_$CHK (parity/chk.c).
+ */
+#define SAU2_MEM_ERR_STATUS_LONG ((volatile uint32_t *)0x00FFB404u)
+#define SAU2_MEM_ERR_STATUS_WORD ((volatile uint16_t *)0x00FFB406u)
+
+/*
+ * IODEFS buffer pages: fixed virtual pages of the I/O region (map IODEFS
+ * 0xFC0000..) that the kernel maps a physical page into with MMU_$INSTALL
+ * to look at it.  Virtual addresses, not objects.
+ *
+ * SAU2_PAR_BUFF - map PAR_BUFF 0xFF9000, PARITY_$CHK's scratch page.
+ */
+#define SAU2_PAR_BUFF           0x00FF9000u
 
 #endif /* ARCH_M68K_SAU2_HW_H */

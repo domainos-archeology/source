@@ -61,13 +61,14 @@ static int tests_run = 0;
 
 #include "route/route_internal.h"
 #include "net_io/net_io.h"
+#include "app/app.h"
 
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t ROUTE_$PORT;
 MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
-uint16_t APP_$STD_IDP_CHANNEL;
+MODULE_DATA_DEFINE(app_$data_t, APP_$DATA, 0x00E1DC0C);
 
 net_io_$driver_t NET_IO_$NIL_DRIVER[1];
 net_io_$driver_t NET_IO_$USER_DRIVER[1];
@@ -418,7 +419,7 @@ static void reset_state(void)
     ROUTE_$PORT = 0;
     ROUTE_$RTWIRED_DATA.n_user_ports = 0;
     RIP_$WIRED_DATA.std_idp_channel = -1;
-    APP_$STD_IDP_CHANNEL = 0xFFFF;
+    APP_$DATA.std_idp_channel = 0xFFFF;
 
     excl_start_calls = 0;
     excl_stop_calls = 0;
@@ -953,14 +954,14 @@ TEST(idp_registration_on_leaving_status_one)
     request.status = 2;
     attach_driver(1);
     RIP_$WIRED_DATA.std_idp_channel = 3;
-    APP_$STD_IDP_CHANNEL = 4;
+    APP_$DATA.std_idp_channel = 4;
 
     call_service();
 
     ASSERT_EQ(2, idp_add_calls);
     ASSERT_EQ((uintptr_t)&RIP_$WIRED_DATA.std_idp_channel, (uintptr_t)idp_add_chan[0]);
     ASSERT_EQ(1, idp_add_port[0]);
-    ASSERT_EQ((uintptr_t)&APP_$STD_IDP_CHANNEL, (uintptr_t)idp_add_chan[1]);
+    ASSERT_EQ((uintptr_t)&APP_$DATA.std_idp_channel, (uintptr_t)idp_add_chan[1]);
     ASSERT_EQ(1, idp_add_port[1]);
 
     /* A channel of -1 is skipped. */
@@ -971,7 +972,7 @@ TEST(idp_registration_on_leaving_status_one)
     request.status = 2;
     attach_driver(1);
     RIP_$WIRED_DATA.std_idp_channel = -1;
-    APP_$STD_IDP_CHANNEL = 0xFFFF;
+    APP_$DATA.std_idp_channel = 0xFFFF;
     call_service();
     ASSERT_EQ(0, idp_add_calls);
 }
@@ -1293,7 +1294,7 @@ TEST(entering_status_one_runs_the_close_side_cleanup)
     attach_driver(1);
     test_driver.enter_status_1 = ARCH_PTR_TO_VA(test_enter_fn);
     RIP_$WIRED_DATA.std_idp_channel = 3;
-    APP_$STD_IDP_CHANNEL = 4;
+    APP_$DATA.std_idp_channel = 4;
 
     call_service();
 
@@ -1305,7 +1306,7 @@ TEST(entering_status_one_runs_the_close_side_cleanup)
     ASSERT_EQ(2, idp_del_calls);
     ASSERT_EQ((uintptr_t)&RIP_$WIRED_DATA.std_idp_channel, (uintptr_t)idp_del_chan[0]);
     ASSERT_EQ(1, idp_del_port[0]);
-    ASSERT_EQ((uintptr_t)&APP_$STD_IDP_CHANNEL, (uintptr_t)idp_del_chan[1]);
+    ASSERT_EQ((uintptr_t)&APP_$DATA.std_idp_channel, (uintptr_t)idp_del_chan[1]);
 }
 
 /* An unchanged status skips the whole arm (0x00E6A3A8 "beq.w 0x00E6A596"). */

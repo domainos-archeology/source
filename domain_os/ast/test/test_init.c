@@ -46,7 +46,7 @@ static void reset_state(void);
 
 #include "ast/init.c"
 
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 static uint16_t  add_aotes_count;
 static status_$t add_aotes_status;
@@ -75,7 +75,7 @@ void CRASH_SYSTEM(const status_$t *status_p) { (void)status_p; crash_calls++; }
 
 static void reset_state(void)
 {
-    memset(&MMAP_GLOBALS_STORAGE, 0, sizeof(MMAP_GLOBALS_STORAGE));
+    memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
     add_aotes_calls = add_astes_calls = 0;
     add_aotes_count = add_astes_count = 0;
     add_aotes_status = add_astes_status = status_$ok;

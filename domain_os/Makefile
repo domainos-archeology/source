@@ -47,7 +47,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm
+.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm check-guards
 
 all:: domain_os
 
@@ -107,7 +107,7 @@ $(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(SAU2_MAP)
 # first inversion, the number placed and what fell into the catch-all.  (The
 # ELF has one RWX segment because the module data blocks now sit among the
 # code in `.text'; the RFC image is flat binary, so that is expected.)
-check: check-layout check-asm
+check: check-layout check-asm check-guards
 
 check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	@echo "[CHECK] layout: static checks"
@@ -133,6 +133,20 @@ ASM_IMAGE_REF := tools/asm_image_ref.txt
 check-asm: $(ALL_ASM_OBJS) $(ASM_COMPARE) $(ASM_IMAGE_REF)
 	@echo "[CHECK] asm: relocation-aware compare with the image"
 	@python3 $(ASM_COMPARE) --map $(SAU2_MAP) --ref $(ASM_IMAGE_REF) $(ALL_ASM_OBJS)
+
+# Architecture guards around data (source-702z, the last step of
+# docs/design-per-process-data.md): outside arch/, an #if/#ifdef on
+# ARCH_M68K or ARCH_HOST may not hold an object declaration or definition,
+# an extern, a #define that casts an absolute address to a pointer, or a
+# struct/union definition.  Pointer-layout _Static_asserts, host fallback
+# bodies of hand-written routines and .text section macros are allowed.  The
+# guards still left for tracked beads are listed, with the bead, in the
+# script's EXEMPT table; tools/arch_m68k_guards.md classifies every guard.
+GUARD_CHECK := tools/check_guards.py
+
+check-guards: $(GUARD_CHECK)
+	@echo "[CHECK] guards: no architecture guards around data"
+	@python3 $(GUARD_CHECK)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c

@@ -76,7 +76,7 @@ static uint32_t          pft_store[TEST_PAGES];
  * of this one object (mmap/mmap.h), so the daemon's whole MMAP_ world is
  * this single definition.
  */
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 mmape_t           *mmap_mmape_base = mmape_store;

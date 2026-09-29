@@ -33,8 +33,9 @@
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
-        .equ    MMAP_$HPPN,     0x00E23C8C  /* MMAP_ cell; MMAP_GLOBALS is an absolute macro on m68k: TODO(source-alpj) */
-        .equ    MMAP_$LPPN,     0x00E23C90  /* MMAP_ cell; MMAP_GLOBALS is an absolute macro on m68k: TODO(source-alpj) */
+        .extern MMAP_$DATA
+        .equ    MMAP_$HPPN,     MMAP_$DATA + 0xA08  /* map 0xE23C8C, a field of the MMAP_$DATA block */
+        .equ    MMAP_$LPPN,     MMAP_$DATA + 0xA0C  /* map 0xE23C90, a field of the MMAP_$DATA block */
         .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
         .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
 

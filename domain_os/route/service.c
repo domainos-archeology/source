@@ -776,9 +776,9 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
                                      &idp_port, &idp_status);
             }
             /* "cmpi.w #-0x1,(0x00e1dc20).l" is a signed word compare */
-            if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
+            if ((int16_t)APP_$DATA.std_idp_channel != -1) {
                 idp_port = (uint16_t)port_index;
-                XNS_IDP_$OS_ADD_PORT((uint16_t *)&APP_$STD_IDP_CHANNEL,
+                XNS_IDP_$OS_ADD_PORT((uint16_t *)&APP_$DATA.std_idp_channel,
                                      &idp_port, &idp_status);
             }
         }
@@ -830,9 +830,9 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
                 XNS_IDP_$OS_DELETE_PORT((uint16_t *)&RIP_$WIRED_DATA.std_idp_channel,
                                         &idp_port, &idp_status);
             }
-            if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
+            if ((int16_t)APP_$DATA.std_idp_channel != -1) {
                 idp_port = (uint16_t)port_index;
-                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&APP_$STD_IDP_CHANNEL,
+                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&APP_$DATA.std_idp_channel,
                                         &idp_port, &idp_status);
             }
         }

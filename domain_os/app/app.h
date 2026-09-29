@@ -17,6 +17,7 @@
 #define APP_H
 
 #include "base/base.h"
+#include "ml/ml.h"     /* ml_$exclusion_t */
 #include "xns/xns.h"   /* xns_$pkt_desc_t */
 
 /*
@@ -204,19 +205,46 @@ void APP_$DEMUX(xns_$pkt_desc_t *pkt, uint16_t *port_type,
 void APP_$STD_OPEN(void);
 
 /*
- * APP_$STD_IDP_CHANNEL - Standard application IDP channel number
+ * ============================================================================
+ * APP_$DATA - the APP data segment, 0x00E1DC0C..0x00E1DC7F
+ * ============================================================================
  *
- * 0xFFFF when no channel is open.  Also consulted by ROUTE_$SERVICE when
- * registering a new port with the IDP channels.
+ * SAU2 map: "D E1DC0C APP size = 74", interior symbol APP_$STD_IDP_CHANNEL
+ * (0xE1DC20).  APP_$RECEIVE establishes A5 with `lea (0xe1dc0c).l,A5'
+ * (0x00E00808) and reaches the lock as `pea (A5)' (0x00E00956, 0x00E00A7E)
+ * and the bounce buffer as `lea (0x18,A5),A0' (0x00E00964).  Converted from
+ * three absolute-address macros by source-702z.
  *
- * Original address: 0xE1DC20
+ *   +0x00  exclusion_lock   serialises use of temp_buffer (APP_$STD_OPEN
+ *                           initialises it, 0x00E00BA0)
+ *   +0x14  std_idp_channel  map APP_$STD_IDP_CHANNEL: the standard
+ *                           application IDP channel, 0xFFFF (none) in the
+ *                           image; ROUTE_$SERVICE passes its address to
+ *                           XNS_IDP_$OS_ADD_PORT / _DELETE_PORT
+ *   +0x18  temp_buffer      where APP_$RECEIVE copies a packet's header
+ *                           when the reply would not fit inline; the
+ *                           copy's length (header offset, up to 0x11D) is not
+ *                           bounded by the 0x5C bytes left in the segment -
+ *                           as in the image
  */
-#ifndef APP_$STD_IDP_CHANNEL
+typedef struct app_$data_t {
+    ml_$exclusion_t exclusion_lock;     /* +0x00 */
+    uint16_t        _unknown_12;        /* +0x12: not referenced */
+    uint16_t        std_idp_channel;    /* +0x14 map APP_$STD_IDP_CHANNEL */
+    uint16_t        _unknown_16;        /* +0x16: not referenced */
+    uint8_t         temp_buffer[0x5C];  /* +0x18 .. the segment end */
+} app_$data_t;
+
+#define APP_$DATA_SIZE 0x74     /* the map's segment size */
+_Static_assert(offsetof(app_$data_t, exclusion_lock) == 0x00, "APP lock");
 #if defined(ARCH_M68K)
-#define APP_$STD_IDP_CHANNEL (*(uint16_t *)0xE1DC20)
-#else
-extern uint16_t APP_$STD_IDP_CHANNEL;
+/* Pointer-bearing record in front: target-only (design section 3). */
+_Static_assert(sizeof(ml_$exclusion_t) == 0x12, "ml_$exclusion_t size");
+_Static_assert(offsetof(app_$data_t, std_idp_channel) == 0x14, "APP_$STD_IDP_CHANNEL (0xE1DC20)");
+_Static_assert(offsetof(app_$data_t, temp_buffer) == 0x18, "APP temp buffer (A5+0x18)");
+_Static_assert(sizeof(app_$data_t) == APP_$DATA_SIZE, "APP: map size 0x74");
 #endif
-#endif
+
+MODULE_DATA_DECLARE(app_$data_t, APP_$DATA, 0x00E1DC0C);
 
 #endif /* APP_H */

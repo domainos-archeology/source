@@ -83,6 +83,27 @@
 #define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
 
 /*
+ * ARCH_IO_READ8(addr) / ARCH_IO_WRITE8(addr, val) - one byte access to the
+ * device register at `addr', an integer SAU hardware address (the SAU's
+ * hw.h, e.g. SAU2_CALENDAR_BASE + 0x24).  On the target a volatile byte
+ * access at that address; on the host a call to a hook the test supplies,
+ * so a test can model the device and observe the exact access sequence.
+ */
+#define ARCH_IO_READ8(addr) \
+    (*(volatile uint8_t *)(uintptr_t)(addr))
+#define ARCH_IO_WRITE8(addr, val) \
+    (*(volatile uint8_t *)(uintptr_t)(addr) = (uint8_t)(val))
+
+/*
+ * ARCH_PROM_MACHINE_ID - the machine identification longword the boot PROM
+ * leaves at 0x00000100 in the trap page (SAU2 map PROM_$MACHINE_ID, in "D37
+ * 0 TRAP_PAGE ... size = 400").  A PROM-known cell, the same on every m68k
+ * Apollo, so it is defined here rather than in a per-SAU header; the image
+ * carries no bytes for it.  prom/prom.h names it PROM_$MACHINE_ID.
+ */
+#define ARCH_PROM_MACHINE_ID (*(const volatile uint32_t *)0x00000100u)
+
+/*
  * MODULE_DATA_* - Pascal module data blocks, linked in the image's order
  *
  * Domain Pascal compiles each module's globals into one block addressed
@@ -134,21 +155,5 @@
 #define MODULE_DATA_DEFINE_INIT(T, name, addr, ...)                          \
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
     T name MODULE_DATA_ATTRS_(name) = __VA_ARGS__
-
-/*
- * M68K Global Register Variables
- *
- * The A5 register is used as the global data pointer in Domain/OS.
- * Many kernel data structures are accessed via fixed offsets from A5.
- *
- * __A5_BASE() returns the value of the A5 register as a void pointer.
- * Use this macro to access A5-relative globals:
- *   *(uint32_t *)((char *)__A5_BASE() + offset)
- */
-static inline void *__A5_BASE(void) {
-    void *result;
-    __asm__ ("move.l %%a5, %0" : "=r" (result));
-    return result;
-}
 
 #endif /* ARCH_M68K_ARCH_H */

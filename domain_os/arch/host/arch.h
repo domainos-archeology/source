@@ -109,6 +109,25 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
 #define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
 
 /*
+ * ARCH_IO_READ8 / ARCH_IO_WRITE8 - see arch/m68k/arch.h.  There are no device
+ * registers on the host: the accesses become calls to two hooks a test that
+ * exercises a driver defines (with the SAU hardware address it needs, e.g.
+ * SAU2_CALENDAR_BASE, since arch/m68k/sau2/hw.h is not included here).
+ */
+uint8_t arch_$io_read8(uint32_t addr);
+void    arch_$io_write8(uint32_t addr, uint8_t val);
+#define ARCH_IO_READ8(addr)       arch_$io_read8((uint32_t)(addr))
+#define ARCH_IO_WRITE8(addr, val) arch_$io_write8((uint32_t)(addr), (uint8_t)(val))
+
+/*
+ * ARCH_PROM_MACHINE_ID - see arch/m68k/arch.h.  There is no PROM trap page on
+ * the host, so the cell is an ordinary object a test program defines for
+ * itself (uint32_t arch_$prom_machine_id;), as with arch_$vector_table.
+ */
+extern uint32_t arch_$prom_machine_id;
+#define ARCH_PROM_MACHINE_ID arch_$prom_machine_id
+
+/*
  * MODULE_DATA_DEFINE / MODULE_DATA_DEFINE_INIT - Pascal module data blocks
  * (see arch/m68k/arch.h; MODULE_DATA_DECLARE and MODULE_DATA_ADDR are the
  * shared ones in arch/arch.h)
@@ -150,18 +169,5 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
  * is no device behind them, so code that uses one does not build into a host
  * test, and a test supplies its own register cell or arena instead.
  */
-
-/*
- * A5 Global Data Pointer - NOT AVAILABLE on host
- *
- * Code that uses __A5_BASE() must be guarded with #if defined(ARCH_M68K)
- * or use the portable per-process data abstraction (see bead source-0i3).
- *
- * For testing, we provide a stub that returns NULL so that compilation
- * succeeds, but any runtime use will be caught by tests.
- */
-static inline void *__A5_BASE(void) {
-    return (void *)0;
-}
 
 #endif /* ARCH_HOST_ARCH_H */

@@ -22,6 +22,7 @@
 
 #include "mmu/mmu_internal.h"
 
+/* TODO(source-o56c): the MMU_ASM cells, MMU_$PTTX and the MMU registers are still absolute on the target (tools/check_guards.py exemption). */
 #if !defined(ARCH_M68K)
 
 /*

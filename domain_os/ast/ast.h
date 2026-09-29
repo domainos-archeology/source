@@ -503,6 +503,7 @@ typedef struct segmap_entry_t {
 /*
  * Architecture-independent macros for AST access
  */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 /* AST globals base */
 #define AST_GLOBALS_BASE 0xE1DC80

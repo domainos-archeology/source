@@ -24,6 +24,7 @@
 #include "dbuf/dbuf.h"
 
 /* The first AOTE, `AOT` in the SAU2 map (`movea.l #0xec7b60,A2`). */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define AOTE_ARRAY_START ((aote_t *)0xEC7B60)
 #else

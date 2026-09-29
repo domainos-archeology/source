@@ -78,8 +78,17 @@ void CRASH_SYSTEM(const status_$t *msg) {
 #define PAGE_SIZE 1024
 static uint8_t page_pool[MAX_PAGES][PAGE_SIZE];
 
-/* Mock handle structure */
-static uint8_t mock_handle[32];
+/*
+ * Mock handle structure.  The directory handle is a 32-bit target VA
+ * (name/name.h), so the mock lives in an arena that ARCH_HOST_VA_BASE
+ * (arch/host/arch.h) points at, and its handle is its offset (offset 0
+ * unused: VA 0 is nil).
+ */
+static struct {
+    uint8_t nil[0x10];
+    uint8_t mock_handle[32];
+} arena;
+#define mock_handle (arena.mock_handle)
 
 static void init_handle(uint16_t total_pages) {
     memset(mock_handle, 0, sizeof(mock_handle));
@@ -156,13 +165,6 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
     return 0;
 }
 
-/*
- * dir/alloc_split_page.c turns the 32-bit directory handle back into a
- * pointer with NAME_$HANDLE_TO_PTR (name/name.h).  On a 64-bit host that is
- * the registry in name/handle_map.c, so it is compiled in here and the tests
- * register mock_handle with NAME_$PTR_TO_HANDLE.
- */
-#include "../../name/handle_map.c"
 
 /* Pull in the implementation */
 #include "../alloc_split_page.c"
@@ -171,6 +173,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
  * Helper: reset all test state
  * ================================================================ */
 static void reset_test_state(void) {
+    ARCH_HOST_VA_BASE = (uintptr_t)&arena;
     init_page_pool();
     memset(mock_handle, 0, sizeof(mock_handle));
     crash_called = 0;

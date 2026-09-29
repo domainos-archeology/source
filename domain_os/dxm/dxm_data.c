@@ -39,59 +39,15 @@ dxm_queue_t DXM_$UNWIRED_Q;
 dxm_queue_t DXM_$WIRED_Q;
 
 /*
- * Deferred signal-delivery routine table
- *
- * Original address: 0x00E85708 (Ghidra label DXM_$SIGNAL_ROUTINES;
- * NETLOG_$DATA_END sits at the same address).
+ * DXM_$SIGNAL_ROUTINES - the deferred signal-delivery routine table, the
+ * whole DXM_WIRED_ data segment (map "D E85708 DXM_WIRED_ size = 8"; Ghidra
+ * label DXM_$SIGNAL_ROUTINES, NETLOG_$DATA_END sits at the same address).
+ * Image bytes (`gsk read 0xE85708 8`): 00 e3 f0 a6  00 e3 f2 c2.
  */
-#if !defined(ARCH_M68K)
-dxm_$signal_routine_t DXM_$SIGNAL_ROUTINES[DXM_SIGNAL_ROUTINE_COUNT] = {
+MODULE_DATA_DEFINE_INIT(dxm_$signal_routines_t, DXM_$SIGNAL_ROUTINES, 0x00E85708, {
     PROC2_$SIGNAL_OS,           /* 0xE85708: 0x00E3F0A6 */
     PROC2_$SIGNAL_PGROUP_OS,    /* 0xE8570C: 0x00E3F2C2 */
-};
-#endif
-
-/*
- * ============================================================================
- * Callback-cell registry (host only)
- * ============================================================================
- *
- * A dxm_$callback_t is the 4-byte code address the image stores in a queue
- * entry.  A 64-bit host cannot put a function address in four bytes, so the
- * cell holds a 1-based handle into this table and dxm_$callback_fn() maps it
- * back.  See dxm/dxm.h (source-wy9y).
- */
-#if !defined(ARCH_M68K)
-
-static dxm_$callback_fn_t dxm_$host_callbacks[DXM_HOST_CALLBACK_MAX];
-static uint32_t dxm_$host_callback_count;
-
-dxm_$callback_t dxm_$callback_cell(dxm_$callback_fn_t fn)
-{
-    uint32_t i;
-
-    for (i = 0; i < dxm_$host_callback_count; i++) {
-        if (dxm_$host_callbacks[i] == fn) {
-            return (dxm_$callback_t)(i + 1);
-        }
-    }
-    if (dxm_$host_callback_count >= DXM_HOST_CALLBACK_MAX) {
-        return 0;
-    }
-    dxm_$host_callbacks[dxm_$host_callback_count] = fn;
-    dxm_$host_callback_count++;
-    return (dxm_$callback_t)dxm_$host_callback_count;
-}
-
-dxm_$callback_fn_t dxm_$callback_fn(dxm_$callback_t cell)
-{
-    if (cell == 0 || cell > dxm_$host_callback_count) {
-        return NULL;
-    }
-    return dxm_$host_callbacks[cell - 1];
-}
-
-#endif /* !ARCH_M68K */
+});
 
 /*
  * Cell holding DXM_$ADD_SIGNAL_CALLBACK's address

@@ -35,6 +35,7 @@
 #include "ast/ast_internal.h"
 
 /* The AOTE hash table, `AOTH` in the SAU2 map. */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else

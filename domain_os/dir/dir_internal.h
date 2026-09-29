@@ -1801,6 +1801,10 @@ _Static_assert(DIR_LOCK_TAB_OFF + DIR_SLOT_COUNT * 0x10 == DIR_HANDLE_TAB_OFF,
  * including this header to point the whole module at a buffer of its own
  * (see dir/test/test_cleanup.c); left undefined it is NULL, which the
  * m68k-only code paths never dereference.  source-yv13.
+ *
+ * TODO(source-qiby): the target spelling is still the image address, which
+ * names different memory from anything linked; the DIR segment becomes a
+ * MODULE_DATA block and this hook goes away.
  */
 #ifndef DIR_$BLOCK_BASE
 #if defined(ARCH_M68K)

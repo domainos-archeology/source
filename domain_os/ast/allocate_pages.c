@@ -50,6 +50,7 @@ static void ast_$allocate_pages_log(const mmape_t *pmape, uint16_t seg,
 /*
  * Allocation stats at A5+0x460 and A5+0x464
  */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define AST_$ALLOC_FAIL_CNT (*(uint32_t *)0xE1E0E0)  /* A5+0x460 */
 #define AST_$ALLOC_TRY_CNT  (*(uint32_t *)0xE1E0E4)  /* A5+0x464 */

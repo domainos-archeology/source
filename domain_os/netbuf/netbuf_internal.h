@@ -93,17 +93,22 @@ _Static_assert(__builtin_offsetof(netbuf_globals_t, hdr_delays) == 0x318, "netbu
 #endif
 
 /*
- * Architecture-specific access to netbuf globals
+ * NETBUF_$DATA - the NETBUF_ data segment (SAU2 map "D E245A8 NETBUF_ size =
+ * 338") as a MODULE_DATA block; NETBUF_$ADD_PAGES, _GET_HDR, _GET_DAT and
+ * the rest establish A5 = 0xE245A8 (0x00E0E930 "lea (0xe245a8).l,A5").
+ * source-702z: the target used an absolute-address macro, the host a
+ * pointer variable.  NETBUF_GLOBALS keeps the pointer spelling the NETBUF
+ * code uses.
  */
-#if defined(ARCH_M68K)
-#define NETBUF_GLOBALS ((netbuf_globals_t *)0xE245A8)
-#define NETBUF_$VA_BASE 0xD64C00
-#else
-extern netbuf_globals_t *netbuf_globals;
-extern uint32_t netbuf_va_base;
-#define NETBUF_GLOBALS netbuf_globals
-#define NETBUF_$VA_BASE netbuf_va_base
-#endif
+MODULE_DATA_DECLARE(netbuf_globals_t, NETBUF_$DATA, 0x00E245A8);
+#define NETBUF_GLOBALS (&NETBUF_$DATA)
+
+/*
+ * NETBUF_$VA_BASE - the base of the virtual-address window the network
+ * buffers are mapped into, an immediate in the image (NETBUF_$INIT stores
+ * #0xD64C00 into va_base), not the address of a linked object.
+ */
+#define NETBUF_$VA_BASE 0x00D64C00u
 
 _Static_assert(offsetof(netbuf_globals_t, delay_time) == 0x300, "netbuf.delay_time");
 _Static_assert(offsetof(netbuf_globals_t, spin_lock) == 0x308, "netbuf.spin_lock");

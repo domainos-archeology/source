@@ -85,10 +85,12 @@
         .set    PEB_CTL_BYTE,       0x00FF7001  /* PEB control, bit 2 = ours  */
         .set    PEB_ACK_BYTE,       0x00FF73FC  /* touched to acknowledge     */
         .set    PEB_EXC_STATUS,     0x000070F4  /* absolute short in the image*/
-/* The owner ASID byte, the low byte of PEB_GLOBALS.owner_asid (image
- * 0xE24C78 + 0x16 + 1, peb/peb_internal.h), which is still an absolute
- * macro in C: kept until the PEB_PARITY data is an object.  TODO(source-i1uu) */
-        .set    PEB_$OWNER_ASID_B,  0x00E24C8E  /* owner ASID byte            */
+/* The owner ASID byte: the image operand 0x00E24C8E is PEB_$INFO + 0x16,
+ * the first byte of the owner_asid word as peb/peb.h lays out the
+ * PEB_PARITY block (map 0xE24C78).  A field of the MODULE_DATA block since
+ * source-702z. */
+        .extern PEB_$INFO
+        .set    PEB_$OWNER_ASID_B,  PEB_$INFO + 0x16  /* owner ASID byte     */
 /* Routines in our tree, by name: FIM_$SPURIOUS_INT (fim/sau2/fim.s, map
  * 0xE21F20, the default jmp target), IO_$USE_INT_STACK (io/sau2, map
  * 0xE2E826), CRASH_SYSTEM (misc/sau2, map 0xE1E700), DXM_$ADD_SIGNAL (dxm/,

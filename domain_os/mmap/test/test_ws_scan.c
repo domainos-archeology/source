@@ -78,7 +78,7 @@ static uint32_t pft_store[TEST_PAGES];
  * scanner touches - the WSL array, MMAP_$WSL_HI_MARK and the three counters -
  * is a field of this one object, so the test allocates the block itself.
  */
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 const status_$t mmap_$illegal_wsl_index_00e0c9e0 = status_$mmap_illegal_wsl_index;
 
 mmape_t  *mmap_mmape_base = mmape_store;

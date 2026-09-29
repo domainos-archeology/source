@@ -101,7 +101,7 @@ extern int16_t CAL_$BOOT_VOLX;              /* 0x00E7B040 */
  * (0x00FFA800) and uses (0x20,A0)/(0x22,A0)/(0x24,A0); CAL_$WRITE_CALENDAR
  * spells the same three addresses out absolutely (0x00FFA820/22/24).
  */
-#define CAL_$RTC_BASE               0x00FFA800u  /* long at 0x00E2AF66 */
+#define CAL_$RTC_BASE               SAU2_CALENDAR_BASE  /* 0x00FFA800, long at 0x00E2AF66 */
 #define CAL_$RTC_CONTROL_OFFSET     0x20         /* write only */
 #define CAL_$RTC_WRITE_DATA_OFFSET  0x22         /* write only */
 #define CAL_$RTC_READ_DATA_OFFSET   0x24         /* read only  */
@@ -172,23 +172,14 @@ extern int16_t CAL_$BOOT_VOLX;              /* 0x00E7B040 */
  */
 
 /*
- * Register access, isolated behind the arch layer.  On the target these are
- * plain volatile MMIO byte accesses at fixed addresses; on the host build
- * (unit tests) they route through functions the test supplies, so a test can
- * observe the exact control/data sequence the driver emits.
+ * Register access, isolated behind the arch layer: ARCH_IO_WRITE8 /
+ * ARCH_IO_READ8 (arch/arch.h) at the SAU2 calendar address.  On the target
+ * these are plain volatile MMIO byte accesses; on the host build (unit
+ * tests) they route through hooks the test supplies, so a test can observe
+ * the exact control/data sequence the driver emits.
  */
-#if defined(ARCH_M68K)
-#define CAL_$RTC_WRITE(off, val)                                              \
-  (*(volatile uint8_t *)(uintptr_t)(CAL_$RTC_BASE + (off)) = (uint8_t)(val))
-#define CAL_$RTC_READ(off)                                                    \
-  (*(volatile uint8_t *)(uintptr_t)(CAL_$RTC_BASE + (off)))
-#else
-uint8_t cal_$rtc_read_reg(uint16_t offset);
-void cal_$rtc_write_reg(uint16_t offset, uint8_t value);
-#define CAL_$RTC_WRITE(off, val)                                              \
-  cal_$rtc_write_reg((uint16_t)(off), (uint8_t)(val))
-#define CAL_$RTC_READ(off) cal_$rtc_read_reg((uint16_t)(off))
-#endif
+#define CAL_$RTC_WRITE(off, val) ARCH_IO_WRITE8(CAL_$RTC_BASE + (off), (val))
+#define CAL_$RTC_READ(off)       ARCH_IO_READ8(CAL_$RTC_BASE + (off))
 
 #define CAL_$RTC_WRITE_CONTROL(v)                                             \
   CAL_$RTC_WRITE(CAL_$RTC_CONTROL_OFFSET, (v))

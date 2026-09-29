@@ -81,6 +81,9 @@ _Static_assert(sizeof(dxm_queue_t) == 0x1C, "dxm_queue_t must be 28 bytes");
  * address.  On a 64-bit host it is a handle into a small registry, and
  * dxm_$callback_fn() maps it back to a callable function pointer.  Define a
  * cell with DXM_$DEFINE_CALLBACK_CELL so both spellings stay in one place.
+ * The host registry is test support, not kernel data: a test that runs the
+ * queue includes dxm/test/dxm_host_callbacks.h, others define the two hooks
+ * themselves.
  */
 typedef void (*dxm_$callback_fn_t)(void *);
 
@@ -374,6 +377,11 @@ _Static_assert(sizeof(dxm_signal_data_t) == 0x0A,
  * end of the NETLOG data block (NETLOG_$CNTL's A5 base 0xE85684 reaches
  * only as far as (0x7e,A5) = 0xE85702) and is unrelated to this table.
  * The Ghidra label DXM_$SIGNAL_ROUTINES was added at 0xE85708.
+ *
+ * The table is the whole DXM_WIRED_ data segment (SAU2 map "D E85708
+ * DXM_WIRED_ size = 8") and the A5 block of DXM_$ADD_SIGNAL_CALLBACK, so it
+ * is a MODULE_DATA block (source-702z; it was an absolute-address macro on
+ * the target).
  */
 typedef void (*dxm_$signal_routine_t)(uid_t *uid, int16_t *signal,
                                       uint32_t *param, status_$t *status_ret);
@@ -382,11 +390,14 @@ typedef void (*dxm_$signal_routine_t)(uid_t *uid, int16_t *signal,
 #define DXM_SIGNAL_ROUTINE_PROC     0   /* PROC2_$SIGNAL_OS */
 #define DXM_SIGNAL_ROUTINE_PGROUP   1   /* PROC2_$SIGNAL_PGROUP_OS */
 
+typedef dxm_$signal_routine_t dxm_$signal_routines_t[DXM_SIGNAL_ROUTINE_COUNT];
+
 #if defined(ARCH_M68K)
-#define DXM_$SIGNAL_ROUTINES ((dxm_$signal_routine_t *)0xE85708)
-#else
-extern dxm_$signal_routine_t DXM_$SIGNAL_ROUTINES[DXM_SIGNAL_ROUTINE_COUNT];
+/* Code addresses: target-only (design section 3). */
+_Static_assert(sizeof(dxm_$signal_routines_t) == 8, "DXM_WIRED_: map size 8");
 #endif
+
+MODULE_DATA_DECLARE(dxm_$signal_routines_t, DXM_$SIGNAL_ROUTINES, 0x00E85708);
 
 /*
  * DXM_$ADD_SIGNAL_CALLBACK - Signal delivery callback

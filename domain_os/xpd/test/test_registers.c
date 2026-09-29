@@ -38,8 +38,7 @@ uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
 MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
 MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
-int8_t peb_$installed_flag;
-int8_t m68881_$save_flag;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 
 static int lock_held;
 void ML_$LOCK(int16_t id)   { (void)id; lock_held++; }
@@ -145,7 +144,7 @@ static void reset(void)
     fp_get_calls = fp_put_calls = peb_get_calls = peb_put_calls = 0;
     resume_calls = 0; resume_status = status_$ok;
     ec_value = 10; waitn_calls = 0; waitn_stops = NULL;
-    m68881_$save_flag = 0; peb_$installed_flag = 0;
+    M68881_$SAVE_FLAG = 0; PEB_$INSTALLED_FLAG = 0;
 }
 
 /* ==========================================================================
@@ -305,12 +304,12 @@ TEST(fp_state_helpers)
     XPD_$FP_GET_STATE(buf, aux);
     ASSERT_EQ(0, aux[0]);
     ASSERT_EQ(0, fim_get_calls); ASSERT_EQ(0, peb_unload_calls);
-    m68881_$save_flag = -1;
+    M68881_$SAVE_FLAG = -1;
     XPD_$FP_GET_STATE(buf, aux);
     ASSERT_EQ(1, fim_get_calls);
     ASSERT_EQ((long long)(intptr_t)buf, (long long)(intptr_t)fim_get_state);
     ASSERT_EQ((long long)(intptr_t)aux, (long long)(intptr_t)fim_get_status);
-    m68881_$save_flag = 0; peb_$installed_flag = -1;
+    M68881_$SAVE_FLAG = 0; PEB_$INSTALLED_FLAG = -1;
     XPD_$FP_GET_STATE(buf, aux);
     ASSERT_EQ(1, peb_unload_calls);
     ASSERT_EQ((long long)(intptr_t)&buf[1], (long long)(intptr_t)peb_unload_state);
@@ -318,7 +317,7 @@ TEST(fp_state_helpers)
     ASSERT_EQ(4, aux[0]);
     XPD_$FP_PUT_STATE(buf, aux);
     ASSERT_EQ(1, peb_load_calls);
-    m68881_$save_flag = -1;
+    M68881_$SAVE_FLAG = -1;
     XPD_$FP_PUT_STATE(buf, aux);
     ASSERT_EQ(1, fim_put_calls);
 }
@@ -330,12 +329,12 @@ TEST(get_put_fp)
     reset();
     XPD_DEBUGGER(2)->asid = 5;
     XPD_TARGET(7)->state = (2 << XPD_STATE_DEBUGGER_SHIFT) | XPD_STATE_ENABLED | (3 << XPD_STATE_EVENT_SHIFT);
-    m68881_$save_flag = -1;
+    M68881_$SAVE_FLAG = -1;
     XPD_$GET_FP(&u, &st);
     ASSERT_EQ(status_$ok, st);
     ASSERT_EQ(1, fp_get_calls);
     ASSERT_EQ(7, fp_get_asid);          /* the index FIND_ASID returned */
-    m68881_$save_flag = 0;
+    M68881_$SAVE_FLAG = 0;
     XPD_$PUT_FP(&u, &st);
     ASSERT_EQ(1, peb_put_calls);
     /* the wrong debugger */

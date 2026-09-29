@@ -27,6 +27,7 @@
  * The AOTE hash table (`AOTH`, 0xE1DC80 in the SAU2 map): an array of
  * chain heads indexed by UID_$HASH's result.
  */
+/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 #define AST_AOTH_BASE ((aote_t **)0xE1DC80)
 #else

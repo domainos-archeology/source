@@ -24,9 +24,6 @@
  *       ARCH_VECTOR(n)          - lvalue for vector n's handler address
  *       ARCH_AUTOVECTOR(level)  - lvalue for interrupt level 1..7's vector
  *
- *   - Global data pointer:
- *       __A5_BASE()  (or a stub for non-M68K)
- *
  *   - Module data blocks (docs/design-per-process-data.md, section 3):
  *       MODULE_DATA_DEFINE(T, name, addr)            - define the block
  *       MODULE_DATA_DEFINE_INIT(T, name, addr, init) - same, with the

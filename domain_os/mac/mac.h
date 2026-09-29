@@ -224,21 +224,14 @@ typedef struct mac_$channel_entry_t {
  * ============================================================================
  */
 
-#if defined(ARCH_M68K)
-/* Base address for MAC data */
-#define MAC_$DATA_BASE 0xE22990
-
-/* Channel table (10 entries of 20 bytes each) */
-#define MAC_$CHANNEL_TABLE ((mac_$channel_entry_t *)(MAC_$DATA_BASE + 0x7A8))
-
 /*
- * The cell at MAC_$DATA_BASE + 0x8E0 is not a table: it is one constant
- * rip_$nexthop_t holding the broadcast address, and it is modelled as
- * MAC_OS_$BROADCAST_NEXTHOP in mac_os/mac_os.h (source-d6vh).
+ * The MAC channel table (10 entries of 20 bytes) is MAC_OS segment data
+ * (map "D E22990 MAC_OS size = 8EC", table at +0x7A8); the cell at +0x8E0 is
+ * one constant rip_$nexthop_t, MAC_OS_$BROADCAST_NEXTHOP in mac_os/mac_os.h
+ * (source-d6vh).  source-702z removed an unused absolute-address spelling of
+ * the table (and its host stand-in); the MAC code reaches the segment
+ * through mac_os/.
  */
-#else
-extern mac_$channel_entry_t mac_$channel_table[MAC_MAX_CHANNELS];
-#endif
 
 /*
  * ============================================================================

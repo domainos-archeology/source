@@ -13,10 +13,11 @@ int __host_intr_disable_count = 0;
 
 #include "peb/peb_internal.h"
 
-peb_globals_t   peb_globals;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 peb_fp_state_t  PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
+/* The PEB register page at VA 0x7000 (PEB_REG_PAGE_7000): main points
+ * ARCH_HOST_VA_BASE so that VA resolves here. */
 static uint8_t  host_reg_page[0x400];
-volatile uint8_t *peb_reg_page_7000 = host_reg_page;
 
 #include "../regs.c"
 
@@ -95,6 +96,7 @@ TEST(put_fp_stores_record_by_asid)
 
 int main(void)
 {
+    ARCH_HOST_VA_BASE = (uintptr_t)host_reg_page - PEB_REG_PAGE_VA;
     printf("PEB register tests\n");
     RUN_TEST(load_writes_seven_input_registers);
     RUN_TEST(unload_reads_seven_output_registers);

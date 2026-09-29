@@ -53,7 +53,7 @@ uint8_t mmu_sysrev;
 uint16_t mmu_current_asid;
 uint8_t mmu_mcr_shadow;
 uint32_t MMU_$SYSTEM_REV;
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 static volatile uint16_t hw_csr;
 static uint32_t pft_store[0x1000];

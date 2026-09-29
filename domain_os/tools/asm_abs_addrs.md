@@ -101,9 +101,9 @@ Per subsystem (class: count):
 | source-k79b | 0xE213A0 FIM_UNWIRED common fault, 0xE213A4 FIM_$COM, 0xE21458 FIM_$SOFT_FAULT+0xC | fim/sau2/fim.s, fim/sau2/bus_err.s |
 | source-nojc | 0xE0DD40 MST_$TOUCH | fim/sau2/bus_err.s |
 | source-o56c | 0xE23D2C MMU_$PID_PRIV, 0xE23D2E M68020, 0xE23D30 VA_TO_PTT_OFFSET_MASK, 0xE23D34 MMU_$VA_SHIFT, 0xE23D36 MMU_$PTT_SHIFT, 0xEC2800 MMU_$PTTX | mmu/sau2/*.s (15 files) |
-| source-alpj | 0xE23C8C MMAP_$HPPN, 0xE23C90 MMAP_$LPPN | mmu/sau2/remove_asid.s |
+| source-alpj (closed 2026-09-29) | 0xE23C8C MMAP_$HPPN, 0xE23C90 MMAP_$LPPN: now `MMAP_$DATA + 0xA08 / + 0xA0C` (source-702z) | mmu/sau2/remove_asid.s |
 | source-4k71 | 0xEB2BE8 interrupt stack top | io/sau2/use_int_stack.s, proc1/sau2/int_handler.s |
-| source-i1uu | 0xE24C8E PEB owner ASID byte | peb/sau2/int.s |
+| source-i1uu (closed 2026-09-29) | 0xE24C8E PEB owner ASID byte: now `PEB_$INFO + 0x16` (source-702z) | peb/sau2/int.s |
 
 Structural deviations the gate reports instead of failing (not address
 operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
@@ -215,8 +215,8 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | mmu/sau2/remove.s:24 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
 | mmu/sau2/remove.s:25 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:35 | `.equ    MMU_$PID_PRIV,  0x00E23D2C` | 0xE23D2C | 4 not yet translated | MMU_$PID_PRIV (MMU_ASM) | kept, TODO(source-o56c) |
-| mmu/sau2/remove_asid.s:36 | `.equ    MMAP_$HPPN,     0x00E23C8C` | 0xE23C8C | 4 not yet translated | MMAP_$HPPN | kept, TODO(source-alpj) |
-| mmu/sau2/remove_asid.s:37 | `.equ    MMAP_$LPPN,     0x00E23C90` | 0xE23C90 | 4 not yet translated | MMAP_$LPPN | kept, TODO(source-alpj) |
+| mmu/sau2/remove_asid.s:36 | `.equ    MMAP_$HPPN,     0x00E23C8C` | 0xE23C8C | 4 not yet translated | MMAP_$HPPN | kept, TODO(source-alpj); 2026-09-29 -> MMAP_$DATA + 0xA08 |
+| mmu/sau2/remove_asid.s:37 | `.equ    MMAP_$LPPN,     0x00E23C90` | 0xE23C90 | 4 not yet translated | MMAP_$LPPN | kept, TODO(source-alpj); 2026-09-29 -> MMAP_$DATA + 0xA0C |
 | mmu/sau2/remove_asid.s:38 | `.equ    MMU_CSR,        0x00FFB400` | 0xFFB400 | 1 hardware/PROM | MMU CSR | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:39 | `.equ    PFT_BASE,       0x00FFB800` | 0xFFB800 | 1 hardware/PROM | page frame table (PFT) | kept (.equ/.set or literal, commented) |
 | mmu/sau2/remove_asid.s:57 | `move.l  #0xfe000000,%d6` | 0xFE000000 | 5 not an address | status code / mask / magic constant | kept |
@@ -246,7 +246,7 @@ operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
 | peb/sau2/int.s:83 | `.set    PEB_CTL_BYTE,       0x00FF7001` | 0xFF7001 | 1 hardware/PROM | PEB control byte | kept (.equ/.set or literal, commented) |
 | peb/sau2/int.s:84 | `.set    PEB_ACK_BYTE,       0x00FF73FC` | 0xFF73FC | 1 hardware/PROM | PEB acknowledge byte | kept (.equ/.set or literal, commented) |
 | peb/sau2/int.s:85 | `.set    PEB_EXC_STATUS,     0x000070F4` | 0x0070F4 | 1 hardware/PROM | PEB exception status (abs.w) | kept (.equ/.set or literal, commented) |
-| peb/sau2/int.s:86 | `.set    PEB_$OWNER_ASID_B,  0x00E24C8E` | 0xE24C8E | 4 not yet translated | PEB owner ASID byte (PEB_PARITY) | kept, TODO(source-i1uu) |
+| peb/sau2/int.s:86 | `.set    PEB_$OWNER_ASID_B,  0x00E24C8E` | 0xE24C8E | 4 not yet translated | PEB owner ASID byte (PEB_PARITY) | kept, TODO(source-i1uu); 2026-09-29 -> PEB_$INFO + 0x16 |
 | peb/sau2/int.s:87 | `.set    FIM_$SPURIOUS_INT,  0x00E21F20` | 0xE21F20 | 3 code in tree | routine | -> FIM_$SPURIOUS_INT |
 | peb/sau2/int.s:88 | `.set    IO_$USE_INT_STACK,  0x00E2E826` | 0xE2E826 | 3 code in tree | routine | -> IO_$USE_INT_STACK |
 | peb/sau2/int.s:89 | `.set    CRASH_SYSTEM,       0x00E1E700` | 0xE1E700 | 3 code in tree | routine | -> CRASH_SYSTEM |

@@ -119,7 +119,7 @@
  * The DMA controller is memory-mapped at these addresses.
  * Each channel is 0x40 bytes apart.
  */
-#define DN300_DMAC_BASE_ADDRESS         0x00FFA000
+#define DN300_DMAC_BASE_ADDRESS         SAU2_DMAC_BASE  /* 0x00FFA000, arch/m68k/sau2/hw.h */
 #define DN300_DMAC_CHANNEL_SIZE         0x40
 
 #define DN300_DMAC_CHAN0_VIRTUAL_ADDRESS (DN300_DMAC_BASE_ADDRESS + (0 * DN300_DMAC_CHANNEL_SIZE))

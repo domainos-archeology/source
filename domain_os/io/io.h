@@ -182,16 +182,6 @@ extern void *IO_$SAVED_OS_SP;
  */
 extern uint16_t IO_$SAVED_INT_SR;
 
-#if !defined(ARCH_M68K)
-/*
- * IO_$INT_STACK - Dedicated interrupt stack buffer (non-M68K builds)
- *
- * On M68K hardware, the interrupt stack is at a fixed address
- * (top at 0x00EB2BE8). For other architectures, this buffer
- * provides the interrupt stack storage.
- */
-extern uint8_t IO_$INT_STACK[];
-#endif
 
 /*
  * ============================================================================

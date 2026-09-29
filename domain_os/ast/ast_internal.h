@@ -258,13 +258,16 @@ extern uid_t ast_$clobbered_uid;
 /* Dismount failed AOTE pointer */
 extern aote_t* AST_$DISMOUNT_FAILED_PTR;
 
-/* Attribute timestamp mask at A5+0x48C (0xE1E10C), used by AST_$SET_ATTR_DISPATCH */
-#if defined(ARCH_M68K)
-#define AST_$ATTR_TIMESTAMP_MASK (*(uint32_t *)((char *)__A5_BASE() + 0x48C))
-#else
+/*
+ * Attribute timestamp mask, AST_ module block + 0x48C (0xE1E10C): the set of
+ * attribute types whose update also refreshes the object's absolute clock.
+ * AST_$SET_ATTR_DISPATCH tests it with `move.l (0x48c,A5),D3 / btst.l D1,D3'
+ * (0x00E0511E).  Image contents 0x0278301C.  A plain object until the AST_
+ * segment becomes a MODULE_DATA block (source-702z removed the __A5_BASE()
+ * arithmetic that addressed it; TODO(source-gmxj) for the block).
+ */
 extern uint32_t ast_$attr_timestamp_mask;
 #define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask
-#endif
 
 /*
  * Cell holding AST_$SET_TROUBLE's address.  AST_$SAVE_CLOBBERED_UID pushes
@@ -326,12 +329,10 @@ typedef struct ast_$not_found_t {
 } ast_$not_found_t;
 _Static_assert(sizeof(ast_$not_found_t) == 0x0C, "ast_$not_found_t is 12 bytes");
 
-#if defined(ARCH_M68K)
-#define AST_$NOT_FOUND (*(ast_$not_found_t *)0xE1E0F8)
-#else
+/* A plain object until the AST_ segment becomes a MODULE_DATA block
+ * (TODO(source-gmxj)); zero in the image. */
 extern ast_$not_found_t ast_$not_found;
 #define AST_$NOT_FOUND ast_$not_found
-#endif
 
 /* Network info flags pointer */
 extern void *net_info_flags;

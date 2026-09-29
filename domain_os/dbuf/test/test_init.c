@@ -38,7 +38,7 @@ uint32_t dbuf_$head;
 uint16_t dbuf_$waiters;
 uint16_t dbuf_$count;
 uint16_t DBUF_$TROUBLE;
-mmap_globals_t MMAP_GLOBALS_STORAGE;   /* MMAP_$REAL_PAGES lives in it */
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);   /* MMAP_$REAL_PAGES lives in it */
 uid_t UID_$NIL = { 0x0A, 0x0B };
 
 static int callocs, installs, inhibits, ec_inits;

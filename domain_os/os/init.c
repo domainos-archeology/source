@@ -344,7 +344,7 @@ static void os_$install_vectors(uint32_t *table)
                 entry++;
                 /* 0x00E338B8: tst.l (0xdc,A0) -- after the increment */
                 if (entry[0x37] != 0) {
-                    OS_$VECTOR_TABLE[vecnum] = entry[0x37];
+                    ARCH_VECTOR(vecnum) = (void *)(uintptr_t)entry[0x37];
                 }
                 vecnum++;
                 remaining--;
@@ -692,7 +692,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     PRINT_BUILD_TIME();
 
     /* --- 0x00E33D30-0x00E33D5A --------------------------------------- */
-    OS_$VECTOR_TABLE[0x7C / 4] = (uint32_t)(uintptr_t)FIM_$PARITY_TRAP;
+    ARCH_VECTOR(0x7C / 4) = (void *)FIM_$PARITY_TRAP;
     ACL_$INIT();
     AST_$INIT();
     AREA_$INIT();
@@ -978,7 +978,7 @@ after_paging_file:
     /* --- 0x00E342DC-0x00E34322 --------------------------------------- */
     PROC1_$INIT_LOADAV();
     FILE_$LOCK_INIT();
-    OS_$VECTOR_TABLE[0x08 / 4] = (uint32_t)(uintptr_t)FIM_$BUS_ERR;
+    ARCH_VECTOR(0x08 / 4) = (void *)FIM_$BUS_ERR;
 
     PROC1_$CREATE_P((void *)DXM_$HELPER_WIRED, 0x08000004, &status);
     if (status != status_$ok) {

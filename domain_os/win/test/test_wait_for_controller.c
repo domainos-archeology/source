@@ -15,7 +15,7 @@
 /* ------------------------------------------------------------------ */
 /* Module data (normally win/win_data.c) and the globals WIN reaches   */
 /* ------------------------------------------------------------------ */
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t TIME_$CLOCKH;
 
 /*
@@ -79,7 +79,7 @@ static void set_status(uint16_t v)
 
 static void reset_state(void)
 {
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(regs, 0, sizeof(regs));
     TIME_$CLOCKH = 0;
     clock_step = 0;

@@ -5,14 +5,14 @@ status_$t PEB_interrupt = status_$peb_interrupt;
 status_$t PEB_FPU_Is_Hung_Err = status_$peb_fpu_is_hung | 0x80000000;
 
 /*
- * Host-build storage for the two exported PEB feature flags declared in
- * peb/peb.h.  On ARCH_M68K those are absolute-address macros over the PEB
- * global block (0x00E24C92 / 0x00E24C98) and no object is needed.
+ * PEB_$INFO - the PEB_PARITY data segment (map "D E24C78 PEB_PARITY size =
+ * 24"), layout in peb/peb.h.  Zero in the image (`gsk read 0xE24C78 0x24`);
+ * PEB_$INIT initialises the eventcount (0x00E31D12) and sets the flags.
  */
-#if !defined(ARCH_M68K)
-int8_t peb_$installed_flag = 0;
-int8_t m68881_$save_flag = 0;
-#endif
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
+
+/* M68881_EXISTS (0xE8180C, PEB_UNWIRED): zero in the image. */
+volatile int8_t M68881_EXISTS;
 
 /*
  * The PEB_ASM module, 0x00E24468..0x00E244F0 (map: "D E24468 PEB_ASM
@@ -30,9 +30,6 @@ int8_t m68881_$save_flag = 0;
  *                                    the PEB routes the display interrupt
  *                                    (smd/interrupt_init.c).
  *
- * The host build has no .s, so the two data cells get plain storage here.
+ * No C file defines the two data cells: a host test that needs one defines
+ * it (source-702z removed host-only definitions from this file).
  */
-#if !defined(ARCH_M68K)
-uint32_t PEB_$STATUS_REG = 0;
-void **PEB_$DISP_INT_ADDR = (void **)0x00E21F20;
-#endif

@@ -68,7 +68,7 @@ uint16_t MST[MST_TABLE_ENTRIES];
  * module data block (`D E23284 MMAP_ size = AA8'), so the test allocates
  * the block rather than the two scalars (bead source-mu8j).
  */
-mmap_globals_t MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 uint16_t mmu_m68020;
 
 /* The four global-segment pages plus the MST pages land in this arena. */

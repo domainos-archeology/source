@@ -100,18 +100,20 @@ _Static_assert(sizeof(ml_$lock_event_t) == 0x10,
 #define ML_NUM_LOCKS 32
 
 /*
- * Global variables (m68k-specific addresses)
+ * Resource-lock state, defined in ml/ml_data.c on every build (source-702z;
+ * the target used absolute-address macros, which named different memory
+ * from the linked objects).  In the image both follow ML_$SPIN_UNLOCK in
+ * the ML code segment and ML_$UNLOCK reaches them PC-relative (`lea
+ * (0x60,PC),A0` at 0x00E20B62); ordering map-named plain globals is
+ * source-91vs.
+ *
+ * ML_$LOCK_BYTES  - map LOCK_BYTE (0xE20BC4): bit 0 set while the lock is
+ *                   held, one byte per lock.
+ * ML_$LOCK_EVENTS - map LOCK_$EVENT_LISTS (0xE20BE4 = LOCK_BYTE + 0x20):
+ *                   32 entries of 16 bytes.
  */
-#if defined(ARCH_M68K)
-/* Lock byte array: bit 0 indicates lock is held (0xE20BC4, from
- * `lea (0x60,PC),A0` at ML_$UNLOCK 0x00E20B62). */
-#define ML_$LOCK_BYTES ((volatile uint8_t *)0xE20BC4)
-/* Lock event table: 32 entries of 16 bytes (0xE20BE4 = 0xE20BC4 + 0x20). */
-#define ML_$LOCK_EVENTS ((ml_$lock_event_t *)0xE20BE4)
-#else
-extern volatile uint8_t ML_$LOCK_BYTES[];
-extern ml_$lock_event_t ML_$LOCK_EVENTS[];
-#endif
+extern volatile uint8_t ML_$LOCK_BYTES[ML_NUM_LOCKS];
+extern ml_$lock_event_t ML_$LOCK_EVENTS[ML_NUM_LOCKS];
 
 /*
  * ============================================================================

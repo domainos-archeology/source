@@ -42,6 +42,12 @@
  * ============================================================================
  * Global Data
  * ============================================================================
+ *
+ * The three cells below are defined by fim/sau2/fim.s: FIM_$FLINE and the
+ * FP routines address them PC-relative, so they are assembled in the image's
+ * place with that code.  No C file defines them (a host test that needs one
+ * defines it; source-702z removed fp/fp_data.c, which held host-only
+ * definitions under an architecture guard).
  */
 
 /*

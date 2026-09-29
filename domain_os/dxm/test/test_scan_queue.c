@@ -3,7 +3,7 @@
  *
  * dxm/dxm_data.c and dxm/scan_queue.c are #included below, so this test
  * drives the real DXM_$SCAN_QUEUE over a real dxm_queue_t and the real
- * host callback registry.
+ * host callback registry (dxm/test/dxm_host_callbacks.h).
  *
  * Points covered (source-wy9y):
  *   - dxm_entry_t is 16 bytes on the host as well as on m68k, so the
@@ -71,6 +71,7 @@ void DXM_$ADD_SIGNAL_CALLBACK(void *data) { (void)data; }
 /* Code under test                                                     */
 /* ------------------------------------------------------------------ */
 
+#include "dxm_host_callbacks.h"
 #include "dxm/dxm_data.c"
 #include "dxm/scan_queue.c"
 

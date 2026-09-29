@@ -111,6 +111,7 @@ _Static_assert(sizeof(mmu_globals_t) == 0x0A, "mmu_globals_t must be 10 bytes");
  * Architecture-independent macros for MMU access
  * These isolate m68k-specific memory layout
  */
+/* TODO(source-o56c): the MMU_ASM cells, MMU_$PTTX and the MMU registers are still absolute on the target (tools/check_guards.py exemption). */
 #if defined(ARCH_M68K)
 /* PTT - Page Translation Table (indexed by virtual address) */
 #define PTT_BASE ((uint16_t *)0x700000)

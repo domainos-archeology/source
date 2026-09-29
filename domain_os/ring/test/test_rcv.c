@@ -81,9 +81,15 @@ char            NETWORK_$DO_CHKSUM;
 network_$failure_rec_t NETWORK_$FAILURE_REC;
 uint32_t        TIME_$CURRENT_CLOCKH;
 
-/* Stand-ins for the memory mapped DMA byte counters (see ring/rcv.c). */
-volatile uint16_t ring_$dma_chan0_count_cell;
-volatile uint16_t ring_$dma_chan1_count_cell;
+/*
+ * Stand-in for the DMAC register window (0xFFA000 on the SAU2,
+ * arch/m68k/sau2/hw.h): ring/rcv.c reads the channel 0 / 1 byte counters in
+ * it (RING_DMA_CHAN0_COUNT / RING_DMA_CHAN1_COUNT, ring/ring_internal.h).
+ */
+static volatile uint16_t ring_$dmac_cells[0x100 / 2];
+#define SAU2_DMAC_BASE ((uintptr_t)ring_$dmac_cells)
+#define ring_$dma_chan0_count_cell (*RING_DMA_CHAN0_COUNT)
+#define ring_$dma_chan1_count_cell (*RING_DMA_CHAN1_COUNT)
 
 /* The register block the unit points at. */
 static ring_hw_regs_t   hw;

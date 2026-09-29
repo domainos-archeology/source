@@ -103,7 +103,7 @@ int8_t   NETLOG_$OK_TO_LOG;
 uid_t    ANON_$UID;
 
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
-mmap_globals_t   MMAP_GLOBALS_STORAGE;
+MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 
 /* ==========================================================================
  * Mocked callees
@@ -228,7 +228,7 @@ static void reset_mocks(void)
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
-    memset(&MMAP_GLOBALS_STORAGE, 0, sizeof(MMAP_GLOBALS_STORAGE));
+    memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
 
     free_calls = pure_calls = 0;
     for (i = 0; i < MAX_ALLOC; i++) {

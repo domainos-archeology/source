@@ -151,28 +151,7 @@ _Static_assert(__builtin_offsetof(app_pkt_hdr_t, flags) == 0x16, "app_pkt_hdr_t.
 _Static_assert(__builtin_offsetof(app_pkt_hdr_t, _reserved) == 0x17, "app_pkt_hdr_t._reserved");
 _Static_assert(sizeof(app_pkt_hdr_t) == 0x18, "app_pkt_hdr_t size");
 
-/*
- * ============================================================================
- * Global Variable Declarations
- * ============================================================================
- */
-
-#if defined(ARCH_M68K)
-
-/* Exclusion lock for APP operations (at 0xE1DC0C) */
-#define APP_$EXCLUSION_LOCK (*(ml_$exclusion_t *)0xE1DC0C)
-
-/* Standard IDP channel number (at 0xE1DC20) */
-#define APP_$STD_IDP_CHANNEL (*(uint16_t *)0xE1DC20)
-
-/* Temporary buffer for large packets (at 0xE1DC24, 0x394 bytes) */
-#define APP_$TEMP_BUFFER ((uint8_t *)0xE1DC24)
-
-#else
-/* Non-m68k: extern declarations */
-extern ml_$exclusion_t APP_$EXCLUSION_LOCK;
-extern uint16_t APP_$STD_IDP_CHANNEL;
-extern uint8_t APP_$TEMP_BUFFER[];
-#endif
+/* The module data block APP_$DATA is in app/app.h (ROUTE_$SERVICE uses
+ * its std_idp_channel). */
 
 #endif /* APP_INTERNAL_H */

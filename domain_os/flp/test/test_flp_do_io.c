@@ -3,9 +3,10 @@
  * (0x00E3DFE2) and FLP_FORMAT_TRACK (0x00E3DC78)
  *
  * EXCS, ML_$LOCK / ML_$UNLOCK are mocked; the FDC registers, the volume's
- * device entry, the DCTE and the DISK per-process slots live in a VA arena
- * the host ARCH_VA_TO_PTR maps; the DMAC channel-3 registers are the
- * flp_$dmac_cells array flp_internal.h substitutes on the host.
+ * device entry and the DCTE live in a VA arena the host ARCH_VA_TO_PTR maps;
+ * the DISK per-process slots are in the test's DISK_$DATA; the DMAC
+ * channel-3 registers are the flp_$dmac_cells array, which the test makes
+ * the SAU2 DMAC (SAU2_DMAC_BASE, arch/m68k/sau2/hw.h) for the host.
  */
 
 #include <stdio.h>
@@ -47,8 +48,8 @@ static int tests_failed = 0;
 } while (0)
 
 /* ==========================================================================
- * The VA arena: DISK_PER_PROC_VA (0x00E7A544) must resolve into it, so it is
- * big enough to reach that offset from a base far below.
+ * The VA arena the FDC registers, device entry and DCTE are reached through
+ * (their records hold 32-bit VAs).
  * ========================================================================== */
 
 #define ARENA_SIZE      0x1000
@@ -62,10 +63,12 @@ static uint8_t va_arena[ARENA_SIZE];
 #define REGS ((volatile flp_regs_t *)(va_arena + REGS_OFF))
 #define DCTE ((dcte_t *)(va_arena + DCTE_OFF))
 #define DEV  ((disk_device_entry_t *)(va_arena + DEV_OFF))
-#define PER_PROC(pid) \
-    (((disk_$per_proc_t *)(va_arena + (DISK_PER_PROC_VA - ARENA_VA_BASE)))[pid])
+_Alignas(16) uint8_t DISK_$DATA[DISK_$DATA_SIZE];
+#define PER_PROC(pid) (DISK_$PER_PROC[pid])
 
-volatile uint8_t flp_$dmac_cells[0x100];
+/* The DMAC register window (0xFFA000 on the SAU2). */
+static volatile uint8_t flp_$dmac_cells[0x100];
+#define SAU2_DMAC_BASE ((uintptr_t)flp_$dmac_cells)
 
 /* ==========================================================================
  * Mocks
@@ -122,6 +125,7 @@ static int8_t result;
 static void reset(void)
 {
     memset(va_arena, 0, sizeof(va_arena));
+    memset(DISK_$DATA, 0, sizeof(DISK_$DATA));
     memset((void *)flp_$dmac_cells, 0, sizeof(flp_$dmac_cells));
 
     DEV->controller = 1;

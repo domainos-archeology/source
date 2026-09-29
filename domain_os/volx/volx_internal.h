@@ -105,18 +105,18 @@
  * ----------------------------------------------------------------------------
  */
 
-/* Target address of entry 1 (`D  E82604  VOLX_  size = C0`). */
+/* Image address of entry 1 (`D  E82604  VOLX_  size = C0`); documentation
+ * and the ordering key of the block below, not where it is linked. */
 #define VOLX_$TABLE_ADDR 0x00E82604UL
 
-/* Host-side storage for the table.  On m68k the image's own copy at
- * VOLX_$TABLE_ADDR is used instead and this object is unreferenced. */
-extern volx_$entry_t volx_$table_storage[VOLX_MAX_VOLUMES];
-
-#if defined(ARCH_M68K)
-#define VOLX_$TABLE ((volx_$entry_t *)VOLX_$TABLE_ADDR)
-#else
-#define VOLX_$TABLE volx_$table_storage
-#endif
+/*
+ * The table: the whole VOLX_ data segment, a MODULE_DATA block defined in
+ * volx/volx_data.c (source-702z; the target used VOLX_$TABLE_ADDR as an
+ * absolute address, the host a separate object).
+ */
+typedef volx_$entry_t volx_$table_t[VOLX_MAX_VOLUMES];
+MODULE_DATA_DECLARE(volx_$table_t, VOLX_$DATA, 0x00E82604);
+#define VOLX_$TABLE VOLX_$DATA
 
 /*
  * VOLX_$ENTRY - address volume index `idx` (1..6).

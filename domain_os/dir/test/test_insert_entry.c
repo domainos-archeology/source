@@ -12,10 +12,10 @@
  * that guard them only compile under ARCH_M68K.
  *
  * The simple insertion path (0xE4FCB6-0xE4FDBE) dereferences the directory
- * handle at handle+0x0E.  ctx->handle is a 32-bit kernel virtual address, so
- * the host build routes it through NAME_$HANDLE_TO_PTR (name/name.h,
- * implemented by name/handle_map.c) and the tests below register a real
- * directory header with NAME_$PTR_TO_HANDLE (source-qu3v).
+ * handle at handle+0x0E.  ctx->handle is a 32-bit kernel virtual address
+ * (NAME_$HANDLE_TO_PTR, name/name.h, is ARCH_VA_TO_PTR), so the directory
+ * header lives in an arena ARCH_HOST_VA_BASE points at and the handle is its
+ * offset (source-qu3v, source-702z).
  */
 
 #include <stdio.h>
@@ -73,7 +73,11 @@ static uint8_t page_b[DIR_PAGE_BYTES];      /* the page for level 0 (parent) */
  * so it is a Domain boolean - negative means "volatile directory".
  */
 #define DIR_HDR_VOLATILE_FLAG   0x0E
-static uint8_t dir_header[0x40];
+static struct {
+    uint8_t nil[0x10];              /* VA 0 is nil */
+    uint8_t dir_header[0x40];
+} arena;
+#define dir_header (arena.dir_header)
 
 static int      mock_map_calls;
 static int16_t  mock_map_last_page;
@@ -164,7 +168,6 @@ void FIM_$SIGNAL(status_$t status) { (void)status; }
 /* Code under test                                                      */
 /* ------------------------------------------------------------------ */
 
-#include "../../name/handle_map.c"
 #include "../insert_entry.c"
 
 /* ------------------------------------------------------------------ */
@@ -198,6 +201,7 @@ static void build_full_leaf(uint8_t *page, uint16_t page_no,
 static void reset(void)
 {
     memset(&ctx, 0, sizeof(ctx));
+    ARCH_HOST_VA_BASE = (uintptr_t)&arena;
     memset(dir_header, 0, sizeof(dir_header));
     ctx.handle = NAME_$PTR_TO_HANDLE(dir_header);
     ctx.entry_type = 2;                 /* fixed part = 16 bytes */

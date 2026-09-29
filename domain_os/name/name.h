@@ -337,22 +337,16 @@ MODULE_DATA_DECLARE(name_$old_dir_data_t, NAME_$OLD_DIR_DATA, 0x00E7FD24);
  * mapped and stores it in a 32-bit word, because m68k pointers are 32 bits
  * wide.  Turning that word back into a pointer (0xE54B06:
  * `movea.l (A0),A1 ; cmpi.w #0x1,(A1)`) is the one architecture-specific step
- * in the routine.  On m68k it is the identity cast the original performs; a
- * host whose pointers are wider supplies a translation (name/handle_map.c)
- * instead, so the code can be exercised without a 32-bit address space.
+ * in the routine, and it is exactly a stored target VA: on m68k the identity
+ * cast the original performs, on a host whose pointers are wider an offset
+ * into the arena a test points ARCH_HOST_VA_BASE at (arch/host/arch.h).
+ * (source-702z: this replaced a host-only handle registry.)
  *
  * dir/ uses the same pair for the directory handle dir_$add_entry receives at
  * A6+0x08 and passes down through dir_insert_ctx_t.handle.
  */
-#if defined(ARCH_M68K)
-#define NAME_$HANDLE_TO_PTR(h)   ((void *)(uintptr_t)(h))
-#define NAME_$PTR_TO_HANDLE(p)   ((uint32_t)(uintptr_t)(p))
-#else
-void    *name_$handle_to_ptr(uint32_t handle);
-uint32_t name_$ptr_to_handle(const void *ptr);
-#define NAME_$HANDLE_TO_PTR(h)   name_$handle_to_ptr(h)
-#define NAME_$PTR_TO_HANDLE(p)   name_$ptr_to_handle(p)
-#endif
+#define NAME_$HANDLE_TO_PTR(h)   ARCH_VA_TO_PTR(h)
+#define NAME_$PTR_TO_HANDLE(p)   ARCH_PTR_TO_VA(p)
 
 /* ============================================================================
  * Public Function Prototypes

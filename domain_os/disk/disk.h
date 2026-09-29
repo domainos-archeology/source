@@ -110,7 +110,9 @@
  *     PV label word at +0x32 (0xe6c438) and is what DISK_$GET_MNT_INFO reports
  *     at info+0x0a (0xe6befe).
  */
-#define DISK_VOLUME_BASE          ((uint8_t *)0x00e7a1cc)
+/* DISK_$DATA (0x00E7A1CC in the image); source-702z replaced the absolute
+ * address, which named different memory from the linked DISK_$DATA. */
+#define DISK_VOLUME_BASE          (DISK_$DATA)
 
 /* Byte offset of the descriptor within DISK_VOLUME_BASE + N * 0x48 */
 #define DISK_VOL_DESC_OFFSET      0x7c
@@ -472,16 +474,14 @@ _Static_assert(sizeof(disk_$per_proc_t) == 0x1C, "disk_$per_proc_t must be 28 by
 #endif
 
 /*
- * 0x00E7A544 == DISK_$DATA (0x00E7A1CC) + 0x378.  On the target the array is
- * at that fixed address; a host build gets a real object so a test can supply
- * it (the same shape the rest of the tree uses for A5-relative tables).
+ * The array is DISK_$DATA + 0x378 (0x00E7A544 in the image, DISK_$DATA =
+ * 0x00E7A1CC), reached through the DISK_$DATA object on every build
+ * (source-702z replaced an absolute-address macro, which named different
+ * memory from the linked object).  On a host the slot stride is wider than
+ * 0x1C (native pointers), so a test can only use the low slots it needs.
  */
-#define DISK_PER_PROC_VA 0x00E7A544
-#if defined(ARCH_M68K)
-#define DISK_$PER_PROC ((disk_$per_proc_t *)DISK_PER_PROC_VA)
-#else
-extern disk_$per_proc_t DISK_$PER_PROC[DISK_PER_PROC_ENTRIES];
-#endif
+#define DISK_$PER_PROC \
+    ((disk_$per_proc_t *)&DISK_$DATA[DISK_PER_PROC_BASE_OFFSET])
 
 /*
  * Global data areas

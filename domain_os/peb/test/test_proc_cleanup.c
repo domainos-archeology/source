@@ -14,14 +14,16 @@ int __host_intr_disable_count = 0;
 
 #include "peb/peb_internal.h"
 
-peb_globals_t     peb_globals;
+MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 uint16_t          PROC1_$CURRENT;
 uint16_t          PROC1_$AS_ID;
 peb_fp_state_t    PEB_$WIRED_DATA_START[PEB_MAX_PROCESSES];
 status_$t         PEB_FPU_Is_Hung_Err = status_$peb_fpu_is_hung | 0x80000000;
 
 static uint16_t   host_peb_ctl;
-volatile uint16_t *peb_ctl_reg = &host_peb_ctl;
+/* The PEB control page stands in for SAU2_PEB_CTL (arch/m68k/sau2/hw.h). */
+#define SAU2_PEB_CTL peb_ctl_reg
+static volatile uint16_t *peb_ctl_reg = &host_peb_ctl;
 
 static int remove_calls; static uint32_t remove_ppn;
 static int crash_calls; static const status_$t *crash_arg;
@@ -49,7 +51,7 @@ static int tests_failed = 0;
 
 static void reset(void)
 {
-    memset(&peb_globals, 0, sizeof peb_globals);
+    memset(&PEB_$INFO, 0, sizeof PEB_$INFO);
     memset(PEB_$WIRED_DATA_START, 0xAB, sizeof PEB_$WIRED_DATA_START);
     host_peb_ctl = 0;
     remove_calls = crash_calls = 0;
@@ -77,8 +79,8 @@ TEST(not_installed_does_nothing)
 TEST(mmu_installed_does_nothing)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
-    PEB_$MMU_INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
+    PEB_$MMU_INSTALLED = -1;
     PEB_$OWNER_PID = 7;
     PEB_$PROC_CLEANUP();
     ASSERT_EQ(0, remove_calls);
@@ -88,7 +90,7 @@ TEST(mmu_installed_does_nothing)
 TEST(owner_idle_removes_page_and_zeroes)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     PEB_$OWNER_PID = 7;
     PEB_$PROC_CLEANUP();
     ASSERT_EQ(1, remove_calls);
@@ -104,7 +106,7 @@ TEST(owner_idle_removes_page_and_zeroes)
 TEST(not_owner_only_zeroes)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     PEB_$OWNER_PID = 9;
     host_peb_ctl = 0x8000;
     PEB_$PROC_CLEANUP();
@@ -116,7 +118,7 @@ TEST(not_owner_only_zeroes)
 TEST(owner_busy_forever_crashes_then_removes)
 {
     reset();
-    PEB_$INSTALLED = 0xFF;
+    PEB_$INSTALLED = -1;
     PEB_$OWNER_PID = 7;
     host_peb_ctl = 0x8000;
     PEB_$PROC_CLEANUP();

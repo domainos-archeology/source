@@ -20,7 +20,7 @@
 /* ------------------------------------------------------------------ */
 /* Module data and the globals DISK_INIT reaches                       */
 /* ------------------------------------------------------------------ */
-uint8_t WIN_$DATA[WIN_DATA_SIZE];
+MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t TIME_$CLOCKH;
 
 uint32_t win_$host_clockh(void) { return TIME_$CLOCKH; }
@@ -153,7 +153,7 @@ static void reset_state(void)
 {
     int i;
 
-    memset(WIN_$DATA, 0, sizeof(WIN_$DATA));
+    memset(WIN_$DATA.bytes, 0, sizeof(WIN_$DATA.bytes));
     memset(regs, 0, sizeof(regs));
     *(uint8_t **)(WIN_UNIT(0) + WIN_BASE_ADDR_OFFSET) = regs;
 

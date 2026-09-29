@@ -47,12 +47,11 @@ static int tests_run = 0;
 
 #include "hint/hint_internal.h"
 
-hint_globals_t HINT_$GLOBALS_BLOCK;
+MODULE_DATA_DEFINE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 hint_file_t *HINT_$HINTFILE_PTR;
 uint32_t NODE_$ME;
 uint32_t ROUTE_$PORT;
 
-#define HINT_$BUCKET_INDEX (HINT_$GLOBALS->bucket_index)
 
 static hint_file_t test_hintfile;
 
@@ -69,7 +68,7 @@ static hint_file_t test_hintfile;
 static void reset_state(void)
 {
     memset(&test_hintfile, 0, sizeof(test_hintfile));
-    memset(&HINT_$GLOBALS_BLOCK, 0, sizeof(HINT_$GLOBALS_BLOCK));
+    memset(&HINT_$DATA, 0, sizeof(HINT_$DATA));
     HINT_$HINTFILE_PTR = &test_hintfile;
     HINT_$BUCKET_INDEX = 1;
     NODE_$ME = TEST_NODE_ME;

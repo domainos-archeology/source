@@ -28,17 +28,43 @@
  *
  * Every WIN entry point loads it with `lea (0xe2b89c).l,A5` (e.g. DISK_INIT
  * at 0x00E1998E, WIN_$DINIT at 0x00E19CF0) and then addresses the module
- * globals as (off,A5).  On a host build the same offsets are applied to a
- * plain array the unit tests supply, so the translated code can be driven
- * without an Apollo.
+ * globals as (off,A5).  The translated code keeps that byte-offset view
+ * (WIN_DATA_BASE + off, the offsets below).
+ *
+ * WIN_$DATA is the WIN_ data segment (SAU2 map "D E2B89C WIN_ size = 78",
+ * interior symbol WIN_$CNT at +0x40) as a MODULE_DATA block (source-702z;
+ * the target had an absolute-address macro, the host a test array).  The
+ * `image' arm spells the cells the image ships non-zero (`gsk read 0xE2B89C
+ * 0x78'): the driver entry table at +0x10 that WIN_$CINIT registers with
+ * DISK_$REGISTER, laid out as disk_jump_table_t is on the target but held
+ * as 32-bit code VAs so the layout is the same on every build, the longword
+ * 1 at +0x68 and the current head / cylinder at +0x72 / +0x74 (-1, "unknown",
+ * as win_$reinit_drive resets them).
  */
-#if defined(ARCH_M68K)
-#define WIN_DATA_BASE ((uint8_t *)0x00e2b89c)
-#else
 #define WIN_DATA_SIZE 0x78
-extern uint8_t WIN_$DATA[WIN_DATA_SIZE];
-#define WIN_DATA_BASE (WIN_$DATA)
-#endif
+
+typedef union win_$data_t {
+    uint8_t bytes[WIN_DATA_SIZE];       /* the (off,A5) view */
+    struct {
+        uint8_t  _0000[0x10];
+        uint32_t jump_table[8];         /* +0x10: disk_jump_table_t (code VAs) */
+        uint8_t  _0030[0x38];
+        uint32_t _unknown_68;           /* +0x68: 1 in the image */
+        uint8_t  _006c[0x06];
+        int16_t  cur_head;              /* +0x72: -1 in the image */
+        int16_t  cur_cyl;               /* +0x74: -1 in the image */
+        uint8_t  _0076[0x02];
+    } image;
+} win_$data_t;
+
+_Static_assert(sizeof(win_$data_t) == WIN_DATA_SIZE, "WIN_: map size 0x78");
+_Static_assert(offsetof(win_$data_t, image.jump_table) == 0x10, "WIN jump table");
+_Static_assert(offsetof(win_$data_t, image._unknown_68) == 0x68, "WIN +0x68");
+_Static_assert(offsetof(win_$data_t, image.cur_head) == 0x72, "WIN current head");
+_Static_assert(offsetof(win_$data_t, image.cur_cyl) == 0x74, "WIN current cylinder");
+
+MODULE_DATA_DECLARE(win_$data_t, WIN_$DATA, 0x00E2B89C);
+#define WIN_DATA_BASE (WIN_$DATA.bytes)
 
 /*
  * WIN data area structure
