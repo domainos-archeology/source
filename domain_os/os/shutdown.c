@@ -141,7 +141,7 @@ void OS_$SHUTDOWN(status_$t *status_p)
     FILE_$PRIV_UNLOCK_ALL((uint16_t *)&os_$shutdown_wait_type_00e6d628);
 
     /* 0x00E6D57C st (0x00e254da).l */
-    PMAP_$SHUTTING_DOWN_FLAG = (char)0xFF;
+    PMAP_$DATA.shutting_down_flag = (char)0xFF;
 
     /* 0x00E6D582 */
     AREA_$SHUTDOWN();

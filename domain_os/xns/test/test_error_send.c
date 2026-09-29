@@ -196,6 +196,10 @@ void XNS_IDP_$OS_SEND(int16_t *channel, xns_$os_send_rec_t *send_rec,
     *status_ret = status_$ok;
 }
 
+/* The XNS_ERROR module block the code under test works on (its image
+ * contents are in xns/xns_data.c; setup() below sets them). */
+MODULE_DATA_DEFINE(xns_error_$data_t, XNS_ERROR_$DATA, 0x00E2B29C);
+
 /* The code under test, for real. */
 #include "../error_send.c"
 

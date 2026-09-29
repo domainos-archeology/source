@@ -5,6 +5,9 @@
  * xns_$copy_packet_data (0x00E18C5E).
  *
  * Original address: 0x00E18CE2
+ *
+ * Module data through XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -104,8 +107,7 @@ static void xns_$copy_packet_data(xns_$idp_receive_frame_t *parent,
 void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
                       status_$t *status_ret)
 {
-    uint8_t  *base = XNS_IDP_BASE;
-    uint8_t  *chan;
+    xns_$channel_t *chan;               /* A2 */
     uint16_t  channel;
     sock_$pkt_info_t rec;               /* A6-0x40, what SOCK_$GET fills in */
     uint32_t  data_va;                  /* A6-0x70 */
@@ -127,10 +129,11 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
     }
 
     /* 0x00E18D04-0x00E18D0E: the channel base is formed with WORD
-     * arithmetic, so the multiply is modulo 65536. */
-    chan = base + (uint16_t)(channel * XNS_CHANNEL_SIZE);
+     * arithmetic; with channel < 16 (checked above) that is simply
+     * A5 + channel * 0x48. */
+    chan = &XNS_IDP_$DATA.channels[channel];
 
-    if (*(int16_t *)(chan + XNS_CHAN_OFF_STATE) >= 0) { /* 0x00E18D12 `bpl' */
+    if (chan->state >= 0) {                             /* 0x00E18D12 `bpl' */
         *status_ret = status_$xns_bad_channel;
         return;
     }
@@ -141,9 +144,9 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
      * ownership check for it.  Written as a word mask so the host build
      * looks at the same bit.
      */
-    if ((*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) & 0x8000u) == 0) {
+    if ((chan->flags & 0x8000u) == 0) {
         uint16_t chan_as_id =
-            (uint16_t)((*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) &
+            (uint16_t)((chan->flags &
                         XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT);
 
         if (chan_as_id != PROC1_$AS_ID) {               /* 0x00E18D28 */
@@ -152,13 +155,13 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
         }
     }
 
-    if (*(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) == XNS_NO_SOCKET) {
+    if (chan->user_socket == XNS_NO_SOCKET) {
         *status_ret = status_$xns_no_socket;            /* 0x00E18D42 */
         return;
     }
 
     /* 0x00E18D4C: a word result slot, then &rec and the socket number. */
-    if (SOCK_$GET(*(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET), &rec) >= 0) {
+    if (SOCK_$GET(chan->user_socket, &rec) >= 0) {
         *status_ret = status_$xns_no_data;              /* 0x00E18D66 */
         return;
     }
@@ -168,7 +171,7 @@ void XNS_IDP_$RECEIVE(uint16_t *channel_ptr, xns_$idp_recv_t *recv_params,
      * byte, i.e. word bit 11 - the channel builds its own IDP header, so the
      * caller wants the received one's addresses handed back.
      */
-    if (*(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) & XNS_CHAN_FLAG_BUILD_HEADER) {
+    if (chan->flags & XNS_CHAN_FLAG_BUILD_HEADER) {
         const uint8_t *hdr = (const uint8_t *)ARCH_VA_TO_PTR(rec.hdr);
         uint8_t *dst = (uint8_t *)recv_params;
 

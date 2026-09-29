@@ -45,8 +45,7 @@ mmap_globals_t MMAP_GLOBALS_STORAGE;
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
 aste_t MMAP_$SEG_ASTE[4];
-static pmap_segmap_row_t segmap_store[4];
-pmap_segmap_row_t *pmap_segmap = segmap_store;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uint32_t TIME_$CLOCKH;
 
 void MMU_$REMOVE(uint32_t ppn) { (void)ppn; }

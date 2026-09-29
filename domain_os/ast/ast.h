@@ -34,6 +34,8 @@
  * AST_$GET_ATTRIBUTES fill from aote+0x9C.  Defined in file/file.h, which is
  * where FILE_$PRIV_LOCK (its other producer) already documents the layout. */
 #include "file/file.h"
+/* PMAP_$SEGMAP, the segment map SEGMAP_BASE names (see below) */
+#include "pmap/pmap.h"
 
 /* AST status codes (module 0x03) */
 #define status_$ast_segment_not_deactivatable 0x00030004  /* segment is not deactivatable */
@@ -511,8 +513,17 @@ typedef struct segmap_entry_t {
 /* ASTE array base */
 #define ASTE_BASE ((aste_t *)0xEC5400)
 
-/* Segment map base */
-#define SEGMAP_BASE ((segmap_entry_t *)0xED5000)
+/*
+ * Segment map base - the image's 0xED5000 (map AST_PMAPS), which is now the
+ * MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h, source-iq58): row 0 of the
+ * block is segment 1, so SEGMAP_BASE keeps the image's meaning and every
+ * `SEGMAP_BASE + seg*0x80 - 0x80' site below still reaches row seg.  A
+ * shim for the AST sites (one per file, byte arithmetic that is not a
+ * mechanical conversion) until the AST module's own block step converts
+ * them; the literal would name different memory from the linked block.
+ * TODO(source-avdg): convert the AST SEGMAP_BASE sites and ast_segmap_base.
+ */
+#define SEGMAP_BASE ((segmap_entry_t *)&PMAP_$SEGMAP.row[0][0])
 
 /* AST globals at various offsets from base */
 #define AST_$AOTE_LIMIT (*(aote_t **)0xE1E074)        /* 0x3F4 */

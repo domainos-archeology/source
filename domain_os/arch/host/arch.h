@@ -120,6 +120,13 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
  * it).
  * The evenness check and the check against the declaration are the same as
  * the target's, so a bad address fails on either build.
+ *
+ * aligned(16): the explicit alignment is what stops clang on Darwin/arm64
+ * from giving a large zero-filled block (PMAP_$SEGMAP is 0xFC00 bytes) a
+ * size-based alignment that ld then reports reducing ("reducing alignment
+ * of section __DATA,__common from 0x8000 to 0x4000").  16 is the widest
+ * alignment a host ABI asks of any object, and it affects only where the
+ * block sits, never its layout.
  */
 #define MODULE_DATA_CHECK_ADDR_(name, addr)                                  \
     _Static_assert(((addr) & 1u) == 0u,                                      \
@@ -127,13 +134,15 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
     _Static_assert((addr) == moddata_addr_##name,                            \
                    #name ": address differs from its MODULE_DATA_DECLARE")
 
+#define MODULE_DATA_ATTRS_ __attribute__((aligned(16)))
+
 #define MODULE_DATA_DEFINE(T, name, addr)                                    \
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
-    T name
+    T name MODULE_DATA_ATTRS_
 
 #define MODULE_DATA_DEFINE_INIT(T, name, addr, ...)                          \
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
-    T name = __VA_ARGS__
+    T name MODULE_DATA_ATTRS_ = __VA_ARGS__
 
 /*
  * SAU hardware addresses (arch/m68k/sau2/hw.h: SAU2_DISPLAY_CTRL_REGS,

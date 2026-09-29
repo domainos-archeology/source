@@ -139,8 +139,9 @@ void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count)
         qb[QB_HDR + 6] = 0;                                         /* 0x38..0x3B */
         qb[QB_OPFLAGS] = (qb[QB_OPFLAGS] & 0xFFFFFF00u) | (vol & 0xFF); /* move.b D5b,(0x1f,A1) */
 
-        /* 0x00E13362 - 0x00E1337C: the segment map entry (base 0xED4F80) */
-        seg_entry = (uint32_t *)&PMAP_SEGMAP[seg][page_idx];
+        /* 0x00E13362 - 0x00E1337C: the segment map entry, "movea.l #0xed5000,A0"
+         * then (-0x80,A0,page*4): 1-based row seg of PMAP_$SEGMAP */
+        seg_entry = (uint32_t *)&PMAP_SEGMAP_ROW(seg)[page_idx];
 
         /* 0x00E13380 - 0x00E1338A */
         if ((page->disk_addr & PMAP_DADDR_MASK) == 0) {

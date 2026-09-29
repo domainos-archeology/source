@@ -26,18 +26,11 @@
  * ============================================================================
  */
 
-/* Page thresholds for purifier decisions */
-extern uint16_t PMAP_$LOW_THRESH;       /* Low page threshold */
-extern uint16_t PMAP_$MID_THRESH;       /* Middle page threshold */
-extern uint16_t PMAP_$WS_SCAN_DELTA;    /* Working set scan delta */
-extern uint16_t PMAP_$MAX_WS_INTERVAL;  /* Max working set interval */
-extern uint16_t PMAP_$MIN_WS_INTERVAL;  /* Min working set interval */
-extern uint32_t PMAP_$IDLE_INTERVAL;    /* Idle interval */
-extern uint32_t PMAP_$PUR_L_CNT;        /* Local purifier page count */
-extern uint32_t PMAP_$PUR_R_CNT;        /* Remote purifier page count */
-
-/* Shutdown flag */
-extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
+/*
+ * The module's own cells - the thresholds, intervals, counters, eventcounts,
+ * timer elements, MOUNT_LOCK, the scan slot and the random seed - are
+ * fields of PMAP_$DATA (pmap/pmap.h), the PMAP_ A5 block.
+ */
 
 /*
  * ============================================================================
@@ -72,23 +65,11 @@ extern int8_t PMAP_$SHUTTING_DOWN_FLAG;
  * here are gone (bead source-ffh1).
  */
 
-/*
- * Current working-set scan slot, PMAP_ module block + 0x7A0 (A5 = 0xE24D44).
- * pmap_$t_purif_callback wraps it from 0x45 back to 5 and steps it by one
- * each tick:
- *   00e143da  cmpi.w #0x45,(0x7a0,A5)
- *   00e143e2  move.w #0x5,(0x7a0,A5)
- *   00e143ea  addq.w #0x1,(0x7a0,A5)
- * The SAU2 map names nothing past PMAP_$SHUTTING_DOWN_FLAG (0xE254DA) in the
- * `D E24D44 PMAP_ size = 7A4` segment.  Image value 0x0005.
- */
-/* Declared in pmap/pmap.h as PMAP_$CURRENT_SLOT (a tree name: the map has no
- * symbol at 0xE254E4); its one definition is in pmap/pmap_data.c. */
-extern uint16_t PMAP_$WS_RANDOM_SEED;   /* 0xE254E2: random seed for page
-                                         * selection (word; initial value 0x004D) */
+/* The scan slot (+0x7A0) and the random seed (+0x79E) are
+ * PMAP_$DATA.current_slot / ws_random_seed (pmap/pmap.h). */
 
-/* Segment map (0xED4F80): pmap_segmap_entry_t / PMAP_SEGMAP moved to pmap/pmap.h
- * because mmap_$trim_wsl (0x00E0C850) reads and clears its entries too. */
+/* Segment map: PMAP_$SEGMAP / PMAP_SEGMAP_ROW in pmap/pmap.h, because
+ * mmap_$trim_wsl (0x00E0C850) reads and clears its entries too. */
 
 /*
  * ============================================================================
@@ -125,52 +106,13 @@ _Static_assert(__builtin_offsetof(pmap_qblk_t, log_info) == 0x3C,
 #endif
 
 /*
- * PMAP_$SHORT_WAIT_DELAY - relative delay used by PMAP_$PURIFIER_L
- * between working-set scans (TIME_$WAIT with a relative delay type).
- *
- * Original address: 0xE254DC (DAT_00e254dc), value 0x00000000:0005
+ * PMAP_$DATA.short_wait_delay (+0x798, 0xE254DC, image {0, 5}) is the
+ * relative delay PMAP_$PURIFIER_L waits between working-set scans.  The
+ * working-set scan timers are PMAP_$DATA.ws_timer[1..64], Pascal-indexed by
+ * working-set index (pmap/pmap.h); their queue is TIME_$VTQ[index - 1], not
+ * a PMAP array (bead source-7sda).  The update and purifier timer elements
+ * are PMAP_$DATA.update_timer / purifier_timer.
  */
-extern clock_t PMAP_$SHORT_WAIT_DELAY;
-
-/*
- * Per-working-set timer queues and queue elements used by
- * PMAP_$INIT_WS_SCAN.  One slot per working set (0..69; slot 5 is
- * special and never gets a timer).
- *
- * Original addresses:
- *   PMAP_$WS_TIMER_QUEUES:   0xE2A494 (70 * 0x0C bytes)
- *   PMAP_$WS_TIMER_ELEMENTS: 0xE24D68 (70 * 0x1A bytes, DAT_00e24d68,
- *                            ends at PMAP_$IDLE_INTERVAL 0xE25484)
- */
-#define PMAP_WS_SLOTS   70
-extern time_queue_t      PMAP_$WS_TIMER_QUEUES[PMAP_WS_SLOTS];
-extern time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
-
-/*
- * Timer queue elements for the update and purifier timers
- * (PMAP_$INIT_TIMERS).  On m68k these are at fixed addresses
- * (DAT_00e24d44 update, DAT_00e24d64 purifier).
- */
-#if !defined(ARCH_M68K)
-extern time_queue_elem_t pmap_update_timer_elem;    /* 0xE24D44 */
-extern time_queue_elem_t pmap_purifier_timer_elem;  /* 0xE24D64 */
-#endif
-
-/*
- * Raw table base addresses used via pointer arithmetic by the purifier
- * and page-write code.  On m68k these are fixed addresses (see the
- * #define blocks in the .c files); other targets get them from platform
- * init.
- */
-#if !defined(ARCH_M68K)
-extern uint8_t wsl_base[];              /* 0xE232B0: working set list */
-extern uint8_t segmap_base[];           /* 0xED5000: segment map */
-extern uint8_t aote_table[];            /* 0xEC53F0: AOTE table */
-extern uint8_t pur_stats[];             /* 0xE25D18: purifier statistics */
-extern uint8_t *aote_table_ptr_base;    /* 0xEC53F0: AOTE pointer table */
-extern uint8_t *segmap_indexed_base;    /* 0xED4F80: indexed segment map */
-extern uint8_t *mmape_raw_base;         /* 0xEB2800: MMAPE array */
-#endif
 
 /*
  * ============================================================================
@@ -304,20 +246,5 @@ void PMAP_$INIT_TIMERS(void);
  * ANON_$UID           - anon/anon.h
  */
 
-
-/*
- * PMAP_$INIT_WS_SCAN reaches the working-set timer element for process
- * `idx` as 0xE24D68 + idx * 0x1C (`lea (0x24,A5,D4w*0x1)` with A5 =
- * 0xE24D44 and D4 = idx * 0x1C, 0x00E14626-0x00E14632): the stride is
- * 0x1C, two bytes more than time_queue_elem_t, and the array is 1-based
- * (65 elements of 0x1C end exactly at PMAP_$IDLE_INTERVAL, 0xE25484).  The
- * queue it pairs with is TIME_$VTQ[idx - 1] (0xE2A4A0 - 0xC + idx * 0xC),
- * not a PMAP-owned array.  Appended 2026-09-27; the storage below keeps
- * its old shape until pmap_data.c is re-emitted (see the bead).
- */
-#define PMAP_WS_TIMER_ELEM_STRIDE 0x1C
-#define PMAP_WS_TIMER_ELEM(idx) \
-    ((time_queue_elem_t *)((uint8_t *)PMAP_$WS_TIMER_ELEMENTS + \
-                           (uint32_t)(idx) * PMAP_WS_TIMER_ELEM_STRIDE))
 
 #endif /* PMAP_INTERNAL_H */

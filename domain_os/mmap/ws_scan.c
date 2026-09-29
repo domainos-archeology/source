@@ -23,7 +23,7 @@
  * pool 1 (pure), (-0x1C,A6) -> pool 3 (dirty local), (-0x18,A6) -> pool 4
  * (dirty remote); the `move.w (-0x1e/-0x1a/-0x16,A6)' stores are the low
  * words of those chain heads.  A3 = the mmape_t (0xEB4800 + vpn*0x10 with
- * -0x2000-based displacements), A0 = PMAP_SEGMAP[segment][seg_offset]
+ * -0x2000-based displacements), A0 = PMAP_SEGMAP_ROW(segment)[seg_offset]
  * reached as 0xED5000 + segment*0x80 + seg_offset*4 with a -0x80
  * displacement, and 0xFFB800 + vpn*4 + 2 is the PFT second word.
  *
@@ -110,7 +110,7 @@ uint32_t MMAP_$WS_SCAN(uint16_t wsl_index, int16_t mode, uint32_t pages_needed,
     while (examined < page_count) {                          /* 0x00E0D568 */
         mmape_t *page = MMAPE_FOR_VPN(vpn);                  /* 0x00E0D3C2 */
         pmap_segmap_entry_t *seg_entry =
-            &PMAP_SEGMAP[page->segment][page->seg_offset];   /* 0x00E0D3D2 */
+            &PMAP_SEGMAP_ROW(page->segment)[page->seg_offset];   /* 0x00E0D3D2 */
         uint16_t *pft = PMAPE_FOR_VPN(vpn);
         boolean take = false;
 

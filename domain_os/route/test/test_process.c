@@ -98,8 +98,7 @@ uint32_t TIME_$CLOCKH;
 uint32_t NODE_$ME;
 uint8_t  sock_table_base[SOCK_TABLE_SIZE];
 ringlog_ctl_t RINGLOG_$CTL;
-xns_$idp_state_t mock_idp_state;
-xns_$idp_state_t *XNS_$IDP_STATE = &mock_idp_state;
+MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];

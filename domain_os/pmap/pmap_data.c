@@ -1,256 +1,95 @@
 /*
  * pmap_data.c - PMAP Module Global Data Definitions
  *
- * This file defines the global variables used by the PMAP (Page Map)
- * module for page purification and working set management.
+ * Module data blocks PMAP_$DATA and PMAP_$SEGMAP: Claude Opus 5.5
+ * (source-iq58).
  *
- * Original M68K addresses:
- *   PMAP_$IDLE_INTERVAL:       0xE25484 (4 bytes)  - Idle interval (0x063c = 1596)
- *   PMAP_$T_PUR_SCANS:         0xE25488 (4 bytes)  - Timer purifier scans
- *   PMAP_$PUR_R_CNT:           0xE2548C (4 bytes)  - Remote purifier count
- *   PMAP_$PUR_L_CNT:           0xE25490 (4 bytes)  - Local purifier count
- *   PMAP_$PAGES_EC:            0xE25494 (12 bytes) - Pages eventcount
- *   PMAP_$R_PURIFIER_EC:       0xE254A0 (12 bytes) - Remote purifier EC
- *   PMAP_$L_PURIFIER_EC:       0xE254AC (12 bytes) - Local purifier EC
- *   PMAP_$SCAN_FRACT:          0xE254CC (2 bytes)  - Scan fraction (0xFFFF)
- *   PMAP_$MID_THRESH:          0xE254CE (2 bytes)  - Middle threshold
- *   PMAP_$LOW_THRESH:          0xE254D0 (2 bytes)  - Low threshold (1)
- *   PMAP_$WS_SCAN_DELTA:       0xE254D2 (2 bytes)  - Working set scan delta
- *   PMAP_$MIN_WS_INTERVAL:     0xE254D4 (2 bytes)  - Min WS interval (1)
- *   PMAP_$MAX_WS_INTERVAL:     0xE254D6 (2 bytes)  - Max WS interval (8)
- *   PMAP_$WS_INTERVAL:         0xE254D8 (2 bytes)  - Working set interval (5)
- *   PMAP_$SHUTTING_DOWN_FLAG:  0xE254DA (1 byte)   - Shutdown flag
- *   PMAP_$CURRENT_SLOT:        0xE254E4 (2 bytes)  - Current scan slot
+ * The PMAP module's data (docs/design-per-process-data.md; the addresses are
+ * the SAU2 image's, used as ordering keys, not link addresses):
+ *
+ *   0x00E24D44  PMAP_$DATA    map "D E24D44 PMAP_ size = 7A4": the A5 block
+ *                             (timer elements, the exported scalars
+ *                             PMAP_$IDLE_INTERVAL..PMAP_$SHUTTING_DOWN_FLAG,
+ *                             MOUNT_LOCK); layout in pmap/pmap.h
+ *   0x00ED5000  PMAP_$SEGMAP  map AST_PMAPS..AST_PMAPS_END in VM_TABLES:
+ *                             the segment map, 0xFC00 bytes
+ *
+ * plus two status constants inside the PMAP_ code segment.
  */
 
 #include "pmap/pmap_internal.h"
 
 /*
  * ============================================================================
- * Timer and Interval Configuration
+ * PMAP_$DATA - the PMAP_ module block, 0x00E24D44..0x00E254E7
  * ============================================================================
+ *
+ * Layout, biases and asserts in pmap/pmap.h.  The map places it after the
+ * PKT segment (0xE24C9C, PKT_$N_MISSING 0xE24CF4) and before PROC1_
+ * (0xE254E8).  Image contents
+ * (`gsk read 0xE24D44 0x7A4`); every byte not listed is zero:
+ *
+ *   +0x740 0xE25484  00 00 06 3c                   idle_interval = 0x63C
+ *   +0x750 0xE25494  00 00 00 00 00 e2 54 94 00 e2 54 94   pages_ec
+ *   +0x75C 0xE254A0  00 00 00 00 00 e2 54 a0 00 e2 54 a0   r_purifier_ec
+ *   +0x768 0xE254AC  00 00 00 00 00 e2 54 ac 00 e2 54 ac   l_purifier_ec
+ *   +0x774 0xE254B8  00 00 00 00 00 e2 54 b8 00 e2 54 b8 00 00 00 00 ff ff
+ *                                                  mount_lock
+ *   +0x788 0xE254CC  00 01                          scan_fract = 1
+ *   +0x78E 0xE254D2  00 02                          ws_scan_delta = 2
+ *   +0x790 0xE254D4  00 01 00 08 00 05              min/max/ws_interval
+ *   +0x798 0xE254DC  00 00 00 00 00 05              short_wait_delay {0, 5}
+ *   +0x79E 0xE254E2  00 4d                          ws_random_seed = 0x4D
+ *   +0x7A0 0xE254E4  00 05                          current_slot = 5
+ *
+ * The eventcounts and MOUNT_LOCK are the EC_$INIT / ML_$EXCLUSION_INIT
+ * state: an empty circular waiter list whose head and tail point back at
+ * the object itself, plus f5 = -1 (unlocked) for the lock.  (The previous
+ * pmap_data.c had scan_fract 0xFFFF, low_thresh 1 and ws_scan_delta 0; the
+ * image has 1, 0 and 2.)
  */
-
-/*
- * Idle interval for purifier sleep
- *
- * Time (in ticks) the purifier sleeps when idle.
- * Default: 0x063c = 1596 ticks
- *
- * Original address: 0xE25484
- */
-uint32_t PMAP_$IDLE_INTERVAL = 0x063c;
-
-/*
- * Timer purifier scan count
- *
- * Number of scans performed by the timer-based purifier.
- *
- * Original address: 0xE25488
- */
-uint32_t PMAP_$T_PUR_SCANS = 0;
-
-/*
- * Remote purifier page count
- *
- * Number of pages processed by the remote purifier.
- *
- * Original address: 0xE2548C
- */
-uint32_t PMAP_$PUR_R_CNT = 0;
-
-/*
- * Local purifier page count
- *
- * Number of pages processed by the local purifier.
- *
- * Original address: 0xE25490
- */
-uint32_t PMAP_$PUR_L_CNT = 0;
-
-/*
- * ============================================================================
- * Eventcounts
- * ============================================================================
- */
-
-/*
- * Pages available eventcount
- *
- * Signaled when pages become available for allocation.
- *
- * Original address: 0xE25494
- */
-ec_$eventcount_t PMAP_$PAGES_EC = { 0 };
-
-/*
- * Remote purifier eventcount
- *
- * Used to wake the remote purifier process.
- *
- * Original address: 0xE254A0
- */
-ec_$eventcount_t PMAP_$R_PURIFIER_EC = { 0 };
-
-/*
- * Local purifier eventcount
- *
- * Used to wake the local purifier process.
- *
- * Original address: 0xE254AC
- */
-ec_$eventcount_t PMAP_$L_PURIFIER_EC = { 0 };
+MODULE_DATA_DEFINE_INIT(pmap_$data_t, PMAP_$DATA, 0x00E24D44, {
+    .idle_interval = 0x063C,
+    .pages_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&PMAP_$DATA.pages_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&PMAP_$DATA.pages_ec,
+    },
+    .r_purifier_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&PMAP_$DATA.r_purifier_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&PMAP_$DATA.r_purifier_ec,
+    },
+    .l_purifier_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&PMAP_$DATA.l_purifier_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&PMAP_$DATA.l_purifier_ec,
+    },
+    .mount_lock = { 0, &PMAP_$DATA.mount_lock, &PMAP_$DATA.mount_lock, 0, -1 },
+    .scan_fract = 1,
+    .mid_thresh = 0,
+    .low_thresh = 0,
+    .ws_scan_delta = 2,
+    .min_ws_interval = 1,
+    .max_ws_interval = 8,
+    .ws_interval = 5,
+    .shutting_down_flag = 0,
+    .short_wait_delay = { 0, 5 },
+    .ws_random_seed = 0x004D,
+    .current_slot = 5,
+});
 
 /*
  * ============================================================================
- * Thresholds and Scan Parameters
+ * PMAP_$SEGMAP - the segment map, 0x00ED5000..0x00EE4BFF
  * ============================================================================
+ *
+ * Layout in pmap/pmap.h.  Uninitialised in the image (VM_TABLES has no
+ * loaded bytes in Ghidra), so zero-filled.  The map places AST_PMAPS first
+ * in VM_TABLES, after the AST/AOT tables (0xEC5400, VM_TABLES size F960)
+ * and before AREA_$RPMAP_CACHE (0xEE4C00).
  */
-
-/*
- * Scan fraction
- *
- * Fraction of pages to scan per iteration (0xFFFF = all).
- *
- * Original address: 0xE254CC
- */
-uint16_t PMAP_$SCAN_FRACT = 0xFFFF;
-
-/*
- * Middle threshold
- *
- * Page count threshold for medium-priority purging.
- *
- * Original address: 0xE254CE
- */
-uint16_t PMAP_$MID_THRESH = 0;
-
-/*
- * Low threshold
- *
- * Page count threshold for high-priority purging.
- * Default: 1
- *
- * Original address: 0xE254D0
- */
-uint16_t PMAP_$LOW_THRESH = 1;
-
-/*
- * Working set scan delta
- *
- * Change in working set size per scan.
- *
- * Original address: 0xE254D2
- */
-uint16_t PMAP_$WS_SCAN_DELTA = 0;
-
-/*
- * Minimum working set interval
- *
- * Minimum time between working set scans.
- * Default: 1
- *
- * Original address: 0xE254D4
- */
-uint16_t PMAP_$MIN_WS_INTERVAL = 1;
-
-/*
- * Maximum working set interval
- *
- * Maximum time between working set scans.
- * Default: 8
- *
- * Original address: 0xE254D6
- */
-uint16_t PMAP_$MAX_WS_INTERVAL = 8;
-
-/*
- * Current working set interval
- *
- * Current time between working set scans.
- * Default: 5
- *
- * Original address: 0xE254D8
- */
-uint16_t PMAP_$WS_INTERVAL = 5;
-
-/*
- * ============================================================================
- * State Flags
- * ============================================================================
- */
-
-/*
- * Shutdown in progress flag
- *
- * Set to 0xFF when system shutdown begins.
- * Purifiers check this to stop processing.
- *
- * Original address: 0xE254DA
- */
-int8_t PMAP_$SHUTTING_DOWN_FLAG = 0;
-
-/*
- * Current scan slot
- *
- * Index into page table for current scan position.
- * Ranges from 5 to 69.
- * Default: 5
- *
- * Original address: 0xE254E4
- */
-uint16_t PMAP_$CURRENT_SLOT = 5;
-
-/*
- * ============================================================================
- * Purifier Wait Delay
- * ============================================================================
- */
-
-/*
- * Short wait delay
- *
- * Relative delay (5 ticks) used by PMAP_$PURIFIER_L between passes.
- *
- * Original address: 0xE254DC (DAT_00e254dc)
- */
-clock_t PMAP_$SHORT_WAIT_DELAY = { 0, 5 };
-
-/*
- * ============================================================================
- * Working Set Scan Timers
- * ============================================================================
- */
-
-/*
- * Per-working-set timer queues
- *
- * Original address: 0xE2A494
- */
-time_queue_t PMAP_$WS_TIMER_QUEUES[PMAP_WS_SLOTS];
-
-/*
- * Per-working-set timer queue elements
- *
- * Original address: 0xE24D68 (DAT_00e24d68)
- */
-time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
-
-/*
- * ============================================================================
- * PMAP_ module block scalars (A5 = 0xE24D44, `D E24D44 PMAP_ size = 7A4`)
- * ============================================================================
- */
-
-/*
- * PMAP_$WS_RANDOM_SEED - the 16-bit LCG state PMAP_$PURIFIER_L uses to pick
- * how much of a working set to steal.  Block + 0x79E; both accesses are word
- * wide (0x00E13ED0 `move.w (0x79e,A5),D5w`, 0x00E13EDC `move.w D5w,(0x79e,A5)`).
- * Image value 0x004D.
- *
- * Original address: 0xE254E2
- */
-uint16_t PMAP_$WS_RANDOM_SEED = 0x004D;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 
 /*
  * ============================================================================

@@ -117,7 +117,7 @@ static boolean pmap_$purifier_ws_scan_pass(uint32_t total_pages,
                                            int32_t *prev_steal)
 {
     /* 0x00E13E34: idle cutoff, computed once per pass */
-    int32_t idle_cutoff = (int32_t)(TIME_$CLOCKH - PMAP_$IDLE_INTERVAL);
+    int32_t idle_cutoff = (int32_t)(TIME_$CLOCKH - PMAP_$DATA.idle_interval);
     uint16_t slot;
     uint16_t slot_pages;        /* D4w - a 16-bit accumulator (0x00E13E42) */
     uint32_t accumulator;       /* D1  - 32 bits (0x00E13EE2) */
@@ -134,7 +134,7 @@ static boolean pmap_$purifier_ws_scan_pass(uint32_t total_pages,
             ws_hdr_t *ws = &MMAP_WSL[slot];
 
             if (ws->page_count != 0) {                      /* 0x00E13E72 */
-                if (ws->owner > PMAP_$WS_INTERVAL) {        /* 0x00E13E78 */
+                if (ws->owner > PMAP_$DATA.ws_interval) {        /* 0x00E13E78 */
                     /* Overdue: reset the age and rescan the whole set. */
                     ws->owner = 0;                          /* 0x00E13E82 */
                     ws->ws_timestamp = TIME_$CLOCKH;        /* 0x00E13E86 */
@@ -166,10 +166,10 @@ static boolean pmap_$purifier_ws_scan_pass(uint32_t total_pages,
     }
 
     /* 0x00E13ED0-0x00E13EE6: pick a page index in [0, slot_pages) */
-    PMAP_$WS_RANDOM_SEED = (uint16_t)((uint16_t)(PMAP_$WS_RANDOM_SEED * PMAP_L_RAND_MULT)
+    PMAP_$DATA.ws_random_seed = (uint16_t)((uint16_t)(PMAP_$DATA.ws_random_seed * PMAP_L_RAND_MULT)
                               & PMAP_L_RAND_MASK);
     /* `move.w D4w,D5w` into a cleared D5: the quotient is kept 16-bit. */
-    target = (uint16_t)(((uint32_t)slot_pages * (uint32_t)PMAP_$WS_RANDOM_SEED) >> 10);
+    target = (uint16_t)(((uint32_t)slot_pages * (uint32_t)PMAP_$DATA.ws_random_seed) >> 10);
 
     accumulator = 0;
 
@@ -230,11 +230,11 @@ void PMAP_$PURIFIER_L(void)
     shutdown_time = scan_time;
 
     /* 0x00E13AEC */
-    wait_value = PMAP_$L_PURIFIER_EC.value + 1;
+    wait_value = PMAP_$DATA.l_purifier_ec.value + 1;
 
     /* 0x00E13AF6: divu.w - a 16-bit unsigned divide in the original */
-    PMAP_$LOW_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x32);
-    PMAP_$MID_THRESH = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x14);
+    PMAP_$DATA.low_thresh = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x32);
+    PMAP_$DATA.mid_thresh = (uint16_t)(MMAP_$PAGEABLE_PAGES / 0x14);
 
     carryover = 0;
     carryover_delta = 0;
@@ -252,7 +252,7 @@ void PMAP_$PURIFIER_L(void)
          * when the clock reaches the next scan deadline.
          */
         ec_wait_result = EC_$WAIT(
-            (ec_$wait_ecs_t){{ &PMAP_$L_PURIFIER_EC,
+            (ec_$wait_ecs_t){{ &PMAP_$DATA.l_purifier_ec,
                                (ec_$eventcount_t *)&TIME_$CLOCKH,
                                NULL }},
             (ec_$wait_vals_t){{ wait_value, (int32_t)scan_time, 0 }});
@@ -268,7 +268,7 @@ void PMAP_$PURIFIER_L(void)
                             + MMAP_WSL[MMAP_WSL_POOL_PURE].page_count;
 
                 /* 0x00E13B7A: shi - unsigned compare against MID_THRESH */
-                below_thresh = (total_pages < (uint32_t)PMAP_$MID_THRESH)
+                below_thresh = (total_pages < (uint32_t)PMAP_$DATA.mid_thresh)
                              ? true : false;
 
                 /*
@@ -284,7 +284,7 @@ void PMAP_$PURIFIER_L(void)
 
                 /* 0x00E13B9A: below_thresh is recomputed for the call */
                 MMAP_$GET_IMPURE(MMAP_WSL_POOL_DIRTY_LOCAL, batch_pages,
-                                 (total_pages < (uint32_t)PMAP_$MID_THRESH)
+                                 (total_pages < (uint32_t)PMAP_$DATA.mid_thresh)
                                      ? true : false,
                                  PMAP_L_BATCH_MAX, page_counts, &page_count);
 
@@ -326,7 +326,7 @@ void PMAP_$PURIFIER_L(void)
                         }
 
                         /* 0x00E13C32: 1-based segment index */
-                        PMAP_SEGMAP[seg][page_idx].flags |= PMAP_SEGMAP_WRITING;
+                        PMAP_SEGMAP_ROW(seg)[page_idx].flags |= PMAP_SEGMAP_WRITING;
 
                         /* 0x00E13C38-0x00E13C4A: PFT low word, bit 14 */
                         if ((*pft & PFT_FLAG_MODIFIED) != 0) {      /* the LOW word's bit 14, on the longword */
@@ -436,14 +436,14 @@ void PMAP_$PURIFIER_L(void)
 
                     if (batch_advanced < 0) {       /* 0x00E13DE4 */
                         EC_$ADVANCE(&AST_$PMAP_IN_TRANS_EC);
-                        EC_$ADVANCE(&PMAP_$PAGES_EC);
+                        EC_$ADVANCE(&PMAP_$DATA.pages_ec);
                     }
 
                     /* 0x00E13E02: unconditional, even when false */
                     did_advance = batch_advanced;
 
                     /* 0x00E13E06 */
-                    PMAP_$PUR_L_CNT += (uint32_t)page_count;
+                    PMAP_$DATA.pur_l_cnt += (uint32_t)page_count;
                 }
 
                 /* 0x00E13E0A: saturating carryover -= pages scanned */
@@ -456,7 +456,7 @@ void PMAP_$PURIFIER_L(void)
             }
 
             /* 0x00E13E20 */
-            wait_value = PMAP_$L_PURIFIER_EC.value + 1;
+            wait_value = PMAP_$DATA.l_purifier_ec.value + 1;
             total_pages += MMAP_WSL[MMAP_WSL_POOL_DIRTY_LOCAL].page_count;
 
             /* 0x00E13FA2 / 0x00E13E34: working-set scanning when low */
@@ -467,7 +467,7 @@ void PMAP_$PURIFIER_L(void)
 
                 ML_$UNLOCK(PMAP_LOCK_ID);           /* 0x00E13F52 */
                 TIME_$WAIT((uint16_t *)&pmap_l_relative_delay_type,
-                           &PMAP_$SHORT_WAIT_DELAY, &status);
+                           &PMAP_$DATA.short_wait_delay, &status);
                 ML_$LOCK(PMAP_LOCK_ID);             /* 0x00E13F76 */
 
                 /* 0x00E13F84: all five pools this time */
@@ -480,7 +480,7 @@ void PMAP_$PURIFIER_L(void)
 
             /* 0x00E13FAC: make sure waiters see at least one advance */
             if (did_advance >= 0) {
-                EC_$ADVANCE(&PMAP_$PAGES_EC);
+                EC_$ADVANCE(&PMAP_$DATA.pages_ec);
                 did_advance = true;
             }
 
@@ -504,15 +504,15 @@ void PMAP_$PURIFIER_L(void)
 
             if (total_steal == steal_count) {       /* 0x00E13FFC */
                 /* No stealing at all: let the scan interval grow. */
-                PMAP_$WS_INTERVAL += PMAP_$WS_SCAN_DELTA;
-                if (PMAP_$MAX_WS_INTERVAL < PMAP_$WS_INTERVAL) {
-                    PMAP_$WS_INTERVAL = PMAP_$MAX_WS_INTERVAL;
+                PMAP_$DATA.ws_interval += PMAP_$DATA.ws_scan_delta;
+                if (PMAP_$DATA.max_ws_interval < PMAP_$DATA.ws_interval) {
+                    PMAP_$DATA.ws_interval = PMAP_$DATA.max_ws_interval;
                 }
             } else if (steal_delta > PMAP_L_STEAL_HYSTERESIS) {  /* 0x00E14016 */
                 /* Heavy stealing: halve the interval, clamped at the floor. */
-                PMAP_$WS_INTERVAL >>= 1;
-                if (PMAP_$MIN_WS_INTERVAL > PMAP_$WS_INTERVAL) {
-                    PMAP_$WS_INTERVAL = PMAP_$MIN_WS_INTERVAL;
+                PMAP_$DATA.ws_interval >>= 1;
+                if (PMAP_$DATA.min_ws_interval > PMAP_$DATA.ws_interval) {
+                    PMAP_$DATA.ws_interval = PMAP_$DATA.min_ws_interval;
                 }
             }
 
@@ -531,13 +531,13 @@ void PMAP_$PURIFIER_L(void)
 
             /* 0x00E1406A: LOW_THRESH slews half-way to limit/0x32 */
             quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES, 0x32);
-            PMAP_$LOW_THRESH =
-                (uint16_t)(((uint32_t)PMAP_$LOW_THRESH + quotient) >> 1);
+            PMAP_$DATA.low_thresh =
+                (uint16_t)(((uint32_t)PMAP_$DATA.low_thresh + quotient) >> 1);
 
             /* 0x00E1408C: MID_THRESH slews half-way to limit/0x14 */
             quotient = M$DIU$LLW(MMAP_$PAGEABLE_PAGES, 0x14);
-            PMAP_$MID_THRESH =
-                (uint16_t)(((uint32_t)PMAP_$MID_THRESH + quotient) >> 1);
+            PMAP_$DATA.mid_thresh =
+                (uint16_t)(((uint32_t)PMAP_$DATA.mid_thresh + quotient) >> 1);
 
             /* 0x00E140AE */
             int32_t log_vpn = LOG_$UPDATE();
@@ -569,7 +569,7 @@ void PMAP_$PURIFIER_L(void)
         }
 
         /* 0x00E14122: periodic shutdown check */
-        if (PMAP_$SHUTTING_DOWN_FLAG >= 0 && scan_time >= shutdown_time) {
+        if (PMAP_$DATA.shutting_down_flag >= 0 && scan_time >= shutdown_time) {
             if (NETWORK_$DISKLESS >= 0) {
                 CAL_$SHUTDOWN(&status);             /* 0x00E1413E */
                 if (status != 0) {

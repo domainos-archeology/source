@@ -238,7 +238,7 @@ void mmap_$remove_from_wsl(mmape_t *page, uint32_t vpn)
  * 0x00E0C7A8-0x00E0C7B2  current = head_vpn; an empty list skips the scan
  * 0x00E0C7C0-0x00E0C7F2  page = mmape[current]; A1 = 0xED5000 +
  *                        page->segment*0x80 + page->seg_offset*4, so
- *                        (-0x80,A1) is PMAP_SEGMAP[segment][seg_offset]
+ *                        (-0x80,A1) is PMAP_SEGMAP_ROW(segment)[seg_offset]
  *                        (1-based base 0xED4F80); next = page->prev_vpn
  * 0x00E0C7F6-0x00E0C810  while position <= skip_count, a page whose PFT
  *                        second word (0xFFB800 + vpn*4 + 2) has bit 13
@@ -303,7 +303,7 @@ void mmap_$trim_wsl(uint16_t wsl_index, uint32_t pages_to_trim)
         for (pass = 0; pass < passes; pass++) {
             mmape_t *page = MMAPE_FOR_VPN(current);          /* 0x00E0C7C0 */
             pmap_segmap_entry_t *seg_entry =
-                &PMAP_SEGMAP[page->segment][page->seg_offset]; /* 0x00E0C7D4 */
+                &PMAP_SEGMAP_ROW(page->segment)[page->seg_offset]; /* 0x00E0C7D4 */
             uint32_t next = page->prev_vpn;                  /* 0x00E0C7F2 */
             boolean referenced = false;
 

@@ -65,8 +65,7 @@ static int current_failed;
  * Globals
  * ============================================================================ */
 
-static uint8_t idp_arena[0x2000];
-uint8_t *XNS_IDP_BASE = idp_arena;
+MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 uint8_t sock_table_base[SOCK_TABLE_SIZE];
 uint16_t PROC1_$AS_ID;
@@ -181,14 +180,14 @@ static xns_$idp_open_opt_t opt;
 static status_$t st;
 static sock_$sock_t sock_descs[4];
 
-static uint8_t *channel_base(uint16_t idx)
+static xns_$channel_t *channel_base(uint16_t idx)
 {
-    return idp_arena + (uint32_t)idx * XNS_CHANNEL_SIZE;
+    return &XNS_IDP_$DATA.channels[idx];
 }
 
 static void setup(void)
 {
-    memset(idp_arena, 0, sizeof(idp_arena));
+    memset(&XNS_IDP_$DATA, 0, sizeof(XNS_IDP_$DATA));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(sock_descs, 0, sizeof(sock_descs));
     memset(&opt, 0, sizeof(opt));
@@ -379,7 +378,7 @@ static void test_register_ec1_runs_even_with_no_socket(void)
     ASSERT_EQ((uintptr_t)&sock_descs[1], (uintptr_t)reg_ec1_arg,
               "the entry one past the end of the descriptor table");
     ASSERT_EQ(XNS_NO_SOCKET,
-              *(uint16_t *)(channel_base(TEST_CHANNEL) + XNS_CHAN_OFF_USER_SOCKET),
+              channel_base(TEST_CHANNEL)->user_socket,
               "the channel records 'no user socket'");
 }
 
@@ -420,7 +419,7 @@ static void test_success_path_bookkeeping(void)
     ASSERT_EQ(1, excl_start_calls, "lock taken");
     ASSERT_EQ(1, excl_stop_calls, "lock released");
     ASSERT_EQ(TEST_USER_SOCKET,
-              *(uint16_t *)(channel_base(TEST_CHANNEL) + XNS_CHAN_OFF_USER_SOCKET),
+              channel_base(TEST_CHANNEL)->user_socket,
               "the channel's user socket");
 }
 

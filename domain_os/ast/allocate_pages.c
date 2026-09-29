@@ -183,7 +183,7 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
 done:
     /* 0x00E00E74-0x00E00E9A */
     if ((MMAP_$WSL_FREE_CNT + MMAP_$WSL_PURE_CNT + MMAP_$WSL_IMPURE_CNT)
-        < (uint32_t)PMAP_$LOW_THRESH) {
+        < (uint32_t)PMAP_$DATA.low_thresh) {
         PMAP_$WAKE_PURIFIER(0);
     }
 

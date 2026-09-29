@@ -52,7 +52,7 @@ void DISK_$DISMOUNT(uint16_t vol_idx)
     }
 
     /* 0x00E6D00C - 0x00E6D018 */
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
 
     /* 0x00E6D01A - 0x00E6D024: a Pascal function - the `subq.l #2,SP`
      * result slot is discarded */
@@ -116,5 +116,5 @@ void DISK_$DISMOUNT(uint16_t vol_idx)
     }
 
     /* 0x00E6D11A - 0x00E6D120 */
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
 }

@@ -35,9 +35,7 @@ static int tests_failed = 0;
 
 time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
 time_queue_t TIME_$RTEQ;
-time_queue_elem_t PMAP_$WS_TIMER_ELEMENTS[PMAP_WS_SLOTS];
-time_queue_elem_t pmap_update_timer_elem;
-time_queue_elem_t pmap_purifier_timer_elem;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint32_t TIME_$CLOCKH;
 
 static int set_ws_calls, removes, enters;
@@ -69,7 +67,7 @@ void PMAP_$UPDATE_CALLBACK(void) {}
 
 static void reset(void)
 {
-    memset(PMAP_$WS_TIMER_ELEMENTS, 0, sizeof PMAP_$WS_TIMER_ELEMENTS);
+    memset(&PMAP_$DATA, 0, sizeof PMAP_$DATA);
     set_ws_calls = removes = enters = 0;
     enter_status = 0;
 }
@@ -83,7 +81,8 @@ TEST(ws_scan_uses_vtq_and_0x1c_stride)
     ASSERT_EQ(7, set_ws_pid);
     ASSERT_EQ(9, set_ws_val);
     ASSERT_EQ((unsigned long)&TIME_$VTQ[6], (unsigned long)rm_queue);
-    e = (time_queue_elem_t *)((uint8_t *)PMAP_$WS_TIMER_ELEMENTS + 7 * 0x1C);
+    e = (time_queue_elem_t *)((uint8_t *)&PMAP_$DATA + 0x24 + 7 * 0x1C);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.ws_timer[7].elem, (unsigned long)e);
     ASSERT_EQ((unsigned long)e, (unsigned long)rm_elem);
     ASSERT_EQ(1, enters);
     ASSERT_EQ((unsigned long)&TIME_$VTQ[6], (unsigned long)en_queue[0]);
@@ -114,20 +113,20 @@ TEST(timers_intervals)
     TIME_$CLOCKH = 0x1000;
     PMAP_$INIT_TIMERS();
     ASSERT_EQ(2, enters);
-    ASSERT_EQ((unsigned long)&pmap_purifier_timer_elem, (unsigned long)en_elem[0]);
-    ASSERT_EQ((unsigned long)&pmap_update_timer_elem, (unsigned long)en_elem[1]);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.purifier_timer, (unsigned long)en_elem[0]);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.update_timer, (unsigned long)en_elem[1]);
     ASSERT_EQ((unsigned long)&TIME_$RTEQ, (unsigned long)en_queue[1]);
     ASSERT_EQ(0x1000, en_when[0].high);
     ASSERT_EQ(0, en_when[0].low);
-    ASSERT_EQ(0x1A, pmap_purifier_timer_elem.flags);
-    ASSERT_EQ(0x10E5, pmap_purifier_timer_elem.expire_high);
-    ASSERT_EQ(0, pmap_purifier_timer_elem.expire_low);
-    ASSERT_EQ(7, pmap_purifier_timer_elem.interval_high);
-    ASSERT_EQ(0x270E, pmap_purifier_timer_elem.interval_low);
-    ASSERT_EQ(0x16, pmap_update_timer_elem.flags);
-    ASSERT_EQ(0x10E5, pmap_update_timer_elem.expire_high);
-    ASSERT_EQ(0xE5, pmap_update_timer_elem.interval_high);
-    ASSERT_EQ(0, pmap_update_timer_elem.interval_low);
+    ASSERT_EQ(0x1A, PMAP_$DATA.purifier_timer.flags);
+    ASSERT_EQ(0x10E5, PMAP_$DATA.purifier_timer.expire_high);
+    ASSERT_EQ(0, PMAP_$DATA.purifier_timer.expire_low);
+    ASSERT_EQ(7, PMAP_$DATA.purifier_timer.interval_high);
+    ASSERT_EQ(0x270E, PMAP_$DATA.purifier_timer.interval_low);
+    ASSERT_EQ(0x16, PMAP_$DATA.update_timer.flags);
+    ASSERT_EQ(0x10E5, PMAP_$DATA.update_timer.expire_high);
+    ASSERT_EQ(0xE5, PMAP_$DATA.update_timer.interval_high);
+    ASSERT_EQ(0, PMAP_$DATA.update_timer.interval_low);
 }
 
 TEST(timers_enter_failure_crashes)

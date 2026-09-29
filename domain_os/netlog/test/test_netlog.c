@@ -33,8 +33,9 @@ static int passes = 0;
 
 #include "netlog/netlog_internal.h"
 
-/* netlog_internal.h declares these; the layout tests do not call any code. */
-netlog_data_t netlog_data;
+/* The layout tests do not call any code; test_netlog_data.c covers the
+ * block itself. */
+MODULE_DATA_DEFINE(netlog_$data_t, NETLOG_$DATA, 0x00E85684);
 
 static void test_entry_size(void)
 {
@@ -61,14 +62,14 @@ static void test_entry_offsets(void)
 
 static void test_data_offsets(void)
 {
-    TEST_ASSERT(offsetof(netlog_data_t, page_counts) == 0x70,
-                "page_counts at 0x70");
-    TEST_ASSERT(offsetof(netlog_data_t, current_buf_ptr) == 0x74,
+    TEST_ASSERT(offsetof(netlog_$data_t, page_counts[1]) == 0x70,
+                "page_counts[1] at 0x70");
+    TEST_ASSERT(offsetof(netlog_$data_t, current_buf_ptr) == 0x74,
                 "current_buf_ptr at 0x74 (so page_counts holds exactly two)");
-    TEST_ASSERT(sizeof(netlog_data.page_counts) == 4,
-                "page_counts is two words wide");
-    TEST_ASSERT(offsetof(netlog_data_t, buffer_va) == 0x54 &&
-                sizeof(netlog_data.buffer_va) == 12,
+    TEST_ASSERT(sizeof(NETLOG_$DATA.page_counts) == 6,
+                "page_counts is the bias word plus two");
+    TEST_ASSERT(offsetof(netlog_$data_t, buffer_va) == 0x54 &&
+                sizeof(NETLOG_$DATA.buffer_va) == 12,
                 "buffer_va is three longwords at 0x54 (element 0 unused)");
 }
 

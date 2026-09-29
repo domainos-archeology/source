@@ -39,7 +39,7 @@ uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 #undef DISK_VOLUME_BASE
 #define DISK_VOLUME_BASE (DISK_$DATA)
 
-ml_$exclusion_t MOUNT_LOCK;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 
 static int starts, stops, shutdowns;
 static int invalidates;

@@ -16,18 +16,16 @@
  * TIME_$RTEQ (0xE2A7A0) with the `when' cell {TIME_$CLOCKH, 0} at
  * (-0xC,A6)/(-0x8,A6).  A non-zero status from either TIME_$Q_ENTER_ELEM
  * crashes with that status.
+ *
+ * Timer elements through PMAP_$DATA: Claude Opus 5.5 (source-iq58).
  */
 
 #include "pmap/pmap_internal.h"
 #include "misc/misc.h"
 
-#if defined(ARCH_M68K)
-    #define PMAP_UPDATE_TIMER_ELEM   ((time_queue_elem_t *)0xE24D44)
-    #define PMAP_PURIFIER_TIMER_ELEM ((time_queue_elem_t *)0xE24D64)
-#else
-    #define PMAP_UPDATE_TIMER_ELEM   (&pmap_update_timer_elem)
-    #define PMAP_PURIFIER_TIMER_ELEM (&pmap_purifier_timer_elem)
-#endif
+/* "movea.l #0xe24d44,A0": PMAP_$DATA +0x00 and +0x20 (source-iq58) */
+#define PMAP_UPDATE_TIMER_ELEM   (&PMAP_$DATA.update_timer)
+#define PMAP_PURIFIER_TIMER_ELEM (&PMAP_$DATA.purifier_timer)
 
 /* 0x00E2F894 / 0x00E2F8FA: the two flag words */
 #define PMAP_PURIFIER_TIMER_FLAGS   0x1A

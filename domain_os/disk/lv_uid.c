@@ -42,7 +42,7 @@ void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
     uint32_t lv_daddr;              /* D3 */
 
     /* 0x00E6CC78 - 0x00E6CC84 */
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
 
     /* 0x00E6CC86 - 0x00E6CCAA: 0xE7A290 + vol_idx * 0x48, word arithmetic */
     vol = DISK_VOL(vol_idx);
@@ -95,7 +95,7 @@ void DISK_$LV_UID(int16_t vol_idx, int16_t lv_num, uid_t *uid_ret,
 
 done:
     /* 0x00E6CD86 - 0x00E6CDA4 */
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
     uid_ret->high = lv_uid.high;
     uid_ret->low = lv_uid.low;
     *status_ret = status;

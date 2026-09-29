@@ -39,7 +39,7 @@ static int tests_run = 0;
  * Globals and mocks
  * ================================================================ */
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
-ml_$exclusion_t MOUNT_LOCK;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 
 #define MAX_EVENTS 8
 

@@ -321,7 +321,7 @@ void MST_$DISKLESS_INIT(int16_t a, uint32_t b, uint32_t c)
 }
 
 /* Globals owned by other subsystems that os/init.c reads or writes */
-int8_t PMAP_$SHUTTING_DOWN_FLAG;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 int8_t NETWORK_$DISKLESS;
 int8_t NETWORK_$REALLY_DISKLESS;
 char NETWORK_$DO_CHKSUM;

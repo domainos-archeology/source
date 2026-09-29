@@ -15,28 +15,20 @@
  * behind an error code and parameter.
  *
  * Original address: 0x00E17A2E
+ *
+ * Module data through XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #include "xns/xns_internal.h"
 
 /*
- * The XNS_ERROR module data segment, 0x00E2B29C (SAU2 link map, size 0x78).
- * Every routine in this file starts with "lea (0xe2b29c).l,A5", so each A5
- * displacement below is a field of this object.
- *
- * Initial contents, straight out of the image (0x00E2B29C..0x00E2B313):
- *   +0x6C  00 D9 4C 00     buf_va_high
- *   +0x70  00 D6 4C 00     buf_va_low
- *   +0x74  00 00           client_ref_count
- *   +0x76  FF FF           std_idp_channel
- * everything else is zero.
+ * The XNS_ERROR module data segment, 0x00E2B29C (SAU2 link map, size 0x78),
+ * is the MODULE_DATA block XNS_ERROR_$DATA (xns/xns_internal.h, defined
+ * with its image contents in xns/xns_data.c).  Every routine in this file
+ * starts with "lea (0xe2b29c).l,A5", so each A5 displacement below is a
+ * field of that block.
  */
-xns_error_$data_t XNS_ERROR_$DATA = {
-    .buf_va_high      = 0x00D94C00,
-    .buf_va_low       = 0x00D64C00,
-    .client_ref_count = 0,
-    .std_idp_channel  = -1,
-};
 
 /*
  * XNS_ERROR_$CLIENT_MUTEX, 0x00E26268 (SAU2 link map).  All sixteen bytes of

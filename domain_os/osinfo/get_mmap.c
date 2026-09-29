@@ -87,13 +87,13 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
         if (global_info->set_op < 5) {
             switch (global_info->set_op) {
             case MMAP_SET_WS_INTERVAL:                          /* 0x00E5C6E0 */
-                PMAP_$WS_INTERVAL = *(uint16_t *)((uint8_t *)info + 0x2a);
-                PMAP_$MAX_WS_INTERVAL = *(uint16_t *)((uint8_t *)info + 0x2a);
-                PMAP_$MIN_WS_INTERVAL = global_info->asid;      /* the word at +0x2e */
+                PMAP_$DATA.ws_interval = *(uint16_t *)((uint8_t *)info + 0x2a);
+                PMAP_$DATA.max_ws_interval = *(uint16_t *)((uint8_t *)info + 0x2a);
+                PMAP_$DATA.min_ws_interval = global_info->asid;      /* the word at +0x2e */
                 break;
 
             case MMAP_SET_IDLE_INTERVAL:                        /* 0x00E5C6FC */
-                PMAP_$IDLE_INTERVAL = global_info->set_value;
+                PMAP_$DATA.idle_interval = global_info->set_value;
                 break;
 
             case MMAP_SET_WS_MAX:                               /* 0x00E5C708 */
@@ -188,16 +188,16 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
         global_info->ws_data[2] = MMAP_$WSL[2].page_count;       /* 0xE232FC */
         global_info->ws_data[3] = MMAP_$WSL[3].page_count;       /* 0xE23320 */
         global_info->ws_data[4] = MMAP_$WSL[4].page_count;       /* 0xE23344 */
-        global_info->ws_interval = PMAP_$WS_INTERVAL;            /* 0xE254D8 */
+        global_info->ws_interval = PMAP_$DATA.ws_interval;            /* 0xE254D8 */
     }
 
     /* 0x00E5C8C8 btst.b #0x0: GET_COUNTERS (A1 still = flags_p) */
     if (flag_byte & MMAP_FLAG_GET_COUNTERS) {
-        paging->pur_l_cnt = PMAP_$PUR_L_CNT;                     /* 0xE25490 */
-        paging->pur_r_cnt = PMAP_$PUR_R_CNT;                     /* 0xE2548C */
+        paging->pur_l_cnt = PMAP_$DATA.pur_l_cnt;                     /* 0xE25490 */
+        paging->pur_r_cnt = PMAP_$DATA.pur_r_cnt;                     /* 0xE2548C */
         paging->page_flt_cnt = AST_$PAGE_FLT_CNT;                /* 0xE1E0DC */
         paging->ws_flt_cnt = AST_$WS_FLT_CNT;                    /* 0xE1E0D8 */
-        paging->t_pur_scans = PMAP_$T_PUR_SCANS;                 /* 0xE25488 */
+        paging->t_pur_scans = PMAP_$DATA.t_pur_scans;                 /* 0xE25488 */
         paging->alloc_cnt = MMAP_$ALLOC_CNT;                     /* 0xE232AC */
         paging->alloc_pages = MMAP_$ALLOC_PAGES;                 /* 0xE232A8 */
         paging->steal_cnt = MMAP_$STEAL_CNT;                     /* 0xE232A4 */
@@ -209,7 +209,7 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
         paging->reclaim_shar_cnt = MMAP_$RECLAIM_SHAR_CNT;       /* 0xE23298 */
         paging->reclaim_pur_cnt = MMAP_$RECLAIM_PUR_CNT;         /* 0xE23294 */
         paging->ws_remove = MMAP_$WS_REMOVE;                     /* 0xE23290 */
-        paging->scan_fract = PMAP_$SCAN_FRACT;                   /* 0xE254CC */
+        paging->scan_fract = PMAP_$DATA.scan_fract;                   /* 0xE254CC */
     }
 
     /* 0x00E5C952 btst.b #0x3: GET_WS_LIST */

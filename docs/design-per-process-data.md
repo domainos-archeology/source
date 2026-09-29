@@ -195,6 +195,18 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    at 0xE82B8C is already asserted end to end).
 3. **netlog, xns, pmap, route, rip, asknode, ring, sock, pkt, msg**: each
    has a base macro and a host variable today; the struct exists for most.
+   Amended 2026-09-29 (netlog/xns/pmap step, source-iq58): blocks
+   `NETLOG_$DATA` (0xE85684), `XNS_ERROR_$DATA` (0xE2B29C), `XNS_IDP_$DATA`
+   (0xE2B314), `PMAP_$DATA` (0xE24D44, which also holds the map's
+   `MOUNT_LOCK` and the exported `PMAP_$*` scalars, now fields) and
+   `PMAP_$SEGMAP` (map `AST_PMAPS` 0xED5000, 0xFC00).  The segment map's
+   bias row (0xED4F80) lies in the gap before `AST_PMAPS`, outside every
+   map segment, so like `P2_INFO_ENTRY` it is declared from row 1 and
+   `PMAP_SEGMAP_ROW(seg)` applies the bias once; `ast/ast.h`'s
+   `SEGMAP_BASE` is a shim onto the block until the AST step (source-avdg).
+   Segments whose cells are exported globals addressed by name and never
+   through A5 (`NETLOG_ASM` 0xE248E0) stay individual objects
+   (ordering them is source-91vs).
 4. **proc1/proc2/fim/acl per-process arrays** (`PROC1_$TYPE` bias,
    `FIM_$QUIT_EC/VALUE` 12- and 4-byte strides, `ACL_$SUPER_COUNT`,
    `PROC2_UID[58]`): declaration-side bias, use sites direct.

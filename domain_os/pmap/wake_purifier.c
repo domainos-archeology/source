@@ -23,14 +23,14 @@ void PMAP_$WAKE_PURIFIER(int8_t wait)
     int32_t wait_value;                                 /* (-0x4,A6) */
     ec_$eventcount_t *ecs;                              /* (-0x8,A6) */
 
-    wait_value = PMAP_$PAGES_EC.value + 1;              /* 0x00E13A2A */
-    EC_$ADVANCE(&PMAP_$L_PURIFIER_EC);                  /* 0x00E13A34 */
+    wait_value = PMAP_$DATA.pages_ec.value + 1;              /* 0x00E13A2A */
+    EC_$ADVANCE(&PMAP_$DATA.l_purifier_ec);                  /* 0x00E13A34 */
     if (MMAP_WSL[MMAP_WSL_POOL_DIRTY_RMT].page_count != 0) { /* 0x00E13A40 */
-        EC_$ADVANCE(&PMAP_$R_PURIFIER_EC);              /* 0x00E13A48 */
+        EC_$ADVANCE(&PMAP_$DATA.r_purifier_ec);              /* 0x00E13A48 */
     }
     if (wait < 0) {                                     /* 0x00E13A54 */
         ML_$UNLOCK(PMAP_LOCK_ID);                       /* 0x00E13A5E */
-        ecs = &PMAP_$PAGES_EC;
+        ecs = &PMAP_$DATA.pages_ec;
         EC_$WAITN(&ecs, &wait_value, 1);                /* 0x00E13A7C */
         ML_$LOCK(PMAP_LOCK_ID);                         /* 0x00E13A8C */
     }

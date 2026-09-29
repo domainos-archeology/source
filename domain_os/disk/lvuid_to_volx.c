@@ -35,7 +35,7 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
     uid.low = ((const uint32_t *)uid_ptr)[1];
 
     /* 0x00E6D14E - 0x00E6D15C */
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
     local_status = status_$logical_volume_not_found;
 
     /* 0x00E6D164 - 0x00E6D1A2 */
@@ -54,7 +54,7 @@ void DISK_$LVUID_TO_VOLX(void *uid_ptr, int16_t *vol_idx, status_$t *status)
     }
 
     /* 0x00E6D1A6 - 0x00E6D1BC */
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
     *vol_idx = d2;
     *status = local_status;
 }

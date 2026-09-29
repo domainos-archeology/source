@@ -48,8 +48,7 @@ mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
 aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
 static aote_t aote_store[TEST_SEGMENTS];
-static pmap_segmap_row_t segmap_store[TEST_SEGMENTS];
-pmap_segmap_row_t *pmap_segmap = segmap_store;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uint32_t TIME_$CLOCKH;
 
 static int      remove_calls;
@@ -82,7 +81,7 @@ static void build_list(int n)
         p->seg_offset = (uint8_t)i;
         p->prev_vpn = list_v[(i + 1) % n];
         p->next_vpn = list_v[(i - 1 + n) % n];
-        PMAP_SEGMAP[1][i].flags = PMAP_SEGMAP_INSTALLED | 0x80;
+        PMAP_SEGMAP_ROW(1)[i].flags = PMAP_SEGMAP_INSTALLED | 0x80;
     }
 }
 
@@ -95,7 +94,7 @@ static void reset_module(void)
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
     memset(aote_store, 0, sizeof(aote_store));
-    memset(segmap_store, 0, sizeof(segmap_store));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     for (s = 1; s <= TEST_SEGMENTS; s++) {
         MMAP_$SEG_ASTE_FOR(s)->aote = &aote_store[s - 1];
     }
@@ -126,9 +125,9 @@ TEST(trims_two_pages_to_pools)
     ASSERT_EQ(2, remove_calls);
     ASSERT_EQ(10, remove_ppn[0]);
     ASSERT_EQ(11, remove_ppn[1]);
-    ASSERT_EQ(0x80, PMAP_SEGMAP[1][0].flags);    /* bit 5 cleared, bit 7 kept */
-    ASSERT_EQ(0x80, PMAP_SEGMAP[1][1].flags);
-    ASSERT_EQ(0xA0, PMAP_SEGMAP[1][2].flags);
+    ASSERT_EQ(0x80, PMAP_SEGMAP_ROW(1)[0].flags);    /* bit 5 cleared, bit 7 kept */
+    ASSERT_EQ(0x80, PMAP_SEGMAP_ROW(1)[1].flags);
+    ASSERT_EQ(0xA0, PMAP_SEGMAP_ROW(1)[2].flags);
 
     /* collected list is 11 then 10 */
     ASSERT_EQ(1, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
@@ -151,7 +150,7 @@ TEST(wired_page_is_dropped_not_pooled)
     ASSERT_EQ(3, MMAP_$WSL[7].page_count);
     ASSERT_EQ(11, MMAP_$WSL[7].head_vpn);
     ASSERT_EQ(0, remove_calls);
-    ASSERT_EQ(0xA0, PMAP_SEGMAP[1][0].flags);
+    ASSERT_EQ(0xA0, PMAP_SEGMAP_ROW(1)[0].flags);
     ASSERT_EQ(0, MMAPE_FOR_VPN(10)->flags1 & MMAPE_FLAG1_IN_WSL);
     ASSERT_EQ(0, MMAP_$WSL[MMAP_WSL_POOL_IMPURE].page_count);
     ASSERT_EQ(99, MMAP_$PAGEABLE_PAGES);

@@ -85,7 +85,7 @@ void PMAP_$PURIFIER_R(void)
     recalc_time = scan_time;
 
     /* 0x00E141B8 */
-    wait_value = PMAP_$R_PURIFIER_EC.value + 1;
+    wait_value = PMAP_$DATA.r_purifier_ec.value + 1;
 
     carryover = 0;                            /* 0x00E141C2: clr.l D5 */
     carryover_delta = 0;                      /* 0x00E141C4 */
@@ -99,7 +99,7 @@ void PMAP_$PURIFIER_R(void)
          * reaches the next scan deadline.  The result is discarded here.
          */
         (void)EC_$WAIT(
-            (ec_$wait_ecs_t){{ &PMAP_$R_PURIFIER_EC,
+            (ec_$wait_ecs_t){{ &PMAP_$DATA.r_purifier_ec,
                                (ec_$eventcount_t *)&TIME_$CLOCKH,
                                NULL }},
             (ec_$wait_vals_t){{ wait_value, (int32_t)scan_time, 0 }});
@@ -133,11 +133,11 @@ void PMAP_$PURIFIER_R(void)
          */
         while (MMAP_WSL[MMAP_WSL_POOL_DIRTY_RMT].page_count != 0
                && (carryover != 0
-                   || total_pages < (uint32_t)PMAP_$MID_THRESH)) {
+                   || total_pages < (uint32_t)PMAP_$DATA.mid_thresh)) {
 
             /* 0x00E1426A-0x00E14292 */
             MMAP_$GET_IMPURE(MMAP_WSL_POOL_DIRTY_RMT, batch_pages,
-                             (total_pages < (uint32_t)PMAP_$MID_THRESH)
+                             (total_pages < (uint32_t)PMAP_$DATA.mid_thresh)
                                  ? true : false,   /* 0x00E14280: shi */
                              PMAP_R_BATCH_MAX, &scanned, &page_count);
 
@@ -156,7 +156,7 @@ void PMAP_$PURIFIER_R(void)
                      * ... / bset.b #7,(-0x80,A1)" - the array base is
                      * 0xED4F80 and the segment index is 1-based.
                      */
-                    PMAP_SEGMAP[seg][page_idx].flags |= PMAP_SEGMAP_WRITING;
+                    PMAP_SEGMAP_ROW(seg)[page_idx].flags |= PMAP_SEGMAP_WRITING;
 
                     /*
                      * 0x00E142F0: `andi.w #-0x4001,(0x2,A3,D0*0x1)` - bit 14
@@ -180,7 +180,7 @@ void PMAP_$PURIFIER_R(void)
                     pmap_$write_page(vpn, &status, true);
 
                     if (status == status_$ok) {           /* 0x00E14316 */
-                        EC_$ADVANCE(&PMAP_$PAGES_EC);     /* 0x00E14320 */
+                        EC_$ADVANCE(&PMAP_$DATA.pages_ec);     /* 0x00E14320 */
                         MMAP_$AVAIL(vpn);                 /* 0x00E1436C */
                     } else if (page->wsl_index == PMAP_R_WSL_DIRTY_RMT
                                && status != PMAP_R_STATUS_NO_RETRY_1
@@ -204,7 +204,7 @@ void PMAP_$PURIFIER_R(void)
             }
 
             /* 0x00E1437A-0x00E14382: 16-bit count, zero-extended */
-            PMAP_$PUR_R_CNT += (uint32_t)page_count;
+            PMAP_$DATA.pur_r_cnt += (uint32_t)page_count;
 
             /*
              * 0x00E14386-0x00E14392: "cmp.l D5,D6 / bls" - when the number
@@ -224,7 +224,7 @@ void PMAP_$PURIFIER_R(void)
         }
 
         /* 0x00E14396 */
-        wait_value = PMAP_$R_PURIFIER_EC.value + 1;
+        wait_value = PMAP_$DATA.r_purifier_ec.value + 1;
 
         ML_$UNLOCK(PMAP_LOCK_ID);               /* 0x00E143A6 */
     }

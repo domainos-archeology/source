@@ -13,6 +13,8 @@
  *   5. Returns the header buffer
  *
  * Original address: 0x00E71C78
+ *
+ * Module data through NETLOG_$DATA: Claude Opus 5.5 (source-iq58).
  */
 
 #include "netlog/netlog_internal.h"
@@ -21,14 +23,9 @@
 #include "pkt/pkt.h"
 #include "net_io/net_io.h"
 
-/*
- * AUDIT_PKT_INFO (0xE248FC), the packet template passed to
- * PKT_$BLD_INTERNET_HDR, is defined in netlog/netlog_internal.h.
- */
-
 void NETLOG_$SEND_PAGE(void)
 {
-    netlog_data_t *nl = NETLOG_DATA;
+    netlog_$data_t *nl = &NETLOG_$DATA;
 
     /*
      * Local variables for network header building
@@ -50,7 +47,7 @@ void NETLOG_$SEND_PAGE(void)
      */
     nl->pkt_done_cnt = nl->done_cnt;
     /* 0xE71C98: move.w (0x6e,A0),(0x50,A5) with A0 = A5 + index*2 */
-    nl->pkt_entry_cnt = nl->page_counts[nl->send_page_index - 1];
+    nl->pkt_entry_cnt = nl->page_counts[nl->send_page_index];
 
     /*
      * Get a network header buffer
@@ -70,7 +67,7 @@ void NETLOG_$SEND_PAGE(void)
             NODE_$ME,                   /* src_node */
             NETLOG_$SOCK,               /* src_sock */
             /* pkt_info: "pea (A5)" at 0x00E71CE4 - the module data base
-             * itself, not AUDIT_PKT_INFO. */
+             * itself (NETLOG_$DATA.pkt_info). */
             &nl->pkt_info,
             0,                          /* param8 */
             &nl->pkt_type1,             /* template data (type1, type2, done_cnt, entry_cnt) */
@@ -99,7 +96,8 @@ void NETLOG_$SEND_PAGE(void)
          * Calculate data length: buffer_ppn << 10 gives size in bytes
          * The original shifts left by 10 (multiply by 1024)
          */
-        data_len = nl->buffer_ppn[nl->send_page_index - 1] << 10;
+        /* 0xE71D36: move.l (0x5c,A5,D0*1),D1, D0 = index*4 (Pascal [1..2]) */
+        data_len = nl->buffer_ppn[nl->send_page_index] << 10;
 
         NET_IO_$SEND(
             port,                                               /* port */

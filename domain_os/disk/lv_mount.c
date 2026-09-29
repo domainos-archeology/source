@@ -88,7 +88,7 @@ int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret)
     target_uid_high = lv_uid->high;
     target_uid_low = lv_uid->low;
 
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
 
     /*
      * Phase 1: Search for a free slot in the LV portion of the table,
@@ -242,7 +242,7 @@ int16_t DISK_$LV_MOUNT(uid_t *lv_uid, status_$t *status_ret)
     status = status_$logical_volume_not_found;
 
 done:
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
     *status_ret = status;
     return free_slot;
 }

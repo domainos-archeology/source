@@ -55,7 +55,7 @@ void PMAP_$WS_SCAN_CALLBACK(void *arg)
     if (slot != 0) {
         ws = &MMAP_WSL[slot];
         ws->owner++;
-        if (ws->owner >= PMAP_$WS_INTERVAL) {           /* bcs 0x00E1455E */
+        if (ws->owner >= PMAP_$DATA.ws_interval) {           /* bcs 0x00E1455E */
             ws->owner = 0;
             ws->scan_pos = ws->page_count;
             ws->ws_timestamp = TIME_$CLOCKH;
@@ -69,7 +69,7 @@ void PMAP_$WS_SCAN_CALLBACK(void *arg)
         wired->pri_timestamp = TIME_$CLOCKH;
         wired->ws_timestamp = TIME_$CLOCKH;
         wired->owner++;
-        if (wired->owner >= PMAP_$WS_INTERVAL) {        /* bcs 0x00E145B2 */
+        if (wired->owner >= PMAP_$DATA.ws_interval) {        /* bcs 0x00E145B2 */
             wired->owner = 0;
             wired->scan_pos = wired->page_count;
             MMAP_$WS_SCAN(MMAP_WSL_POOL_WIRED, 0, PMAP_WSC_SCAN_ALL, PMAP_WSC_SCAN_ALL);

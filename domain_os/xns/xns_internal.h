@@ -3,6 +3,9 @@
  *
  * Internal definitions, helper functions, and data structures for the
  * XNS IDP implementation. Not part of the public API.
+ *
+ * Module data blocks XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #ifndef XNS_INTERNAL_H
@@ -24,109 +27,16 @@
 #include "xns/xns.h"
 
 /*
- * Global XNS IDP state base address
- *
- * On M68K, this is the direct hardware address.
- * On other platforms, it's an extern pointer.
+ * The IDP module block is XNS_IDP_$DATA (xns/xns.h): every cell the IDP
+ * routines reach (off,A5) with A5 = 0xE2B314 is a field of it, and the
+ * channel and port tables are its channels[] / ports[] arrays.
  */
-#if defined(ARCH_M68K)
-#define XNS_IDP_BASE ((uint8_t *)0xE2B314)
-#else
-extern uint8_t *XNS_IDP_BASE;
-#endif
 
 /*
- * Offsets into the XNS IDP state structure (relative to 0xE2B314)
- */
-#define XNS_OFF_PACKETS_SENT 0x000
-#define XNS_OFF_PACKETS_RECV 0x004
-#define XNS_OFF_PACKETS_DROP 0x008
-#define XNS_OFF_PORT_NETWORK 0x010
-/*
- * The registered local host addresses, six bytes each, at state +0x20
- * (xns_$idp_state_t.addrs).  XNS_IDP_$OS_OPEN copies the FIRST entry into a
- * connected channel's source host with three word moves at
- * 0x00E180F4-0x00E18108, and xns_$is_broadcast_addr walks the array with
- * "lea (A5),A1 / addq.l #6,A1" reading (0x20,A1) (0x22,A1) (0x24,A1).
- */
-#define XNS_OFF_ADDRS 0x020
-#define XNS_ADDR_SIZE 6
-#define XNS_OFF_LOCAL_SOCKET 0x020
-#define XNS_OFF_LOCAL_HOST_HI 0x022
-#define XNS_OFF_LOCAL_HOST_LO 0x024
-/*
- * XNS_OFF_REG_ADDR_BASE used to name 0x026 as the "first registered address
- * entry".  The array actually starts at 0x020 with a six-byte stride
- * (XNS_OFF_ADDRS above), so 0x026 is the SECOND entry; the name is kept only
- * because nothing referenced it and removing it silently would lose the
- * correction.
- */
-#define XNS_OFF_REG_ADDR_BASE (XNS_OFF_ADDRS + XNS_ADDR_SIZE) /* addrs[1] */
-#define XNS_OFF_PORTS 0x040         /* xns_$port_state_t ports[8], stride 0x0C */
-/*
- * The channel array starts at state +0xA0 with a 0x48 stride.  Verified in
- * XNS_IDP_$OS_DEMUX: the socket scan walks `movea.l A5,A1' /
- * `lea (0x48,A1),A1' reading (0xD8,A0), and the demux vector is (0xA0,A2)
- * with A2 = A5 + index * 0x48.  0xA0 + 16 * 0x48 == 0x520 == XNS_OFF_LOCK.
- */
-#define XNS_OFF_CHANNELS 0x0A0
-#define XNS_OFF_LOCK 0x520
-#define XNS_OFF_OPEN_COUNT 0x534
-#define XNS_OFF_NEXT_SOCKET 0x536
-#define XNS_OFF_REG_COUNT 0x538
-
-/*
- * Channel field offsets.
- *
- * NOTE: these are A5-relative offsets for CHANNEL 0, i.e. they already
- * include the 0xA0 channel-array base.  Code that uses them must index as
- * `XNS_IDP_BASE + idx * XNS_CHANNEL_SIZE + XNS_CHAN_OFF_xxx'.  Prefer
- * XNS_CHANNEL_PTR() and the xns_$channel_t fields, whose offsets are
- * channel-relative.
- *
- * The first four entries are in fact xns_$port_state_t fields (the port
- * array at +0x40), kept here under their historical names.
- */
-#define XNS_CHAN_OFF_PORT_REF 0x40
-#define XNS_CHAN_OFF_PORT_INFO 0x44
-#define XNS_CHAN_OFF_MAC_SOCKET 0x48
-#define XNS_CHAN_OFF_PORT_REFCOUNT 0x4A
-#define XNS_CHAN_OFF_DEMUX 0xA0
-#define XNS_CHAN_OFF_DEST_NETWORK 0xA4
-#define XNS_CHAN_OFF_DEST_HOST 0xA8
-#define XNS_CHAN_OFF_DEST_SOCKET 0xAE
-#define XNS_CHAN_OFF_SRC_NETWORK 0xB0
-#define XNS_CHAN_OFF_SRC_HOST 0xB4
-#define XNS_CHAN_OFF_SRC_PORT 0xBA
-#define XNS_CHAN_OFF_MAC_INFO 0xBC
-#define XNS_CHAN_OFF_CONN_PORT 0xD4
-#define XNS_CHAN_OFF_USER_SOCKET 0xD6
-#define XNS_CHAN_OFF_XNS_SOCKET 0xD8
-#define XNS_CHAN_OFF_FLAGS 0xDA
-#define XNS_CHAN_OFF_PORT_ACTIVE 0xDC
-#define XNS_CHAN_OFF_STATE 0xE4
-
-/*
- * Channel size
- */
-#define XNS_CHANNEL_SIZE 0x48
-
-/*
- * Per-port state offsets (relative to port base, 12 bytes apart)
- */
-#define XNS_PORT_OFF_REF 0x40
-#define XNS_PORT_OFF_INFO 0x44
-#define XNS_PORT_OFF_MAC_SOCKET 0x48
-#define XNS_PORT_OFF_REFCOUNT 0x4A
-
-/*
- * Port state size
- */
-#define XNS_PORT_STATE_SIZE 0x0C
-
-/*
- * XNS_ERROR module data - the whole D segment "XNS_ERROR" at 0x00E2B29C,
- * size 0x78 (SAU2 link map).  XNS_ERROR_$SEND, xns_$maybe_open_error_socket,
+ * XNS_ERROR_$DATA - the XNS_ERROR module block, the whole D segment
+ * "XNS_ERROR" at 0x00E2B29C, size 0x78 (SAU2 link map), a MODULE_DATA block
+ * linked in the map's order (the address is its ordering key, not its link
+ * address; definition with the image contents in xns/xns_data.c).  XNS_ERROR_$SEND, xns_$maybe_open_error_socket,
  * xns_$maybe_close_error_socket and xns_$pkt_bufs_in_netbuf_pool all set
  * A5 to that address, so every displacement they use is a field here.
  *
@@ -164,7 +74,7 @@ _Static_assert(offsetof(xns_error_$data_t, std_idp_channel)  == 0x76, "xns_error
 _Static_assert(sizeof(xns_error_$data_t) == 0x78,
                "the XNS_ERROR segment is 0x78 bytes (SAU2 link map)");
 
-extern xns_error_$data_t XNS_ERROR_$DATA;
+MODULE_DATA_DECLARE(xns_error_$data_t, XNS_ERROR_$DATA, 0x00E2B29C);
 
 /*
  * XNS_ERROR_$CLIENT_MUTEX (0x00E26268, SAU2 link map) - guards
@@ -265,21 +175,5 @@ int8_t xns_$is_broadcast_addr(void *addr);
  * Original address: 0x00E17850
  */
 int8_t xns_$is_local_addr(void *addr);
-
-/*
- * Inline accessor macros for channel state
- */
-#define XNS_CHANNEL_PTR(idx)                                                   \
-  ((xns_$channel_t *)(XNS_IDP_BASE + XNS_OFF_CHANNELS +                        \
-                      (idx) * XNS_CHANNEL_SIZE))
-#define XNS_PORT_PTR(idx)                                                      \
-  ((xns_$port_state_t *)(XNS_IDP_BASE + XNS_OFF_PORTS +                        \
-                         (idx) * XNS_PORT_STATE_SIZE))
-#define XNS_PACKETS_RECV() (*(uint32_t *)(XNS_IDP_BASE + XNS_OFF_PACKETS_RECV))
-#define XNS_PACKETS_DROP() (*(uint32_t *)(XNS_IDP_BASE + XNS_OFF_PACKETS_DROP))
-#define XNS_LOCK_PTR() ((ml_$exclusion_t *)(XNS_IDP_BASE + XNS_OFF_LOCK))
-#define XNS_OPEN_COUNT() (*(uint16_t *)(XNS_IDP_BASE + XNS_OFF_OPEN_COUNT))
-#define XNS_NEXT_SOCKET() (*(uint16_t *)(XNS_IDP_BASE + XNS_OFF_NEXT_SOCKET))
-#define XNS_REG_COUNT() (*(uint16_t *)(XNS_IDP_BASE + XNS_OFF_REG_COUNT))
 
 #endif /* XNS_INTERNAL_H */

@@ -47,10 +47,9 @@ static int tests_failed = 0;
 static aste_t aste_store[8];
 static aote_t aote_store[8];
 static mmape_t mmape_store[0x1000];
-static pmap_segmap_row_t segmap_store[8];
 aste_t *ast_aste_base = aste_store;
 mmape_t *mmap_mmape_base = mmape_store;
-pmap_segmap_row_t *pmap_segmap = segmap_store;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uid_t ANON_$UID = { 0xA0A0, 0xB0B0 };
 uint32_t TIME_$CURRENT_CLOCKH = 0x55667788;
 int8_t NETLOG_$OK_TO_LOG;
@@ -99,7 +98,7 @@ static void reset(void)
     memset(aste_store, 0, sizeof aste_store);
     memset(aote_store, 0, sizeof aote_store);
     memset(mmape_store, 0, sizeof mmape_store);
-    memset(segmap_store, 0, sizeof segmap_store);
+    memset(&PMAP_$SEGMAP, 0, sizeof PMAP_$SEGMAP);
     memset(DISK_$DATA, 0, sizeof DISK_$DATA);
     locks = unlocks = allocs = logs = removes = 0;
     alloc_status = 0;
@@ -189,7 +188,7 @@ TEST(allocates_for_the_run_of_unaddressed_pages)
 TEST(hint_from_earlier_neighbour_through_its_mmape)
 {
     int32_t pages[1] = { 0x300 };
-    uint32_t *row = (uint32_t *)segmap_store[3];
+    uint32_t *row = (uint32_t *)PMAP_SEGMAP_ROW(3);
     reset();
     page(0x300, 3, 4, 0);
     page(0x250, 3, 2, 0x5555);
@@ -203,7 +202,7 @@ TEST(hint_from_earlier_neighbour_through_its_mmape)
 TEST(hint_from_later_neighbour_entry_address)
 {
     int32_t pages[1] = { 0x300 };
-    uint32_t *row = (uint32_t *)segmap_store[3];
+    uint32_t *row = (uint32_t *)PMAP_SEGMAP_ROW(3);
     reset();
     page(0x300, 3, 4, 0);
     row[6] = 0x00003333;                   /* not VALID: its own address */
@@ -228,7 +227,7 @@ TEST(allocation_failure_crashes)
 TEST(netlog_and_checksum_removal)
 {
     int32_t pages[1] = { 0x300 };
-    uint32_t *row = (uint32_t *)segmap_store[3];
+    uint32_t *row = (uint32_t *)PMAP_SEGMAP_ROW(3);
     reset();
     page(0x300, 3, 4, 0x1234);
     row[4] = PMAP_SEGMAP_L_VALID | PMAP_SEGMAP_L_INSTALLED | 0x300;

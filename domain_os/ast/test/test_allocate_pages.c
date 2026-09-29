@@ -102,7 +102,7 @@ uint32_t ast_$alloc_try_cnt;
 int8_t   NETLOG_$OK_TO_LOG;
 uid_t    ANON_$UID;
 
-uint16_t         PMAP_$LOW_THRESH;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 mmap_globals_t   MMAP_GLOBALS_STORAGE;
 
 /* ==========================================================================
@@ -247,7 +247,7 @@ static void reset_mocks(void)
     ANON_$UID.low = 0;
 
     /* Plenty of free memory, so the tail never wakes the purifier. */
-    PMAP_$LOW_THRESH = 0;
+    PMAP_$DATA.low_thresh = 0;
 
     /* One pure page, ppn 7, belonging to segment 2 page 3. */
     test_mmapes[TEST_PPN].segment = TEST_SEG;
@@ -514,7 +514,7 @@ TEST(low_memory_wakes_the_purifier_at_the_tail)
     uint32_t ppns[8] = { 0 };
 
     free_result[0] = 1;
-    PMAP_$LOW_THRESH = 100;
+    PMAP_$DATA.low_thresh = 100;
 
     ast_$allocate_pages(1, 1, ppns);
 

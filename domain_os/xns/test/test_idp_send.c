@@ -68,9 +68,7 @@ static int current_failed;
  * Globals the send path touches
  * ============================================================================ */
 
-static xns_$idp_state_t idp_state;
-xns_$idp_state_t       *XNS_$IDP_STATE = &idp_state;
-uint8_t                *XNS_IDP_BASE = (uint8_t *)&idp_state;
+MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 uint16_t                PROC1_$AS_ID;
 
 /* ============================================================================
@@ -211,7 +209,7 @@ static void setup(void)
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
 
     memset(arena, 0, sizeof(arena));
-    memset(&idp_state, 0, sizeof(idp_state));
+    memset(&XNS_IDP_$DATA, 0, sizeof(XNS_IDP_$DATA));
     memset(&rec, 0, sizeof(rec));
     memset(&send_rec_copy, 0, sizeof(send_rec_copy));
 
@@ -247,9 +245,9 @@ static void setup(void)
     PROC1_$AS_ID = 5;
 
     /* A plain unconnected channel that asks for a header build. */
-    idp_state.channels[TEST_CHANNEL].flags =
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags =
         XNS_CHAN_FLAG_BUILD_HEADER | (5 << XNS_CHAN_FLAG_AS_ID_SHIFT);
-    idp_state.channels[TEST_CHANNEL].state = (int16_t)0x8000;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].state = (int16_t)0x8000;
 
     /* The request: a 30-byte header buffer plus two chained payload buffers */
     rec.hdr_desc.length  = XNS_IDP_HEADER_SIZE;
@@ -513,7 +511,7 @@ static void test_mac_send_channel_argument(void)
 
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
-    ASSERT_PTR(&idp_state.ports[TEST_PORT].mac_socket, send_channel_p);
+    ASSERT_PTR(&XNS_IDP_$DATA.ports[TEST_PORT].mac_socket, send_channel_p);
     ASSERT_PTR(XNS_IDP_$PORT_MAC_CHANNEL(TEST_PORT), send_channel_p);
 }
 
@@ -527,7 +525,7 @@ static void test_length_is_reported_back(void)
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
     ASSERT_EQ(0x2A, len);
-    ASSERT_EQ(1, idp_state.packets_sent);       /* 0x00E1848A */
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_sent);       /* 0x00E1848A */
 }
 
 /* 0x00E18486: a failed send counts nothing */
@@ -540,7 +538,7 @@ static void test_failed_send_counts_nothing(void)
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
 
     ASSERT_EQ(status_$mac_illegal_buffer_spec, s);
-    ASSERT_EQ(0, idp_state.packets_sent);
+    ASSERT_EQ(0, XNS_IDP_$DATA.packets_sent);
     ASSERT_EQ(1, fim_release_calls);
 }
 
@@ -566,9 +564,9 @@ static void test_checksum_computed_for_prebuilt_header(void)
     status_$t s = 0;
 
     /* no header build, and the caller left a checksum request in place */
-    idp_state.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
-    idp_state.channels[TEST_CHANNEL].flags |= XNS_CHAN_FLAG_CONNECT;
-    idp_state.channels[TEST_CHANNEL].connected_port = TEST_PORT;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags |= XNS_CHAN_FLAG_CONNECT;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].connected_port = TEST_PORT;
     hdr->checksum = 0;
 
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
@@ -586,9 +584,9 @@ static void test_bad_checksum(void)
     int16_t   len = 0;
     status_$t s = 0;
 
-    idp_state.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
-    idp_state.channels[TEST_CHANNEL].flags |= XNS_CHAN_FLAG_CONNECT;
-    idp_state.channels[TEST_CHANNEL].connected_port = TEST_PORT;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags |= XNS_CHAN_FLAG_CONNECT;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].connected_port = TEST_PORT;
     hdr->checksum = 0;
     chksum_result = -1;
 
@@ -607,7 +605,7 @@ static void test_connected_channel(void)
 {
     int16_t   len = 0;
     status_$t s = 0;
-    xns_$channel_t *chan = &idp_state.channels[TEST_CHANNEL];
+    xns_$channel_t *chan = &XNS_IDP_$DATA.channels[TEST_CHANNEL];
     int i;
 
     chan->flags |= XNS_CHAN_FLAG_CONNECT;
@@ -655,7 +653,7 @@ static void test_no_build_no_connect(void)
     int16_t   len = 0;
     status_$t s = 0;
 
-    idp_state.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags &= (uint16_t)~XNS_CHAN_FLAG_BUILD_HEADER;
     hdr->checksum = 0xFFFF;
     hdr->length = 0x1234;
 
@@ -678,7 +676,7 @@ static void test_flag_bits_do_not_collide_with_as_id(void)
     status_$t s = 0;
 
     /* every AS_ID bit set, nothing else */
-    idp_state.channels[TEST_CHANNEL].flags = XNS_CHAN_FLAG_AS_ID_MASK;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].flags = XNS_CHAN_FLAG_AS_ID_MASK;
     hdr->checksum = 0xFFFF;
 
     XNS_IDP_$OS_SEND(&channel_no, &rec, &len, &s);
@@ -750,7 +748,7 @@ static void test_user_channel_not_open(void)
     status_$t s = 0;
 
     setup_user();
-    idp_state.channels[TEST_CHANNEL].state = 0;
+    XNS_IDP_$DATA.channels[TEST_CHANNEL].state = 0;
     XNS_IDP_$SEND(&user_channel, &user_rec, &len, &s);
 
     ASSERT_EQ(status_$xns_bad_channel, s);

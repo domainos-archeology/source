@@ -50,9 +50,7 @@ mmape_t  *mmap_mmape_base;
 uint16_t *mmap_pte_base;
 aste_t   *ast_aste_base;
 uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt, ast_alloc_too_few_cnt, ast_alloc_cnt;
-uint16_t  PMAP_$WS_INTERVAL, PMAP_$MAX_WS_INTERVAL, PMAP_$MIN_WS_INTERVAL;
-uint32_t  PMAP_$IDLE_INTERVAL, PMAP_$PUR_L_CNT, PMAP_$PUR_R_CNT, PMAP_$T_PUR_SCANS;
-uint16_t  PMAP_$SCAN_FRACT;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint16_t  PROC1_$CURRENT;
 uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
 
@@ -159,9 +157,9 @@ static void test_set_ws_interval(void)
     *(uint16_t *)((uint8_t *)&info + 0x2a) = 0x1111;
     info.asid = 0x2222;
     call(MMAP_FLAG_SET_PARAMS);
-    ASSERT_EQ(0x1111, PMAP_$WS_INTERVAL);
-    ASSERT_EQ(0x1111, PMAP_$MAX_WS_INTERVAL);
-    ASSERT_EQ(0x2222, PMAP_$MIN_WS_INTERVAL);
+    ASSERT_EQ(0x1111, PMAP_$DATA.ws_interval);
+    ASSERT_EQ(0x1111, PMAP_$DATA.max_ws_interval);
+    ASSERT_EQ(0x2222, PMAP_$DATA.min_ws_interval);
 }
 
 /* Op 2: the WSL index is MMAP_$WS_OWNER[asid - 1]; the status is the callee's. */
@@ -300,7 +298,7 @@ static void test_get_global(void)
     for (int i = 0; i < 5; i++) {
         MMAP_$WSL[i].page_count = 0x100 + i;
     }
-    PMAP_$WS_INTERVAL = 9;
+    PMAP_$DATA.ws_interval = 9;
     call(MMAP_FLAG_GET_GLOBAL);
     ASSERT_EQ(1, info.real_pages);
     ASSERT_EQ(2, info.pageable_lower_limit);
@@ -313,11 +311,11 @@ static void test_get_global(void)
 
 static void test_get_counters(void)
 {
-    PMAP_$PUR_L_CNT = 1;
-    PMAP_$PUR_R_CNT = 2;
+    PMAP_$DATA.pur_l_cnt = 1;
+    PMAP_$DATA.pur_r_cnt = 2;
     ast_page_flt_cnt = 3;
     ast_ws_flt_cnt = 4;
-    PMAP_$T_PUR_SCANS = 5;
+    PMAP_$DATA.t_pur_scans = 5;
     MMAP_$ALLOC_CNT = 6;
     MMAP_$ALLOC_PAGES = 7;
     MMAP_$STEAL_CNT = 8;
@@ -328,7 +326,7 @@ static void test_get_counters(void)
     MMAP_$RECLAIM_SHAR_CNT = 13;
     MMAP_$RECLAIM_PUR_CNT = 14;
     MMAP_$WS_REMOVE = 15;
-    PMAP_$SCAN_FRACT = 16;
+    PMAP_$DATA.scan_fract = 16;
     call(MMAP_FLAG_GET_COUNTERS);
     ASSERT_EQ(1, counters.pur_l_cnt);
     ASSERT_EQ(2, counters.pur_r_cnt);

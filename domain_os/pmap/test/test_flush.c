@@ -43,7 +43,7 @@ static mmape_t mmape_store[0x1000];
 static uint32_t pft_store[0x1000];
 mmape_t *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base = pft_store;
-int8_t PMAP_$SHUTTING_DOWN_FLAG;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 status_$t status_$t_00e13a14 = 0x00050003;
 
 static int locks, unlocks, unavails, removes, writes, updates, batches, waits;
@@ -111,7 +111,7 @@ static void reset(void)
     locks = unlocks = unavails = removes = writes = updates = batches = waits = 0;
     clock_calls = abs_clock_calls = 0;
     write_status = batch_status = 0;
-    PMAP_$SHUTTING_DOWN_FLAG = 0;
+    PMAP_$DATA.shutting_down_flag = 0;
 }
 
 /* page index i holds vpn, pageable, seg_offset matching */
@@ -265,7 +265,7 @@ TEST(non_pageable_vpn_skipped_unless_shutting_down)
     ASSERT_EQ(0, unavails);
     reset();
     map(0, 0x100, 0);
-    PMAP_$SHUTTING_DOWN_FLAG = -1;
+    PMAP_$DATA.shutting_down_flag = -1;
     (void)PMAP_$FLUSH(&the_aste, segmap, 0, 1, 0, &st);
     ASSERT_EQ(status_$pmap_pages_wired, st);
 }

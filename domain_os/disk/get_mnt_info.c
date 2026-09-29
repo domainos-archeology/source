@@ -70,14 +70,14 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info_p,
     }
 
     /* 0x00E6BE78 - 0x00E6BE84 */
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
 
     /* 0x00E6BE86 - 0x00E6BEB0 */
     orig = DISK_VOL(vol_idx);
     if (orig->mount_state != DISK_MOUNT_MOUNTED &&
         orig->mount_state != DISK_MOUNT_ASSIGNED) {
         *status = status_$volume_not_properly_mounted;
-        ML_$EXCLUSION_STOP(&MOUNT_LOCK);                        /* 0x00E6C04A */
+        ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);                        /* 0x00E6C04A */
         return;
     }
 
@@ -166,5 +166,5 @@ void DISK_$GET_MNT_INFO(uint16_t *vol_idx_ptr, void *param_2, void *info_p,
     info->_pad_29 = 0;
 
     /* 0x00E6C04A - 0x00E6C050 */
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
 }

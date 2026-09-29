@@ -17,6 +17,7 @@
 #include "time/time.h"
 #include "misc/crash_system.h"
 #include "arch/arch.h"   /* ARCH_VA_TO_PTR / ARCH_PTR_TO_VA */
+#include "pmap/pmap.h"   /* PMAP_$DATA.mount_lock (MOUNT_LOCK) */
 
 /*
  * The per-volume descriptor disk_$volume_t, its biased accessor DISK_VOL()
@@ -161,8 +162,11 @@ void DISK_$REVALID(struct disk_$volume_t *vol);
  * DISK_$DIAG is an accessor into DISK_$DATA; see disk/disk.h.
  */
 
-/* Mount lock - protects mount table operations */
-extern ml_$exclusion_t MOUNT_LOCK;
+/*
+ * Mount lock - protects mount table operations.  The SAU2 map puts
+ * MOUNT_LOCK (0xE254B8) inside the PMAP_ data segment, so it is the field
+ * PMAP_$DATA.mount_lock of that module block (pmap/pmap.h, source-iq58).
+ */
 
 /*
  * Exclusion locks for disk operations.  Both live inside the DISK_ module

@@ -7,6 +7,9 @@
  * Original addresses:
  *   XNS_IDP_$OPEN:  0x00E187AC
  *   XNS_IDP_$CLOSE: 0x00E189C4
+ *
+ * Module data through XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -24,10 +27,9 @@
  */
 void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
 {
-    uint8_t  *base = XNS_IDP_BASE;
     uint16_t  user_socket;              /* D2 */
     uint16_t  channel;
-    uint8_t  *chan;
+    xns_$channel_t *chan;
     sock_$sock_t *sock;                 /* A4 */
     xns_$os_open_opt_t os_opt;          /* A6-0x28 */
     status_$t os_status;                /* A6-0x2C */
@@ -160,14 +162,15 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
     /*
      * 0x00E18966-0x00E18990.  The channel index the OS record now carries is
      * turned into a channel base with WORD arithmetic ("lsl.w #0x3" twice and
-     * an "add.w"), so the multiply is modulo 65536.
+     * an "add.w"), so the multiply is modulo 65536; XNS_IDP_$OS_OPEN hands
+     * back 0..15, for which that is simply A5 + channel * 0x48.
      */
     channel = os_opt.flags_channel;
-    chan = base + (uint16_t)(channel * XNS_CHANNEL_SIZE);
+    chan = &XNS_IDP_$DATA.channels[channel];
 
-    ML_$EXCLUSION_START(XNS_LOCK_PTR());                /* 0x00E1896A */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = user_socket;  /* 0x00E18982 */
-    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E1898A */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);           /* 0x00E1896A */
+    chan->user_socket = user_socket;                    /* 0x00E18982 */
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);            /* 0x00E1898A */
 
     /*
      * 0x00E18992 "move.w (-0x26,A6),(0x8,A2)" - a WORD, into the caller's
@@ -204,31 +207,30 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
  */
 void XNS_IDP_$CLOSE(uint16_t *channel_ptr, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
     uint16_t channel = *channel_ptr;
-    int iVar1;
+    xns_$channel_t *chan;
     status_$t local_status;
 
     *status_ret = status_$ok;
 
-    /* Acquire exclusion lock */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    /* Acquire exclusion lock: pea (0x520,A5) */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);
 
     /* Validate channel number and ownership */
     if (channel >= XNS_MAX_CHANNELS) {
         goto bad_channel;
     }
 
-    iVar1 = channel * XNS_CHANNEL_SIZE;
+    chan = &XNS_IDP_$DATA.channels[channel];
 
     /* Check channel is active */
-    if (*(int16_t *)(base + iVar1 + XNS_CHAN_OFF_STATE) >= 0) {
+    if (chan->state >= 0) {
         goto bad_channel;
     }
 
     /* Check ownership (AS_ID must match) */
     {
-        uint16_t chan_as_id = (*(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) &
+        uint16_t chan_as_id = (chan->flags &
                                XNS_CHAN_FLAG_AS_ID_MASK) >> XNS_CHAN_FLAG_AS_ID_SHIFT;
         if (chan_as_id != PROC1_$AS_ID) {
             goto bad_channel;
@@ -237,15 +239,15 @@ void XNS_IDP_$CLOSE(uint16_t *channel_ptr, status_$t *status_ret)
 
     /* Close user socket if allocated */
     {
-        uint16_t user_socket = *(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_USER_SOCKET);
+        uint16_t user_socket = chan->user_socket;
         if (user_socket != XNS_NO_SOCKET) {
             SOCK_$CLOSE(user_socket);
         }
-        *(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET;
+        chan->user_socket = XNS_NO_SOCKET;
     }
 
     /* Release lock before calling OS_CLOSE */
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);
 
     /* Call OS-level close */
     XNS_IDP_$OS_CLOSE((int16_t *)channel_ptr, &local_status);
@@ -253,6 +255,6 @@ void XNS_IDP_$CLOSE(uint16_t *channel_ptr, status_$t *status_ret)
     return;
 
 bad_channel:
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);
     *status_ret = status_$xns_bad_channel;
 }

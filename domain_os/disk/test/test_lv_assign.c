@@ -41,7 +41,7 @@ uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 #undef DISK_VOLUME_BASE
 #define DISK_VOLUME_BASE (DISK_$DATA)
 uint16_t PROC1_$CURRENT = 9;
-ml_$exclusion_t MOUNT_LOCK;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uid_t PV_LABEL_$UID = { 0x11, 0x22 };
 
 static int starts, stops, cleanups, set_buffs;

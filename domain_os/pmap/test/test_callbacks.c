@@ -38,11 +38,8 @@ static int tests_failed = 0;
 } while (0)
 
 mmap_globals_t MMAP_GLOBALS_STORAGE;
-uint16_t PMAP_$CURRENT_SLOT;
-uint32_t PMAP_$T_PUR_SCANS;
-uint16_t PMAP_$WS_INTERVAL;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint32_t TIME_$CLOCKH;
-ec_$eventcount_t PMAP_$PAGES_EC, PMAP_$L_PURIFIER_EC, PMAP_$R_PURIFIER_EC;
 ec_$eventcount_t AST_$PMAP_IN_TRANS_EC;
 status_$t status_$t_00e145ec = 0x00050010;
 
@@ -78,21 +75,21 @@ static void reset(void)
 {
     memset(&MMAP_GLOBALS_STORAGE, 0, sizeof MMAP_GLOBALS_STORAGE);
     locks = unlocks = purges = scans = advances = waitns = free_wsls = 0;
-    PMAP_$WS_INTERVAL = 5;
+    PMAP_$DATA.ws_interval = 5;
     TIME_$CLOCKH = 0x10000;
-    PMAP_$CURRENT_SLOT = 10;
-    PMAP_$T_PUR_SCANS = 0;
+    PMAP_$DATA.current_slot = 10;
+    PMAP_$DATA.t_pur_scans = 0;
 }
 
 TEST(t_purif_slot_wraps_and_limit)
 {
     reset();
-    PMAP_$CURRENT_SLOT = 0x45;
+    PMAP_$DATA.current_slot = 0x45;
     MMAP_$PAGEABLE_PAGES = 0x4000;
-    PMAP_$T_PUR_SCANS = 3;
+    PMAP_$DATA.t_pur_scans = 3;
     PMAP_$T_PURIF_CALLBACK();
-    ASSERT_EQ(5, PMAP_$CURRENT_SLOT);
-    ASSERT_EQ(4, PMAP_$T_PUR_SCANS);
+    ASSERT_EQ(5, PMAP_$DATA.current_slot);
+    ASSERT_EQ(4, PMAP_$DATA.t_pur_scans);
     ASSERT_EQ(0x4000 - 0x800, MMAP_WSL[5].max_pages);   /* capped at 0x800 */
     ASSERT_EQ(0, locks);                                 /* no pages: done */
     ASSERT_EQ(0, advances);
@@ -101,7 +98,7 @@ TEST(t_purif_slot_wraps_and_limit)
     MMAP_WSL[11].flags = 0x20;                           /* bit 13 of the word */
     MMAP_WSL[11].max_pages = 77;
     PMAP_$T_PURIF_CALLBACK();
-    ASSERT_EQ(11, PMAP_$CURRENT_SLOT);
+    ASSERT_EQ(11, PMAP_$DATA.current_slot);
     ASSERT_EQ(77, MMAP_WSL[11].max_pages);
 }
 
@@ -116,7 +113,7 @@ TEST(t_purif_purges_idle_slot)
     ASSERT_EQ(11, purge_slot);
     ASSERT_EQ(0, scans);
     ASSERT_EQ(1, advances);
-    ASSERT_EQ((unsigned long)&PMAP_$PAGES_EC, (unsigned long)advanced[0]);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.pages_ec, (unsigned long)advanced[0]);
     ASSERT_EQ(1, locks);
     ASSERT_EQ(1, unlocks);
 }
@@ -211,18 +208,18 @@ TEST(ws_scan_callback_bad_pid_crashes)
 TEST(wake_purifier)
 {
     reset();
-    PMAP_$PAGES_EC.value = 40;
+    PMAP_$DATA.pages_ec.value = 40;
     PMAP_$WAKE_PURIFIER(0);
     ASSERT_EQ(1, advances);
-    ASSERT_EQ((unsigned long)&PMAP_$L_PURIFIER_EC, (unsigned long)advanced[0]);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.l_purifier_ec, (unsigned long)advanced[0]);
     ASSERT_EQ(0, waitns);
     reset();
     MMAP_WSL[4].page_count = 1;
     PMAP_$WAKE_PURIFIER(-1);
     ASSERT_EQ(2, advances);
-    ASSERT_EQ((unsigned long)&PMAP_$R_PURIFIER_EC, (unsigned long)advanced[1]);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.r_purifier_ec, (unsigned long)advanced[1]);
     ASSERT_EQ(1, waitns);
-    ASSERT_EQ((unsigned long)&PMAP_$PAGES_EC, (unsigned long)waitn_ec);
+    ASSERT_EQ((unsigned long)&PMAP_$DATA.pages_ec, (unsigned long)waitn_ec);
     ASSERT_EQ(41, waitn_val);
     ASSERT_EQ(-1, lock_depth_at_wait);                    /* unlocked while waiting */
     ASSERT_EQ(1, locks);

@@ -8,6 +8,8 @@
  * to allow one buffer to be sent while the other accumulates entries.
  *
  * Original address: 0x00E71B38
+ *
+ * Module data through NETLOG_$DATA: Claude Opus 5.5 (source-iq58).
  */
 
 #include "netlog/netlog_internal.h"
@@ -17,7 +19,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
                     uint16_t param5, uint16_t param6,
                     uint16_t param7, uint16_t param8)
 {
-    netlog_data_t *nl = NETLOG_DATA;
+    netlog_$data_t *nl = &NETLOG_$DATA;
     ml_$spin_token_t token;
     clock_t timestamp;
     netlog_entry_t *entry;
@@ -50,12 +52,12 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
     TIME_$CLOCK(&timestamp);
 
     /*
-     * 0xE71B90..0xE71BA6: the counter array is Pascal 1-based
+     * 0xE71B90..0xE71BA6: the counter array is Pascal [1..2]
      * (`(0x6e,A0)` with A0 = A5 + current_buf_index*2), and the index used
      * below is the value AFTER the increment.
      */
-    nl->page_counts[nl->current_buf_index - 1]++;
-    entry_index = nl->page_counts[nl->current_buf_index - 1];
+    nl->page_counts[nl->current_buf_index]++;
+    entry_index = nl->page_counts[nl->current_buf_index];
 
     /*
      * 0xE71BB6..0xE71BCA computes A0 = current_buf_ptr + entry_index*26
@@ -83,7 +85,9 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
      *   -0x02 (entry_base + 24): param8
      */
     entry->kind = (uint8_t)kind;
-    entry->process_id = NETLOG_GET_CURRENT_PID();
+    /* 0x00E71BD2: move.b (0x00e20609).l - the low-order byte of the word
+     * PROC1_$CURRENT (0xE20608) */
+    entry->process_id = (uint8_t)PROC1_$CURRENT;
     /*
      * 0xE71BDA: move.l (-0xe,A6),(-0x18,A0).  TIME_$CLOCK filled the 6-byte
      * clock at (-0x10,A6), so this longword is bytes 2..5 of it - the LOW
@@ -104,7 +108,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
      * Check if buffer is full (39 entries)
      */
     /* 0xE71C14: cmpi.w #0x27,(0x6e,A1) */
-    if (nl->page_counts[nl->current_buf_index - 1] == NETLOG_ENTRIES_PER_PAGE) {
+    if (nl->page_counts[nl->current_buf_index] == NETLOG_ENTRIES_PER_PAGE) {
         /*
          * Buffer is full - prepare to send it
          * Save the index of the full buffer and increment done count
@@ -120,7 +124,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
         /*
          * Clear entry count for new buffer
          */
-        nl->page_counts[nl->current_buf_index - 1] = 0;   /* 0xE71C38 */
+        nl->page_counts[nl->current_buf_index] = 0;   /* 0xE71C38 */
 
         /*
          * Set flag to advance event count after releasing lock
@@ -129,7 +133,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
 
         /*
          * Update current buffer pointer
-         * buffer_va array is indexed [0,1,2] but we use indices 1 and 2
+         * 0xE71C46: move.l (0x54,A5,D0*1),(0x74,A5), D0 = index*4
          */
         nl->current_buf_ptr = nl->buffer_va[nl->current_buf_index];
     }

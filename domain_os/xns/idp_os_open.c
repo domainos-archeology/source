@@ -7,6 +7,8 @@
  * Original addresses:
  *   XNS_IDP_$OS_OPEN:  0x00E17F02
  *   XNS_IDP_$OS_CLOSE: 0x00E181D8
+ *
+ * Module data through XNS_IDP_$DATA: Claude Opus 5.5 (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -28,7 +30,6 @@
  */
 void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
 {
-    uint8_t  *base = XNS_IDP_BASE;
     uint8_t   flags;                    /* the byte at options +0x03 */
     /*
      * D2, the channel index.
@@ -42,7 +43,7 @@ void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
      * in the image constrains the value.
      */
     uint16_t  channel;
-    uint8_t  *chan;                     /* A0 / A4: base + channel * 0x48 */
+    xns_$channel_t *chan;               /* A0 / A4: A5 + channel * 0x48 */
     boolean   use_local_source;         /* D3 from 0x00E17FFC on */
     int16_t   port;                     /* D3 in the bind arm, D4 later */
     int       i;
@@ -58,7 +59,7 @@ void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
     *status_ret = status_$ok;                           /* 0x00E17F18 */
 
     /* 0x00E17F1A "cmpi.w #0x10,(0x534,A5)" / `bcs' - an UNSIGNED compare. */
-    if (XNS_OPEN_COUNT() >= XNS_MAX_CHANNELS) {
+    if (XNS_IDP_$DATA.open_channels >= XNS_MAX_CHANNELS) {
         *status_ret = status_$xns_idp_socket_table_full;
         /* 0x00E17F28 "bra.w 0x00E181CE" - straight to the epilogue, because
          * the exclusion lock has not been taken yet. */
@@ -80,23 +81,26 @@ void XNS_IDP_$OS_OPEN(xns_$os_open_opt_t *options, status_$t *status_ret)
         }
     }
 
-    ML_$EXCLUSION_START(XNS_LOCK_PTR());                /* 0x00E17F4E */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);           /* 0x00E17F4E */
 
     /*
      * 0x00E17F56-0x00E17F76: find the first slot whose state word is not
      * negative.  The bound check sits INSIDE the loop body, after the state
-     * test, so a table that is full to the brim reads one word past the last
-     * channel (base + 0x564) before deciding.
+     * test, so a table that is full to the brim reads the state word of a
+     * seventeenth channel - A5 + 0x564, past the end of the 0x53C-byte block,
+     * in the image the XNS_IDP_ASM code that follows it - before deciding.
+     * QUIRK, reproduced as found: in C that read is channels[16].state, one
+     * element past the array (and past XNS_IDP_$DATA).
      */
     channel = 0;                                        /* 0x00E17F56 */
-    chan = base;                                        /* 0x00E17F58 */
-    while (*(int16_t *)(chan + XNS_CHAN_OFF_STATE) < 0) {   /* 0x00E17F72 */
+    chan = &XNS_IDP_$DATA.channels[0];                  /* 0x00E17F58 */
+    while (chan->state < 0) {                           /* 0x00E17F72 */
         if (channel >= XNS_MAX_CHANNELS) {              /* 0x00E17F5C `bcs' */
             *status_ret = status_$xns_channel_table_full;
             goto cleanup_error;                         /* 0x00E17F68 */
         }
         channel += 1;                                   /* 0x00E17F6C */
-        chan += XNS_CHANNEL_SIZE;                       /* 0x00E17F6E */
+        chan += 1;                                      /* 0x00E17F6E lea (0x48,A0) */
     }
 
     /* 0x00E17F7A "btst.b #0x1,(0x3,A1)" - the flags are the LOW byte of the
@@ -196,8 +200,8 @@ after_bind:
          * argument is a local broadcast-flag byte MAC_OS_$ARP writes; it is
          * never NULL.
          */
-        chan = base + channel * XNS_CHANNEL_SIZE;       /* 0x00E18092 A4 */
-        MAC_OS_$ARP(nexthop, port, (uint16_t *)(chan + XNS_CHAN_OFF_MAC_INFO),
+        chan = &XNS_IDP_$DATA.channels[channel];        /* 0x00E18092 A4 */
+        MAC_OS_$ARP(nexthop, port, (uint16_t *)chan->mac_info,
                     (uint8_t *)&arp_is_broadcast, status_ret);
         if (*status_ret != status_$ok) {                /* 0x00E180A8 */
             goto cleanup_error;
@@ -211,10 +215,10 @@ after_bind:
         /* 0x00E180C4-0x00E180D2: twelve bytes of destination address, then
          * the port the connection goes out of. */
         for (i = 0; i < 12; i++) {
-            (chan + XNS_CHAN_OFF_DEST_NETWORK)[i] =
+            ((uint8_t *)&chan->dest_network)[i] =
                 ((const uint8_t *)&options->dest_network)[i];
         }
-        *(int16_t *)(chan + XNS_CHAN_OFF_CONN_PORT) = port;
+        chan->connected_port = port;
 
         if (use_local_source < 0) {                     /* 0x00E180D6 */
             /*
@@ -224,19 +228,17 @@ after_bind:
              * is xns_$port_state_t.net_addr_ptr of that port, NOT
              * ROUTE_$PORTP[port]->network.
              */
-            uint32_t net_va = *(uint32_t *)(base +
-                (uint32_t)(int32_t)port * XNS_PORT_STATE_SIZE +
-                XNS_PORT_OFF_INFO);
+            uint32_t net_va = XNS_IDP_$DATA.ports[port].net_addr_ptr;
             const uint32_t *net_ptr = (const uint32_t *)ARCH_VA_TO_PTR(net_va);
 
-            *(uint32_t *)(chan + XNS_CHAN_OFF_SRC_NETWORK) = *net_ptr;
+            chan->src_network = *net_ptr;
 
             /*
              * 0x00E180F2-0x00E18108: three words from the state's first
              * registered address (A5+0x20) into the channel's source host.
              */
-            for (i = 0; i < XNS_ADDR_SIZE; i++) {
-                (chan + XNS_CHAN_OFF_SRC_HOST)[i] = (base + XNS_OFF_ADDRS)[i];
+            for (i = 0; i < 6; i++) {
+                chan->src_host[i] = ((const uint8_t *)XNS_IDP_$DATA.addrs[0])[i];
             }
 
             /*
@@ -245,12 +247,11 @@ after_bind:
              * 0x00E1816A, so this copies the value LEFT OVER from whoever
              * used the slot last, not the socket about to be assigned.
              */
-            *(uint16_t *)(chan + XNS_CHAN_OFF_SRC_PORT) =
-                *(uint16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET);
+            chan->src_port = (uint16_t)chan->xns_socket;
         } else {
             /* 0x00E18112-0x00E18120: twelve bytes of caller-supplied source. */
             for (i = 0; i < 12; i++) {
-                (chan + XNS_CHAN_OFF_SRC_NETWORK)[i] =
+                ((uint8_t *)&chan->src_network)[i] =
                     ((const uint8_t *)&options->src_network)[i];
             }
         }
@@ -263,31 +264,32 @@ after_bind:
          * then advances past every socket that is in use so the next caller
          * gets a free one.
          */
-        options->socket = (int16_t)XNS_NEXT_SOCKET();   /* 0x00E18128 */
+        options->socket = (int16_t)XNS_IDP_$DATA.next_socket;   /* 0x00E18128 */
         do {
-            XNS_NEXT_SOCKET() += 1;                     /* 0x00E1812C */
+            XNS_IDP_$DATA.next_socket += 1;                     /* 0x00E1812C */
             /* 0x00E18130 "cmpi.w #-0x2,(0x536,A5)" / `bls' - an UNSIGNED
              * compare against 0xFFFE, so the wrap happens only at 0xFFFF. */
-            if (XNS_NEXT_SOCKET() > 0xFFFE) {
-                XNS_NEXT_SOCKET() = XNS_FIRST_DYNAMIC_PORT;   /* 0x00E18138 */
+            if (XNS_IDP_$DATA.next_socket > 0xFFFE) {
+                XNS_IDP_$DATA.next_socket = XNS_FIRST_DYNAMIC_PORT;   /* 0x00E18138 */
             }
-        } while (xns_$find_socket((int16_t)XNS_NEXT_SOCKET()) < 0); /* 0x00E1814C */
+        } while (xns_$find_socket((int16_t)XNS_IDP_$DATA.next_socket) < 0); /* 0x00E1814C */
     }
 
-    XNS_OPEN_COUNT() += 1;                              /* 0x00E1814E */
+    XNS_IDP_$DATA.open_channels += 1;                   /* 0x00E1814E */
 
-    chan = base + channel * XNS_CHANNEL_SIZE;           /* 0x00E1815E */
+    chan = &XNS_IDP_$DATA.channels[channel];            /* 0x00E1815E */
 
     /* 0x00E18162 "bset.b #0x7,(0xe4,A0)" - a byte operation on the HIGH half
      * of the state word, i.e. bit 15.  Written as a word mask so the host
      * build touches the same bit. */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) |= 0x8000u;
+    chan->state |= (int16_t)0x8000;
 
-    *(int16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET) = options->socket; /* 0x00E1816A */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET; /* 0x00E1816E */
+    chan->xns_socket = options->socket;                 /* 0x00E1816A */
+    chan->user_socket = XNS_NO_SOCKET;                  /* 0x00E1816E */
 
-    /* 0x00E18174 "move.l (0x4,A1),(0xa0,A0)" - one longword. */
-    *(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX) = options->demux;
+    /* 0x00E18174 "move.l (0x4,A1),(0xa0,A0)" - one longword, the code
+     * address the option record carries. */
+    chan->demux = (code_ptr_t)(uintptr_t)options->demux;
 
     /*
      * 0x00E1817A-0x00E1819A.  The first three operations are BYTE operations
@@ -295,7 +297,7 @@ after_bind:
      * bit n+11; the AS_ID then goes into bits 5..10 with word operations.
      */
     {
-        uint16_t *chan_flags = (uint16_t *)(chan + XNS_CHAN_OFF_FLAGS);
+        uint16_t *chan_flags = &chan->flags;
         uint8_t   as_id = (uint8_t)PROC1_$AS_ID;        /* 0x00E1818C */
 
         *chan_flags &= 0x07FF;                          /* 0x00E1817A andi.b #7 */
@@ -311,16 +313,16 @@ after_bind:
     /* 0x00E181A4 "move.w D2w,(0x2,A0)" - the whole word, flags included. */
     options->flags_channel = channel;
 
-    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E181C8 */
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);            /* 0x00E181C8 */
     return;
 
 cleanup_error:
     /* 0x00E181AA-0x00E181C0 */
-    chan = base + channel * XNS_CHANNEL_SIZE;
+    chan = &XNS_IDP_$DATA.channels[channel];
     /* 0x00E181BA "bclr.b #0x7,(0xe4,A0)" - again bit 15 of the state word. */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) &= (uint16_t)~0x8000u;
-    *(uint32_t *)(chan + XNS_CHAN_OFF_DEMUX) = 0;
-    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());                 /* 0x00E181C8 */
+    chan->state &= (int16_t)~0x8000;
+    chan->demux = NULL;                                 /* clr.l (0xa0,A0) */
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);            /* 0x00E181C8 */
 }
 
 /*
@@ -339,35 +341,34 @@ cleanup_error:
  */
 void XNS_IDP_$OS_CLOSE(int16_t *channel_ptr, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
     int16_t channel = *channel_ptr;
-    int iVar1;
+    xns_$channel_t *chan;
     int16_t port;
 
     *status_ret = status_$ok;
 
-    /* Acquire exclusion lock */
-    ML_$EXCLUSION_START((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    /* Acquire exclusion lock: pea (0x520,A5) */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);
 
-    /* Decrement open channel count */
-    XNS_OPEN_COUNT() -= 1;
+    /* Decrement open channel count: (0x534,A5) */
+    XNS_IDP_$DATA.open_channels -= 1;
 
-    /* Calculate channel offset */
-    iVar1 = channel * XNS_CHANNEL_SIZE;
+    chan = &XNS_IDP_$DATA.channels[channel];
 
     /* Delete all active port bindings */
     for (port = 0; port < XNS_MAX_PORTS; port++) {
-        if (*(int8_t *)(base + iVar1 + XNS_CHAN_OFF_PORT_ACTIVE + port) < 0) {
+        if ((int8_t)chan->port_active[port] < 0) {
             xns_$delete_port(channel, port, status_ret);
         }
     }
 
-    /* Clear channel state */
-    *(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_STATE) &= 0x7F;         /* Clear active flag */
-    *(uint8_t *)(base + iVar1 + XNS_CHAN_OFF_FLAGS) &= 0x07;         /* Clear flags */
-    *(uint16_t *)(base + iVar1 + XNS_CHAN_OFF_XNS_SOCKET) = 0;       /* Clear socket */
-    *(uint32_t *)(base + iVar1 + XNS_CHAN_OFF_DEMUX) = 0;            /* Clear callback */
+    /* Clear channel state.  The byte operations act on the HIGH byte of the
+     * state and flags words (bit 15; bits 11..15). */
+    chan->state &= (int16_t)~0x8000;     /* Clear active flag */
+    chan->flags &= 0x07FF;               /* Clear flags */
+    chan->xns_socket = 0;                /* Clear socket */
+    chan->demux = NULL;                  /* Clear callback */
 
     /* Release exclusion lock */
-    ML_$EXCLUSION_STOP((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);
 }

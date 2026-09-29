@@ -1,17 +1,20 @@
 /*
  * NETLOG Data - Global Variables
  *
- * This file defines the global variables for the NETLOG subsystem.
- * On m68k, these are mapped to specific memory addresses.
+ * Module data block NETLOG_$DATA and the NETLOG_EC image contents:
+ * Claude Opus 5.5 (source-iq58).
  *
- * Original addresses:
- *   NETLOG_$OK_TO_LOG:        0xE248E0
- *   NETLOG_$OK_TO_LOG_SERVER: 0xE248E2
- *   NETLOG_$KINDS:            0xE248E4
- *   NETLOG_$EC:               0xE248E8
- *   NETLOG_$NODE:             0xE248F4
- *   NETLOG_$SOCK:             0xE248F8
- *   Internal data block:      0xE85684
+ * The NETLOG module's data (docs/design-per-process-data.md):
+ *
+ *   0x00E248E0  NETLOG_ASM segment, map "D E248E0 NETLOG_ASM size = 1C":
+ *               the six exported cells below, each addressed absolutely by
+ *               its own name (e.g. "move.l (A0),(0x00e248f4).l" at
+ *               0x00E71A38).  No routine bases A5 on the segment, so the
+ *               cells stay individual objects (their link order: bead
+ *               source-91vs).
+ *   0x00E85684  NETLOG_$DATA, map "D E85684 NETLOG size = 84": the A5 block
+ *               of NETLOG_$CNTL / LOG_IT / SEND_PAGE (netlog_internal.h),
+ *               a MODULE_DATA block linked in the map's order.
  */
 
 #include "netlog/netlog_internal.h"
@@ -21,12 +24,14 @@
  *
  * NETLOG_$OK_TO_LOG: Set to -1 (0xFF) when general logging is enabled
  * NETLOG_$OK_TO_LOG_SERVER: Set to -1 when server logging is enabled
+ *
+ * Original addresses 0xE248E0 / 0xE248E2; zero in the image.
  */
 int8_t NETLOG_$OK_TO_LOG = 0;
 int8_t NETLOG_$OK_TO_LOG_SERVER = 0;
 
 /*
- * Bitmask of enabled log kinds
+ * Bitmask of enabled log kinds (0xE248E4, zero in the image)
  *
  * Each bit (0-31) corresponds to a log category. When a bit is set,
  * events of that kind will be logged.
@@ -36,15 +41,21 @@ int8_t NETLOG_$OK_TO_LOG_SERVER = 0;
 uint32_t NETLOG_$KINDS = 0;
 
 /*
- * Event count for page-ready notifications
+ * NETLOG_$EC - page-ready eventcount (0xE248E8, 0x0C bytes).
  *
- * Advanced when a buffer page fills up and is ready to send.
- * The network send process waits on this event count.
+ * Advanced when a buffer page fills up and is ready to send.  The image
+ * value is the EC_$INIT'd state (`gsk read 0xE248E8 12`:
+ * 00 00 00 00 00 e2 48 e8 00 e2 48 e8): value 0 and an empty circular
+ * waiter list whose head and tail both point back at the eventcount.
  */
-ec_$eventcount_t NETLOG_$EC = { 0, NULL, NULL };
+ec_$eventcount_t NETLOG_$EC = {
+    .value = 0,
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&NETLOG_$EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&NETLOG_$EC,
+};
 
 /*
- * Target logging server
+ * Target logging server (0xE248F4 / 0xE248F8, zero in the image)
  *
  * NETLOG_$NODE: Network node ID of the logging server
  * NETLOG_$SOCK: Socket number on the logging server
@@ -53,18 +64,29 @@ uint32_t NETLOG_$NODE = 0;
 uint16_t NETLOG_$SOCK = 0;
 
 /*
- * Internal data structure (for non-m68k platforms)
+ * ============================================================================
+ * NETLOG_$DATA - the NETLOG module block, 0x00E85684..0x00E85707
+ * ============================================================================
  *
- * On m68k, this is at a fixed address (0xE85684) and accessed
- * via the NETLOG_DATA macro. On other platforms, we allocate it here.
+ * Layout, biases and asserts in netlog/netlog_internal.h.  The map places
+ * it after the AUDIT_$*_EU entries (AUDIT_$DATA_END = 0xE85684) and before
+ * DXM_WIRED_ (0xE85708).  Image contents (`gsk read 0xE85684 0x84`): the
+ * first 0x10 bytes of the packet info template,
+ *
+ *   00 04 00 02 00 02 80 31  00 01 00 00 ff ff 00 00
+ *
+ * i.e. flags 0x0004, routing_type 2 (internet), addr_type 2, protocol
+ * 0x8031, retry_limit 1, field_0a 0, field_0c 0xFFFF; every other byte of the
+ * block is zero.
  */
-#if !defined(ARCH_M68K)
-netlog_data_t netlog_data = { 0 };
-#endif
-
-/*
- * Local node ID (for non-m68k platforms)
- */
-#if !defined(ARCH_M68K)
-/* NODE_$ME (0xE245A4) is defined in uid/uid_data.c */
-#endif
+MODULE_DATA_DEFINE_INIT(netlog_$data_t, NETLOG_$DATA, 0x00E85684, {
+    .pkt_info = {
+        .flags        = 0x0004,
+        .routing_type = 2,
+        .addr_type    = 2,
+        .protocol     = 0x8031,
+        .retry_limit  = 1,
+        .field_0a     = 0,
+        .field_0c     = 0xFFFF,
+    },
+});

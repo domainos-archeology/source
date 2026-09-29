@@ -44,15 +44,15 @@ void PMAP_$T_PURIF_CALLBACK(void)
     uint32_t limit;
 
     /* 0x00E143DA - 0x00E143EE */
-    if (PMAP_$CURRENT_SLOT == PMAP_TP_SLOT_LAST) {
-        PMAP_$CURRENT_SLOT = PMAP_TP_SLOT_FIRST;
+    if (PMAP_$DATA.current_slot == PMAP_TP_SLOT_LAST) {
+        PMAP_$DATA.current_slot = PMAP_TP_SLOT_FIRST;
     } else {
-        PMAP_$CURRENT_SLOT++;
+        PMAP_$DATA.current_slot++;
     }
-    PMAP_$T_PUR_SCANS++;
+    PMAP_$DATA.t_pur_scans++;
 
     /* 0x00E143F2 - 0x00E1440A: 0xE232B0 + slot * 0x24 */
-    ws = &MMAP_WSL[PMAP_$CURRENT_SLOT];
+    ws = &MMAP_WSL[PMAP_$DATA.current_slot];
     now = TIME_$CLOCKH;
 
     /* 0x00E1440E - 0x00E14434 */
@@ -77,13 +77,13 @@ void PMAP_$T_PURIF_CALLBACK(void)
     ML_$LOCK(PMAP_LOCK_ID);
     /* 0x00E1445E - 0x00E14478 */
     if (ws->ws_timestamp == 0 && (int32_t)ws->pri_timestamp < cutoff) {
-        MMAP_$PURGE(PMAP_$CURRENT_SLOT);
+        MMAP_$PURGE(PMAP_$DATA.current_slot);
     } else {
         int16_t mode;
         /* 0x00E1447A - 0x00E144A6 */
         ws->scan_pos = ws->page_count;
         if ((ws->flags & WS_HDR_FLAG_BIT6) != 0 ||
-            ws->owner > PMAP_$WS_INTERVAL ||
+            ws->owner > PMAP_$DATA.ws_interval ||
             ((int32_t)ws->pri_timestamp > (int32_t)ws->ws_timestamp &&
              (int32_t)(now - PMAP_TP_RECENT_CUTOFF) > (int32_t)ws->pri_timestamp)) {
             /* 0x00E144A8 - 0x00E144BA */
@@ -94,9 +94,9 @@ void PMAP_$T_PURIF_CALLBACK(void)
             /* 0x00E144BC - 0x00E144C4 */
             mode = PMAP_TP_MODE_PARTIAL;
         }
-        MMAP_$WS_SCAN(PMAP_$CURRENT_SLOT, mode, PMAP_TP_SCAN_ALL, PMAP_TP_SCAN_ALL);
+        MMAP_$WS_SCAN(PMAP_$DATA.current_slot, mode, PMAP_TP_SCAN_ALL, PMAP_TP_SCAN_ALL);
     }
     /* 0x00E144D4 - 0x00E144E6 */
     ML_$UNLOCK(PMAP_LOCK_ID);
-    EC_$ADVANCE(&PMAP_$PAGES_EC);
+    EC_$ADVANCE(&PMAP_$DATA.pages_ec);
 }

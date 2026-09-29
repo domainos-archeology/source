@@ -55,8 +55,7 @@ static int current_failed;
  * Globals
  * ============================================================================ */
 
-static uint8_t idp_arena[0x2000];
-uint8_t *XNS_IDP_BASE = idp_arena;
+MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 uint16_t PROC1_$AS_ID;
 
@@ -161,14 +160,14 @@ static uint32_t iov1_va, iov2_va;
 static uint32_t buf0_va, buf1_va, buf2_va;
 static uint32_t hdr_va, data_va;
 
-static uint8_t *chan;
+static xns_$channel_t *chan;
 
 static void setup(void)
 {
     uint8_t *p;
     int i;
 
-    memset(idp_arena, 0, sizeof(idp_arena));
+    memset(&XNS_IDP_$DATA, 0, sizeof(XNS_IDP_$DATA));
     memset(target_arena, 0, sizeof(target_arena));
     memset(&recv_rec, 0, sizeof(recv_rec));
     memset(&sock_get_rec, 0, sizeof(sock_get_rec));
@@ -185,11 +184,11 @@ static void setup(void)
 
     ARCH_HOST_VA_BASE = (uintptr_t)target_arena - (uintptr_t)TARGET_VA_BASE;
 
-    chan = idp_arena + TEST_CHANNEL * XNS_CHANNEL_SIZE;
-    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) = 0x8000;          /* active */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) =
+    chan = &XNS_IDP_$DATA.channels[TEST_CHANNEL];
+    chan->state = (int16_t)0x8000;          /* active */
+    chan->flags =
         (uint16_t)(3 << XNS_CHAN_FLAG_AS_ID_SHIFT);             /* our AS_ID */
-    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = TEST_USER_SOCKET;
+    chan->user_socket = TEST_USER_SOCKET;
 
     iov1_va = TARGET_VA_BASE + 0x0100;
     iov2_va = TARGET_VA_BASE + 0x0200;
@@ -375,7 +374,7 @@ static void test_header_addresses_are_returned(void)
 {
     const uint8_t *hdr = (const uint8_t *)va_ptr(hdr_va);
 
-    *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) |= XNS_CHAN_FLAG_BUILD_HEADER;
+    chan->flags |= XNS_CHAN_FLAG_BUILD_HEADER;
 
     call_receive();
 
@@ -401,12 +400,12 @@ static void test_bad_channel(void)
     ASSERT_EQ(status_$xns_bad_channel, st, "index out of range");
 
     setup();
-    *(uint16_t *)(chan + XNS_CHAN_OFF_STATE) = 0;
+    chan->state = 0;
     call_receive();
     ASSERT_EQ(status_$xns_bad_channel, st, "channel not active");
 
     setup();
-    *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) =
+    chan->flags =
         (uint16_t)(4 << XNS_CHAN_FLAG_AS_ID_SHIFT);
     call_receive();
     ASSERT_EQ(status_$xns_bad_channel, st, "another AS_ID owns it");
@@ -418,7 +417,7 @@ static void test_bad_channel(void)
  */
 static void test_os_channel_skips_the_as_id_check(void)
 {
-    *(uint16_t *)(chan + XNS_CHAN_OFF_FLAGS) =
+    chan->flags =
         (uint16_t)(0x8000u | (4 << XNS_CHAN_FLAG_AS_ID_SHIFT));
 
     call_receive();
@@ -428,7 +427,7 @@ static void test_os_channel_skips_the_as_id_check(void)
 
 static void test_no_user_socket(void)
 {
-    *(uint16_t *)(chan + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET;
+    chan->user_socket = XNS_NO_SOCKET;
     call_receive();
     ASSERT_EQ(status_$xns_no_socket, st, "status");
     ASSERT_EQ(0, sock_get_calls, "SOCK_$GET never ran");

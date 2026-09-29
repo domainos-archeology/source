@@ -70,8 +70,7 @@ static int current_failed;
  * Globals the demux path touches
  * ============================================================================ */
 
-static xns_$idp_state_t idp_state;
-uint8_t *XNS_IDP_BASE = (uint8_t *)&idp_state;
+MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 static route_$port_t    port0;
 route_$port_t          *ROUTE_$PORTP[8];
@@ -205,7 +204,7 @@ static void va_base_setup(void)
 {
     uintptr_t lo = (uintptr_t)&header;
 
-    if ((uintptr_t)&idp_state < lo) lo = (uintptr_t)&idp_state;
+    if ((uintptr_t)&XNS_IDP_$DATA < lo) lo = (uintptr_t)&XNS_IDP_$DATA;
     if ((uintptr_t)&pkt < lo)       lo = (uintptr_t)&pkt;
     if ((uintptr_t)&port0 < lo)     lo = (uintptr_t)&port0;
     ARCH_HOST_VA_BASE = lo - 0x10000u;
@@ -216,7 +215,7 @@ static void setup(void)
     int i;
 
     va_base_setup();
-    memset(&idp_state, 0, sizeof(idp_state));
+    memset(&XNS_IDP_$DATA, 0, sizeof(XNS_IDP_$DATA));
     memset(&pkt, 0, sizeof(pkt));
     memset(&header, 0, sizeof(header));
     memset(&port0, 0, sizeof(port0));
@@ -263,15 +262,13 @@ static void setup(void)
     /*
      * One channel bound to the destination socket with a demux vector.
      *
-     * The channel table is addressed through XNS_CHANNEL_PTR(), which walks
-     * the state block with the m68k stride (0x48).  The host's
-     * xns_$channel_t is wider than that, so the fixture must go through the
-     * same accessor the code under test uses rather than through the
-     * xns_$idp_state_t.channels[] array.
+     * The channel table is XNS_IDP_$DATA.channels[], the same typed array
+     * the code under test indexes (0x48 stride on the target, wider on a
+     * host whose demux pointer is eight bytes).
      */
-    XNS_CHANNEL_PTR(3)->xns_socket = 0x0050;
-    XNS_CHANNEL_PTR(3)->demux = (code_ptr_t)test_demux_vector;
-    XNS_CHANNEL_PTR(3)->user_socket = 0x0060;
+    XNS_IDP_$DATA.channels[3].xns_socket = 0x0050;
+    XNS_IDP_$DATA.channels[3].demux = (code_ptr_t)test_demux_vector;
+    XNS_IDP_$DATA.channels[3].user_socket = 0x0060;
 
     the_port = 0;
     mac_bcast = false;
@@ -291,7 +288,7 @@ static void run(void)
 static void test_packet_counted(void)
 {
     run();
-    ASSERT_EQ(1, idp_state.packets_received);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_received);
 }
 
 /* A broadcast SOURCE host is dropped once with status_$xns_no_client_for_packet. */
@@ -302,7 +299,7 @@ static void test_broadcast_source_dropped(void)
         header.src_host[i] = 0xFF;
     }
     run();
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, chksum_calls);
     ASSERT_EQ(0, demux_calls);
@@ -331,7 +328,7 @@ static void test_bad_checksum_at_destination(void)
     ASSERT_EQ(1, err_send_calls);
     ASSERT_EQ(0x0001, err_send_code);
     ASSERT_EQ(0x0000, err_send_param);
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_bad_checksum, st);
     ASSERT_EQ(0, demux_calls);
 }
@@ -396,7 +393,7 @@ static void test_local_delivery_record(void)
     ASSERT_EQ((int8_t)-1, demux_rec_copy.from_net);
     ASSERT_EQ(0x778899AA, demux_rec_copy.mac_src_hi);
     ASSERT_EQ(0xBBCC, demux_rec_copy.mac_src_lo);
-    ASSERT_PTR(XNS_CHANNEL_PTR(3), ARCH_VA_TO_PTR(demux_rec_copy.channel));
+    ASSERT_PTR(&XNS_IDP_$DATA.channels[3], ARCH_VA_TO_PTR(demux_rec_copy.channel));
     ASSERT_EQ(0x0A0B, demux_rec_copy.port_info);
     ASSERT_EQ(0x5A5B, demux_rec_copy._unknown_34);
     for (i = 0; i < 0x10; i++) {
@@ -407,7 +404,7 @@ static void test_local_delivery_record(void)
     ASSERT_PTR(&port0.socket, demux_port_socket_p);
     ASSERT_PTR(&mac_bcast, demux_bcast_p);
     /* the callback succeeded: no drop, status untouched */
-    ASSERT_EQ(0, idp_state.packets_dropped);
+    ASSERT_EQ(0, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$ok, st);
 }
 
@@ -420,7 +417,7 @@ static void test_callback_failure_preserves_status(void)
     demux_set_status = 0x00AB00CD;
     run();
     ASSERT_EQ(1, demux_calls);
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(0x00AB00CD, st);
 }
 
@@ -429,14 +426,14 @@ static void test_undeliverable_sockets(void)
 {
     header.dest_socket = 0;
     run();
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 
     setup();
     header.dest_socket = 0xFFFF;
     run();
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
@@ -444,9 +441,9 @@ static void test_undeliverable_sockets(void)
 /* No channel bound to the socket: one drop, no_route. */
 static void test_no_channel_bound(void)
 {
-    XNS_CHANNEL_PTR(3)->xns_socket = 0x0051;
+    XNS_IDP_$DATA.channels[3].xns_socket = 0x0051;
     run();
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
@@ -454,9 +451,9 @@ static void test_no_channel_bound(void)
 /* A channel with no demux vector installed is the same as no channel. */
 static void test_channel_without_vector(void)
 {
-    XNS_CHANNEL_PTR(3)->demux = NULL;
+    XNS_IDP_$DATA.channels[3].demux = NULL;
     run();
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, demux_calls);
 }
@@ -469,7 +466,7 @@ static void test_forward_not_routing(void)
     run();
     ASSERT_EQ(1, ROUTE_$STD_MISROUTE);
     ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, sock_put_calls);
 }
@@ -482,7 +479,7 @@ static void test_forward_hop_limit(void)
     run();
     ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
     ASSERT_EQ(0, ROUTE_$STD_MISROUTE);
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_hop_count_exceeded, st);
     ASSERT_EQ(0, sock_put_calls);
 }
@@ -509,7 +506,7 @@ static void test_forward_success(void)
     run();
     ASSERT_EQ(1, sock_put_calls);
     ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(0, idp_state.packets_dropped);
+    ASSERT_EQ(0, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(0x0077, sock_put_sock);
     ASSERT_EQ(0, sock_put_flags);
     ASSERT_EQ(0x1111, sock_put_p4);     /* port_type */
@@ -523,7 +520,7 @@ static void test_forward_failure(void)
     sock_put_result = 0;
     run();
     ASSERT_EQ(1, sock_put_calls);
-    ASSERT_EQ(1, idp_state.packets_dropped);
+    ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_could_not_put_packet_into_socket, st);
 }
 
@@ -633,7 +630,7 @@ static void test_channel_demux_unbound(void)
 
     ASSERT_EQ(0, sock_put_calls);
     ASSERT_EQ(status_$xns_no_client_for_packet, s);
-    ASSERT_EQ(0, idp_state.packets_dropped);
+    ASSERT_EQ(0, XNS_IDP_$DATA.packets_dropped);
 }
 
 int main(void)

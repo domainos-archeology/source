@@ -86,10 +86,9 @@ uint32_t *mmu_pft_base    = pft_store;
 /*
  * The 0xED4F80 segment map (pmap/pmap.h): MMAP_$WS_SCAN reaches it as
  * 0xED5000 + segment*0x80 + seg_offset*4 with a -0x80 displacement, i.e.
- * PMAP_SEGMAP[segment][seg_offset] with a 1-based segment.
+ * PMAP_SEGMAP_ROW(segment)[seg_offset] with a 1-based segment.
  */
-static pmap_segmap_row_t segmap_store[TEST_SEGMENTS + 1];
-pmap_segmap_row_t *pmap_segmap = segmap_store;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 
 /*
  * The 0xEC5400 table and the AOTEs it points at.  MMAP_$SEG_ASTE_FOR(seg)
@@ -147,7 +146,7 @@ static void reset_module(uint8_t flags2)
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
-    memset(segmap_store, 0, sizeof(segmap_store));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
     memset(aote_store, 0, sizeof(aote_store));
 

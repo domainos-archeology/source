@@ -28,21 +28,11 @@ uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
 
 /*
- * MOUNT_LOCK - guards the mount/dismount/LV-assign paths.  Named by the SAU2
- * map, which places it between PMAP_$L_PURIFIER_EC (0xE254AC) and
- * PMAP_$SCAN_FRACT (0xE254CC), so it is 0x14 bytes - one ml_$exclusion_t.
- *
- * Unlike the two locks above it is initialised in the image:
- *
- *   00e254b8  00 00 00 00 00 e2 54 b8  00 e2 54 b8 00 00 00 00
- *   00e254c8  ff ff 00 00
- *
- * i.e. f1 = 0, f2 = f3 = &MOUNT_LOCK (an empty self-linked waiter queue),
- * f4 = 0 and f5 = -1 (unlocked).
- *
- * Original address: 0xE254B8
+ * MOUNT_LOCK (0xE254B8) - guards the mount/dismount/LV-assign paths.  The
+ * SAU2 map places it inside the PMAP_ segment, between PMAP_$L_PURIFIER_EC
+ * (0xE254AC) and PMAP_$SCAN_FRACT (0xE254CC), so it is defined with its
+ * image contents as PMAP_$DATA.mount_lock in pmap/pmap_data.c (source-iq58).
  */
-ml_$exclusion_t MOUNT_LOCK = { 0, &MOUNT_LOCK, &MOUNT_LOCK, 0, -1 };
 
 /*
  * DISK_$DIAG (0xE7ACCA) and DISK_$DO_CHKSUM (0xE7ACCC) are bytes of

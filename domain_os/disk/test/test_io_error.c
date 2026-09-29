@@ -52,7 +52,7 @@ static uint8_t mock_disk_data[0xB00];
 #define DISK_VOLUME_BASE (mock_disk_data)
 
 ml_$exclusion_t ml_$exclusion_t_00e7a274;
-ml_$exclusion_t MOUNT_LOCK;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint32_t TIME_$CURRENT_CLOCKH;
 uint32_t TIME_$CLOCKH;
 

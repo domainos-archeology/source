@@ -7,6 +7,9 @@
  * Both were re-emitted against the disassembly for source-tvrs; every basic
  * block of both functions is accounted for below and the addresses are cited
  * inline.
+ *
+ * Module data through XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -38,7 +41,7 @@
 void XNS_IDP_$OS_SEND(int16_t *channel_ptr, xns_$os_send_rec_t *rec,
                       int16_t *len_sent_ret, status_$t *status_ret)
 {
-    xns_$idp_state_t   *state = XNS_$IDP_STATE;
+    xns_$idp_data_t    *state = &XNS_IDP_$DATA;
     xns_$channel_t     *chan;
     xns_$idp_header_t  *hdr;
     boolean             is_connected;   /* D0b, `sne' at 0x00E182AA */
@@ -256,7 +259,7 @@ release:
 void XNS_IDP_$SEND(uint16_t *channel_ptr, xns_$idp_send_t *send_params,
                    int16_t *len_sent_ret, status_$t *status_ret)
 {
-    xns_$idp_state_t   *state = XNS_$IDP_STATE;
+    xns_$idp_data_t    *state = &XNS_IDP_$DATA;
     xns_$channel_t     *chan;
     xns_$idp_iov_t     *iov;
 

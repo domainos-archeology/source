@@ -10,7 +10,10 @@
  *   XNS_IDP_$OS_DELETE_PORT:    0x00E1876C
  *
  * All four routines use A5 = 0xE2B314 (the IDP module data base,
- * `lea (0xE2B314).l,A5'), reached here through XNS_IDP_BASE.
+ * `lea (0xE2B314).l,A5'), the block XNS_IDP_$DATA (xns/xns.h).
+ *
+ * Module data through XNS_IDP_$DATA / XNS_ERROR_$DATA: Claude Opus 5.5
+ * (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -105,7 +108,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
     status_$t err_status;
 
     *status_ret = status_$ok;               /* 0x00E184C0 clr.l (A0) */
-    XNS_PACKETS_RECV() += 1;                /* 0x00E184C2 addq.l #1,(0x4,A5) */
+    XNS_IDP_$DATA.packets_received += 1;                /* 0x00E184C2 addq.l #1,(0x4,A5) */
 
     /* 0x00E184CC movea.l (0x20,A1),A2 - the field holds a target VA */
     header = (xns_$idp_header_t *)ARCH_VA_TO_PTR(pkt->d.header);
@@ -115,7 +118,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
      * all-ones broadcast id is not deliverable and not answerable.
      */
     if (xns_idp_host_is_all_ones(header->src_host)) {
-        XNS_PACKETS_DROP() += 1;            /* 0x00E184E2 addq.l #1,(0x8,A5) */
+        XNS_IDP_$DATA.packets_dropped += 1;            /* 0x00E184E2 addq.l #1,(0x8,A5) */
         goto no_route;                      /* 0x00E184E6 bra.w 0x00E18684 */
     }
 
@@ -163,7 +166,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
                             XNS_IDP_CONST_REF(xns_idp_c_error_param_none),
                             &err_result, &err_status);
 
-            XNS_PACKETS_DROP() += 1;                    /* 0x00E1856C */
+            XNS_IDP_$DATA.packets_dropped += 1;                    /* 0x00E1856C */
             *status_ret = status_$xns_bad_checksum;     /* 0x00E18572 */
             goto done;                                  /* 0x00E18578 */
         }
@@ -191,7 +194,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          */
         chan_idx = XNS_MAX_CHANNELS;        /* 0x00E185B0 move.w #0x10 */
         for (i = 0; i < XNS_MAX_CHANNELS; i++) {
-            if (XNS_CHANNEL_PTR(i)->xns_socket == (int16_t)header->dest_socket) {
+            if (XNS_IDP_$DATA.channels[i].xns_socket == (int16_t)header->dest_socket) {
                 chan_idx = (uint16_t)i;     /* 0x00E185C8 */
                 break;                      /* 0x00E185CC bra.b */
             }
@@ -202,11 +205,11 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * vector installed.  Same drop epilogue as 0x00E1867E.
          */
         if (chan_idx == XNS_MAX_CHANNELS ||
-            XNS_CHANNEL_PTR(chan_idx)->demux == NULL) {
+            XNS_IDP_$DATA.channels[chan_idx].demux == NULL) {
             goto drop_no_route;             /* 0x00E185F8 */
         }
 
-        chan = XNS_CHANNEL_PTR(chan_idx);   /* 0x00E185EE lea (0,A5,D5),A2 */
+        chan = &XNS_IDP_$DATA.channels[chan_idx];   /* 0x00E185EE lea (0,A5,D5),A2 */
 
         /*
          * 0x00E18608..0x00E1863C: build the callback record.  Same shape as
@@ -243,7 +246,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
         if (*status_ret == status_$ok) {
             goto done;                      /* 0x00E18662 beq.w */
         }
-        XNS_PACKETS_DROP() += 1;            /* 0x00E18666 */
+        XNS_IDP_$DATA.packets_dropped += 1;            /* 0x00E18666 */
         goto done;                          /* 0x00E1866A bra.w */
     } else {
         /*
@@ -262,7 +265,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          */
         if (header->transport_ctl >= 15) {
             ROUTE_$STD_TOO_FAR += 1;               /* 0x00E1869A */
-            XNS_PACKETS_DROP() += 1;                        /* 0x00E186A0 */
+            XNS_IDP_$DATA.packets_dropped += 1;                        /* 0x00E186A0 */
             *status_ret = status_$xns_hop_count_exceeded;   /* 0x00E186A6 */
             goto done;                                      /* 0x00E186AC */
         }
@@ -316,13 +319,13 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
             goto done;                          /* 0x00E1870E bmi.b */
         }
 
-        XNS_PACKETS_DROP() += 1;                        /* 0x00E18710 */
+        XNS_IDP_$DATA.packets_dropped += 1;                        /* 0x00E18710 */
         *status_ret = status_$xns_could_not_put_packet_into_socket;       /* 0x00E18716 */
         goto done;
     }
 
 drop_no_route:
-    XNS_PACKETS_DROP() += 1;                    /* 0x00E1867E addq.l #1,(0x8,A5) */
+    XNS_IDP_$DATA.packets_dropped += 1;                    /* 0x00E1867E addq.l #1,(0x8,A5) */
 no_route:
     *status_ret = status_$xns_no_client_for_packet;         /* 0x00E18684 move.l #0x3B0010 */
 done:
@@ -425,7 +428,7 @@ void XNS_IDP_$DEMUX(xns_$pkt_desc_t *rec, uint16_t *port_type,
         goto done;
     }
 
-    XNS_PACKETS_DROP() += 1;                    /* 0x00E18C4A */
+    XNS_IDP_$DATA.packets_dropped += 1;                    /* 0x00E18C4A */
     *status_ret = status_$xns_could_not_put_packet_into_socket;   /* 0x00E18C4E */
 
 done:
@@ -448,9 +451,9 @@ done:
 void XNS_IDP_$OS_ADD_PORT(uint16_t *channel_ptr, uint16_t *port_ptr,
                           status_$t *status_ret)
 {
-    ML_$EXCLUSION_START(XNS_LOCK_PTR());     /* 0x00E1873C */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);     /* 0x00E1873C */
     xns_$add_port(*channel_ptr, (int16_t)*port_ptr, status_ret);
-    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());      /* 0x00E1875E */
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);      /* 0x00E1875E */
 }
 
 /*
@@ -465,7 +468,7 @@ void XNS_IDP_$OS_ADD_PORT(uint16_t *channel_ptr, uint16_t *port_ptr,
 void XNS_IDP_$OS_DELETE_PORT(uint16_t *channel_ptr, uint16_t *port_ptr,
                              status_$t *status_ret)
 {
-    ML_$EXCLUSION_START(XNS_LOCK_PTR());     /* 0x00E1877C */
+    ML_$EXCLUSION_START(&XNS_IDP_$DATA.lock);     /* 0x00E1877C */
     xns_$delete_port(*channel_ptr, (int16_t)*port_ptr, status_ret);
-    ML_$EXCLUSION_STOP(XNS_LOCK_PTR());      /* 0x00E1879E */
+    ML_$EXCLUSION_STOP(&XNS_IDP_$DATA.lock);      /* 0x00E1879E */
 }

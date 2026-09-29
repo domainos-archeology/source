@@ -15,6 +15,10 @@
  * It is a NESTED PROCEDURE of XNS_IDP_$RECEIVE, so it now sits in
  * xns/idp_receive.c as a static function taking the parent frame
  * explicitly (bead source-pvhv).
+ *
+ * Module data through XNS_IDP_$DATA: Claude Opus 5.5 (source-iq58).
+ * xns_$get_checksum and xns_$is_broadcast_addr re-emitted from the
+ * disassembly: Claude Fable 5.1 (source-tydd).
  */
 
 #include "xns/xns_internal.h"
@@ -33,19 +37,18 @@
  */
 int8_t xns_$find_socket(int16_t socket)
 {
-    uint8_t *base = XNS_IDP_BASE;
     int16_t i;
 
     for (i = 0; i < XNS_MAX_CHANNELS; i++) {
-        uint8_t *chan = base + i * XNS_CHANNEL_SIZE;
+        xns_$channel_t *chan = &XNS_IDP_$DATA.channels[i];
 
         /* Check if channel is active (bit 15 set in state) */
-        if (*(int16_t *)(chan + XNS_CHAN_OFF_STATE) >= 0) {
+        if (chan->state >= 0) {
             continue;  /* Not active */
         }
 
         /* Check if socket matches */
-        if (*(int16_t *)(chan + XNS_CHAN_OFF_XNS_SOCKET) == socket) {
+        if (chan->xns_socket == socket) {
             return -1;  /* Found - socket is in use */
         }
     }
@@ -67,14 +70,14 @@ int8_t xns_$find_socket(int16_t socket)
  */
 void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    int port_offset = port * XNS_PORT_STATE_SIZE;
-    int chan_offset = channel * XNS_CHANNEL_SIZE;
+    /* A3 = A5 + port * 0xC, A0 = A5 + channel * 0x48 */
+    xns_$port_state_t *pstate = &XNS_IDP_$DATA.ports[port];
+    xns_$channel_t *chan = &XNS_IDP_$DATA.channels[channel];
 
     *status_ret = status_$ok;
 
     /* Check if port is already open at the port level */
-    if (*(uint16_t *)(base + port_offset + XNS_PORT_OFF_REFCOUNT) == 0) {
+    if (pstate->refcount == 0) {
         /* Port not yet open - need to open MAC layer */
 
         /* Check if port type supports opening */
@@ -109,21 +112,19 @@ void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret)
             }
 
             /* 0x00E17C76 / 0x00E17C7C: the two results share entry 0 */
-            *(uint16_t *)(base + port_offset + XNS_PORT_OFF_MAC_SOCKET) =
-                mac_open_params.u.result.channel;
-            *(uint32_t *)(base + port_offset + XNS_PORT_OFF_REF) =
-                mac_open_params.u.result.mtu;
+            pstate->mac_socket = mac_open_params.u.result.channel;
+            pstate->mac_handle = mac_open_params.u.result.mtu;
         }
     }
 
     /* Check if already added to this channel */
     if (*status_ret == status_$ok) {
-        uint8_t *port_active = base + chan_offset + XNS_CHAN_OFF_PORT_ACTIVE + port;
-
-        if (*port_active >= 0) {
+        /* 0x00E17C9A "tst.b (0xdc,A0)" / bmi: a Domain boolean, tested
+         * signed (the byte view used to be tested unsigned, always true) */
+        if ((int8_t)chan->port_active[port] >= 0) {
             /* Not yet active for this channel - add it */
-            *port_active = 0xFF;  /* Mark as active */
-            *(uint16_t *)(base + port_offset + XNS_PORT_OFF_REFCOUNT) += 1;
+            chan->port_active[port] = 0xFF;  /* st (0xdc,A0) */
+            pstate->refcount += 1;           /* addq.w #1,(0x4a,A3) */
         }
     }
 }
@@ -142,104 +143,227 @@ void xns_$add_port(uint16_t channel, int16_t port, status_$t *status_ret)
  */
 void xns_$delete_port(uint16_t channel, int16_t port, status_$t *status_ret)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    int port_offset = port * XNS_PORT_STATE_SIZE;
-    int chan_offset = channel * XNS_CHANNEL_SIZE;
+    xns_$port_state_t *pstate = &XNS_IDP_$DATA.ports[port];    /* A3 */
 
     *status_ret = status_$ok;
 
-    /* Clear port active flag for this channel */
-    *(uint8_t *)(base + chan_offset + XNS_CHAN_OFF_PORT_ACTIVE + port) = 0;
+    /* Clear port active flag for this channel: clr.b (0xdc,A0) */
+    XNS_IDP_$DATA.channels[channel].port_active[port] = 0;
 
-    /* Decrement port reference count */
-    uint16_t refcount = *(uint16_t *)(base + port_offset + XNS_PORT_OFF_REFCOUNT);
-    refcount--;
-    *(uint16_t *)(base + port_offset + XNS_PORT_OFF_REFCOUNT) = refcount;
+    /* Decrement port reference count: subq.w #1,(0x4a,A3) / bne */
+    pstate->refcount--;
 
     /* If no more references, close MAC layer */
-    if (refcount == 0) {
-        MAC_OS_$CLOSE((uint16_t *)(base + port_offset + XNS_PORT_OFF_MAC_SOCKET), status_ret);
-        *(uint16_t *)(base + port_offset + XNS_PORT_OFF_MAC_SOCKET) = 0xFFFF;
+    if (pstate->refcount == 0) {
+        MAC_OS_$CLOSE((int16_t *)&pstate->mac_socket, status_ret); /* pea (0x48,A3) */
+        pstate->mac_socket = 0xFFFF;                      /* move.w #-0x1 */
     }
 }
 
 /*
- * xns_$get_checksum - Calculate checksum from packet info
+ * xns_$get_checksum - compute the IDP checksum over a packet descriptor
  *
- * Extracts packet data and computes the IDP checksum.
+ * Re-emitted from the disassembly (source-tydd).  The argument is the
+ * mac_os_$send_pkt_t-shaped record both callers hold: XNS_IDP_$OS_SEND's
+ * send record (0x00E18438) and the receive descriptor XNS_IDP_$OS_DEMUX is
+ * handed (0x00E184F2; mac_os/mac_os.h: "the same Pascal record as
+ * mac_os_$send_pkt_t").  It reads +0x1C/+0x20/+0x24 (the header buffer
+ * chain), +0x38 (the payload byte count) and +0x3C.. (the payload pages).
  *
- * @param packet_info   Packet information structure (with header at +0x20)
+ * Register roles (0x00E17D46-0x00E17E86):
+ *   A2  the record            A3  the IDP header (rec->hdr_desc.address)
+ *   D2  bytes accounted for   D4  the running sum (word)
+ *   A4  the descriptor chain, then A2+4+4*(page-1) for the page test
+ *   D3  page number 1..4      D5  dbf count (four pages)
+ *   D7  bytes left in this page, clamped to 0x400
  *
- * @return Calculated checksum, or -1 on error
+ * Every word count is a signed 32-bit divide by two ("subq/addq, bpl,
+ * addq, asr.l #1" - C's truncating `/ 2') taken as a word, and every
+ * length check is "idp length + 1 < accounted bytes" (cmp.l / blt).
+ *
+ * Two things the image does that a reader would not expect, kept as they
+ * are:
+ *   - 0x00E17E32 pushes rec->data_pages[0] into NETBUF_$GETVA for EVERY
+ *     page, although the page test at 0x00E17E08 walks data_pages[page-1];
+ *     an IDP packet fits in one 0x400-byte page, so no image path reaches
+ *     the second.
+ *   - the "nothing left in this page" exits at 0x00E17E10 and 0x00E17E16
+ *     branch to the epilogue (0x00E17E7E) PAST the "move.w D4w,D0w" at
+ *     0x00E17E7C, so the function result is whatever the last
+ *     XNS_IDP_$CHECKSUM call left in D0 - the last partial sum, not the
+ *     total.  A payload shorter than the four pages (every IDP packet)
+ *     reaches such a page, so a packet with a payload yields its last
+ *     page's partial and the header's sum is dropped; only a payload-less
+ *     packet, or one filling all four pages, returns D4.  Both ends of a
+ *     Domain link run this code, so they agree.  `last' carries D0.
+ *
+ * @param packet_info   mac_os_$send_pkt_t or xns_$mac_rcv_t
+ *
+ * @return the checksum, or -1 when the packet is malformed
  *
  * Original address: 0x00E17D46
  */
 int16_t xns_$get_checksum(void *packet_info)
 {
-    uint8_t *pkt = (uint8_t *)packet_info;
-    int16_t *header = *(int16_t **)(pkt + 0x20);
-    uint16_t length = header[1];  /* Packet length at offset 2 */
-    uint16_t word_count;
+    const mac_os_$send_pkt_t *rec = (const mac_os_$send_pkt_t *)packet_info; /* A2 */
+    xns_$idp_header_t *hdr;             /* A3 */
+    int32_t  total;                     /* D2 */
+    int32_t  words;                     /* D0 before each XNS_IDP_$CHECKSUM */
+    uint16_t sum;                       /* D4 */
+    uint16_t last = 0;                  /* D0 after the last XNS_IDP_$CHECKSUM */
+    uint32_t next;                      /* A4 (chain walk) */
+    int16_t  page;                      /* D3 */
+    int32_t  remaining;                 /* D7 */
+    int32_t  chunk;                     /* D6 */
+    uint32_t va;                        /* A6-0x0C */
+    status_$t status;                   /* A6-0x08 */
 
-    /* Length includes header, compute word count */
-    word_count = (length + 1) >> 1;  /* Round up to words */
-
-    if (word_count == 0) {
-        return -1;
+    /* 0x00E17D52-0x00E17D64: the header buffer must fit the IDP length */
+    hdr = (xns_$idp_header_t *)ARCH_VA_TO_PTR(rec->hdr_desc.address);
+    total = rec->hdr_desc.length;
+    if ((int32_t)(int16_t)hdr->length + 1 < total) {
+        return -1;                                              /* 0x00E17E46 */
     }
 
-    return (int16_t)XNS_IDP_$CHECKSUM((uint16_t *)header, word_count);
+    /* 0x00E17D68-0x00E17D8C: sum the header from its length word on
+     * ("lea (0x2,A3),A0"), (length - 1) / 2 words */
+    words = (total - 1) / 2;
+    last = XNS_IDP_$CHECKSUM((uint16_t *)((uint8_t *)hdr + 2), (int16_t)words);
+    sum = last;
+
+    /* 0x00E17D8E-0x00E17DD2: the rest of the header chain, {length,
+     * address, next} descriptors until next == 0 ("cmpa.w #0,A4") */
+    next = rec->hdr_desc.next;
+    while (next != 0) {
+        const mac_os_$buf_desc_t *elem =
+            (const mac_os_$buf_desc_t *)ARCH_VA_TO_PTR(next);
+
+        total += elem->length;                                  /* 0x00E17D9E */
+        if ((int32_t)(int16_t)hdr->length + 1 < total) {
+            return -1;                                          /* 0x00E17DA6 */
+        }
+        words = (elem->length + 1) / 2;                         /* 0x00E17DAA */
+        last = XNS_IDP_$CHECKSUM((uint16_t *)ARCH_VA_TO_PTR(elem->address),
+                                 (int16_t)words);
+        sum += last;                                            /* 0x00E17DC8 */
+        next = elem->next;                                      /* 0x00E17DCA */
+    }
+
+    /* 0x00E17DD4: no payload - the total is the result */
+    if ((int32_t)rec->data_length <= 0) {
+        return (int16_t)sum;                                    /* 0x00E17E7C */
+    }
+
+    /* 0x00E17DDC-0x00E17E78: "moveq #0x3,D5" + dbf - four pages */
+    for (page = 1; page <= 4; page++) {
+        /* 0x00E17DE4-0x00E17E02: bytes of payload left from this page on,
+         * at most 0x400 */
+        remaining = (int32_t)rec->data_length - ((int32_t)(page - 1) << 10);
+        if (remaining > 0x400) {
+            remaining = 0x400;
+        }
+
+        /* 0x00E17E08: this page's address ("tst.l (0x38,A4)") */
+        if (rec->data_pages[page - 1] == 0) {
+            if ((int16_t)remaining <= 0) {
+                return (int16_t)last;       /* 0x00E17E10 ble 0x00E17E7E */
+            }
+            return -1;                      /* 0x00E17E12 bra 0x00E17E46 */
+        }
+        if ((int16_t)remaining <= 0) {
+            return (int16_t)last;           /* 0x00E17E16 ble 0x00E17E7E */
+        }
+
+        /* 0x00E17E18-0x00E17E28 */
+        chunk = (int32_t)(int16_t)remaining;
+        total += chunk;
+        if ((int32_t)(int16_t)hdr->length + 1 < total) {
+            return -1;                                          /* 0x00E17E28 */
+        }
+
+        /* 0x00E17E2A-0x00E17E44: always data_pages[0] ("move.l (0x3c,A2)") */
+        NETBUF_$GETVA(rec->data_pages[0], &va, &status);
+        if (status != status_$ok) {
+            return -1;                      /* 0x00E17E44 falls into 0x00E17E46 */
+        }
+
+        /* 0x00E17E4A-0x00E17E66: (chunk + 1) / 2 words */
+        words = (chunk + 1) / 2;
+        last = XNS_IDP_$CHECKSUM((uint16_t *)ARCH_VA_TO_PTR(va), (int16_t)words);
+        sum += last;
+
+        NETBUF_$RTNVA(&va);                                     /* 0x00E17E6C */
+    }
+
+    return (int16_t)sum;                                        /* 0x00E17E7C */
 }
 
 /*
- * xns_$is_broadcast_addr - Check if address is a broadcast address
+ * xns_$is_broadcast_addr - is this IDP address the broadcast host or ours?
  *
- * Checks if the given XNS address is the broadcast address
- * (network -1, host -1, socket -1) or matches one of our
- * registered local addresses.
+ * Re-emitted from the disassembly (source-tydd).  True (0xFF) when the host
+ * part is all ones, or when the network is the network of one of the eight
+ * ROUTE ports and the host is one of the registered local addresses.
  *
- * @param addr      Pointer to 12-byte XNS address starting at network field
+ * Register roles (0x00E17E88-0x00E17F00):
+ *   A0  the address: network longword at +0, host words at +4/+6/+8
+ *   D0b the result, "clr.b" then "st"
+ *   A2  XNS_IDP_$DATA.ports[p] ("movea.l A5,A2", "lea (0xc,A2),A2"),
+ *       D1 the dbf count (eight ports)
+ *   A1  first the port's network record (its net_addr_ptr, 0x00E17EB0),
+ *       then XNS_IDP_$DATA.addrs[i] ("lea (A5),A1", "addq.l #0x6,A1"),
+ *       D2 the dbf count (registered_count: entries 0..count)
  *
- * @return 0xFF (-1) if broadcast or local, 0 if remote
+ * The port's network is read through ports[p].net_addr_ptr, the VA
+ * XNS_IDP_$INIT copied out of ROUTE_$PORTP (0x00E3031E), and the image
+ * tests it for nothing before "move.l (A1),D2" - a port with a zero VA
+ * reads the longword at 0.  The comparisons are word compares.
+ *
+ * @param addr      Pointer to 12-byte XNS address (network + host + socket)
+ *
+ * @return 0xFF (-1) if broadcast/local, 0 if remote
  *
  * Original address: 0x00E17E88
  */
 int8_t xns_$is_broadcast_addr(void *addr)
 {
-    uint8_t *base = XNS_IDP_BASE;
-    int16_t *address = (int16_t *)addr;
-    int16_t reg_count;
-    int16_t i;
+    const uint16_t *w = (const uint16_t *)addr; /* A0, as the words it reads */
+    uint32_t network = *(const uint32_t *)addr; /* (A0), 0x00E17EB6 */
+    uint16_t host0 = w[2];                      /* (0x4,A0) */
+    uint16_t host1 = w[3];                      /* (0x6,A0) */
+    uint16_t host2 = w[4];                      /* (0x8,A0) */
+    int16_t  p;                                 /* eight ports (D1 dbf) */
+    int16_t  count;                             /* D2 */
+    int16_t  i;
 
-    /* Check for broadcast (all 0xFFFF) */
-    if (address[4] == -1 && address[2] == -1 && address[3] == -1) {
-        return -1;  /* Broadcast */
+    /* 0x00E17E94-0x00E17EAA: "move.w #-0x1,D1w" against +8, +4, +6 */
+    if (host2 == 0xFFFF && host0 == 0xFFFF && host1 == 0xFFFF) {
+        return -1;                                              /* 0x00E17EE6 */
     }
 
-    /* Check against registered addresses */
-    for (i = 0; i < XNS_MAX_PORTS; i++) {
-        route_$port_t *rport = ROUTE_$PORTP[i];
-        if (rport == NULL) continue;
+    /* 0x00E17EAC-0x00E17EF4: "moveq #0x7,D1" + dbf over the port table */
+    for (p = 0; p < XNS_MAX_PORTS; p++) {
+        const uint32_t *port_network =
+            (const uint32_t *)ARCH_VA_TO_PTR(XNS_IDP_$DATA.ports[p].net_addr_ptr);
 
-        /* Check if network matches */
-        if (rport->network != *(uint32_t *)address) continue;
-
-        /* Check registered addresses for this port */
-        reg_count = XNS_REG_COUNT();
-        if (reg_count >= 0) {
-            int16_t j;
-            for (j = 0; j <= reg_count; j++) {
-                /* Check if host matches registered address */
-                if (*(uint16_t *)(base + 0x24 + j * 6) == address[4] &&
-                    *(uint16_t *)(base + 0x22 + j * 6) == address[3] &&
-                    *(uint16_t *)(base + 0x20 + j * 6) == address[2]) {
-                    return -1;  /* Local address */
-                }
+        if (*port_network != network) {                         /* 0x00E17EB6 */
+            continue;
+        }
+        count = XNS_IDP_$DATA.registered_count;                 /* 0x00E17EBA */
+        if (count < 0) {                                        /* bmi */
+            continue;
+        }
+        /* 0x00E17EC8-0x00E17EEC: dbf D2 - entries 0..count */
+        for (i = 0; i <= count; i++) {
+            if (XNS_IDP_$DATA.addrs[i][2] == host2 &&           /* (0x24,A1) */
+                XNS_IDP_$DATA.addrs[i][1] == host1 &&           /* (0x22,A1) */
+                XNS_IDP_$DATA.addrs[i][0] == host0) {           /* (0x20,A1) */
+                return -1;                                      /* 0x00E17EE6 */
             }
         }
     }
 
-    return 0;  /* Remote address */
+    return 0;                                                   /* clr.b D0b */
 }
 
 /*

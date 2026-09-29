@@ -103,7 +103,7 @@ int16_t PMAP_$FLUSH(struct aste_t *aste, uint32_t *segmap, uint16_t start_page,
                 vpn = entry & PMAP_SEGMAP_L_VPN_MASK;
                 /* 0x00E1380C - 0x00E13822: unless shutting down, only
                  * pageable VPNs are considered */
-                if (PMAP_$SHUTTING_DOWN_FLAG >= 0 &&
+                if (PMAP_$DATA.shutting_down_flag >= 0 &&
                     (vpn < PMAP_FLUSH_VPN_LOW || vpn > PMAP_FLUSH_VPN_HIGH)) {
                     continue;
                 }

@@ -38,11 +38,17 @@
 
 #include "osinfo/osinfo_internal.h"
 #include "ast/ast.h"
+#include "pmap/pmap.h"   /* PMAP_$SEGMAP */
 
 /* `movea.l #0xec5400,A3` at 0x00E5C616: the AST, 0x14-byte entries */
 #define OSINFO_AST_BASE_VA      0x00EC5400u
-/* `movea.l #0xed5000,A3` at 0x00E5C65A: the AOT, 0x80-byte entries */
-#define OSINFO_AOT_BASE_VA      0x00ED5000u
+/*
+ * `movea.l #0xed5000,A3` at 0x00E5C65A: the 0x80-byte entries at map
+ * AST_PMAPS, which is the MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h,
+ * source-iq58) - linked in map order, so the image literal would name
+ * different memory; row 0 is the image's 0xED5000.
+ */
+#define OSINFO_AOT_BASE         ((const uint32_t *)&PMAP_$SEGMAP.row[0][0])
 
 void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
                            short *max_entries_ptr, short *actual_entries_ptr,
@@ -99,7 +105,7 @@ void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
         if (count < 0) {
             return;
         }
-        src = (const uint32_t *)ARCH_VA_TO_PTR(OSINFO_AOT_BASE_VA);
+        src = OSINFO_AOT_BASE;
         dst = (uint32_t *)buffer;
         /* 0x00E5C66C .. 0x00E5C686: count + 1 entries of 32 longwords */
         for (; count != -1; count--) {

@@ -12,7 +12,7 @@
 #include "dump/dump.h"  /* mem_range_t, DUMP_$ADDRS (MMAP_$INIT fills it) */
 #include "mmu/mmu.h"  /* For PMAPE_FOR_VPN, PMAPE_FLAG_* */
 #include "ast/ast.h" /* For aste_t / aote_t (the 0xEC5400 segment table) */
-#include "pmap/pmap.h" /* PMAP_SEGMAP, read by mmap_$trim_wsl */
+#include "pmap/pmap.h" /* PMAP_$SEGMAP / PMAP_SEGMAP_ROW, read by mmap_$trim_wsl */
 
 /*
  * ============================================================================

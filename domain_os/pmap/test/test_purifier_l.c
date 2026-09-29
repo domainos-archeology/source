@@ -17,8 +17,9 @@
  *     the low-memory loop (0x00E13ECC -> 0x00E13FAC);
  *   - the proportional draw picks the working set the accumulator crosses
  *     (0x00E13F2A);
- *   - the segment map base is 0xED4F80 with a 1-based segment index, i.e.
- *     PMAP_SEGMAP[seg][page] is seg*0x80 + page*4 BELOW 0xED5000.
+ *   - the segment map (PMAP_$SEGMAP, image 0xED5000) takes a 1-based
+ *     segment index, i.e. PMAP_SEGMAP_ROW(seg)[page] is 0xED5000 +
+ *     (seg - 1)*0x80 + page*4.
  */
 
 #include <stdio.h>
@@ -66,7 +67,6 @@ static int tests_failed = 0;
 #define TEST_SEGMENTS   8
 #define TEST_PAGES      64
 
-static pmap_segmap_row_t segmap_store[TEST_SEGMENTS];
 static mmape_t           mmape_store[TEST_PAGES];
 static uint32_t          pft_store[TEST_PAGES];
 
@@ -78,14 +78,12 @@ static uint32_t          pft_store[TEST_PAGES];
  */
 mmap_globals_t MMAP_GLOBALS_STORAGE;
 
-pmap_segmap_row_t *pmap_segmap = segmap_store;
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 mmape_t           *mmap_mmape_base = mmape_store;
 uint32_t          *mmu_pft_base = pft_store;
 
-uint16_t PMAP_$WS_INTERVAL;
-uint32_t PMAP_$IDLE_INTERVAL;
+MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint32_t TIME_$CLOCKH;
-uint16_t PMAP_$WS_RANDOM_SEED;
 
 /*
  * ========================================================================
@@ -126,12 +124,6 @@ void MMAP_$PURGE(uint16_t wsl_index)
  * by these tests (it never returns), but the translation unit still has to
  * link, so every external it touches gets a stub here.
  */
-uint16_t PMAP_$LOW_THRESH, PMAP_$MID_THRESH, PMAP_$MAX_WS_INTERVAL;
-uint16_t PMAP_$MIN_WS_INTERVAL, PMAP_$WS_SCAN_DELTA;
-uint32_t PMAP_$PUR_L_CNT;
-int8_t   PMAP_$SHUTTING_DOWN_FLAG;
-clock_t  PMAP_$SHORT_WAIT_DELAY;
-ec_$eventcount_t PMAP_$L_PURIFIER_EC, PMAP_$PAGES_EC;
 uint16_t PROC1_$CURRENT;
 uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
 int8_t   NETLOG_$OK_TO_LOG;
@@ -177,7 +169,7 @@ void pmap_$write_page(uint32_t vpn, status_$t *st, int8_t f)
 static void reset_mocks(void)
 {
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
-    memset(segmap_store, 0, sizeof(segmap_store));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
 
@@ -188,10 +180,10 @@ static void reset_mocks(void)
     memset(purge_slot, 0, sizeof(purge_slot));
 
     MMAP_WSL_HI_MARK = 7;
-    PMAP_$WS_INTERVAL = 10;
-    PMAP_$IDLE_INTERVAL = 100;
+    PMAP_$DATA.ws_interval = 10;
+    PMAP_$DATA.idle_interval = 100;
     TIME_$CLOCKH = 1000;
-    PMAP_$WS_RANDOM_SEED = 1;
+    PMAP_$DATA.ws_random_seed = 1;
 }
 
 /*
@@ -308,7 +300,7 @@ static void test_selection_takes_the_first_slot_crossed(void)
     MMAP_WSL[7].ws_floor = 0;
     MMAP_WSL[7].pri_timestamp = 1000;
 
-    PMAP_$WS_RANDOM_SEED = 0;      /* the draw stays 0, so target == 0 */
+    PMAP_$DATA.ws_random_seed = 0;      /* the draw stays 0, so target == 0 */
 
     ASSERT_TRUE(pmap_$purifier_ws_scan_pass(50, &prev_steal) < 0);
     ASSERT_EQ(1, scan_calls);
@@ -316,21 +308,23 @@ static void test_selection_takes_the_first_slot_crossed(void)
 }
 
 /*
- * The segment map base is 0xED4F80 and the segment index is 1-based:
- * PMAP_SEGMAP[seg][page] must land seg*0x80 + page*4 bytes past the base,
- * which is 0x80 BELOW the 0xED5000 the old code used for segment 1.
+ * The segment index is 1-based: PMAP_SEGMAP_ROW(seg)[page] must land
+ * (seg - 1)*0x80 + page*4 bytes past the block (image 0xED5000), i.e.
+ * 0xED5000 + seg*0x80 - 0x80 as "lea (-0x80,A0,...)" computes it.
  */
 static void test_segmap_indexing_is_one_based(void)
 {
-    char *base = (char *)&PMAP_SEGMAP[0][0];
+    char *base = (char *)&PMAP_$SEGMAP;
 
-    ASSERT_EQ(0x80, (char *)&PMAP_SEGMAP[1][0] - base);
-    ASSERT_EQ(0x84, (char *)&PMAP_SEGMAP[1][1] - base);
+    ASSERT_EQ(0x00, (char *)&PMAP_SEGMAP_ROW(1)[0] - base);
+    ASSERT_EQ(0x04, (char *)&PMAP_SEGMAP_ROW(1)[1] - base);
+    ASSERT_EQ(0x80, (char *)&PMAP_SEGMAP_ROW(2)[0] - base);
     ASSERT_EQ(4, (long)sizeof(pmap_segmap_entry_t));
     ASSERT_EQ(0x80, (long)sizeof(pmap_segmap_row_t));
 
-    PMAP_SEGMAP[3][2].flags |= PMAP_SEGMAP_WRITING;
-    ASSERT_EQ(0x80, (uint8_t)base[3 * 0x80 + 2 * 4]);
+    PMAP_SEGMAP_ROW(3)[2].flags |= PMAP_SEGMAP_WRITING;
+    ASSERT_EQ(0x80, (uint8_t)base[2 * 0x80 + 2 * 4]);
+    PMAP_SEGMAP_ROW(3)[2].flags = 0;
 }
 
 int main(void)

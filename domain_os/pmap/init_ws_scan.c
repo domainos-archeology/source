@@ -13,6 +13,8 @@
  * Arguments: (0x8,A6) index word (the pid, D2), (0xa,A6) param word (the
  * WSL index, D3).  MMAP_$SET_WS_INDEX(index, &param) first; a param of 5
  * (the wired pool) gets no timer.
+ *
+ * Timer element through PMAP_$DATA.ws_timer: Claude Opus 5.5 (source-iq58).
  */
 
 #include "pmap/pmap_internal.h"
@@ -33,7 +35,7 @@ void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
     status_$t status;           /* (-0xC,A6) */
     clock_t when;               /* (-0x8,A6) */
     time_queue_t *queue;        /* 0xE2A4A0 - 0xC + index * 0xC */
-    time_queue_elem_t *e;       /* A2 + 0x24 */
+    time_queue_elem_t *e;       /* A2 + 0x24, A2 = A5 + index * 0x1C */
 
     /* 0x00E14606 - 0x00E14618: result slot discarded */
     local_param = (uint16_t)param;
@@ -46,7 +48,8 @@ void PMAP_$INIT_WS_SCAN(uint16_t index, int16_t param)
 
     /* 0x00E14622 - 0x00E14650 */
     queue = &TIME_$VTQ[index - 1];
-    e = PMAP_WS_TIMER_ELEM(index);
+    /* "lea (0x24,A5,D4w*0x1)", D4 = index * 0x1C: Pascal [1..64] (pmap/pmap.h) */
+    e = &PMAP_$DATA.ws_timer[index].elem;
     TIME_$Q_REMOVE_ELEM(queue, e, &status);
 
     /* 0x00E14654 - 0x00E14682 */

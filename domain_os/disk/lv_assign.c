@@ -75,7 +75,7 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
 
     /* 0x00E6CE00 - 0x00E6CE1A: result slot of SET_CLEANUP discarded */
     PROC2_$SET_CLEANUP(DISK_LV_ASSIGN_CLEANUP);
-    ML_$EXCLUSION_START(&MOUNT_LOCK);
+    ML_$EXCLUSION_START(&PMAP_$DATA.mount_lock);
 
     /* 0x00E6CE1C - 0x00E6CE30: D2w = vol_idx * 64 on the way to * 0x48 */
     d2 = (uint16_t)(vol_idx << 6);
@@ -184,7 +184,7 @@ uint16_t DISK_$LV_ASSIGN(uint16_t *vol_idx_ptr, uint16_t *lv_idx_ptr,
 done:
     /* 0x00E6CFB6 - 0x00E6CFDA: the PV's state back, unlock, both outputs */
     vol->mount_state = saved_state;
-    ML_$EXCLUSION_STOP(&MOUNT_LOCK);
+    ML_$EXCLUSION_STOP(&PMAP_$DATA.mount_lock);
     *blocks_avail_ptr = (int32_t)d5;
     *status = local_status;
     return (uint16_t)d2;

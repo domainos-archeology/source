@@ -14,13 +14,16 @@
  * channel)
  *   - Sockets: XNS socket numbers for demultiplexing (like UDP ports)
  *
- * Original location: 0xE2B314 (base of IDP state)
+ * Module data: XNS_IDP_$DATA (image 0xE2B314, below) and XNS_ERROR_$DATA
+ * (image 0xE2B29C, xns/xns_internal.h), MODULE_DATA blocks since
+ * source-iq58 (Claude Opus 5.5); definitions in xns/xns_data.c.
  */
 
 #ifndef XNS_H
 #define XNS_H
 
 #include "base/base.h"
+#include "arch/arch.h"
 #include "mac_os/mac_os.h"   /* mac_os_$buf_desc_t */
 #include "ml/ml.h"
 
@@ -317,43 +320,80 @@ typedef struct xns_$sock_pkt_t {
 #define XNS_CHAN_STATE_ACTIVE 0x8000 /* Bit 15: Channel is active */
 
 /*
- * XNS IDP Global State
+ * ============================================================================
+ * XNS_IDP_$DATA - the XNS_IDP module block, 0x00E2B314..0x00E2B84F
+ * ============================================================================
  *
- * This structure represents the complete IDP subsystem state at 0xE2B314.
- * It includes statistics, registered addresses, channel state, and the
- * exclusion lock for thread safety.
+ * SAU2 map "D E2B314 XNS_IDP size = 53C", interior symbol
+ * XNS_IDP_$PORT_TABLE at 0xE2B354 (+0x40, the ports[] array).  Every IDP
+ * routine loads "lea (0xe2b314).l,A5" (XNS_IDP_$OS_OPEN .. REGISTER_ADDR;
+ * XNS_IDP_$INIT uses "movea.l #0xe2b314,A0"), so each (off,A5) is a field.
+ * The address is the block's image address - the ordering key of
+ * tools/gen_layout_ld.py and documentation, not where it is linked
+ * (docs/design-per-process-data.md).  All 0x53C bytes are zero in the image;
+ * XNS_IDP_$INIT fills the block at boot.
+ *
+ * The three tables are 0-based: the loops start their index at 0
+ * (xns_$find_socket, XNS_IDP_$OS_OPEN "clr.w D2w" 0x00E17F56,
+ * XNS_IDP_$REGISTER_ADDR "clr.w D1w" 0x00E1902A, XNS_IDP_$INIT "moveq
+ * #0xf,D0 / movea.l A0,A1") and index from the table's own first element:
+ *   addr_port[i]  (0x10,A0), A0 = A5 + i*2         0x00E1902E
+ *   addrs[i]      (0x20,A5,D0*1), D0 = i*6         0x00E19044
+ *   ports[p]      (0x40..0x4A,A5+p*0xC)            0x00E17C30, 0x00E3031E
+ *   channels[c]   (0xA0..0xE4,A5+c*0x48)           0x00E30296, 0x00E17F72
+ * registered_count is the dbf count of addrs[] (entries 0..count are in
+ * use), which is why XNS_IDP_$REGISTER_ADDR appends at (0x26,A5,count*6) /
+ * (0x12,A5,count*2), i.e. element count + 1.
+ *
+ * The channels carry a code pointer (the demux vector) and the lock native
+ * pointers, so the offsets from +0xA0 on and the size are asserted on the
+ * target only; everything before is pointer-free and asserted everywhere.
  */
-typedef struct xns_$idp_state_t {
-  /* Statistics (0x00-0x0B) */
-  uint32_t packets_sent;     /* 0x000: Total packets sent */
-  uint32_t packets_received; /* 0x004: Total packets received (A5+0x4) */
-  uint32_t packets_dropped;  /* 0x008: Total packets dropped/errored (A5+0x8) */
+#define XNS_IDP_$DATA_SIZE 0x53C        /* map: XNS_IDP size = 53C */
 
-  uint8_t _unknown_0c[0x14]; /* 0x00C-0x01F */
+typedef struct xns_$idp_data_t {
+  /* Statistics, returned by XNS_IDP_$GET_STATS (0x00E18FE6-0x00E18FEE) */
+  uint32_t packets_sent;     /* +0x000: bumped by XNS_IDP_$OS_SEND */
+  uint32_t packets_received; /* +0x004: "addq.l #1,(0x4,A5)" 0x00E184C2 */
+  uint32_t packets_dropped;  /* +0x008: "addq.l #1,(0x8,A5)" 0x00E184E2 */
+
+  uint8_t _unknown_0c[4];    /* +0x00C: not referenced */
 
   /*
-   * Registered local host addresses, six bytes each, `registered_count'
-   * being the dbf count (so entries 0..registered_count are valid).
-   * xns_$is_broadcast_addr walks these with `lea (A5),A1' /
-   * `addq.l #6,A1' reading (0x20,A1) (0x22,A1) (0x24,A1).
+   * +0x010: the ROUTE port each registered address belongs to, one word per
+   * addrs[] entry; XNS_IDP_$INIT sets entry 0 (the node's own address) to
+   * -1, any port ("move.w #-0x1,(0x10,A0)" 0x00E3030C).
    */
-  uint8_t addrs[XNS_MAX_ADDRS][6]; /* 0x020-0x037 */
+  int16_t addr_port[XNS_MAX_ADDRS];
 
-  uint8_t _unknown_38[8];    /* 0x038-0x03F */
+  uint8_t _unknown_18[8];    /* +0x018: not referenced */
 
-  xns_$port_state_t ports[XNS_MAX_PORTS];    /* 0x040-0x09F (8 * 0x0C) */
-  xns_$channel_t channels[XNS_MAX_CHANNELS]; /* 0x0A0-0x51F (16 * 0x48) */
+  /*
+   * +0x020: the registered local host addresses, three words each (every
+   * access is a word move: 0x00E302E6-0x00E30304, 0x00E19044-0x00E1904E,
+   * xns_$is_broadcast_addr's (0x20,A1)/(0x22,A1)/(0x24,A1)).  Entry 0 is
+   * the node's own address, built by XNS_IDP_$INIT from NODE_$ME.
+   */
+  uint16_t addrs[XNS_MAX_ADDRS][3];
 
-  /* Synchronization */
-  ml_$exclusion_t lock; /* 0x520: Exclusion lock (ml_$exclusion_t is 0x12 bytes,
-                         *        so it occupies 0x520-0x531) */
-  uint8_t _pad532[2];   /* 0x532 */
+  uint8_t _unknown_38[8];    /* +0x038: not referenced */
 
-  /* Global counters */
-  uint16_t open_channels;   /* 0x534: Number of open channels */
-  uint16_t next_socket;     /* 0x536: Next dynamic socket number */
-  int16_t registered_count; /* 0x538: dbf count of addrs[] entries */
-} xns_$idp_state_t;
+  /* +0x040 map XNS_IDP_$PORT_TABLE: per ROUTE port state, stride 0x0C */
+  xns_$port_state_t ports[XNS_MAX_PORTS];
+
+  /* +0x0A0: the channels, stride 0x48 (16 * 0x48 ends at the lock) */
+  xns_$channel_t channels[XNS_MAX_CHANNELS];
+
+  /* +0x520: the module's exclusion lock ("pea (0x520,A5)"); 0x12 bytes */
+  ml_$exclusion_t lock;
+  uint8_t _unknown_532[2];   /* +0x532: not referenced */
+
+  uint16_t open_channels;    /* +0x534: open channel count (unsigned compare
+                              * "cmpi.w #0x10,(0x534,A5)" / bcs 0x00E17F1A) */
+  uint16_t next_socket;      /* +0x536: next dynamic socket (from 0xBB9) */
+  int16_t  registered_count; /* +0x538: dbf count of addrs[] entries */
+  uint8_t _unknown_53a[2];   /* +0x53A: not referenced */
+} xns_$idp_data_t;
 
 /*
  * Layout assertions.  Every offset below was read directly out of the
@@ -397,8 +437,26 @@ _Static_assert(offsetof(xns_$sock_pkt_t, mac_info) == 0x30, "sock_pkt mac_info a
  * The rest still contain native pointers or an embedded ml_$exclusion_t, so
  * they only lay out to the binary on the 32-bit target.
  */
-#if defined(ARCH_M68K)
 _Static_assert(sizeof(xns_$port_state_t) == 0x0C, "xns_$port_state_t is 0x0C bytes");
+_Static_assert(offsetof(xns_$port_state_t, mac_socket) == 0x08, "port mac_socket at +0x08");
+
+_Static_assert(offsetof(xns_$idp_data_t, packets_received) == 0x004, "packets_received at +0x004");
+_Static_assert(offsetof(xns_$idp_data_t, packets_dropped) == 0x008, "packets_dropped at +0x008");
+_Static_assert(offsetof(xns_$idp_data_t, addr_port) == 0x010, "addr_port at +0x010");
+_Static_assert(offsetof(xns_$idp_data_t, addrs) == 0x020, "addrs at +0x020");
+_Static_assert(offsetof(xns_$idp_data_t, ports) == 0x040, "ports (XNS_IDP_$PORT_TABLE) at +0x040");
+_Static_assert(offsetof(xns_$idp_data_t, channels) == 0x0A0, "channels at +0x0A0");
+_Static_assert(sizeof(((xns_$idp_data_t *)0)->addr_port[0]) == 2, "addr_port stride (add.w D0,D0)");
+_Static_assert(sizeof(((xns_$idp_data_t *)0)->addrs[0]) == 6, "addrs stride (i*6)");
+_Static_assert(offsetof(xns_$idp_data_t, addrs[XNS_MAX_ADDRS]) == 0x038, "addrs[3] ends at +0x038");
+_Static_assert(offsetof(xns_$idp_data_t, ports[XNS_MAX_PORTS]) == 0x0A0,
+               "ports[7] ends where the channels begin");
+
+/*
+ * The channel record carries the demux vector as a code pointer and the lock
+ * two native pointers, so those layouts hold on the 32-bit target only.
+ */
+#if defined(ARCH_M68K)
 _Static_assert(sizeof(xns_$channel_t) == 0x48, "xns_$channel_t is 0x48 bytes");
 _Static_assert(offsetof(xns_$channel_t, demux) == 0x00, "channel demux at +0x00");
 _Static_assert(offsetof(xns_$channel_t, connected_port) == 0x34, "channel connected_port at +0x34");
@@ -408,16 +466,16 @@ _Static_assert(offsetof(xns_$channel_t, flags) == 0x3A, "channel flags at +0x3A"
 _Static_assert(offsetof(xns_$channel_t, port_active) == 0x3C, "channel port_active at +0x3C");
 _Static_assert(offsetof(xns_$channel_t, state) == 0x44, "channel state at +0x44");
 
-_Static_assert(offsetof(xns_$idp_state_t, packets_received) == 0x004, "state packets_received at +0x004");
-_Static_assert(offsetof(xns_$idp_state_t, packets_dropped) == 0x008, "state packets_dropped at +0x008");
-_Static_assert(offsetof(xns_$idp_state_t, addrs) == 0x020, "state addrs at +0x020");
-_Static_assert(offsetof(xns_$idp_state_t, ports) == 0x040, "state ports at +0x040");
-_Static_assert(offsetof(xns_$idp_state_t, channels) == 0x0A0, "state channels at +0x0A0");
-_Static_assert(offsetof(xns_$idp_state_t, lock) == 0x520, "state lock at +0x520");
-_Static_assert(offsetof(xns_$idp_state_t, open_channels) == 0x534, "state open_channels at +0x534");
-_Static_assert(offsetof(xns_$idp_state_t, next_socket) == 0x536, "state next_socket at +0x536");
-_Static_assert(offsetof(xns_$idp_state_t, registered_count) == 0x538, "state registered_count at +0x538");
+_Static_assert(sizeof(xns_$idp_data_t) == XNS_IDP_$DATA_SIZE, "XNS_IDP block: map size 0x53C");
+_Static_assert(offsetof(xns_$idp_data_t, channels[XNS_MAX_CHANNELS]) == 0x520,
+               "channels[15] ends at the lock");
+_Static_assert(offsetof(xns_$idp_data_t, lock) == 0x520, "lock at +0x520");
+_Static_assert(offsetof(xns_$idp_data_t, open_channels) == 0x534, "open_channels at +0x534");
+_Static_assert(offsetof(xns_$idp_data_t, next_socket) == 0x536, "next_socket at +0x536");
+_Static_assert(offsetof(xns_$idp_data_t, registered_count) == 0x538, "registered_count at +0x538");
 #endif /* ARCH_M68K */
+
+MODULE_DATA_DECLARE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 
 /*
@@ -585,10 +643,8 @@ typedef struct xns_$idp_iov_t {
   uint8_t _pad_0d[3];      /* 0x0D */
 } xns_$idp_iov_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(xns_$idp_iov_t, desc)  == 0x00, "idp_iov.desc");
 _Static_assert(offsetof(xns_$idp_iov_t, flags) == 0x0C, "idp_iov.flags");
-#endif
 
 /*
  * xns_$idp_send_t - the request record XNS_IDP_$SEND (0x00E18A66) is given.
@@ -659,13 +715,11 @@ _Static_assert(offsetof(xns_$idp_recv_t, mac_src_lo)  == 0x2A, "idp_recv.mac_src
 _Static_assert(offsetof(xns_$idp_recv_t, packet_type) == 0x2C, "idp_recv.packet_type");
 _Static_assert(sizeof(xns_$idp_recv_t) == 0x48, "xns_$idp_recv_t must be 0x48 bytes");
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(xns_$idp_send_t, dest_addr)   == 0x00, "idp_send.dest_addr");
 _Static_assert(offsetof(xns_$idp_send_t, src_addr)    == 0x0C, "idp_send.src_addr");
 _Static_assert(offsetof(xns_$idp_send_t, hdr_desc)    == 0x18, "idp_send.hdr_desc");
 _Static_assert(offsetof(xns_$idp_send_t, packet_type) == 0x2C, "idp_send.packet_type");
 _Static_assert(sizeof(xns_$idp_send_t) == 0x48, "xns_$idp_send_t must be 0x48 bytes");
-#endif
 
 /*
  * Status codes for XNS IDP operations
@@ -779,12 +833,6 @@ _Static_assert(sizeof(xns_$error_pkt_t) == 0x4C, "xns_$error_pkt_t must be 0x4C 
  * record +0x34 (0x00E17B52) minus the 0x22 the copy starts at. */
 #define XNS_ERROR_ORIG_SRC_ADDR_OFFSET 0x12
 
-/* Global reference to XNS IDP state (for M68K direct access) */
-#if defined(ARCH_M68K)
-#define XNS_$IDP_STATE ((xns_$idp_state_t *)0xE2B314)
-#else
-extern xns_$idp_state_t *XNS_$IDP_STATE;
-#endif
 
 /*
  * Public API Functions
@@ -970,7 +1018,6 @@ typedef struct xns_$os_send_rec_t {
     uint32_t    data_pages[4];          /* 0x38 */
 } __attribute__((packed)) xns_$os_send_rec_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(xns_$os_send_rec_t, dest_addr)    == 0x00, "os_send_rec.dest_addr");
 _Static_assert(offsetof(xns_$os_send_rec_t, src_addr)     == 0x0C, "os_send_rec.src_addr");
 _Static_assert(offsetof(xns_$os_send_rec_t, hdr_desc)     == 0x18, "os_send_rec.hdr_desc");
@@ -979,7 +1026,6 @@ _Static_assert(offsetof(xns_$os_send_rec_t, packet_type)  == 0x2C, "os_send_rec.
 _Static_assert(offsetof(xns_$os_send_rec_t, data_length)  == 0x34, "os_send_rec.data_length");
 _Static_assert(offsetof(xns_$os_send_rec_t, data_pages)   == 0x38, "os_send_rec.data_pages");
 _Static_assert(sizeof(xns_$os_send_rec_t) == 0x48, "xns_$os_send_rec_t must be 0x48 bytes");
-#endif
 
 /*
  * The MAC frame type XNS_IDP_$OS_SEND stamps into mac_os_$send_pkt_t.frame_type
@@ -1140,7 +1186,6 @@ void XNS_ERROR_$SEND(xns_$pkt_desc_t *packet_info, uint16_t *error_code,
  * checksum with cmpi.w #-1,(A2) (0x00E8752A) and copies the 12-byte
  * destination address starting at idp+6 (lea (0x6,A2),A0 at 0x00E87564).
  */
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(xns_$idp_header_t, checksum)      == 0x00, "idp.checksum");
 _Static_assert(offsetof(xns_$idp_header_t, length)        == 0x02, "idp.length");
 _Static_assert(offsetof(xns_$idp_header_t, transport_ctl) == 0x04, "idp.transport_ctl");
@@ -1151,25 +1196,17 @@ _Static_assert(offsetof(xns_$idp_header_t, dest_socket)   == 0x10, "idp.dest_soc
 _Static_assert(offsetof(xns_$idp_header_t, src_network)   == 0x12, "idp.src_network");
 _Static_assert(offsetof(xns_$idp_header_t, src_socket)    == 0x1C, "idp.src_socket");
 _Static_assert(sizeof(xns_$idp_header_t) == 0x1E, "xns_$idp_header_t must be 30 bytes");
-#endif
 
 /*
  * XNS_IDP_$PORT_MAC_CHANNEL - address of the MAC channel word for a port
  *
- * The IDP state block carries an eight-entry, twelve-byte-per-entry port
- * table at XNS_$IDP_STATE + 0x40 (0xE2B354).  Its third field, at +0x08 of
- * an entry, is the MAC_OS channel number; both XNS_IDP_$SEND (0x00E18474,
- * pea (0x48,A5,D1) with D1 = port*12) and ROUTE_$PROCESS (0x00E876FA,
- * pea (0x8,A0,D1) with A0 = 0xE2B354) pass its address as MAC_OS_$SEND's
- * first argument.
+ * The IDP block's eight-entry port table (XNS_IDP_$DATA.ports, map
+ * XNS_IDP_$PORT_TABLE 0xE2B354) holds each port's MAC_OS channel number at
+ * +0x08 of its entry; both XNS_IDP_$OS_SEND (0x00E18474, pea (0x48,A5,D1)
+ * with D1 = port*12) and ROUTE_$PROCESS (0x00E876FA, pea (0x8,A0,D1) with
+ * A0 = 0xE2B354) pass its address as MAC_OS_$SEND's first argument.
  */
-#define XNS_IDP_PORT_ENTRY_SIZE     12
-#define XNS_IDP_PORT_TABLE_OFFSET   0x40
-#define XNS_IDP_PORT_MAC_CHANNEL_OFFSET 0x08
-
-#define XNS_IDP_$PORT_MAC_CHANNEL(port)                                       \
-    ((int16_t *)((uint8_t *)XNS_$IDP_STATE + XNS_IDP_PORT_TABLE_OFFSET +      \
-                 (uint32_t)(port) * XNS_IDP_PORT_ENTRY_SIZE +                 \
-                 XNS_IDP_PORT_MAC_CHANNEL_OFFSET))
+#define XNS_IDP_$PORT_MAC_CHANNEL(port) \
+    ((int16_t *)&XNS_IDP_$DATA.ports[(port)].mac_socket)
 
 #endif /* XNS_H */

@@ -41,7 +41,7 @@
  *   TIME_$CLOCKH                  time/time.h
  *   NODE_$ME                      uid/uid.h
  *   RING_$LOGGING_NOW             ring/ringlog.h
- *   XNS_$IDP_STATE                xns/xns.h
+ *   XNS_IDP_$DATA (port table)    xns/xns.h
  */
 
 /*

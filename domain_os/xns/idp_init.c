@@ -5,6 +5,8 @@
  * at system startup.
  *
  * Original address: 0x00E30268
+ *
+ * Module data through XNS_IDP_$DATA: Claude Opus 5.5 (source-iq58).
  */
 
 #include "xns/xns_internal.h"
@@ -69,56 +71,56 @@
  */
 void XNS_IDP_$INIT(void)
 {
-    uint8_t *base = XNS_IDP_BASE;
+    xns_$idp_data_t *d = &XNS_IDP_$DATA;    /* movea.l #0xe2b314,A0 */
     int16_t chan, port;
 
-    /* Set initial dynamic socket number */
-    *(uint16_t *)(base + XNS_OFF_NEXT_SOCKET) = XNS_FIRST_DYNAMIC_PORT;
+    /* Set initial dynamic socket number: move.w #0xbb9,(0x536,A0) */
+    d->next_socket = XNS_FIRST_DYNAMIC_PORT;
 
-    /* Initialize exclusion lock */
-    ML_$EXCLUSION_INIT((ml_$exclusion_t *)(base + XNS_OFF_LOCK));
+    /* Initialize exclusion lock: pea (0x520,A0) */
+    ML_$EXCLUSION_INIT(&d->lock);
 
-    /* Clear open channel count */
-    *(uint16_t *)(base + XNS_OFF_OPEN_COUNT) = 0;
+    /* Clear open channel count: clr.w (0x534,A0) */
+    d->open_channels = 0;
 
     /* Initialize all 16 channels */
     for (chan = 0; chan < XNS_MAX_CHANNELS; chan++) {
-        uint8_t *chan_base = base + chan * XNS_CHANNEL_SIZE;
+        xns_$channel_t *c = &d->channels[chan];
 
-        /* Clear active flag (bit 7 of state) */
-        *(uint8_t *)(chan_base + XNS_CHAN_OFF_STATE) &= 0x7F;
+        /* Clear active flag: bclr.b #0x7,(0xe4,A1) - bit 15 of the word */
+        c->state &= (int16_t)~0x8000;
 
-        /* Clear demux callback */
-        *(uint32_t *)(chan_base + XNS_CHAN_OFF_DEMUX) = 0;
+        /* Clear demux callback: clr.l (0xa0,A1) */
+        c->demux = NULL;
 
-        /* Set user socket to "none" */
-        *(uint16_t *)(chan_base + XNS_CHAN_OFF_USER_SOCKET) = XNS_NO_SOCKET;
+        /* Set user socket to "none": move.w #0xe1,(0xd6,A1) */
+        c->user_socket = XNS_NO_SOCKET;
 
-        /* Clear XNS socket */
-        *(uint16_t *)(chan_base + XNS_CHAN_OFF_XNS_SOCKET) = 0;
+        /* Clear XNS socket: clr.w (0xd8,A1) */
+        c->xns_socket = 0;
 
-        /* Clear flags except low 3 bits */
-        *(uint8_t *)(chan_base + XNS_CHAN_OFF_FLAGS) &= 0x07;
+        /* andi.b #0x7,(0xda,A1): the HIGH byte of the flags word */
+        c->flags &= 0x07FF;
 
-        /* Set connected port to "any" (-1) */
-        *(int16_t *)(chan_base + XNS_CHAN_OFF_CONN_PORT) = -1;
+        /* Set connected port to "any": move.w #-0x1,(0xd4,A1) */
+        c->connected_port = -1;
 
-        /* Clear per-port active flags */
+        /* Clear per-port active flags: clr.b (0xdc,A2) */
         for (port = 0; port < XNS_MAX_PORTS; port++) {
-            *(uint8_t *)(chan_base + XNS_CHAN_OFF_PORT_ACTIVE + port) = 0;
+            c->port_active[port] = 0;
         }
     }
 
-    /* Clear statistics */
-    *(uint32_t *)(base + XNS_OFF_PACKETS_SENT) = 0;
-    *(uint32_t *)(base + XNS_OFF_PACKETS_RECV) = 0;
-    *(uint32_t *)(base + XNS_OFF_PACKETS_DROP) = 0;
+    /* Clear statistics: clr.l (A0) / (0x4,A0) / (0x8,A0) */
+    d->packets_sent = 0;
+    d->packets_received = 0;
+    d->packets_dropped = 0;
 
-    /* Clear registered address count */
-    *(uint16_t *)(base + XNS_OFF_REG_COUNT) = 0;
+    /* Clear registered address count: clr.w (0x538,A0) */
+    d->registered_count = 0;
 
-    /* Set up local address from NODE_$ME */
-    *(uint16_t *)(base + XNS_OFF_LOCAL_SOCKET) = 0x800;
+    /* Address entry 0, the node's own: move.w #0x800,(0x20,A0) */
+    d->addrs[0][0] = 0x800;
 
     /* Extract network portion from node address:
      * NODE_$ME contains 4 bytes. We want bits [31:16] masked to low 4 bits,
@@ -127,24 +129,25 @@ void XNS_IDP_$INIT(void)
         uint32_t node = NODE_$ME;
         uint16_t host_hi = ((node >> 16) & 0x0F) | 0x1E00;
         uint16_t host_lo = node & 0xFFFF;
-        *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_HI) = host_hi;
-        *(uint16_t *)(base + XNS_OFF_LOCAL_HOST_LO) = host_lo;
+        d->addrs[0][1] = host_hi;               /* (0x22,A0) */
+        d->addrs[0][2] = host_lo;               /* (0x24,A0) */
     }
 
-    /* Initialize first channel's broadcast address */
-    *(uint16_t *)(base + 0x10) = 0xFFFF;  /* broadcast network */
+    /* Entry 0 belongs to every port: move.w #-0x1,(0x10,A0) */
+    d->addr_port[0] = -1;
 
-    /* Initialize port routing pointers */
+    /* Initialize the port table (0x00E30312-0x00E30332) */
     for (port = 0; port < XNS_MAX_PORTS; port++) {
-        uint8_t *port_base = base + port * XNS_PORT_STATE_SIZE;
+        xns_$port_state_t *p = &d->ports[port];
 
-        /* Set port_info pointer from ROUTE_$PORTP array */
-        *(uint32_t *)(port_base + XNS_PORT_OFF_INFO) = (uint32_t)ROUTE_$PORTP[port];
+        /* move.l (A1)+,(0x44,A0): the ROUTE_$PORTP entry, a VA */
+        p->net_addr_ptr = ARCH_PTR_TO_VA(ROUTE_$PORTP[port]);
 
-        /* Set MAC socket to invalid (0xFFFF in high word) */
-        *(uint32_t *)(port_base + XNS_PORT_OFF_MAC_SOCKET) = 0xFFFF0000;
+        /* move.l #-0x10000,(0x48,A0): mac_socket = 0xFFFF, refcount = 0 */
+        p->mac_socket = 0xFFFF;
+        p->refcount = 0;
 
-        /* Clear port reference */
-        *(uint32_t *)(port_base + XNS_PORT_OFF_REF) = 0;
+        /* Clear port reference: clr.l (0x40,A0) */
+        p->mac_handle = 0;
     }
 }

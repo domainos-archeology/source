@@ -4,8 +4,9 @@
  * Compiles the real netlog/log_it.c and supplies the globals and callees it
  * reaches, so the three things the audit of this file turned up are checked
  * against behaviour rather than restated:
- *   - page_counts[] is Pascal 1-based (bead source-8vau); the counter for
- *     buffer 1 is element 0 (0x00E71B9C `(0x6e,A0)` with A0 = A5 + idx*2),
+ *   - page_counts[] is Pascal [1..2] (bead source-8vau), declared at its
+ *     bias slot, so the counter for buffer 1 is element 1 at block +0x70
+ *     (0x00E71B9C `(0x6e,A0)` with A0 = A5 + idx*2),
  *   - the record address is `buf + count*26 - 26`, because 0x00E71BCE..
  *     0x00E71C02 write at displacements -0x1A..-0x02,
  *   - the timestamp longword is the MIDDLE 32 bits of the 48-bit clock
@@ -41,7 +42,7 @@ static int tests_failed = 0;
 #include "netlog/netlog_internal.h"
 
 /* Globals the code under test links against. */
-netlog_data_t netlog_data;
+MODULE_DATA_DEFINE(netlog_$data_t, NETLOG_$DATA, 0x00E85684);
 uint32_t NETLOG_$KINDS;
 ec_$eventcount_t NETLOG_$EC;
 uint16_t PROC1_$CURRENT;
@@ -99,13 +100,13 @@ static uint8_t arena[3 * 1024];
 
 static void setup(void)
 {
-    memset(&netlog_data, 0, sizeof(netlog_data));
+    memset(&NETLOG_$DATA, 0, sizeof(NETLOG_$DATA));
     memset(arena, 0, sizeof(arena));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
-    netlog_data.buffer_va[1] = PAGE1_VA;
-    netlog_data.buffer_va[2] = PAGE2_VA;
-    netlog_data.current_buf_index = 1;
-    netlog_data.current_buf_ptr = netlog_data.buffer_va[1];
+    NETLOG_$DATA.buffer_va[1] = PAGE1_VA;
+    NETLOG_$DATA.buffer_va[2] = PAGE2_VA;
+    NETLOG_$DATA.current_buf_index = 1;
+    NETLOG_$DATA.current_buf_ptr = NETLOG_$DATA.buffer_va[1];
     NETLOG_$KINDS = 0xFFFFFFFFu;
     PROC1_$CURRENT = 0x0207;   /* the entry keeps the low byte only */
     mock_clock.high = 0x11223344;
@@ -124,7 +125,7 @@ TEST(disabled_kind_is_dropped)
     NETLOG_$LOG_IT(5, a_uid, 0, 0, 0, 0, 0, 0);
 
     ASSERT_EQ(0, spin_locks);
-    ASSERT_EQ(0, netlog_data.page_counts[0]);
+    ASSERT_EQ(0, NETLOG_$DATA.page_counts[1]);
 }
 
 /* btst on a longword numbers bits mod 32, so kind 37 is bit 5. */
@@ -136,10 +137,10 @@ TEST(kind_bit_is_taken_mod_32)
     NETLOG_$LOG_IT(37, a_uid, 0, 0, 0, 0, 0, 0);
 
     ASSERT_EQ(1, spin_locks);
-    ASSERT_EQ(1, netlog_data.page_counts[0]);
+    ASSERT_EQ(1, NETLOG_$DATA.page_counts[1]);
 }
 
-/* The first entry of buffer 1 lands at offset 0 and bumps page_counts[0]. */
+/* The first entry of buffer 1 lands at offset 0 and bumps page_counts[1]. */
 TEST(first_entry_is_at_offset_zero)
 {
     netlog_entry_t *e = (netlog_entry_t *)page1;
@@ -148,8 +149,8 @@ TEST(first_entry_is_at_offset_zero)
 
     NETLOG_$LOG_IT(3, a_uid, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666);
 
-    ASSERT_EQ(1, netlog_data.page_counts[0]);
-    ASSERT_EQ(0, netlog_data.page_counts[1]);
+    ASSERT_EQ(1, NETLOG_$DATA.page_counts[1]);
+    ASSERT_EQ(0, NETLOG_$DATA.page_counts[2]);
     ASSERT_EQ(1, spin_locks);
     ASSERT_EQ(1, spin_unlocks);
     ASSERT_EQ(0, ec_advances);
@@ -178,7 +179,7 @@ TEST(second_entry_is_one_record_on)
     NETLOG_$LOG_IT(1, a_uid, 0, 0, 0, 0, 0, 0);
     NETLOG_$LOG_IT(2, a_uid, 0, 0, 0, 0, 0, 0);
 
-    ASSERT_EQ(2, netlog_data.page_counts[0]);
+    ASSERT_EQ(2, NETLOG_$DATA.page_counts[1]);
     ASSERT_EQ(1, e1->kind);
     ASSERT_EQ(2, e2->kind);
 }
@@ -198,12 +199,12 @@ TEST(full_page_flips_the_buffer)
         NETLOG_$LOG_IT(1, a_uid, 0, 0, 0, 0, 0, 0);
     }
 
-    ASSERT_EQ(2, netlog_data.current_buf_index);
-    ASSERT_EQ(1, netlog_data.send_page_index);
-    ASSERT_EQ(1, netlog_data.done_cnt);
-    ASSERT_EQ(NETLOG_ENTRIES_PER_PAGE, netlog_data.page_counts[0]);
-    ASSERT_EQ(0, netlog_data.page_counts[1]);
-    ASSERT_EQ(PAGE2_VA, netlog_data.current_buf_ptr);
+    ASSERT_EQ(2, NETLOG_$DATA.current_buf_index);
+    ASSERT_EQ(1, NETLOG_$DATA.send_page_index);
+    ASSERT_EQ(1, NETLOG_$DATA.done_cnt);
+    ASSERT_EQ(NETLOG_ENTRIES_PER_PAGE, NETLOG_$DATA.page_counts[1]);
+    ASSERT_EQ(0, NETLOG_$DATA.page_counts[2]);
+    ASSERT_EQ(PAGE2_VA, NETLOG_$DATA.current_buf_ptr);
     ASSERT_EQ(1, ec_advances);
     ASSERT_EQ(NETLOG_ENTRIES_PER_PAGE, spin_unlocks);
 
@@ -225,8 +226,8 @@ TEST(entries_after_the_flip_use_the_other_counter)
 
     NETLOG_$LOG_IT(9, a_uid, 0, 0, 0, 0, 0, 0);
 
-    ASSERT_EQ(1, netlog_data.page_counts[1]);
-    ASSERT_EQ(NETLOG_ENTRIES_PER_PAGE, netlog_data.page_counts[0]);
+    ASSERT_EQ(1, NETLOG_$DATA.page_counts[2]);
+    ASSERT_EQ(NETLOG_ENTRIES_PER_PAGE, NETLOG_$DATA.page_counts[1]);
     ASSERT_EQ(9, ((netlog_entry_t *)page2)->kind);
 }
 

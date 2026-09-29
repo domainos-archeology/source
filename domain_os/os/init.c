@@ -471,7 +471,7 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     }
 
     /* --- 0x00E33832-0x00E33844 --------------------------------------- */
-    PMAP_$SHUTTING_DOWN_FLAG = 0;
+    PMAP_$DATA.shutting_down_flag = 0;
     MST_$PRE_INIT();
     MMU_$INIT();
     AS_$INIT();
