@@ -105,9 +105,8 @@ void AST_$RESERVE(uid_t *uid, uint32_t start_page, uint32_t page_count,
 
         /* 0x00E0689C..0x00E068B6 */
         cur = (uint16_t)(page & 0x1F);
-        entry = (uint32_t *)((char *)SEGMAP_BASE +
-                             ((uint32_t)aste->seg_index << 7) +
-                             (uint16_t)(cur << 2) - 0x80);
+        entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                             + (uint16_t)(cur << 2));
 
         /* 0x00E068C0..0x00E0693C: pages cur .. last_in_seg.  The body is
          * entered unconditionally (`bra.b 0x00e068c0` at 0x00E068BA); the

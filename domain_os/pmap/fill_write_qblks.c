@@ -65,7 +65,7 @@
 /* The entry for `seg' of the 1-based ASTE table (0xEC53F0 + seg * 0x14) */
 static inline aste_t *pmap_$aste_for_segment(uint16_t seg)
 {
-    return &ASTE_BASE[(int16_t)seg - 1];
+    return AST_ASTE_ENTRY((int16_t)seg);
 }
 
 /* A neighbour's block address: the entry's own low 22 bits, or its

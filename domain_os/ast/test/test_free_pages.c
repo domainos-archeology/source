@@ -53,11 +53,13 @@ static void reset_state(void);
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x400
 
-static segmap_entry_t test_segmap[3 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 
 /* the segment map is 1-based by segment: row n at base + n*0x80 - 0x80 */
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint16_t        PROC1_$CURRENT;
 
@@ -124,7 +126,7 @@ void CRASH_SYSTEM(const status_$t *status_p) { (void)status_p; crash_calls++; }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     lock_calls = unlock_calls = 0;
     wait_calls = 0; wait_entry_to_clear = NULL;
@@ -135,8 +137,8 @@ static void reset_state(void)
     PROC1_$CURRENT = 2;
 }
 
-/* segment 1's row is test_segmap[32..63] */
-static uint32_t *row1(void) { return (uint32_t *)&test_segmap[TEST_N_PAGES]; }
+/* segment 1's row, PMAP_$SEGMAP.row[0] */
+static uint32_t *row1(void) { return (uint32_t *)PMAP_SEGMAP_ROW(1); }
 
 TEST(mixed_entries_dirty_and_blocks)
 {
@@ -227,7 +229,7 @@ TEST(thirty_two_blocks_free_mid_loop)
 
     memset(&aste, 0, sizeof(aste));
     aste.seg_index = 2;
-    row = (uint32_t *)&test_segmap[2 * TEST_N_PAGES];
+    row = (uint32_t *)PMAP_SEGMAP_ROW(2);
     for (i = 0; i < 32; i++) {
         row[i] = 0x1000 + i;
     }

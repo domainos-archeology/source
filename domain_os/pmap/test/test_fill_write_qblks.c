@@ -44,10 +44,11 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-static aste_t aste_store[8];
 static aote_t aote_store[8];
 static mmape_t mmape_store[0x1000];
-aste_t *ast_aste_base = aste_store;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 mmape_t *mmap_mmape_base = mmape_store;
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uid_t ANON_$UID = { 0xA0A0, 0xB0B0 };
@@ -95,7 +96,7 @@ static void reset(void)
 {
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
     memset(arena, 0, sizeof arena);
-    memset(aste_store, 0, sizeof aste_store);
+    memset(&AST_$AOT, 0, sizeof AST_$AOT);
     memset(aote_store, 0, sizeof aote_store);
     memset(mmape_store, 0, sizeof mmape_store);
     memset(&PMAP_$SEGMAP, 0, sizeof PMAP_$SEGMAP);
@@ -106,10 +107,10 @@ static void reset(void)
     /* chain block 0 -> block 1 -> block 2 */
     qb(0)[0] = QB_VA(1);
     qb(1)[0] = QB_VA(2);
-    /* segment 3 = ASTE_BASE[2], object AOTE aote_store[1] */
-    aste_store[2].aote = &aote_store[1];
-    aste_store[2].segment = 0x21;
-    aste_store[2].fm_block = 0x7890;
+    /* segment 3 = AST_ASTE_ENTRY(3), object AOTE aote_store[1] */
+    AST_$AOT.aste[2].aote = &aote_store[1];
+    AST_$AOT.aste[2].segment = 0x21;
+    AST_$AOT.aste[2].fm_block = 0x7890;
     aote_store[1].uid.high = 0x11111111;
     aote_store[1].uid.low = 0x22222222;
     aote_store[1].sub_type = 2;
@@ -177,7 +178,7 @@ TEST(allocates_for_the_run_of_unaddressed_pages)
     ASSERT_EQ(1, alloc_reserved);
     ASSERT_EQ(0x2000, mmape_store[0x300].disk_addr);
     ASSERT_EQ(0x2001, mmape_store[0x301].disk_addr);
-    ASSERT_EQ(0x2000, aste_store[2].flags);   /* bset.b #5 on the HIGH byte of the flags word */
+    ASSERT_EQ(0x2000, AST_$AOT.aste[2].flags);   /* bset.b #5 on the HIGH byte of the flags word */
     ASSERT_EQ(0x2000, qb(0)[1]);
     ASSERT_EQ(0x2001, qb(1)[1]);
     ASSERT_EQ(0x301, qb(1)[5]);

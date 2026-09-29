@@ -39,7 +39,7 @@
  * the drain gate, both working-set walks, the random pick, the interval
  * hysteresis and the log/shutdown periods all matched.  Changed: the PFT
  * modified bit is cleared on the longword (it was a big-endian word index)
- * and the ASTE-table access is spelled as ASTE_BASE[seg - 1].aote.
+ * and the ASTE-table access is spelled as AST_ASTE_ENTRY(seg)->aote.
  */
 
 #include "pmap/pmap_internal.h"
@@ -80,14 +80,14 @@ static const uint16_t pmap_l_relative_delay_type = 0;   /* 0x00E1416A */
  *
  * 0x00E13C0C-0x00E13C1E computes (seg * 0x14) in a 16-bit register and uses
  * it as a signed word displacement from 0xEC5400-0x10.  0xEC5400 is
- * ASTE_BASE and an aste_t is 0x14 bytes, so the effective address is
- * &ASTE_BASE[seg - 1].aote: the segment index held in mmape_t.segment is a
+ * the map's AST (AST_$AOT.aste[0]) and an aste_t is 0x14 bytes, so the
+ * effective address is &AST_ASTE_ENTRY(seg)->aote: the segment index held in mmape_t.segment is a
  * 1-based index into the ASTE table.  The 16-bit truncation of the product
  * is preserved here because it is what the hardware does.
  */
 static aote_t *pmap_$aote_for_segment(uint16_t seg)
 {
-    return ASTE_BASE[(int16_t)seg - 1].aote;     /* 0xEC53F0 + seg * 0x14 */
+    return AST_ASTE_ENTRY((int16_t)seg)->aote;     /* 0xEC53F0 + seg * 0x14 */
 }
 
 /*

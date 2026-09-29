@@ -48,12 +48,9 @@ static void reset_state(void);
 #include "ast/flush_installed_pages.c"
 
 /* AST_ block cells */
-aste_t   *ast_free_aste_head;
-uint16_t  ast_free_astes;
-uint16_t  ast_aste_area_cnt;
-uint16_t  ast_aste_r_cnt;
-uint16_t  ast_aste_l_cnt;
-ec_$eventcount_t ast_ast_in_trans_ec;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 uint16_t  PROC1_$CURRENT;
 
 static int advance_calls;
@@ -83,11 +80,11 @@ void MMAP_$FREE_PAGES(uint16_t pid, uint32_t *vpn_array, uint16_t count)
 
 static void reset_state(void)
 {
-    ast_free_aste_head = NULL;
-    ast_free_astes = 5;
-    ast_aste_area_cnt = 10;
-    ast_aste_r_cnt = 20;
-    ast_aste_l_cnt = 30;
+    AST_$FREE_ASTE_HEAD = NULL;
+    AST_$FREE_ASTES = 5;
+    AST_$ASTE_AREA_CNT = 10;
+    AST_$ASTE_R_CNT = 20;
+    AST_$ASTE_L_CNT = 30;
     advance_calls = 0; advance_ec = NULL;
     remove_list_calls = 0; free_pages_calls = 0;
     PROC1_$CURRENT = 3;
@@ -99,20 +96,20 @@ TEST(free_area_aste)
     memset(&a, 0, sizeof(a)); memset(&old_head, 0, sizeof(old_head));
     a.flags = ASTE_FLAG_AREA | ASTE_FLAG_REMOTE;   /* AREA wins */
     a.aote = (aote_t *)&old_head;
-    ast_free_aste_head = &old_head;
+    AST_$FREE_ASTE_HEAD = &old_head;
 
     AST_$FREE_ASTE(&a);
 
-    ASSERT_EQ(9, ast_aste_area_cnt);
-    ASSERT_EQ(20, ast_aste_r_cnt);
-    ASSERT_EQ(30, ast_aste_l_cnt);
+    ASSERT_EQ(9, AST_$ASTE_AREA_CNT);
+    ASSERT_EQ(20, AST_$ASTE_R_CNT);
+    ASSERT_EQ(30, AST_$ASTE_L_CNT);
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)a.aote);
     ASSERT_EQ((uintptr_t)&old_head, (uintptr_t)a.next);
-    ASSERT_EQ((uintptr_t)&a, (uintptr_t)ast_free_aste_head);
+    ASSERT_EQ((uintptr_t)&a, (uintptr_t)AST_$FREE_ASTE_HEAD);
     ASSERT_EQ(ASTE_FLAG_AREA | ASTE_FLAG_REMOTE | ASTE_FLAG_IN_TRANS, a.flags);
-    ASSERT_EQ(6, ast_free_astes);
+    ASSERT_EQ(6, AST_$FREE_ASTES);
     ASSERT_EQ(1, advance_calls);
-    ASSERT_EQ((uintptr_t)&ast_ast_in_trans_ec, (uintptr_t)advance_ec);
+    ASSERT_EQ((uintptr_t)&AST_$AST_IN_TRANS_EC, (uintptr_t)advance_ec);
 }
 
 TEST(free_remote_aste)
@@ -123,9 +120,9 @@ TEST(free_remote_aste)
 
     AST_$FREE_ASTE(&a);
 
-    ASSERT_EQ(10, ast_aste_area_cnt);
-    ASSERT_EQ(19, ast_aste_r_cnt);
-    ASSERT_EQ(30, ast_aste_l_cnt);
+    ASSERT_EQ(10, AST_$ASTE_AREA_CNT);
+    ASSERT_EQ(19, AST_$ASTE_R_CNT);
+    ASSERT_EQ(30, AST_$ASTE_L_CNT);
 }
 
 TEST(free_local_aste)
@@ -136,9 +133,9 @@ TEST(free_local_aste)
 
     AST_$FREE_ASTE(&a);
 
-    ASSERT_EQ(10, ast_aste_area_cnt);
-    ASSERT_EQ(20, ast_aste_r_cnt);
-    ASSERT_EQ(29, ast_aste_l_cnt);
+    ASSERT_EQ(10, AST_$ASTE_AREA_CNT);
+    ASSERT_EQ(20, AST_$ASTE_R_CNT);
+    ASSERT_EQ(29, AST_$ASTE_L_CNT);
     ASSERT_EQ(ASTE_FLAG_DIRTY | ASTE_FLAG_IN_TRANS, a.flags);
 }
 

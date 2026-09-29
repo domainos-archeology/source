@@ -359,6 +359,26 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    source-6co (P2); host-test hygiene - source-ivp9 (P4).  (The PEB boolean
    typing bug the sweep exposed, source-uw36, was fixed in the step's review.)
 
+   Amended 2026-09-29 (AST step, source-gmxj, with source-avdg): blocks
+   `AST_$DATA` (0xE1DC80, 0x498: AOTH's 251 chain heads, the AOTE / ASTE
+   free heads, scan positions and limits, `dism_seqn`, the three
+   self-linked eventcounts, the allocation statistics, `AST_$NOT_FOUND`,
+   the update cursor and timestamp, the attribute timestamp mask and the
+   clobbered UID, all fields; `vol_indices[0..6]` is a union arm over
+   `dism_ec` whose bias slot is the eventcount's last word, the arm's pad
+   sized from the eventcount so element 1 follows it on every build) and
+   `AST_$AOT` (map AST_AOT 0xEC5400, 0xF960: `aste[504]` from the map's
+   AST and `aote[280]` from AOT; the ASTE index is Pascal 1-based and
+   element 0 would fall in AUDIT_LIST, so `AST_ASTE_ENTRY(seg)` applies the
+   bias once, as `PMAP_SEGMAP_ROW` does).  The list heads, limits and hash
+   chains stay pointers (the aste_t / aote_t records they chain already
+   are), so the table cells are initialised with the arrays' addresses
+   rather than `ARCH_PTR_TO_VA_STATIC` and the block's offsets are
+   target-only asserts.  `MMAP_$SEG_ASTE_FOR`, OSINFO_$GET_SEG_TABLE's AST
+   base and PMAP's ASTE lookups name the table; every AST segment-map site
+   is `PMAP_SEGMAP_ROW(seg)` and `SEGMAP_BASE` is gone.  Eleven exempted
+   guards fewer: five remain (DIR, MMAPE, MMU x2, interrupt stack).
+
 Keep the tree green throughout: a subsystem converts in one commit; the
 linker line and the object land together; other subsystems keep compiling
 because the public header still exports the same names (now fields or
@@ -379,7 +399,7 @@ because the public header still exports the same names (now fields or
   and needs neither sparse-VMA support nor padding; `sau2.ld` says so.  The
   converse risk remains for the exempted guards (section 5, step 5): an
   image address still used on the target now lies inside our own `.text`
-  (0xE1DC80 AST_, 0xE7DC00 DIR) or `.bss` (0xEB2800 MMAPE_BASE, 0xEB2BE8
+  (0xE7DC00 DIR; the AST_ one, 0xE1DC80, is gone with source-gmxj) or `.bss` (0xEB2800 MMAPE_BASE, 0xEB2BE8
   interrupt stack), which is why those beads matter. The risks that remain: (a) a hand-written file
   whose routines interleave with other code in the image and cannot be
   split without changing its bytes holds some map symbols out of order

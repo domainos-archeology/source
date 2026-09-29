@@ -69,13 +69,14 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
         /*
          * 0x00E01224..0x00E01248: D0 = size+1 (first new segment index),
          * D1 = size + count - D0 = count - 1 in 16 bits; bmi skips the loop.
-         * D6 = 0xED5000 + (seg << 7) with seg zero-extended to 32 bits.
+         * D6 = 0xED5000 + (seg << 7) with seg zero-extended to 32 bits:
+         * the END of segment seg's row (PMAP_SEGMAP_ROW(seg + 1)).
          */
         seg = (uint16_t)(AST_$SIZE_AST + 1);
         remaining = (int16_t)((int16_t)(AST_$SIZE_AST + add_count) -
                               (int16_t)seg);
         if (remaining >= 0) {
-            segmap_end = (char *)SEGMAP_BASE + ((uint32_t)seg << 7);
+            segmap_end = (char *)PMAP_SEGMAP_ROW(seg + 1);
             do {
                 /* 0x00E0124A..0x00E0125A: take the entry, bump the limit,
                  * va = address of the entry's last byte */

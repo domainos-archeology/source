@@ -26,7 +26,7 @@
  * Returns the AOTE in A0, or NULL.
  *
  * A5 is inherited (no `lea` here; every caller is AST code): 0x434 is
- * AST_$AOTE_SEQN, 0x420 ast_$vol_info_count, 0x428 AST_$AST_IN_TRANS_EC,
+ * AST_$AOTE_SEQN, 0x420 AST_$DATA.vol_info_count, 0x428 AST_$AST_IN_TRANS_EC,
  * and (0x0,A5,D3w) indexes the AOTH at 0xE1DC80.
  *
  * Original address: 0x00E020FA (658 bytes).
@@ -34,13 +34,7 @@
 
 #include "ast/ast_internal.h"
 
-/* The AOTE hash table, `AOTH` in the SAU2 map. */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_AOTH_BASE ((aote_t **)0xE1DC80)
-#else
-#define AST_AOTH_BASE ast_aoth_base
-#endif
+/* The AOTE hash table, `AOTH` in the SAU2 map, is AST_$DATA.aoth (ast/ast.h). */
 
 /*
  * UID_$HASH's table-size word: `pea (-0x52e,PC)` at 0x00E02118 ->
@@ -80,7 +74,7 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
      * is in transition is waited for and the whole test repeated.
      */
     while (seqn_before != AST_$AOTE_SEQN) {
-        existing = AST_AOTH_BASE[hash_index];
+        existing = AST_$DATA.aoth[hash_index];
         while (existing != NULL) {
             /* 0x00E02138..0x00E02146: two cmpm.l over aote+0x10 */
             if (existing->uid.high == uid->high &&
@@ -157,8 +151,8 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
     }
 
     /* 0x00E02208..0x00E02210: push onto the head of the bucket */
-    aote->hash_next = AST_AOTH_BASE[hash_index];
-    AST_AOTH_BASE[hash_index] = aote;
+    aote->hash_next = AST_$DATA.aoth[hash_index];
+    AST_$DATA.aoth[hash_index] = aote;
 
     /* 0x00E02214..0x00E02220 */
     ML_$UNLOCK(AST_LOCK_ID);
@@ -200,11 +194,11 @@ aote_t *ast_$force_activate_segment(uid_t *uid, uint32_t location,
 
     /*
      * 0x00E02288..0x00E0229A: a local volume index of at most 15 whose bit
-     * is set in ast_$vol_info_count is dismounting (`btst.l D0,D1` /
+     * is set in AST_$DATA.vol_info_count is dismounting (`btst.l D0,D1` /
      * `bhi`: C is clear from the preceding cmp, so bhi means "bit set").
      */
     vol_idx = aote->vol_index;
-    if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+    if (vol_idx <= 0xF && (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
         goto bad_volume;
     }
     /* 0x00E0229C..0x00E022A2 */
@@ -228,7 +222,7 @@ after_location_stored:
     }
     /* 0x00E022BA..0x00E022CC: same dismount test (`bls` = bit clear) */
     vol_idx = aote->vol_index;
-    if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+    if (vol_idx <= 0xF && (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
         goto bad_volume;
     }
     /* 0x00E022E0..0x00E022F0: pushes status, &attrs, &obj_loc */
@@ -252,7 +246,7 @@ relock:
      * while the lock was released */
     if (aote->remote_flag >= 0) {
         vol_idx = aote->vol_index;
-        if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+        if (vol_idx <= 0xF && (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
             *status = ast_$validate_uid(uid, 0x30F00);
         }
     }
@@ -272,9 +266,9 @@ relock:
     }
 
     /* 0x00E02350..0x00E02364: unlink from the bucket */
-    prev = AST_AOTH_BASE[hash_index];
+    prev = AST_$DATA.aoth[hash_index];
     if (prev == aote) {
-        AST_AOTH_BASE[hash_index] = aote->hash_next;
+        AST_$DATA.aoth[hash_index] = aote->hash_next;
     } else {
         while (prev->hash_next != aote) {
             prev = prev->hash_next;

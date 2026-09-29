@@ -73,7 +73,9 @@ static int test_failed_flag = 0;
 
 /* Globals the AST subsystem expects from elsewhere. */
 uid_t UID_$NIL = { 0, 0 };
-uint32_t ast_$attr_timestamp_mask = 0;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 /* Mock state. */
 static int mock_lock_depth[64];
@@ -863,14 +865,14 @@ TEST(timestamp_mask_gates_abs_clock)
 
     setup_aote();
     test_aote.obj_type = 4;
-    ast_$attr_timestamp_mask = 0;
+    AST_$ATTR_TIMESTAMP_MASK = 0;
 
     call_dispatch(ATTR_TYPE_DTM, &v, &status);
     ASSERT_EQ(0, mock_abs_clock_calls);
 
     setup_aote();
     test_aote.obj_type = 4;
-    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_DTM;
+    AST_$ATTR_TIMESTAMP_MASK = 1u << ATTR_TYPE_DTM;
 
     call_dispatch(ATTR_TYPE_DTM, &v, &status);
     ASSERT_EQ(1, mock_abs_clock_calls);
@@ -878,7 +880,7 @@ TEST(timestamp_mask_gates_abs_clock)
     ASSERT_EQ(0x11112222, test_aote.dtv_high);
     ASSERT_EQ(0x3333, test_aote.dtv_low);
 
-    ast_$attr_timestamp_mask = 0;
+    AST_$ATTR_TIMESTAMP_MASK = 0;
 }
 
 /* 0xE0512A: a remote AOTE never refreshes the absolute clock. */
@@ -890,12 +892,12 @@ TEST(remote_aote_skips_abs_clock)
     setup_aote();
     test_aote.obj_type = 4;
     test_aote.remote_flag = -1;
-    ast_$attr_timestamp_mask = 1u << ATTR_TYPE_DTM;
+    AST_$ATTR_TIMESTAMP_MASK = 1u << ATTR_TYPE_DTM;
 
     call_dispatch(ATTR_TYPE_DTM, &v, &status);
 
     ASSERT_EQ(0, mock_abs_clock_calls);
-    ast_$attr_timestamp_mask = 0;
+    AST_$ATTR_TIMESTAMP_MASK = 0;
 }
 
 /*

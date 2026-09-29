@@ -12,13 +12,7 @@
 
 #include "ast/ast_internal.h"
 
-/* The AOTE hash table, `AOTH` in the SAU2 map. */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_AOTH_BASE ((aote_t **)0xE1DC80)
-#else
-#define AST_AOTH_BASE ast_aoth_base
-#endif
+/* The AOTE hash table, `AOTH` in the SAU2 map, is AST_$DATA.aoth (ast/ast.h). */
 
 /*
  * UID_$HASH's table-size word: `pea (-0x4c6,PC)` at 0x00E020B0 ->
@@ -40,7 +34,7 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
                                      (uint16_t *)&ast_$aoth_hash_size_00e01bec);
 
     /* 0x00E020E0: the chain head */
-    aote = AST_AOTH_BASE[hash_index];
+    aote = AST_$DATA.aoth[hash_index];
     while (aote != NULL) {
         /* 0x00E020C6..0x00E020D4: two cmpm.l over aote+0x10 */
         if (aote->uid.high == uid->high && aote->uid.low == uid->low) {
@@ -50,7 +44,7 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
             }
             /* 0x00E020DC..0x00E020E0: wait, then restart from the head */
             AST_$WAIT_FOR_AST_INTRANS();
-            aote = AST_AOTH_BASE[hash_index];
+            aote = AST_$DATA.aoth[hash_index];
             continue;
         }
         /* 0x00E020E6 */

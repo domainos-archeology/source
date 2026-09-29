@@ -57,9 +57,9 @@ static void reset_state(void);
 #include "ast/purify_aote.c"
 
 #define TEST_BUCKETS 251
-static aote_t *test_aoth[TEST_BUCKETS];
-aote_t **ast_aoth_base = test_aoth;
-ec_$eventcount_t ast_ast_in_trans_ec;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 static aote_t test_aote, other_aote;
 static aste_t s1, s2;
@@ -113,7 +113,7 @@ void VTOCE_$WRITE(vtoc_$lookup_req_t *req, vtoce_$result_t *data, char flags, st
 
 static void reset_state(void)
 {
-    memset(test_aoth, 0, sizeof(test_aoth));
+    memset(AST_$DATA.aoth, 0, sizeof(AST_$DATA.aoth));
     memset(&test_aote, 0, sizeof(test_aote)); memset(&other_aote, 0, sizeof(other_aote));
     memset(&s1, 0, sizeof(s1)); memset(&s2, 0, sizeof(s2));
     lock_calls = unlock_calls = 0;
@@ -145,14 +145,14 @@ TEST(refusals)
     ASSERT_EQ(0, test_aote.flags);                     /* never marked */
 
     /* keep = TRUE lifts it (the AOTE must be on its bucket for the unlink) */
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
     ast_$process_aote(&test_aote, -1, -1, 0, &status);
     ASSERT_EQ(status_$ok, status);
 
     /* a remote protected type-2 is not refused */
     reset_state();
     test_aote.sub_type = 2; test_aote.attr_flags_lo = 0x02; test_aote.remote_flag = (int8_t)0x80;
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
     ast_$process_aote(&test_aote, -1, 0, 0, &status);
     ASSERT_EQ(status_$ok, status);
 }
@@ -164,7 +164,7 @@ TEST(drain_and_unlink)
     test_aote.obj_loc_uid.high = 0x77;
     s1.next = &s2; test_aote.aste_list = &s1;
     other_aote.hash_next = &test_aote;
-    test_aoth[3] = &other_aote;
+    AST_$DATA.aoth[3] = &other_aote;
     test_aote.hash_next = NULL;
 
     ast_$process_aote(&test_aote, -1, 0, 0, &status);
@@ -186,7 +186,7 @@ TEST(head_unlink_and_purify)
 {
     status_$t status;
 
-    test_aoth[3] = &test_aote; test_aote.hash_next = &other_aote;
+    AST_$DATA.aoth[3] = &test_aote; test_aote.hash_next = &other_aote;
     test_aote.flags = AOTE_FLAG_DIRTY;
 
     ast_$process_aote(&test_aote, 0, 0, 0, &status);
@@ -194,7 +194,7 @@ TEST(head_unlink_and_purify)
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, write_calls);                         /* purify ran */
     ASSERT_EQ(0, write_flags);
-    ASSERT_EQ((uintptr_t)&other_aote, (uintptr_t)test_aoth[3]);
+    ASSERT_EQ((uintptr_t)&other_aote, (uintptr_t)AST_$DATA.aoth[3]);
 }
 
 TEST(wait_for_in_transition_aste)
@@ -203,7 +203,7 @@ TEST(wait_for_in_transition_aste)
 
     s1.flags = ASTE_FLAG_IN_TRANS; test_aote.aste_list = &s1;
     wait_clear = &s1;
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
 
     ast_$process_aote(&test_aote, -1, 0, -1, &status);
     ASSERT_EQ(1, wait_calls);
@@ -212,7 +212,7 @@ TEST(wait_for_in_transition_aste)
     /* wait = FALSE: deactivate at once */
     reset_state();
     s1.flags = ASTE_FLAG_IN_TRANS; test_aote.aste_list = &s1;
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
     ast_$process_aote(&test_aote, -1, 0, 0, &status);
     ASSERT_EQ(0, wait_calls);
     ASSERT_EQ(1, deact_calls);
@@ -222,7 +222,7 @@ TEST(deactivate_failures)
 {
     status_$t status;
 
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
     test_aote.aste_list = &s1;
     deact_fail = &s1; deact_status = status_$ast_segment_not_deactivatable;
     ast_$process_aote(&test_aote, -1, 0, 0, &status);
@@ -231,7 +231,7 @@ TEST(deactivate_failures)
     ASSERT_EQ(1, advance_calls);
 
     reset_state();
-    test_aoth[3] = &test_aote;
+    AST_$DATA.aoth[3] = &test_aote;
     test_aote.aste_list = &s1;
     deact_fail = &s1; deact_status = 0x00050007;
     ast_$process_aote(&test_aote, -1, 0, 0, &status);

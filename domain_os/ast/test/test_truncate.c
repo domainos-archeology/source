@@ -51,11 +51,12 @@ static void reset_state(void);
 
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x400
-static segmap_entry_t test_segmap[4 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
-ec_$eventcount_t ast_ast_in_trans_ec;
 uint16_t  PROC1_$CURRENT;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
@@ -137,7 +138,7 @@ void REM_FILE_$TRUNCATE(uid_t *vol, uid_t *uid, uint32_t size, uint8_t del, cloc
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(lookup_uid, 0, sizeof(lookup_uid));

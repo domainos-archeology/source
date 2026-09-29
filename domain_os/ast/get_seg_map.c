@@ -212,9 +212,8 @@ void AST_$GET_SEG_MAP(uid_t *uid, uint32_t start_offset, uint32_t location,
         /* 0x00E06D1C..0x00E06D44: offset of that page relative to the
          * aligned start, and its segment map entry */
         rel_off = ((uint32_t)seg << 15) + (first_page << 10) - aligned_start;
-        entry = (uint32_t *)((char *)SEGMAP_BASE +
-                             ((uint32_t)aste->seg_index << 7) +
-                             (first_page << 2) - 0x80);
+        entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                             + (first_page << 2));
 
         /* 0x00E06D48..0x00E06D7A: last page to look at */
         if (map_size >= 0x20) {

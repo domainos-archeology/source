@@ -74,23 +74,17 @@ static void reset_mocks(void);
 #define TEST_N_PAGES  32
 #define TEST_N_FRAMES 64
 
-static segmap_entry_t test_segmap[(TEST_N_SEGS + 1) * TEST_N_PAGES];
-static aste_t         test_astes[TEST_N_SEGS];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 /* The MMU page frame table (0xFFB800 on the target): four bytes per page. */
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-/*
- * SEGMAP_BASE is the BIASED base: the row for segment n lives at
- * SEGMAP_BASE + n*0x80 - 0x80, so offer one spare row below it.
- */
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
-aste_t         *ast_aste_base   = test_astes;
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base     = test_pft;
 
-ec_$eventcount_t ast_ast_in_trans_ec;
-ec_$eventcount_t ast_pmap_in_trans_ec;
 
 uint16_t PROC1_$CURRENT;
 #include "proc1/proc1.h"
@@ -217,17 +211,17 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid,
 
 static aote_t test_aote;
 
-static aste_t *the_aste(void) { return &test_astes[TEST_SEG - 1]; }
+static aste_t *the_aste(void) { return AST_ASTE_ENTRY(TEST_SEG); }
 
 static uint32_t *segmap_row_of_test_seg(void)
 {
-    return (uint32_t *)((char *)SEGMAP_BASE + (uint32_t)TEST_SEG * 0x80 - 0x80);
+    return (uint32_t *)PMAP_SEGMAP_ROW(TEST_SEG);
 }
 
 static void reset_mocks(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
-    memset(test_astes, 0, sizeof(test_astes));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));

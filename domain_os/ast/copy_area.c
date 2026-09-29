@@ -115,10 +115,8 @@ void AST_$COPY_AREA(uint16_t partner_index, uint16_t pid, aste_t *src_aste,
 
     /* 0x00E03A3E..0x00E03AB4 */
     *status = status_$ok;
-    src_row = (uint32_t *)((char *)SEGMAP_BASE +
-                           ((uint32_t)src_aste->seg_index << 7) - 0x80);
-    dst_row = (uint32_t *)((char *)SEGMAP_BASE +
-                           ((uint32_t)dst_aste->seg_index << 7) - 0x80);
+    src_row = (uint32_t *)PMAP_SEGMAP_ROW(src_aste->seg_index);
+    dst_row = (uint32_t *)PMAP_SEGMAP_ROW(dst_aste->seg_index);
     buffer_va = ARCH_PTR_TO_VA(buffer);
     area = AREA_ID_TO_ENTRY(partner_index);
     /* tst.w (-0x8,A1,D2) = entry+0x28, sne */

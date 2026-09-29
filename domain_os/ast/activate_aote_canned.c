@@ -25,14 +25,8 @@
 
 /*
  * The AOTE hash table (`AOTH`, 0xE1DC80 in the SAU2 map): an array of
- * chain heads indexed by UID_$HASH's result.
+ * chain heads indexed by UID_$HASH's result, AST_$DATA.aoth (ast/ast.h).
  */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_AOTH_BASE ((aote_t **)0xE1DC80)
-#else
-#define AST_AOTH_BASE ast_aoth_base
-#endif
 
 /*
  * The hash-table size word UID_$HASH is given, `pea (0x6e,PC)` at
@@ -103,7 +97,7 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
     /* 0x00E2F15E..0x00E2F17A: hash aote->uid (aote+0x10); D2 = hash*4 */
     hash = (int16_t)UID_$HASH(&aote->uid,
                               (uint16_t *)&ast_$canned_hash_size_00e2f1ce);
-    chain = AST_AOTH_BASE[hash];
+    chain = AST_$DATA.aoth[hash];
 
     /*
      * 0x00E2F17E..0x00E2F1A8: walk the chain; a matching UID (two cmpm.l
@@ -121,8 +115,8 @@ void AST_$ACTIVATE_AOTE_CANNED(uint32_t *attrs, uint32_t *obj_info)
     }
 
     /* 0x00E2F1AA..0x00E2F1B4: push onto the head of the bucket */
-    aote->hash_next = AST_AOTH_BASE[hash];
-    AST_AOTH_BASE[hash] = aote;
+    aote->hash_next = AST_$DATA.aoth[hash];
+    AST_$DATA.aoth[hash] = aote;
 
     /* 0x00E2F1B8..0x00E2F1BE: ML_$UNLOCK(0x12) */
     ML_$UNLOCK(AST_LOCK_ID);

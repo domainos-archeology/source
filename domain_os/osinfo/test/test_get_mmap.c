@@ -47,8 +47,9 @@ static int tests_failed = 0;
 
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 mmape_t  *mmap_mmape_base;
-aste_t   *ast_aste_base;
-uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt, ast_alloc_too_few_cnt, ast_alloc_cnt;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint16_t  PROC1_$CURRENT;
 #include "proc1/proc1.h"
@@ -97,7 +98,6 @@ uint16_t PROC2_$GET_PID(uid_t *proc_uid, status_$t *status_ret)
 /* ------------------------------------------------------------------ */
 
 static mmape_t mmape_pages[16];
-static aste_t  aste_table[4];
 static aote_t  aote_entries[4];
 static uint8_t flags_rec[4];
 static osinfo_global_info_t info;
@@ -111,7 +111,7 @@ static void reset_state(void)
 {
     memset(&MMAP_$DATA, 0, sizeof(MMAP_$DATA));
     memset(mmape_pages, 0, sizeof(mmape_pages));
-    memset(aste_table, 0, sizeof(aste_table));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(aote_entries, 0, sizeof(aote_entries));
     memset(flags_rec, 0, sizeof(flags_rec));
     memset(&info, 0, sizeof(info));
@@ -121,9 +121,8 @@ static void reset_state(void)
     memset(&uid_out, 0, sizeof(uid_out));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     mmap_mmape_base = mmape_pages;
-    ast_aste_base = aste_table;
     for (int i = 0; i < 4; i++) {
-        aste_table[i].aote = &aote_entries[i];
+        AST_$AOT.aste[i].aote = &aote_entries[i];
     }
     status = 0x5555AAAA;
     PROC1_$CURRENT = 7;
@@ -266,7 +265,7 @@ static void test_find_page_found(void)
     ASSERT_EQ(status_$os_info_page_wired, status);
     ASSERT_EQ(5, info.set_value);
 
-    /* start at 5: page 6 is the hit, ASTE 2 -> aste_table[1] -> its AOTE */
+    /* start at 5: page 6 is the hit, ASTE 2 -> AST_$AOT.aste[1] -> its AOTE */
     info.set_value = 5;
     call(MMAP_FLAG_FIND_PAGE);
     ASSERT_EQ(status_$os_info_page_found, status);
@@ -313,16 +312,16 @@ static void test_get_counters(void)
 {
     PMAP_$DATA.pur_l_cnt = 1;
     PMAP_$DATA.pur_r_cnt = 2;
-    ast_page_flt_cnt = 3;
-    ast_ws_flt_cnt = 4;
+    AST_$PAGE_FLT_CNT = 3;
+    AST_$WS_FLT_CNT = 4;
     PMAP_$DATA.t_pur_scans = 5;
     MMAP_$ALLOC_CNT = 6;
     MMAP_$ALLOC_PAGES = 7;
     MMAP_$STEAL_CNT = 8;
     MMAP_$WS_OVERFLOW = 9;
     MMAP_$WS_SCAN_CNT = 10;
-    ast_alloc_cnt = 11;
-    ast_alloc_too_few_cnt = 12;
+    AST_$ALLOC_CNT = 11;
+    AST_$ALLOC_TOO_FEW_CNT = 12;
     MMAP_$RECLAIM_SHAR_CNT = 13;
     MMAP_$RECLAIM_PUR_CNT = 14;
     MMAP_$WS_REMOVE = 15;

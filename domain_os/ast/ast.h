@@ -15,11 +15,11 @@
  * - ASTE: 20 bytes (0x14) per entry
  * - Segment Map: 128 bytes (0x80) per segment at 0xED5000
  *
- * Memory layout (m68k):
- * - AST globals: 0xE1DC80
- * - ASTE array: 0xEC5400
- * - AOTE area: grows from 0xEC7B60
- * - Segment maps: 0xED5000
+ * Memory layout (image addresses; the blocks are linked in map order):
+ * - AST globals: 0xE1DC80, AST_$DATA
+ * - ASTE array: 0xEC5400, AST_$AOT.aste (AST_ASTE_ENTRY)
+ * - AOTE area: grows from 0xEC7B60, AST_$AOT.aote
+ * - Segment maps: 0xED5000, PMAP_$SEGMAP (PMAP_SEGMAP_ROW)
  *
  * Original source was likely Pascal, converted to C.
  */
@@ -34,7 +34,7 @@
  * AST_$GET_ATTRIBUTES fill from aote+0x9C.  Defined in file/file.h, which is
  * where FILE_$PRIV_LOCK (its other producer) already documents the layout. */
 #include "file/file.h"
-/* PMAP_$SEGMAP, the segment map SEGMAP_BASE names (see below) */
+/* PMAP_$SEGMAP / PMAP_SEGMAP_ROW, the segment map the AST sites index */
 #include "pmap/pmap.h"
 
 /* AST status codes (module 0x03) */
@@ -494,136 +494,6 @@ typedef struct segmap_entry_t {
 #define SEGMAP_COPY_ON_WRITE 0x00400000 /* Copy-on-write page */
 #define SEGMAP_PPN_MASK 0x007FFFFF      /* Physical page number mask */
 
-/*
- * AST Global State
- *
- * Global variables for the AST subsystem, based at 0xE1DC80.
- */
-
-/*
- * Architecture-independent macros for AST access
- */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-/* AST globals base */
-#define AST_GLOBALS_BASE 0xE1DC80
-
-/* AOTE hash table (at base + 0x00, 256 entries * 4 bytes) */
-#define AOTH (*(uint32_t *)0xE1DC80)
-
-/* ASTE array base */
-#define ASTE_BASE ((aste_t *)0xEC5400)
-
-/*
- * Segment map base - the image's 0xED5000 (map AST_PMAPS), which is now the
- * MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h, source-iq58): row 0 of the
- * block is segment 1, so SEGMAP_BASE keeps the image's meaning and every
- * `SEGMAP_BASE + seg*0x80 - 0x80' site below still reaches row seg.  A
- * shim for the AST sites (one per file, byte arithmetic that is not a
- * mechanical conversion) until the AST module's own block step converts
- * them; the literal would name different memory from the linked block.
- * TODO(source-avdg): convert the AST SEGMAP_BASE sites and ast_segmap_base.
- */
-#define SEGMAP_BASE ((segmap_entry_t *)&PMAP_$SEGMAP.row[0][0])
-
-/* AST globals at various offsets from base */
-#define AST_$AOTE_LIMIT (*(aote_t **)0xE1E074)        /* 0x3F4 */
-#define AST_$FREE_ASTE_HEAD (*(aste_t **)0xE1E078)    /* 0x3F8 */
-#define AST_$ASTE_SCAN_POS (*(aste_t **)0xE1E07C)     /* 0x3FC */
-#define AST_$ASTE_LIMIT (*(aste_t **)0xE1E080)        /* 0x400 */
-#define AST_$DISM_SEQN (*(uint32_t *)0xE1E084)        /* 0x404 */
-#define AST_$DISM_EC (*(ec_$eventcount_t *)0xE1E088)  /* 0x408 */
-#define AST_$UPDATE_SCAN (*(aote_t **)0xE1E104)       /* 0x484 */
-#define AST_$UPDATE_TIMESTAMP (*(uint16_t *)0xE1E108) /* 0x488 */
-#define AST_$AOTE_SEQN (*(uint32_t *)0xE1E0B4)        /* 0x434 */
-
-/* Event counters */
-#define AST_$AST_IN_TRANS_EC (*(ec_$eventcount_t *)0xE1E0A8)  /* 0x428 */
-#define AST_$PMAP_IN_TRANS_EC (*(ec_$eventcount_t *)0xE1E0CC) /* 0x44C */
-
-/* Statistics */
-#define AST_$ALLOC_WORST_AST (*(uint32_t *)0xE1E0C4) /* 0x444 */
-#define AST_$ALLOC_TOTAL_AST (*(uint32_t *)0xE1E0C8) /* 0x448 */
-#define AST_$WS_FLT_CNT (*(uint32_t *)0xE1E0D8)      /* 0x458 */
-#define AST_$PAGE_FLT_CNT (*(uint32_t *)0xE1E0DC)    /* 0x45C */
-#define AST_$ALLOC_TOO_FEW_CNT (*(uint32_t *)0xE1E0E0) /* 0x460 (used by osinfo) */
-#define AST_$ALLOC_CNT (*(uint32_t *)0xE1E0E4)       /* 0x464 (used by osinfo) */
-#define AST_$FREE_ASTES (*(uint16_t *)0xE1E0E8)      /* 0x468 */
-#define AST_$GROW_AHEAD_CNT (*(uint16_t *)0xE1E0EC)  /* 0x46C */
-#define AST_$SIZE_AOT (*(uint16_t *)0xE1E0EE)        /* 0x46E */
-#define AST_$SIZE_AST (*(uint16_t *)0xE1E0F0)        /* 0x470 */
-#define AST_$ASTE_AREA_CNT (*(uint16_t *)0xE1E0F2)   /* 0x472 */
-#define AST_$ASTE_R_CNT (*(uint16_t *)0xE1E0F4)      /* 0x474 */
-#define AST_$ASTE_L_CNT (*(uint16_t *)0xE1E0F6)      /* 0x476 */
-#else
-/* For non-m68k platforms */
-extern uint8_t *ast_globals_base;
-extern uint32_t ast_aoth[];
-extern aste_t *ast_aste_base;
-extern segmap_entry_t *ast_segmap_base;
-
-#define AST_GLOBALS_BASE ((uintptr_t)ast_globals_base)
-extern aote_t *ast_aote_limit;
-extern aste_t *ast_free_aste_head;
-extern aste_t *ast_aste_scan_pos;
-extern aste_t *ast_aste_limit;
-extern uint32_t ast_dism_seqn;
-extern ec_$eventcount_t ast_dism_ec;
-extern aote_t *ast_update_scan;
-extern uint16_t ast_update_timestamp;
-extern uint32_t ast_aote_seqn;
-extern ec_$eventcount_t ast_ast_in_trans_ec;
-extern ec_$eventcount_t ast_pmap_in_trans_ec;
-extern uint32_t ast_alloc_worst;
-extern uint32_t ast_alloc_total;
-extern uint32_t ast_ws_flt_cnt;
-extern uint32_t ast_page_flt_cnt;
-extern uint32_t ast_alloc_too_few_cnt;
-extern uint32_t ast_alloc_cnt;
-extern uint16_t ast_free_astes;
-extern uint16_t ast_grow_ahead_cnt;
-extern uint16_t ast_size_aot;
-extern uint16_t ast_size_ast;
-extern uint16_t ast_aste_area_cnt;
-extern uint16_t ast_aste_r_cnt;
-extern uint16_t ast_aste_l_cnt;
-
-#define AOTH ast_aoth[0]
-#define ASTE_BASE ast_aste_base
-#define SEGMAP_BASE ast_segmap_base
-#define AST_$AOTE_LIMIT ast_aote_limit
-#define AST_$FREE_ASTE_HEAD ast_free_aste_head
-#define AST_$ASTE_SCAN_POS ast_aste_scan_pos
-#define AST_$ASTE_LIMIT ast_aste_limit
-#define AST_$DISM_SEQN ast_dism_seqn
-#define AST_$DISM_EC ast_dism_ec
-#define AST_$UPDATE_SCAN ast_update_scan
-#define AST_$UPDATE_TIMESTAMP ast_update_timestamp
-#define AST_$AOTE_SEQN ast_aote_seqn
-#define AST_$AST_IN_TRANS_EC ast_ast_in_trans_ec
-#define AST_$PMAP_IN_TRANS_EC ast_pmap_in_trans_ec
-#define AST_$ALLOC_WORST_AST ast_alloc_worst
-#define AST_$ALLOC_TOTAL_AST ast_alloc_total
-#define AST_$WS_FLT_CNT ast_ws_flt_cnt
-#define AST_$PAGE_FLT_CNT ast_page_flt_cnt
-#define AST_$ALLOC_TOO_FEW_CNT ast_alloc_too_few_cnt
-#define AST_$ALLOC_CNT ast_alloc_cnt
-#define AST_$FREE_ASTES ast_free_astes
-#define AST_$GROW_AHEAD_CNT ast_grow_ahead_cnt
-#define AST_$SIZE_AOT ast_size_aot
-#define AST_$SIZE_AST ast_size_ast
-#define AST_$ASTE_AREA_CNT ast_aste_area_cnt
-#define AST_$ASTE_R_CNT ast_aste_r_cnt
-#define AST_$ASTE_L_CNT ast_aste_l_cnt
-#endif
-
-/* Get ASTE entry by index */
-#define ASTE_FOR_INDEX(idx) (&ASTE_BASE[(idx)])
-
-/* Get segment map for segment index */
-#define SEGMAP_FOR_SEG(seg)                                                    \
-  ((segmap_entry_t *)((char *)SEGMAP_BASE + ((seg) << 7)))
-
 /* Maximum sizes */
 #define AST_MAX_AOTE 0x118 /* 280 entries */
 #define AST_MAX_ASTE 0x1F8 /* 504 entries */
@@ -644,6 +514,277 @@ extern uint16_t ast_aste_l_cnt;
 #define SEGMAP_FLAG_INSTALLED 0x20000000 /* Page installed in MMU */
 #define SEGMAP_FLAG_COW 0x00400000       /* Copy-on-write */
 #define SEGMAP_DISK_ADDR_MASK 0x007FFFFF /* Disk address / PPN mask */
+
+/*
+ * ============================================================================
+ * AST_$DATA - the AST_ module block, 0x00E1DC80..0x00E1E117
+ * ============================================================================
+ *
+ * Module data blocks AST_$DATA / AST_$AOT: Claude Opus 5.5 (source-gmxj).
+ *
+ * Map "D E1DC80 AST_ size = 498", between APP (0xE1DC0C) and AREA_
+ * (0xE1E118); every AST_ entry point loads A5 with it
+ * (docs/design-per-process-data.md; the address is the image's, an
+ * ordering key, not a link address).  The map names AOTH (+0x000),
+ * AST_$AST_IN_TRANS_EC (+0x428), AST_$DISMOUNT_FAILED_PTR (+0x438) and the
+ * run AST_$ALLOC_WORST_AOT..AST_$NOT_FOUND (+0x43C..+0x478); the other
+ * names are the tree's.  Image contents in ast/ast_data.c.  (The four-byte
+ * "D E35000 AST_ size = 4" segment in OS_INIT_DATA has no references in
+ * the image - an A5 anchor, like the other 4-byte segments there - and no
+ * C object.)
+ *
+ * The hash table, the list heads, the scan positions, the limits and the
+ * eventcounts' waiter links are POINTERS here, as in the aote_t / aste_t
+ * records they chain (hash_next, aste_list, next, aote): the AST code
+ * follows them directly, and the tables they point into are the linked
+ * AST_$AOT block below.  So the block is pointer-bearing: its offsets are
+ * asserted on the 32-bit target only (the host's 8-byte pointers move
+ * every field after AOTH).
+ */
+#define AST_AOTH_BUCKETS 0xFB       /* UID_$HASH table size: the word 00 FB
+                                     * at 0x00E01BEC (ast/lookup_aote_by_uid.c) */
+#define AST_VOL_INDEX_SLOTS 7       /* vol_indices[0..6], see below */
+#define AST_$DATA_SIZE 0x498        /* map: AST_ size = 498 */
+
+/*
+ * AST_$NOT_FOUND (0xE1E0F8, A5+0x478): the UID and the caller's flags
+ * longword of the last object lookup that failed.  Only ast_$validate_uid
+ * (0x00E00BE8) writes it; nothing in the image reads it back (post-mortem
+ * inspection).
+ */
+typedef struct ast_$not_found_t {
+    uid_t    uid;       /* 0x00: (0x478,A5) high, (0x47C,A5) low */
+    uint32_t flags;     /* 0x08: (0x480,A5) */
+} ast_$not_found_t;
+_Static_assert(sizeof(ast_$not_found_t) == 0x0C, "ast_$not_found_t is 12 bytes");
+
+typedef struct ast_$data_t {
+    /* +0x000 AOTH: 251 hash chain heads, `(0x0,A5,D3w)` with D3w = hash*4
+     * (ast_$lookup_aote_by_uid 0x00E020E0) */
+    aote_t *aoth[AST_AOTH_BUCKETS];
+    aote_t *free_aote_head;  /* +0x3EC: popped at 0x00E01D74..0x00E01D7E */
+    aote_t *aote_scan_pos;   /* +0x3F0: image 0xEC7B60 = AOT */
+    aote_t *aote_limit;      /* +0x3F4: image 0xEC7B60, grown by AST_$ADD_AOTES */
+    aste_t *free_aste_head;  /* +0x3F8 */
+    aste_t *aste_scan_pos;   /* +0x3FC: image 0xEC5400 = AST */
+    aste_t *aste_limit;      /* +0x400: image 0xEC5400, grown by AST_$ADD_ASTES */
+    uint32_t dism_seqn;             /* +0x404: AST_$GET_DISM_SEQN */
+    /*
+     * +0x408: the dismount eventcount, and the per-volume activated-AOTE
+     * counts.  Every access to the counts is
+     *
+     *   lea (0x0,A5,D0w*0x1),An      ; D0w = vol_index * 2
+     *   ...w (0x412,An)
+     *
+     * (ast_$activate_aote 0x00E025B0/0x00E025B6, ast_$release_aote
+     * 0x00E02800-0x00E0280A, AST_$DISMOUNT 0x00E06A52): a Pascal word array
+     * [1..6] over the VOLX mount indices whose element 1 is at +0x414, right
+     * after the eventcount, so its bias slot (element 0, +0x412) is the low
+     * half of dism_ec's tail link.  One union arm per object keeps both at
+     * their A5 offsets (the design's per-index convention) and the users
+     * index with the volume number; the arm's pad is sized from the
+     * eventcount so element 1 follows it on the host as well.
+     */
+    union {
+        ec_$eventcount_t dism_ec;                       /* +0x408 */
+        struct {
+            uint8_t _bias[sizeof(ec_$eventcount_t) - sizeof(int16_t)];
+            int16_t vol_indices[AST_VOL_INDEX_SLOTS];   /* +0x412, [0..6] */
+        };
+    };
+    /*
+     * +0x420: per-volume "dismount in progress" bit set.  AST_$DISMOUNT sets
+     * bit `vol_index` on entry (0x00E069F8 `or.w D3w,(0x420,A5)`) and clears
+     * it on exit (0x00E06B02); ast_$activate_aote (0x00E02588) and
+     * ast_$release_aote (0x00E02816) test it with `btst.l D2,D0` after
+     * guarding `vol_index <= 15`, and VTOC_$SEARCH_VOLUMES reads it at
+     * 0x00E0244E.  Always a word access.
+     */
+    uint16_t vol_info_count;
+    uint8_t  _0422[6];              /* +0x422: no reference in the image */
+    ec_$eventcount_t ast_in_trans_ec;   /* +0x428 AST_$AST_IN_TRANS_EC */
+    uint32_t aote_seqn;             /* +0x434 */
+    aote_t *dismount_failed_ptr; /* +0x438 AST_$DISMOUNT_FAILED_PTR:
+                                     * stored by AST_$DISMOUNT 0x00E06AC0 */
+    uint32_t alloc_worst_aot;       /* +0x43C AST_$ALLOC_WORST_AOT */
+    uint32_t alloc_total_aot;       /* +0x440 AST_$ALLOC_TOTAL_AOT */
+    uint32_t alloc_worst_ast;       /* +0x444 AST_$ALLOC_WORST_AST */
+    uint32_t alloc_total_ast;       /* +0x448 AST_$ALLOC_TOTAL_AST */
+    ec_$eventcount_t pmap_in_trans_ec;  /* +0x44C AST_$PMAP_IN_TRANS_EC */
+    uint32_t ws_flt_cnt;            /* +0x458 AST_$WS_FLT_CNT */
+    uint32_t page_flt_cnt;          /* +0x45C AST_$PAGE_FLT_CNT */
+    uint32_t alloc_too_few_cnt;     /* +0x460 AST_$ALLOC_TOO_FEW_CNT */
+    uint32_t alloc_cnt;             /* +0x464 AST_$ALLOC_CNT */
+    uint16_t free_astes;            /* +0x468 AST_$FREE_ASTES */
+    uint16_t free_aotes;            /* +0x46A AST_$FREE_AOTES */
+    uint16_t grow_ahead_cnt;        /* +0x46C AST_$GROW_AHEAD_CNT, image 8 */
+    uint16_t size_aot;              /* +0x46E AST_$SIZE_AOT */
+    uint16_t size_ast;              /* +0x470 AST_$SIZE_AST */
+    uint16_t aste_area_cnt;         /* +0x472 AST_$ASTE_AREA_CNT */
+    uint16_t aste_r_cnt;            /* +0x474 AST_$ASTE_R_CNT */
+    uint16_t aste_l_cnt;            /* +0x476 AST_$ASTE_L_CNT */
+    ast_$not_found_t not_found;     /* +0x478 AST_$NOT_FOUND */
+    aote_t *update_scan;     /* +0x484: AST_$UPDATE's cursor, image 0xEC7B60 */
+    uint16_t update_timestamp;      /* +0x488: image 0xFFFF */
+    uint8_t  _048a[2];              /* +0x48A: no reference in the image */
+    /*
+     * +0x48C: the attribute types whose update also refreshes the object's
+     * absolute clock; AST_$SET_ATTR_DISPATCH tests it with
+     * `move.l (0x48c,A5),D3 / btst.l D1,D3' (0x00E0511E).  Image 0x0278301C.
+     */
+    uint32_t attr_timestamp_mask;
+    /* +0x490: the UID AST_$SAVE_CLOBBERED_UID copies aside into (0x490,A5)
+     * at 0x00E07238..0x00E07240 before it queues AST_$SET_TROUBLE */
+    uid_t    clobbered_uid;
+} ast_$data_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(ast_$data_t, free_aote_head) == 0x3EC, "free AOTE head 0xE1E06C");
+_Static_assert(offsetof(ast_$data_t, aote_scan_pos) == 0x3F0, "AOTE scan 0xE1E070");
+_Static_assert(offsetof(ast_$data_t, aote_limit) == 0x3F4, "AOTE limit 0xE1E074");
+_Static_assert(offsetof(ast_$data_t, free_aste_head) == 0x3F8, "free ASTE head 0xE1E078");
+_Static_assert(offsetof(ast_$data_t, aste_scan_pos) == 0x3FC, "ASTE scan 0xE1E07C");
+_Static_assert(offsetof(ast_$data_t, aste_limit) == 0x400, "ASTE limit 0xE1E080");
+_Static_assert(offsetof(ast_$data_t, dism_seqn) == 0x404, "dism_seqn 0xE1E084");
+_Static_assert(offsetof(ast_$data_t, dism_ec) == 0x408, "dism_ec 0xE1E088");
+_Static_assert(offsetof(ast_$data_t, vol_indices) == 0x412, "vol_indices bias slot 0xE1E092");
+_Static_assert(offsetof(ast_$data_t, vol_indices[1]) == 0x414, "vol_indices[1] follows dism_ec");
+_Static_assert(offsetof(ast_$data_t, vol_info_count) == 0x420, "vol_info_count 0xE1E0A0");
+_Static_assert(offsetof(ast_$data_t, ast_in_trans_ec) == 0x428, "AST_$AST_IN_TRANS_EC 0xE1E0A8");
+_Static_assert(offsetof(ast_$data_t, aote_seqn) == 0x434, "aote_seqn 0xE1E0B4");
+_Static_assert(offsetof(ast_$data_t, dismount_failed_ptr) == 0x438, "AST_$DISMOUNT_FAILED_PTR 0xE1E0B8");
+_Static_assert(offsetof(ast_$data_t, alloc_worst_aot) == 0x43C, "AST_$ALLOC_WORST_AOT 0xE1E0BC");
+_Static_assert(offsetof(ast_$data_t, alloc_total_aot) == 0x440, "AST_$ALLOC_TOTAL_AOT 0xE1E0C0");
+_Static_assert(offsetof(ast_$data_t, alloc_worst_ast) == 0x444, "AST_$ALLOC_WORST_AST 0xE1E0C4");
+_Static_assert(offsetof(ast_$data_t, alloc_total_ast) == 0x448, "AST_$ALLOC_TOTAL_AST 0xE1E0C8");
+_Static_assert(offsetof(ast_$data_t, pmap_in_trans_ec) == 0x44C, "AST_$PMAP_IN_TRANS_EC 0xE1E0CC");
+_Static_assert(offsetof(ast_$data_t, ws_flt_cnt) == 0x458, "AST_$WS_FLT_CNT 0xE1E0D8");
+_Static_assert(offsetof(ast_$data_t, page_flt_cnt) == 0x45C, "AST_$PAGE_FLT_CNT 0xE1E0DC");
+_Static_assert(offsetof(ast_$data_t, alloc_too_few_cnt) == 0x460, "AST_$ALLOC_TOO_FEW_CNT 0xE1E0E0");
+_Static_assert(offsetof(ast_$data_t, alloc_cnt) == 0x464, "AST_$ALLOC_CNT 0xE1E0E4");
+_Static_assert(offsetof(ast_$data_t, free_astes) == 0x468, "AST_$FREE_ASTES 0xE1E0E8");
+_Static_assert(offsetof(ast_$data_t, free_aotes) == 0x46A, "AST_$FREE_AOTES 0xE1E0EA");
+_Static_assert(offsetof(ast_$data_t, grow_ahead_cnt) == 0x46C, "AST_$GROW_AHEAD_CNT 0xE1E0EC");
+_Static_assert(offsetof(ast_$data_t, size_aot) == 0x46E, "AST_$SIZE_AOT 0xE1E0EE");
+_Static_assert(offsetof(ast_$data_t, size_ast) == 0x470, "AST_$SIZE_AST 0xE1E0F0");
+_Static_assert(offsetof(ast_$data_t, aste_area_cnt) == 0x472, "AST_$ASTE_AREA_CNT 0xE1E0F2");
+_Static_assert(offsetof(ast_$data_t, aste_r_cnt) == 0x474, "AST_$ASTE_R_CNT 0xE1E0F4");
+_Static_assert(offsetof(ast_$data_t, aste_l_cnt) == 0x476, "AST_$ASTE_L_CNT 0xE1E0F6");
+_Static_assert(offsetof(ast_$data_t, not_found) == 0x478, "AST_$NOT_FOUND 0xE1E0F8");
+_Static_assert(offsetof(ast_$data_t, update_scan) == 0x484, "update_scan 0xE1E104");
+_Static_assert(offsetof(ast_$data_t, update_timestamp) == 0x488, "update_timestamp 0xE1E108");
+_Static_assert(offsetof(ast_$data_t, attr_timestamp_mask) == 0x48C, "timestamp mask 0xE1E10C");
+_Static_assert(offsetof(ast_$data_t, clobbered_uid) == 0x490, "clobbered_uid 0xE1E110");
+_Static_assert(sizeof(ast_$data_t) == AST_$DATA_SIZE, "AST_ block: map size 0x498");
+#endif
+/* Layout-independent: the bias slot is the last word of dism_ec on every
+ * build, so vol_indices[1] is the first word after it. */
+_Static_assert(offsetof(ast_$data_t, aoth) == 0, "AOTH is the block base");
+_Static_assert(offsetof(ast_$data_t, vol_indices[1]) ==
+                   offsetof(ast_$data_t, dism_ec) + sizeof(ec_$eventcount_t),
+               "vol_indices element 1 follows dism_ec");
+
+MODULE_DATA_DECLARE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+
+/*
+ * The cells under the names the kernel uses for them (the map's where it
+ * has one).  AST_$ALLOC_TOO_FEW_CNT / AST_$ALLOC_CNT are the counters
+ * ast_$allocate_pages bumps (formerly spelled AST_$ALLOC_FAIL_CNT /
+ * AST_$ALLOC_TRY_CNT there).
+ */
+#define AST_$FREE_AOTE_HEAD     (AST_$DATA.free_aote_head)      /* +0x3EC */
+#define AST_$AOTE_SCAN_POS      (AST_$DATA.aote_scan_pos)       /* +0x3F0 */
+#define AST_$AOTE_LIMIT         (AST_$DATA.aote_limit)          /* +0x3F4 */
+#define AST_$FREE_ASTE_HEAD     (AST_$DATA.free_aste_head)      /* +0x3F8 */
+#define AST_$ASTE_SCAN_POS      (AST_$DATA.aste_scan_pos)       /* +0x3FC */
+#define AST_$ASTE_LIMIT         (AST_$DATA.aste_limit)          /* +0x400 */
+#define AST_$DISM_SEQN          (AST_$DATA.dism_seqn)           /* +0x404 */
+#define AST_$DISM_EC            (AST_$DATA.dism_ec)             /* +0x408 */
+#define AST_$AST_IN_TRANS_EC    (AST_$DATA.ast_in_trans_ec)     /* +0x428 */
+#define AST_$AOTE_SEQN          (AST_$DATA.aote_seqn)           /* +0x434 */
+#define AST_$DISMOUNT_FAILED_PTR (AST_$DATA.dismount_failed_ptr) /* +0x438 */
+#define AST_$ALLOC_WORST_AOT    (AST_$DATA.alloc_worst_aot)     /* +0x43C */
+#define AST_$ALLOC_TOTAL_AOT    (AST_$DATA.alloc_total_aot)     /* +0x440 */
+#define AST_$ALLOC_WORST_AST    (AST_$DATA.alloc_worst_ast)     /* +0x444 */
+#define AST_$ALLOC_TOTAL_AST    (AST_$DATA.alloc_total_ast)     /* +0x448 */
+#define AST_$PMAP_IN_TRANS_EC   (AST_$DATA.pmap_in_trans_ec)    /* +0x44C */
+#define AST_$WS_FLT_CNT         (AST_$DATA.ws_flt_cnt)          /* +0x458 */
+#define AST_$PAGE_FLT_CNT       (AST_$DATA.page_flt_cnt)        /* +0x45C */
+#define AST_$ALLOC_TOO_FEW_CNT  (AST_$DATA.alloc_too_few_cnt)   /* +0x460 */
+#define AST_$ALLOC_CNT          (AST_$DATA.alloc_cnt)           /* +0x464 */
+#define AST_$FREE_ASTES         (AST_$DATA.free_astes)          /* +0x468 */
+#define AST_$FREE_AOTES         (AST_$DATA.free_aotes)          /* +0x46A */
+#define AST_$GROW_AHEAD_CNT     (AST_$DATA.grow_ahead_cnt)      /* +0x46C */
+#define AST_$SIZE_AOT           (AST_$DATA.size_aot)            /* +0x46E */
+#define AST_$SIZE_AST           (AST_$DATA.size_ast)            /* +0x470 */
+#define AST_$ASTE_AREA_CNT      (AST_$DATA.aste_area_cnt)       /* +0x472 */
+#define AST_$ASTE_R_CNT         (AST_$DATA.aste_r_cnt)          /* +0x474 */
+#define AST_$ASTE_L_CNT         (AST_$DATA.aste_l_cnt)          /* +0x476 */
+#define AST_$NOT_FOUND          (AST_$DATA.not_found)           /* +0x478 */
+#define AST_$UPDATE_SCAN        (AST_$DATA.update_scan)         /* +0x484 */
+#define AST_$UPDATE_TIMESTAMP   (AST_$DATA.update_timestamp)    /* +0x488 */
+#define AST_$ATTR_TIMESTAMP_MASK (AST_$DATA.attr_timestamp_mask) /* +0x48C */
+
+/*
+ * ============================================================================
+ * AST_$AOT - the ASTE and AOTE tables, 0x00EC5400..0x00ED4D5F
+ * ============================================================================
+ *
+ * Map "D00 EC5400 AST_AOT loaded at 1D371A, size = F960", one VM_TABLES
+ * segment of the same size holding the symbols AST (0xEC5400) and AOT
+ * (0xEC7B60); AST_PMAPS (PMAP_$SEGMAP, 0xED5000) follows in the next
+ * VM_TABLES region.  AOT - AST = 0x2760 = 504 * 0x14 (AST_MAX_ASTE
+ * ASTEs), and 0xF960 - 0x2760 = 0xD200 = 280 * 0xC0 (AST_MAX_AOTE AOTEs),
+ * so the segment is exactly the two tables at their maxima.  Ghidra holds
+ * no bytes for it (the tables are built at boot: AST_$INIT ->
+ * AST_$ADD_ASTES / AST_$ADD_AOTES grow them page by page from the limits
+ * in AST_$DATA), so the block is zero-filled.
+ *
+ * The ASTE index is Pascal 1-based (the segment number stored in
+ * aste.seg_index, the mmape_t segment, the area table), and the compiler
+ * folds the bias into a displacement: AST_$REMOVE_CORRUPTED_PAGE forms
+ *   movea.l #0xec5400,A1 ; D1 = seg*0x14 ; lea (0x0,A1,D1*0x1),A2
+ *   ... pea (-0x14,A2)                      (0x00E072E8-0x00E072FA, 0x00E0734A)
+ * and PMAP_$PURIFIER_L reads the AOTE pointer at seg*0x14 + 0xEC53F0, so
+ * ASTE `seg' is at 0xEC5400 + (seg - 1)*0x14.  Element 0 would be 0xEC53EC,
+ * in AUDIT_LIST (0xEC4800, size C00) outside this segment, so, like
+ * P2_INFO_ENTRY and PMAP_SEGMAP_ROW, the table is declared from element 1
+ * and AST_ASTE_ENTRY(seg) applies the bias once.  The AOTE table has no
+ * index: AOTEs are handed out from AST_$AOTE_LIMIT and scanned from
+ * aote[0] (AST_$DATA.aote_scan_pos wraps to it).
+ *
+ * aste_t and aote_t carry pointers, so the element sizes and offsets are
+ * asserted on the target only.
+ */
+#define AST_$AOT_SIZE 0xF960        /* map: AST_AOT size = F960 */
+
+typedef struct ast_$aot_t {
+    aste_t aste[AST_MAX_ASTE];      /* +0x0000 AST: aste[0] = segment 1 */
+    aote_t aote[AST_MAX_AOTE];      /* +0x2760 AOT */
+} ast_$aot_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(aste_t) == 0x14, "ASTE stride (seg*0x14 at 0x00E072F0-0x00E072F6)");
+_Static_assert(sizeof(aote_t) == 0xC0, "AOTE stride (lea (0xc0,A2),A2)");
+_Static_assert(offsetof(ast_$aot_t, aote) == 0x2760, "AOT 0xEC7B60 - AST 0xEC5400");
+_Static_assert(sizeof(ast_$aot_t) == AST_$AOT_SIZE, "AST_AOT: map size 0xF960");
+#endif
+_Static_assert(offsetof(ast_$aot_t, aste) == 0, "AST is the block base");
+
+MODULE_DATA_DECLARE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+
+/*
+ * AST_ASTE_ENTRY(seg) - the ASTE of 1-based segment slot `seg' (a pointer):
+ * the image's 0xEC5400 + (seg - 1)*0x14.
+ */
+#define AST_ASTE_ENTRY(seg)     (&AST_$AOT.aste[(seg) - 1])
+
+/*
+ * The segment map the AST sites index (image 0xED5000, map AST_PMAPS) is
+ * the MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h, source-iq58); every
+ * `0xED5000 + seg*0x80 ... (-0x80,An)' site is PMAP_SEGMAP_ROW(seg)
+ * (source-avdg).
+ */
 
 /*
  * Note: Physical page attributes are tracked using mmape_t from mmap/mmap.h.
@@ -1062,14 +1203,7 @@ void AST_$WAIT_FOR_AST_INTRANS(void);
 /* Validate UID and return status */
 status_$t ast_$validate_uid(uid_t *uid, uint32_t flags);
 
-/*
- * Per-volume "dismount in progress" bit set, AST_ module block + 0x420
- * (A5 = 0xE1DC80, so 0xE1E0A0).  AST_$DISMOUNT sets bit `vol_index` on entry
- * (0x00E069F8 `or.w D3w,(0x420,A5)`) and clears it on exit (0x00E06B02);
- * ast_$activate_aote (0x00E02588) and ast_$release_aote (0x00E02816) test it
- * with `btst.l D2,D0` after guarding `vol_index <= 15`, and
- * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E.  Always a word access.
- */
-extern uint16_t ast_$vol_info_count;
+/* The per-volume "dismount in progress" bit set VTOC_$SEARCH_VOLUMES reads
+ * is AST_$DATA.vol_info_count (+0x420), above. */
 
 #endif /* AST_H */

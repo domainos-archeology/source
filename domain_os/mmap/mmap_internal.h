@@ -40,7 +40,8 @@
 /* DUMP_$ADDRS / DUMP_ADDRS_RANGES: see dump/dump.h (bead source-3uo). */
 
 /*
- * Segment info table, at 0xEC5400 (m68k).
+ * Segment info table: the ASTE table at 0xEC5400, AST_$AOT.aste (ast/ast.h,
+ * source-gmxj).
  *
  *   00e0c8c0  movea.l #0xec5400,A1
  *   00e0c8c6  lsl.w #0x2,D0w / lsl.w #0x2,D1w / add.w D1w,D0w   ; seg * 0x14
@@ -49,12 +50,11 @@
  *
  * so record(seg) = 0xEC5400 + (seg - 1) * sizeof(aste_t).
  *
- * Every user of the table goes through these two names; the old
+ * Every user of the table goes through this name; the old
  * `void *SEGMENT_TABLE[]` view, which indexed the same storage with a
  * 4-byte stride, is gone (bead source-uxu3).
  */
-extern aste_t MMAP_$SEG_ASTE[];
-#define MMAP_$SEG_ASTE_FOR(seg) (&MMAP_$SEG_ASTE[(seg) - 1])
+#define MMAP_$SEG_ASTE_FOR(seg) AST_ASTE_ENTRY(seg)
 
 /*
  * The 0x14-byte stride is the whole basis of the addressing above: the
@@ -62,7 +62,7 @@ extern aste_t MMAP_$SEG_ASTE[];
  * by exactly sizeof(aste_t).
  */
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(aste_t) == 0x14, "MMAP_$SEG_ASTE stride must be 0x14");
+_Static_assert(sizeof(aste_t) == 0x14, "MMAP_$SEG_ASTE_FOR stride must be 0x14");
 #endif
 
 /*

@@ -25,8 +25,8 @@
  * Returns the ASTE in A0, or NULL.
  *
  * Original address: 0x00E0255C (736 bytes), A5 = 0xE1DC80 (AST_ block):
- *   (0x408,A5) AST_$DISM_EC       (0x412,A5) ast_$vol_indices (word array)
- *   (0x420,A5) ast_$vol_info_count (0x428,A5) AST_$AST_IN_TRANS_EC
+ *   (0x408,A5) AST_$DISM_EC       (0x412,A5) AST_$DATA.vol_indices (word array)
+ *   (0x420,A5) AST_$DATA.vol_info_count (0x428,A5) AST_$AST_IN_TRANS_EC
  *   (0x474,A5) AST_$ASTE_R_CNT     (0x476,A5) AST_$ASTE_L_CNT
  */
 
@@ -51,11 +51,11 @@ aste_t *ast_$lookup_or_create_aste(aote_t *aote, uint16_t segment,
     if (aote->remote_flag >= 0) {
         vol_idx = aote->vol_index;
         /* moveq #0xf / cmp / bcs, then btst.l D2,D0 / bls: bit set -> refuse */
-        if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+        if (vol_idx <= 0xF && (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
             *status = ast_$validate_uid(&aote->uid, 0x30F00);
             return NULL;                                    /* 0x00E025A2 */
         }
-        ast_$vol_indices[vol_idx]++;                        /* (0x412,A0) */
+        AST_$DATA.vol_indices[vol_idx]++;                        /* (0x412,A0) */
     }
 
     /* 0x00E025BA..0x00E025C6 */
@@ -130,8 +130,7 @@ retry_insert:
 inserted:
     /* 0x00E02694..0x00E026A6 */
     aote->status_flags++;
-    segmap = (uint32_t *)((char *)SEGMAP_BASE +
-                          ((uint32_t)aste->seg_index << 7) - 0x80);
+    segmap = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
 
     /* 0x00E026AA */
     if (aote->remote_flag < 0) {
@@ -221,9 +220,9 @@ release_holds:
     /* 0x00E027EE..0x00E02826: drop the volume hold; the last one out of
      * a dismounting volume wakes AST_$DISMOUNT */
     if (aote->remote_flag >= 0) {
-        ast_$vol_indices[vol_idx]--;
-        if (ast_$vol_indices[vol_idx] == 0 && vol_idx <= 0xF &&
-            (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+        AST_$DATA.vol_indices[vol_idx]--;
+        if (AST_$DATA.vol_indices[vol_idx] == 0 && vol_idx <= 0xF &&
+            (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
             EC_$ADVANCE(&AST_$DISM_EC);
         }
     }

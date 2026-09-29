@@ -23,7 +23,7 @@ aste_t *AST_$LOCATE_ASTE(locate_request_t *request)
     hint_index = request->hint & ASTE_INDEX_MASK;
     if (hint_index != 0 && hint_index <= AST_$SIZE_AST) {
         /* 0x00E07072..0x00E07084: 0xEC5400 + hint*0x14 - 0x14 */
-        aste = &ASTE_BASE[hint_index - 1];
+        aste = AST_ASTE_ENTRY(hint_index);
 
         /* 0x00E07088..0x00E070C0 */
         if ((int16_t)aste->flags >= 0 &&

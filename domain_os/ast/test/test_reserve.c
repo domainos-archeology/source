@@ -51,9 +51,10 @@ static void reset_state(void);
 #include "ast/set_dts.c"
 
 #define TEST_N_PAGES 32
-static segmap_entry_t test_segmap[4 * TEST_N_PAGES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
-ec_$eventcount_t ast_ast_in_trans_ec;
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 
 static aote_t test_aote;
 static aste_t s2, s1;               /* segments 2 and 1, seg_index 2 and 1 */
@@ -91,7 +92,9 @@ void ast_$wait_for_page_transition(void)
 {
     int i;
     wait_calls++;
-    for (i = 0; i < 4 * TEST_N_PAGES; i++) { test_segmap[i].entry &= ~SEGMAP_IN_TRANS; }
+    for (i = 0; i < 3 * TEST_N_PAGES; i++) {       /* segments 1..3 */
+        ((uint32_t *)&PMAP_$SEGMAP)[i] &= ~SEGMAP_IN_TRANS;
+    }
 }
 static int advance_calls;
 void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; advance_calls++; }
@@ -125,11 +128,11 @@ void REM_FILE_$RESERVE(uid_t *vol, uid_t *uid, uint32_t start, uint32_t count, s
 static int clock_calls; static clock_t *clock_dst;
 void TIME_$CLOCK(clock_t *c) { clock_calls++; clock_dst = c; c->high = 0xC1; c->low = 0xC2; }
 
-static uint32_t *row(int seg) { return (uint32_t *)&test_segmap[seg * TEST_N_PAGES]; }
+static uint32_t *row(int seg) { return (uint32_t *)PMAP_SEGMAP_ROW(seg); }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(&s2, 0, sizeof(s2)); memset(&s1, 0, sizeof(s1));
     s2.seg_index = 2; s2.segment = 2; s1.seg_index = 1; s1.segment = 1;

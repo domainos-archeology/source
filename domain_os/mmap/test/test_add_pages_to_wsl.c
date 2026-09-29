@@ -44,7 +44,9 @@ static uint32_t pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
-aste_t MMAP_$SEG_ASTE[4];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 uint32_t TIME_$CLOCKH;
 

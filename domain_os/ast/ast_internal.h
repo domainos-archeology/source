@@ -221,53 +221,12 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
  * (vtoc/search_volumes.c) calls it (bead source-3uo). */
 
 /*
- * Internal global variables
+ * Internal global variables: the AST_ module cells (the AOTE hash table,
+ * list heads, scan positions, limits, counters, eventcounts,
+ * vol_indices / vol_info_count, AST_$NOT_FOUND, the timestamp mask and the
+ * clobbered UID) are fields of AST_$DATA and the ASTE / AOTE tables are
+ * AST_$AOT, both in ast/ast.h (source-gmxj).
  */
-
-/* ast_$vol_info_count: declared in ast/ast.h --
- * VTOC_$SEARCH_VOLUMES reads it at 0x00E0244E (bead source-3uo). */
-
-/*
- * Dismount eventcount at 0xE1E088 (offset 0x408).  AST_$DISMOUNT waits on it
- * (0xE06A36) and reads its value field for the wait target (0xE06A12), so it is
- * a 12-byte ec_$eventcount_t, not a bare longword.  See AST_$DISM_EC in ast.h.
- */
-
-/*
- * Per-volume count of AOTEs currently activated on that volume, AST_ module
- * block + 0x412 (0xE1E092).  Every access is
- *
- *   lea (0x0,A5,D0w*0x1),An      ; D0w = vol_index * 2
- *   ...w (0x412,An)
- *
- * i.e. a word array based at A5 + 0x412: incremented by ast_$activate_aote
- * (0x00E025B0/0x00E025B6), decremented and tested by ast_$release_aote
- * (0x00E02800-0x00E0280A), and waited on by AST_$DISMOUNT (0x00E06A52).
- *
- * The extent is closed by ast_$vol_info_count at A5 + 0x420: 0xE bytes, seven
- * words.  Volume indices are the VOLX mount-table indices, which run 1..6 (see
- * volx/volx_internal.h - the six-entry table is the whole `VOLX_` segment), so
- * slot 0 exists but is never used.
- */
-#define AST_VOL_INDEX_SLOTS 7
-extern int16_t ast_$vol_indices[AST_VOL_INDEX_SLOTS];
-
-/* Clobbered UID storage at 0xE1E110 (AST_ module block + 0x490) */
-extern uid_t ast_$clobbered_uid;
-
-/* Dismount failed AOTE pointer */
-extern aote_t* AST_$DISMOUNT_FAILED_PTR;
-
-/*
- * Attribute timestamp mask, AST_ module block + 0x48C (0xE1E10C): the set of
- * attribute types whose update also refreshes the object's absolute clock.
- * AST_$SET_ATTR_DISPATCH tests it with `move.l (0x48c,A5),D3 / btst.l D1,D3'
- * (0x00E0511E).  Image contents 0x0278301C.  A plain object until the AST_
- * segment becomes a MODULE_DATA block (source-702z removed the __A5_BASE()
- * arithmetic that addressed it; TODO(source-gmxj) for the block).
- */
-extern uint32_t ast_$attr_timestamp_mask;
-#define AST_$ATTR_TIMESTAMP_MASK ast_$attr_timestamp_mask
 
 /*
  * Cell holding AST_$SET_TROUBLE's address.  AST_$SAVE_CLOBBERED_UID pushes
@@ -293,53 +252,6 @@ extern uint32_t AST_$ZERO_BUFF[256];
  * no name; the image holds 0x80030003.
  */
 extern status_$t status_$t_00e2f1d0;
-
-/*
- * AOTE management globals
- */
-
-/* AOTE array bounds and scanning */
-extern aote_t *aote_array_start;        /* Start of AOTE array */
-extern aote_t *ast_$aote_end;           /* End of AOTE array */
-extern aote_t *ast_$aote_scan_pos;      /* Current scan position for allocation */
-extern aote_t *ast_$free_aote_head;     /* Head of free AOTE list */
-extern uint16_t ast_$free_aotes;        /* Count of free AOTEs */
-extern uint16_t ast_$size_aot;          /* Size of AOTE array */
-
-/* AOTE hash table (for UID lookup) */
-extern aote_t **ast_aoth_base;          /* Base of AOTE hash table */
-extern void *ast_hash_table_info;       /* Hash table parameters */
-extern uint32_t ast_$aote_seqn;         /* AOTE sequence number (for race detection) */
-
-/* AOTE allocation statistics */
-extern uint32_t ast_$alloc_total_aot;   /* Total allocation attempts */
-extern uint32_t ast_$alloc_worst_aot;   /* Worst-case allocation count */
-extern uint32_t ast_$alloc_fail_cnt;    /* Allocation failure count */
-extern uint32_t ast_$alloc_try_cnt;     /* Current try count */
-
-/*
- * AST_$NOT_FOUND (0xE1E0F8, A5+0x478 in the AST_ data segment): the UID and
- * the caller's flags longword of the last object lookup that failed.  Only
- * ast_$validate_uid (0x00E00BE8) writes it; nothing in the image reads it
- * back (post-mortem inspection).
- */
-typedef struct ast_$not_found_t {
-    uid_t    uid;       /* 0x00: (0x478,A5) high, (0x47C,A5) low */
-    uint32_t flags;     /* 0x08: (0x480,A5) */
-} ast_$not_found_t;
-_Static_assert(sizeof(ast_$not_found_t) == 0x0C, "ast_$not_found_t is 12 bytes");
-
-/* A plain object until the AST_ segment becomes a MODULE_DATA block
- * (TODO(source-gmxj)); zero in the image. */
-extern ast_$not_found_t ast_$not_found;
-#define AST_$NOT_FOUND ast_$not_found
-
-/* Network info flags pointer */
-extern void *net_info_flags;
-
-/* Volume reference tracking: ast_$vol_indices (A5+0x412) and AST_$DISM_EC
- * (A5+0x408) above are the cells; the old vol_ref_counts /
- * vol_dismount_ec aliases had no definition and are gone. */
 
 /* ASTE allocation functions */
 extern aste_t *AST_$ALLOCATE_ASTE(void);

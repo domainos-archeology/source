@@ -63,19 +63,12 @@ static void reset_state(void);
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x400
 #define TEST_N_AOTES 4
-static segmap_entry_t test_segmap[3 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
-static aote_t         test_aotes[TEST_N_AOTES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
-aote_t   *aote_array_start = test_aotes;
-aote_t   *ast_aote_limit;
-aote_t   *ast_update_scan;
-uint16_t  ast_update_timestamp;
-uint16_t  ast_grow_ahead_cnt;
-ec_$eventcount_t ast_ast_in_trans_ec;
-ec_$eventcount_t ast_pmap_in_trans_ec;
-ast_$not_found_t ast_$not_found;
 int8_t    NETLOG_$OK_TO_LOG;
 int8_t    NETWORK_$REALLY_DISKLESS;
 uid_t     UID_$NIL = { 0, 0 };
@@ -122,20 +115,20 @@ void ast_$purify_aote(aote_t *a, boolean f, status_$t *st) { (void)f; purify_cal
 static int dbuf_calls;
 void DBUF_$UPDATE_VOL(uint16_t vol, void *uid) { (void)vol; (void)uid; dbuf_calls++; }
 
-static uint32_t *row(int seg) { return (uint32_t *)&test_segmap[seg * TEST_N_PAGES]; }
+static uint32_t *row(int seg) { return (uint32_t *)PMAP_SEGMAP_ROW(seg); }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
-    memset(test_aotes, 0, sizeof(test_aotes));
+    memset(AST_$AOT.aote, 0, sizeof(AST_$AOT.aote));
     memset(&s1, 0, sizeof(s1)); memset(&s2, 0, sizeof(s2));
-    s1.aote = &test_aotes[0]; s1.segment = 3; s1.seg_index = 1; s1.fm_block = 0x7770;
-    s2.aote = &test_aotes[0]; s2.segment = 1; s2.seg_index = 2;
-    ast_aote_limit = &test_aotes[TEST_N_AOTES];
-    ast_update_scan = &test_aotes[0];
-    ast_update_timestamp = 0xFFFF;
-    ast_grow_ahead_cnt = 4;
+    s1.aote = &AST_$AOT.aote[0]; s1.segment = 3; s1.seg_index = 1; s1.fm_block = 0x7770;
+    s2.aote = &AST_$AOT.aote[0]; s2.segment = 1; s2.seg_index = 2;
+    AST_$AOTE_LIMIT = &AST_$AOT.aote[TEST_N_AOTES];
+    AST_$UPDATE_SCAN = &AST_$AOT.aote[0];
+    AST_$UPDATE_TIMESTAMP = 0xFFFF;
+    AST_$GROW_AHEAD_CNT = 4;
     NETLOG_$OK_TO_LOG = 0; NETWORK_$REALLY_DISKLESS = 0;
     lock_calls = unlock_calls = 0; advance_calls = 0;
     waitn_calls = 0; log_calls = 0;
@@ -204,7 +197,7 @@ TEST(setup_area_hints_and_extend)
 {
     status_$t status = 0x77;
     uint32_t *r = row(1);
-    aote_t *a = &test_aotes[0];
+    aote_t *a = &AST_$AOT.aote[0];
 
     a->attr_flags_hi = 0x10; a->vol_index = 2; a->length = 0x1000;
     NETLOG_$OK_TO_LOG = -1;
@@ -253,7 +246,7 @@ TEST(setup_reserve_and_early_out)
 {
     status_$t status = 0x77;
     uint32_t *r = row(1);
-    aote_t *a = &test_aotes[0];
+    aote_t *a = &AST_$AOT.aote[0];
 
     a->vol_index = 5; a->length = 0x100000;
     r[3] = 0x12345678;
@@ -274,7 +267,7 @@ TEST(setup_reserve_and_early_out)
 
 TEST(update_scan)
 {
-    aote_t *a = &test_aotes[0];
+    aote_t *a = &AST_$AOT.aote[0];
 
     NETWORK_$REALLY_DISKLESS = -1;
     AST_$UPDATE();
@@ -284,23 +277,23 @@ TEST(update_scan)
     a->attr_flags_hi = 0x10;
     s1.flags = ASTE_FLAG_DIRTY; s1.next = &s2; s2.flags = ASTE_FLAG_DIRTY | ASTE_FLAG_REMOTE;
     a->aste_list = &s1;
-    test_aotes[1].attr_flags_hi = 0x10; test_aotes[1].ref_count = 1;    /* skipped */
-    test_aotes[2].attr_flags_hi = 0x10;
+    AST_$AOT.aote[1].attr_flags_hi = 0x10; AST_$AOT.aote[1].ref_count = 1;    /* skipped */
+    AST_$AOT.aote[2].attr_flags_hi = 0x10;
     AST_$UPDATE();
     /* s1 written (FM), s2 remote (update_aste returns clean); both AOTEs
      * purified; end of table -> DBUF flush and wrap */
     ASSERT_EQ(1, fmw_calls);
     ASSERT_EQ(2, purify_calls);
     ASSERT_EQ(1, dbuf_calls);
-    ASSERT_EQ((uintptr_t)&test_aotes[0], (uintptr_t)ast_update_scan);
-    ASSERT_EQ(0xFFFF, ast_update_timestamp);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[0], (uintptr_t)AST_$UPDATE_SCAN);
+    ASSERT_EQ(0xFFFF, AST_$UPDATE_TIMESTAMP);
     ASSERT_EQ(0, s1.flags);
     ASSERT_EQ(4, advance_calls);                /* two ASTEs, two AOTEs */
 
     /* the timestamp gate: a segment above it is skipped */
     reset_state();
     a->attr_flags_hi = 0x10; s1.flags = ASTE_FLAG_DIRTY; a->aste_list = &s1;
-    ast_update_timestamp = 2;
+    AST_$UPDATE_TIMESTAMP = 2;
     AST_$UPDATE();
     ASSERT_EQ(0, fmw_calls); ASSERT_EQ(ASTE_FLAG_DIRTY, s1.flags);
 }
@@ -310,18 +303,18 @@ TEST(validate_uid_and_waits)
     uid_t u = { 0xAAAA, 0xBBBB };
     status_$t r = ast_$validate_uid(&u, 0x30F00);
     ASSERT_EQ(file_$object_not_found, r);
-    ASSERT_EQ(0xAAAA, ast_$not_found.uid.high); ASSERT_EQ(0xBBBB, ast_$not_found.uid.low);
-    ASSERT_EQ(0x30F00, ast_$not_found.flags);
+    ASSERT_EQ(0xAAAA, AST_$NOT_FOUND.uid.high); ASSERT_EQ(0xBBBB, AST_$NOT_FOUND.uid.low);
+    ASSERT_EQ(0x30F00, AST_$NOT_FOUND.flags);
 
-    ast_ast_in_trans_ec.value = 41;
+    AST_$AST_IN_TRANS_EC.value = 41;
     AST_$WAIT_FOR_AST_INTRANS();
-    ASSERT_EQ(1, waitn_calls); ASSERT_EQ((uintptr_t)&ast_ast_in_trans_ec, (uintptr_t)waitn_ec);
+    ASSERT_EQ(1, waitn_calls); ASSERT_EQ((uintptr_t)&AST_$AST_IN_TRANS_EC, (uintptr_t)waitn_ec);
     ASSERT_EQ(42, waitn_val); ASSERT_EQ(1, waitn_n);
     ASSERT_EQ(AST_LOCK_ID, unlock_ids[0]); ASSERT_EQ(AST_LOCK_ID, lock_ids[0]);
 
-    ast_pmap_in_trans_ec.value = 7;
+    AST_$PMAP_IN_TRANS_EC.value = 7;
     ast_$wait_for_page_transition();
-    ASSERT_EQ(2, waitn_calls); ASSERT_EQ((uintptr_t)&ast_pmap_in_trans_ec, (uintptr_t)waitn_ec);
+    ASSERT_EQ(2, waitn_calls); ASSERT_EQ((uintptr_t)&AST_$PMAP_IN_TRANS_EC, (uintptr_t)waitn_ec);
     ASSERT_EQ(8, waitn_val);
     ASSERT_EQ(PMAP_LOCK_ID, unlock_ids[1]); ASSERT_EQ(PMAP_LOCK_ID, lock_ids[1]);
 }

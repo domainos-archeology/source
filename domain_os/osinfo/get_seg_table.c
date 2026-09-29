@@ -40,8 +40,13 @@
 #include "ast/ast.h"
 #include "pmap/pmap.h"   /* PMAP_$SEGMAP */
 
-/* `movea.l #0xec5400,A3` at 0x00E5C616: the AST, 0x14-byte entries */
-#define OSINFO_AST_BASE_VA      0x00EC5400u
+/*
+ * `movea.l #0xec5400,A3` at 0x00E5C616: the AST, 0x14-byte entries, which
+ * is the first array of the MODULE_DATA block AST_$AOT (ast/ast.h,
+ * source-gmxj) - linked in map order, so the image literal would name
+ * different memory.
+ */
+#define OSINFO_AST_BASE         ((const uint32_t *)&AST_$AOT.aste[0])
 /*
  * `movea.l #0xed5000,A3` at 0x00E5C65A: the 0x80-byte entries at map
  * AST_PMAPS, which is the MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h,
@@ -87,7 +92,7 @@ void OSINFO_$GET_SEG_TABLE(short *type_ptr, void *buffer,
         if (count < 0) {
             return;
         }
-        src = (const uint32_t *)ARCH_VA_TO_PTR(OSINFO_AST_BASE_VA);
+        src = OSINFO_AST_BASE;
         dst = (uint32_t *)buffer;
         /* 0x00E5C628 .. 0x00E5C642: count + 1 entries of five longwords */
         for (; count != -1; count--) {

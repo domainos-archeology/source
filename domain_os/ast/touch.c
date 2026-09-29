@@ -72,7 +72,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
     aote_t *aote;               /* (-0x24,A6) */
     uint32_t concurrency;       /* D1 */
     uint16_t avail;             /* D4w */
-    uint32_t *row;              /* A3: the segment's unbiased row base */
+    uint32_t *row;              /* A3 - 0x80: the segment's row */
     uint32_t *entry;            /* A2 */
     uint32_t *ent;              /* A0 */
     uint32_t *out;              /* A1 */
@@ -114,8 +114,9 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
     }
 
     /* 0x00E0315E..0x00E03174 */
-    row = (uint32_t *)((char *)SEGMAP_BASE + ((uint32_t)aste->seg_index << 7));
-    entry = (uint32_t *)((char *)row + (uint16_t)(page << 2) - 0x80);
+    /* A3 = 0xED5000 + seg_index*0x80, used as (-0x80,A3,...): the row */
+    row = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
+    entry = (uint32_t *)((char *)row + (uint16_t)(page << 2));
 
     /* 0x00E03178..0x00E03180 */
     while ((int32_t)*entry < 0) {
@@ -294,7 +295,7 @@ release_rest:
     /* 0x00E033D8..0x00E033F2: entries left in transition are released */
     if (touched < run) {
         ast_$clear_transition_bits(
-            (uint32_t *)((char *)row + (uint16_t)((touched + page) << 2) - 0x80),
+            (uint32_t *)((char *)row + (uint16_t)((touched + page) << 2)),
             (uint16_t)(run - touched));
     }
 

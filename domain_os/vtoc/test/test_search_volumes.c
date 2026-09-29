@@ -67,7 +67,9 @@ static int tests_failed = 0;
 #include "network/network.h"
 
 int8_t NETWORK_$REALLY_DISKLESS;
-uint16_t ast_$vol_info_count;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 #define MAX_TRIES 16
 static int lookup_calls;
@@ -116,7 +118,7 @@ static void reset(void)
     lookup_default = file_$object_not_found;
     validate_calls = 0;
     NETWORK_$REALLY_DISKLESS = 0;
-    ast_$vol_info_count = 0;
+    AST_$DATA.vol_info_count = 0;
 }
 
 /* ============================================================================
@@ -165,7 +167,7 @@ TEST(the_dismount_mask_skips_volumes)
 
     reset();
     /* volumes 2 and 5 are being dismounted */
-    ast_$vol_info_count = (uint16_t)((1u << 2) | (1u << 5));
+    AST_$DATA.vol_info_count = (uint16_t)((1u << 2) | (1u << 5));
 
     VTOC_$SEARCH_VOLUMES(&req, &st);
 

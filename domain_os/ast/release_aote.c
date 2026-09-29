@@ -13,15 +13,7 @@
 
 #include "ast/ast_internal.h"
 
-/* The free-list cells, shared with ast/allocate_aote.c. */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_$FREE_AOTE_HEAD (*(aote_t **)0xE1E06C)  /* A5+0x3EC */
-#define AST_$FREE_AOTES     (*(uint16_t *)0xE1E0EA) /* A5+0x46A */
-#else
-#define AST_$FREE_AOTE_HEAD ast_$free_aote_head
-#define AST_$FREE_AOTES     ast_$free_aotes
-#endif
+/* The free-list cells are AST_$DATA fields, shared with ast/allocate_aote.c. */
 
 void ast_$release_aote(aote_t *aote)
 {

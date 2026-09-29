@@ -31,8 +31,7 @@ void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool)
 
     /* 0x00E06F9E..0x00E06FAE: 0xED5000 + (seg_index << 7) - 0x80 */
     count = 0;
-    entry = (uint32_t *)((char *)SEGMAP_BASE +
-                         ((uint32_t)aste->seg_index << 7) - 0x80);
+    entry = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
 
     /* 0x00E06FB2..0x00E06FBE */
     ML_$LOCK(PMAP_LOCK_ID);

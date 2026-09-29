@@ -4,7 +4,7 @@
  * The test #includes ast/dismount.c directly and drives the real routine
  * through mocked callees.  It pins:
  *
- *   - the volume bit is set in ast_$vol_info_count on entry and cleared
+ *   - the volume bit is set in AST_$DATA.vol_info_count on entry and cleared
  *     on every exit, and AST_$DISM_SEQN goes up by one;
  *   - the activation-count wait: EC_$WAIT gets { &AST_$DISM_EC, 0, 0 } and
  *     { value + 1, 0, 0 }, bracketed by an unlock/lock;
@@ -53,14 +53,9 @@ static void reset_state(void);
 
 /* AST_ block cells (ast_data.c is not included) */
 #define TEST_N_AOTES 6
-static aote_t test_aotes[TEST_N_AOTES];
-aote_t   *aote_array_start = test_aotes;
-aote_t   *ast_aote_limit;
-uint32_t  ast_dism_seqn;
-ec_$eventcount_t ast_dism_ec;
-int16_t   ast_$vol_indices[AST_VOL_INDEX_SLOTS];
-uint16_t  ast_$vol_info_count;
-aote_t   *AST_$DISMOUNT_FAILED_PTR;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 uid_t     NETWORK_$PAGING_FILE_UID = { 0x99990000, 0x00009999 };
 
 static int inhibit_begin_calls, inhibit_end_calls;
@@ -81,7 +76,7 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
     wait_ecs = ecs;
     wait_vals = vals;
     /* the activation on the volume finishes */
-    ast_$vol_indices[wait_vol]--;
+    AST_$DATA.vol_indices[wait_vol]--;
     return 0;
 }
 
@@ -134,21 +129,21 @@ void VTOC_$DISMOUNT(uint16_t vol_idx, uint8_t flags, status_$t *status)
 static void set_aote(int i, int8_t remote, uint8_t vol, uint32_t uid_high,
                      uint32_t uid_low)
 {
-    test_aotes[i].remote_flag = remote;
-    test_aotes[i].vol_index = vol;
-    test_aotes[i].uid.high = uid_high;
-    test_aotes[i].uid.low = uid_low;
+    AST_$AOT.aote[i].remote_flag = remote;
+    AST_$AOT.aote[i].vol_index = vol;
+    AST_$AOT.aote[i].uid.high = uid_high;
+    AST_$AOT.aote[i].uid.low = uid_low;
 }
 
 static void reset_state(void)
 {
-    memset(test_aotes, 0, sizeof(test_aotes));
-    ast_aote_limit = &test_aotes[TEST_N_AOTES];
-    ast_dism_seqn = 40;
-    memset(&ast_dism_ec, 0, sizeof(ast_dism_ec));
-    ast_dism_ec.value = 7;
-    memset(ast_$vol_indices, 0, sizeof(ast_$vol_indices));
-    ast_$vol_info_count = 0;
+    memset(AST_$AOT.aote, 0, sizeof(AST_$AOT.aote));
+    AST_$AOTE_LIMIT = &AST_$AOT.aote[TEST_N_AOTES];
+    AST_$DISM_SEQN = 40;
+    memset(&AST_$DISM_EC, 0, sizeof(AST_$DISM_EC));
+    AST_$DISM_EC.value = 7;
+    memset(AST_$DATA.vol_indices, 0, sizeof(AST_$DATA.vol_indices));
+    AST_$DATA.vol_info_count = 0;
     AST_$DISMOUNT_FAILED_PTR = NULL;
     inhibit_begin_calls = inhibit_end_calls = 0;
     lock_calls = unlock_calls = 0;
@@ -175,18 +170,18 @@ TEST(walk_selects_only_local_entries_on_volume)
 
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(2, process_calls);
-    ASSERT_EQ((uintptr_t)&test_aotes[4], (uintptr_t)process_aotes[0]);
-    ASSERT_EQ((uintptr_t)&test_aotes[5], (uintptr_t)process_aotes[1]);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[4], (uintptr_t)process_aotes[0]);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[5], (uintptr_t)process_aotes[1]);
     ASSERT_EQ(0xFF, (uint8_t)process_f1);
     ASSERT_EQ(0xFF, (uint8_t)process_f2);
     ASSERT_EQ(0xFF, (uint8_t)process_f3);
     ASSERT_EQ(2, release_calls);
-    ASSERT_EQ((uintptr_t)&test_aotes[4], (uintptr_t)release_aotes[0]);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[4], (uintptr_t)release_aotes[0]);
     ASSERT_EQ(1, vtoc_calls);
     ASSERT_EQ(2, vtoc_vol);
     ASSERT_EQ(0xFF, vtoc_flags);
-    ASSERT_EQ(41, ast_dism_seqn);
-    ASSERT_EQ(0, ast_$vol_info_count);           /* bit 2 set, then cleared */
+    ASSERT_EQ(41, AST_$DISM_SEQN);
+    ASSERT_EQ(0, AST_$DATA.vol_info_count);           /* bit 2 set, then cleared */
     ASSERT_EQ(1, inhibit_begin_calls);
     ASSERT_EQ(1, inhibit_end_calls);
     ASSERT_EQ(1, lock_calls);
@@ -198,13 +193,13 @@ TEST(waits_for_activations_on_volume)
 {
     status_$t status = 0;
 
-    ast_$vol_indices[3] = 2;
+    AST_$DATA.vol_indices[3] = 2;
     wait_vol = 3;
 
     AST_$DISMOUNT(3, 0, &status);
 
     ASSERT_EQ(2, wait_calls);
-    ASSERT_EQ((uintptr_t)&ast_dism_ec, (uintptr_t)wait_ecs.ec[0]);
+    ASSERT_EQ((uintptr_t)&AST_$DISM_EC, (uintptr_t)wait_ecs.ec[0]);
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)wait_ecs.ec[1]);
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)wait_ecs.ec[2]);
     ASSERT_EQ(8, wait_vals.val[0]);              /* value + 1 */
@@ -221,14 +216,14 @@ TEST(in_transition_entry_is_retested)
     status_$t status = 0;
 
     set_aote(1, 0, 1, 0x01000000, 1);
-    test_aotes[1].flags = AOTE_FLAG_IN_TRANS;
-    intrans_aote = &test_aotes[1];
+    AST_$AOT.aote[1].flags = AOTE_FLAG_IN_TRANS;
+    intrans_aote = &AST_$AOT.aote[1];
 
     AST_$DISMOUNT(1, 0, &status);
 
     ASSERT_EQ(1, intrans_calls);
     ASSERT_EQ(1, process_calls);
-    ASSERT_EQ((uintptr_t)&test_aotes[1], (uintptr_t)process_aotes[0]);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[1], (uintptr_t)process_aotes[0]);
     ASSERT_EQ(0, (uint8_t)process_f1);           /* purge = flags = 0 */
 }
 
@@ -239,7 +234,7 @@ TEST(processing_failure_records_aote_and_skips_vtoc)
     set_aote(0, 0, 4, 0x01000000, 1);
     set_aote(1, 0, 4, 0x01000000, 2);
     set_aote(2, 0, 4, 0x01000000, 3);
-    process_fail_aote = &test_aotes[1];
+    process_fail_aote = &AST_$AOT.aote[1];
     process_fail_status = status_$ast_segment_not_deactivatable;
 
     AST_$DISMOUNT(4, 0, &status);
@@ -247,9 +242,9 @@ TEST(processing_failure_records_aote_and_skips_vtoc)
     ASSERT_EQ(status_$ast_segment_not_deactivatable, status);
     ASSERT_EQ(2, process_calls);                 /* stops at the failure */
     ASSERT_EQ(1, release_calls);
-    ASSERT_EQ((uintptr_t)&test_aotes[1], (uintptr_t)AST_$DISMOUNT_FAILED_PTR);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aote[1], (uintptr_t)AST_$DISMOUNT_FAILED_PTR);
     ASSERT_EQ(0, vtoc_calls);
-    ASSERT_EQ(0, ast_$vol_info_count);           /* still cleared */
+    ASSERT_EQ(0, AST_$DATA.vol_info_count);           /* still cleared */
     ASSERT_EQ(1, inhibit_end_calls);
     ASSERT_EQ(1, unlock_calls);
 }

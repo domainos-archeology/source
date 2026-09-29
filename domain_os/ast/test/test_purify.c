@@ -53,13 +53,14 @@ static void reset_state(void);
 
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x400
-static segmap_entry_t test_segmap[4 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
-ec_$eventcount_t ast_ast_in_trans_ec;
 
 static aote_t test_aote;
 static aste_t s1, s2;                   /* segments 2 and 1 */
@@ -125,7 +126,7 @@ void REM_FILE_$PURIFY(uid_t *vol_uid, uid_t *file_uid, uint16_t *flags, int16_t 
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
@@ -158,7 +159,7 @@ TEST(bad_flags_refused)
 TEST(local_mark_modified_pass)
 {
     status_$t status = 0x77;
-    uint32_t *row2 = (uint32_t *)&test_segmap[2 * TEST_N_PAGES];
+    uint32_t *row2 = (uint32_t *)PMAP_SEGMAP_ROW(2);
 
     row2[4] = SEGMAP_VALID | 0x210;
     test_pft[0x210] = PFT_FLAG_MODIFIED | 0x0001;

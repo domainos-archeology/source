@@ -6,7 +6,7 @@
  *   D    E00400  DUMP               size = 400
  *        E007EC  DUMP_$ADDRS
  *
- * There is no dump/*.c yet: the only cell the tree has recovered is
+ * There is no dump .c file yet: the only cell the tree has recovered is
  * DUMP_$ADDRS, whose storage is defined by mmap/mmap_data.c because MMAP_$INIT
  * is what fills it.  The declaration lives here, with the module that owns the
  * storage (bead source-3uo).

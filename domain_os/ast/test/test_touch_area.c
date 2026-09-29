@@ -66,19 +66,16 @@ static int test_failed_flag = 0;
 #define TEST_N_PAGES  32
 #define TEST_N_FRAMES 64
 
-static segmap_entry_t test_segmap[TEST_N_SEGS * TEST_N_PAGES];
-static aste_t         test_astes[TEST_N_SEGS];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-segmap_entry_t *ast_segmap_base = test_segmap;
-aste_t         *ast_aste_base   = test_astes;
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
 
-uint32_t ast_ws_flt_cnt;
-uint32_t ast_page_flt_cnt;
-ec_$eventcount_t ast_pmap_in_trans_ec;
 
 /* Globals the body reads outside the two tested paths. */
 uid_t     ANON_$UID = { 0x11112222u, 0x33334444u };
@@ -119,14 +116,14 @@ static int       mock_wait_clear_after;
 
 static void reset_mocks(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
-    memset(test_astes, 0, sizeof(test_astes));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
-    ast_ws_flt_cnt = 0;
-    ast_page_flt_cnt = 0;
-    memset(&ast_pmap_in_trans_ec, 0, sizeof(ast_pmap_in_trans_ec));
+    AST_$WS_FLT_CNT = 0;
+    AST_$PAGE_FLT_CNT = 0;
+    memset(&AST_$PMAP_IN_TRANS_EC, 0, sizeof(AST_$PMAP_IN_TRANS_EC));
     NETLOG_$OK_TO_LOG = 0;
     PROC1_$CURRENT = 0;
     mock_wait_calls = 0;
@@ -269,15 +266,15 @@ void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; mock_ec_advance_calls++; }
 
 /*
  * The area flavour of the segment map is 1-based in seg_index: 0x00E0359C
- * builds the pointer as SEGMAP_BASE + seg_index*0x80 - 0x80 + page*4.
+ * builds the pointer as 0xED5000 + seg_index*0x80 - 0x80 + page*4, i.e.
+ * PMAP_SEGMAP_ROW(seg_index)[page].
  */
 #define TEST_SEG   1
 #define TEST_AREA  3
 
 static uint32_t *seg_entry(int page)
 {
-    return (uint32_t *)((char *)ast_segmap_base + TEST_SEG * 0x80 - 0x80 +
-                        page * 4);
+    return (uint32_t *)&PMAP_SEGMAP_ROW(TEST_SEG)[page];
 }
 
 /* ------------------------------------------------------------------ */
@@ -314,9 +311,9 @@ TEST(installed_page_reclaims_and_returns_early)
     CHECK_EQ(0, mock_reclaim_wired);
     CHECK_EQ((uintptr_t)ppn_array, (uintptr_t)mock_reclaim_array);
     /* 0x00E0360A AST_$WS_FLT_CNT += count */
-    CHECK_EQ(1, ast_ws_flt_cnt);
+    CHECK_EQ(1, AST_$WS_FLT_CNT);
     /* The early return skips the common tail entirely. */
-    CHECK_EQ(0, ast_page_flt_cnt);
+    CHECK_EQ(0, AST_$PAGE_FLT_CNT);
     CHECK_EQ(0, mock_ec_advance_calls);
     CHECK_EQ(0, mock_install_calls);
 }
@@ -400,10 +397,10 @@ TEST(unbacked_page_is_zero_filled_and_installed)
     /* 0x00E039B2 MMAP_$INSTALL_LIST(ppn_array, 1, 0) */
     CHECK_EQ(1, mock_install_calls);
     CHECK_EQ(1, mock_install_count);
-    /* 0x00E039CE: ASTE_BASE[seg_index - 1].page_count += pages_done */
-    CHECK_EQ(1, test_astes[TEST_SEG - 1].page_count);
+    /* 0x00E039CE: AST_ASTE_ENTRY(seg_index)->page_count += pages_done */
+    CHECK_EQ(1, AST_ASTE_ENTRY(TEST_SEG)->page_count);
     /* 0x00E039D2 / 0x00E03A1C */
-    CHECK_EQ(1, ast_page_flt_cnt);
+    CHECK_EQ(1, AST_$PAGE_FLT_CNT);
     CHECK_EQ(1, mock_ec_advance_calls);
     /* Nothing was in transition longer than requested. */
     CHECK_EQ(0, mock_clear_trans_calls);

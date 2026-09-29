@@ -92,9 +92,11 @@ MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 
 /*
  * The 0xEC5400 table and the AOTEs it points at.  MMAP_$SEG_ASTE_FOR(seg)
- * is &MMAP_$SEG_ASTE[seg - 1], so segment 1 is slot 0.
+ * is AST_ASTE_ENTRY(seg), so segment 1 is slot 0.
  */
-aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 static aote_t aote_store[TEST_SEGMENTS];
 
 /* ============================================================================
@@ -147,7 +149,7 @@ static void reset_module(uint8_t flags2)
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(pft_store, 0, sizeof(pft_store));
     memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
-    memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
+    memset(AST_$AOT.aste, 0, sizeof(AST_$AOT.aste));
     memset(aote_store, 0, sizeof(aote_store));
 
     move_calls = 0;

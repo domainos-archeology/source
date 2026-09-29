@@ -57,8 +57,9 @@ static void reset_state(void);
  * ========================================================================== */
 
 #define TEST_BUCKETS 251
-static aote_t *test_aoth[TEST_BUCKETS];
-aote_t **ast_aoth_base = test_aoth;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 static aote_t fresh_aote;
 static aote_t other_aote;
@@ -106,7 +107,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
 
 static void reset_state(void)
 {
-    memset(test_aoth, 0, sizeof(test_aoth));
+    memset(AST_$DATA.aoth, 0, sizeof(AST_$DATA.aoth));
     memset(&fresh_aote, 0xA5, sizeof(fresh_aote));   /* stale contents */
     memset(&other_aote, 0, sizeof(other_aote));
     lock_calls = unlock_calls = 0;
@@ -189,7 +190,7 @@ TEST(local_object_fields_and_copies)
     ASSERT_EQ(0x00FB, hash_size_arg);
 
     /* pushed on bucket 7, chain was empty */
-    ASSERT_EQ((uintptr_t)&fresh_aote, (uintptr_t)test_aoth[7]);
+    ASSERT_EQ((uintptr_t)&fresh_aote, (uintptr_t)AST_$DATA.aoth[7]);
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)fresh_aote.hash_next);
     ASSERT_EQ(0, crash_calls);
 }
@@ -219,11 +220,11 @@ TEST(insert_at_head_of_existing_chain)
     loc.flags = 0;
     other_aote.uid.high = 0x1;              /* different UID */
     other_aote.uid.low = 0x2;
-    test_aoth[7] = &other_aote;
+    AST_$DATA.aoth[7] = &other_aote;
 
     AST_$ACTIVATE_AOTE_CANNED(attrs, (uint32_t *)&loc);
 
-    ASSERT_EQ((uintptr_t)&fresh_aote, (uintptr_t)test_aoth[7]);
+    ASSERT_EQ((uintptr_t)&fresh_aote, (uintptr_t)AST_$DATA.aoth[7]);
     ASSERT_EQ((uintptr_t)&other_aote, (uintptr_t)fresh_aote.hash_next);
     ASSERT_EQ(0, crash_calls);
 }
@@ -239,7 +240,7 @@ TEST(duplicate_uid_crashes)
     other_aote.uid.low = 0xBBBB;
     /* a different obj_loc copy must not matter */
     other_aote.obj_loc_uid.high = 0x9999;
-    test_aoth[7] = &other_aote;
+    AST_$DATA.aoth[7] = &other_aote;
 
     AST_$ACTIVATE_AOTE_CANNED(attrs, (uint32_t *)&loc);
 

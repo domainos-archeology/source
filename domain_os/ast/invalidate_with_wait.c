@@ -83,9 +83,8 @@ status_$t ast_$invalidate_with_wait(uint32_t end_page, aote_t *aote,
         ML_$LOCK(PMAP_LOCK_ID);
 
         /* 0x00E0639A..0x00E063AC: the entry of the LAST page in the run */
-        entry = (uint32_t *)((char *)SEGMAP_BASE +
-                             ((uint32_t)aste->seg_index << 7) +
-                             ((uint16_t)(last_in_seg << 2)) - 0x80);
+        entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                             + ((uint16_t)(last_in_seg << 2)));
 
         /* 0x00E063B0..0x00E063B2: the parent's (-0xC) cell */
         *parent_scratch = 0;

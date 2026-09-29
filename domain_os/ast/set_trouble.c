@@ -2,7 +2,7 @@
  * AST_$SET_TROUBLE - DXM callback: flag an object as damaged
  *
  * Runs from the DXM unwired queue with the data cell AST_$SAVE_CLOBBERED_UID
- * registered: a pointer to the cell holding &ast_$clobbered_uid.  It sets
+ * registered: a pointer to the cell holding &AST_$DATA.clobbered_uid.  It sets
  * attribute 2 on that object with a TRUE byte value.  The status
  * AST_$SET_ATTRIBUTE writes to (-0x40,A6) is discarded.
  *

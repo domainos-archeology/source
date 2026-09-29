@@ -23,20 +23,14 @@
  * Locals: (-0x4) NETWORK_$INSTALL_NET's status, (-0x10)/(-0xC) saved DTV.
  *
  * Original address: 0x00E0238C (384 bytes), A5 = 0xE1DC80 (AST_ block):
- *   (0x0,A5,D0w) AOTH  (0x420,A5) ast_$vol_info_count  (0x434,A5) AST_$AOTE_SEQN
+ *   (0x0,A5,D0w) AOTH  (0x420,A5) AST_$DATA.vol_info_count  (0x434,A5) AST_$AOTE_SEQN
  */
 
 #include "ast/ast_internal.h"
 #include "node/node.h"
 #include "network/network.h"
 
-/* The AOTE hash table, `AOTH` in the SAU2 map. */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_AOTH_BASE ((aote_t **)0xE1DC80)
-#else
-#define AST_AOTH_BASE ast_aoth_base
-#endif
+/* The AOTE hash table, `AOTH` in the SAU2 map, is AST_$DATA.aoth (ast/ast.h). */
 
 /*
  * UID_$HASH's table-size word: `pea (-0x810,PC)` at 0x00E023FA ->
@@ -90,7 +84,7 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     /* 0x00E0240C..0x00E02440: another activation ran meanwhile - is the
      * object on the chain now?  (No wait for an in-transition match.) */
     if (seqn_before != AST_$AOTE_SEQN) {
-        for (existing = AST_AOTH_BASE[hash_index]; existing != NULL;
+        for (existing = AST_$DATA.aoth[hash_index]; existing != NULL;
              existing = existing->hash_next) {
             if (existing->uid.high == loc->uid.high &&
                 existing->uid.low == loc->uid.low) {
@@ -100,9 +94,9 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     }
 
     /* 0x00E02442..0x00E02454: a volume index of at most 15 whose bit is
-     * set in ast_$vol_info_count is dismounting (btst / bhi) */
+     * set in AST_$DATA.vol_info_count is dismounting (btst / bhi) */
     vol_idx = (uint8_t)loc->rights_bits;
-    if (vol_idx <= 0xF && (ast_$vol_info_count & (1u << vol_idx)) != 0) {
+    if (vol_idx <= 0xF && (AST_$DATA.vol_info_count & (1u << vol_idx)) != 0) {
         goto release;
     }
 
@@ -156,8 +150,8 @@ void AST_$LOAD_AOTE(uint32_t *attrs, uint32_t *obj_info)
     }
 
     /* 0x00E024EA..0x00E024F2: onto the head of the bucket */
-    aote->hash_next = AST_AOTH_BASE[hash_index];
-    AST_AOTH_BASE[hash_index] = aote;
+    aote->hash_next = AST_$DATA.aoth[hash_index];
+    AST_$DATA.aoth[hash_index] = aote;
     goto unlock;
 
 release:

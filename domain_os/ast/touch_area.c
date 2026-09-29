@@ -69,8 +69,10 @@ void AST_$TOUCH_AREA(uint16_t area_id, uint16_t seg_index, int16_t page,
     area_$entry_t *entry;
     /* D1 (-0x68,A6) and D2w (-0x6a,A6): the two halves of the segment-map
      * byte offset, kept separately because the code recomputes the pointer
-     * from them twice (0x00E037C6 and 0x00E038C4). */
-    uint32_t seg_byte_off;
+     * from them twice (0x00E037C6 and 0x00E038C4).  D1 is seg_index*0x80,
+     * which with the (-0x80,...) displacement off 0xED5000 is segment
+     * seg_index's row; seg_row is that row. */
+    char *seg_row;
     int16_t page_byte_off;
     uint32_t *segmap;          /* A2 */
     uint32_t *ppn_out;         /* A3/A4 walking ppn_array */
@@ -97,13 +99,12 @@ void AST_$TOUCH_AREA(uint16_t area_id, uint16_t seg_index, int16_t page,
                                          (uint32_t)area_id * AREA_ENTRY_SIZE -
                                          AREA_ENTRY_SIZE);
 
-    seg_byte_off  = (uint32_t)seg_index * 0x80;            /* 0x00E03580 */
+    seg_row       = (char *)PMAP_SEGMAP_ROW(seg_index);    /* 0x00E03580 */
     page_byte_off = (int16_t)(page << 2);                  /* 0x00E03596 */
 
     /* 0x00E0359C: lea (-0x80,A4,D2w) - the segment map is 1-based in
-     * seg_index for areas, hence the -0x80 bias. */
-    segmap = (uint32_t *)((char *)SEGMAP_BASE + seg_byte_off - 0x80 +
-                          page_byte_off);
+     * seg_index for areas, hence the -0x80 bias (PMAP_SEGMAP_ROW). */
+    segmap = (uint32_t *)(seg_row + page_byte_off);
 
     pages_done   = 0;                                      /* 0x00E035A4 */
     pages_marked = 0;
@@ -269,8 +270,7 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
             *(uint8_t  *)((char *)qb + 0x30) = 0;
 
             /* 0x00E037C6: recompute the segment-map pointer from scratch. */
-            segmap = (uint32_t *)((char *)SEGMAP_BASE + seg_byte_off - 0x80 +
-                                  page_byte_off);
+            segmap = (uint32_t *)(seg_row + page_byte_off);
 
             /* 0x00E037E2: one queue block per allocated page. */
             ppn_out = ppn_array;
@@ -322,13 +322,11 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
      * 0x00E038C4: common tail - install whatever came back.
      * ----------------------------------------------------------------------
      */
-    segmap = (uint32_t *)((char *)SEGMAP_BASE + seg_byte_off - 0x80 +
-                          page_byte_off);
+    segmap = (uint32_t *)(seg_row + page_byte_off);
 
     if (pages_done < pages_marked) {                       /* 0x00E038DA */
         ast_$clear_transition_bits(
-            (uint32_t *)((char *)SEGMAP_BASE + seg_byte_off - 0x80 +
-                         (int16_t)((pages_done + page) << 2)),
+            (uint32_t *)(seg_row + (int16_t)((pages_done + page) << 2)),
             (uint16_t)(pages_marked - pages_done));
     }
 
@@ -370,10 +368,10 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
 
         /*
          * 0x00E039BA: `0xEC5400 - 4 + seg_index*0x14` is the page_count byte
-         * (+0x10) of ASTE_BASE[seg_index - 1] - the segment map's 1-based
+         * (+0x10) of AST_ASTE_ENTRY(seg_index) - the segment map's 1-based
          * indexing again.
          */
-        ASTE_BASE[seg_index - 1].page_count += (uint8_t)pages_done;
+        AST_ASTE_ENTRY(seg_index)->page_count += (uint8_t)pages_done;
     }
 
     AST_$PAGE_FLT_CNT += 1;                                /* 0x00E039D2 */

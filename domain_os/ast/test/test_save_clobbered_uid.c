@@ -12,12 +12,12 @@
  *   - the cell holds 0x00E071EA = AST_$SET_TROUBLE (image bytes at
  *     0x00E07272 are 00 e0 71 ea), so dxm_$callback_fn() of the cell must
  *     come back as AST_$SET_TROUBLE
- *   - the data argument is a cell holding &ast_$clobbered_uid
+ *   - the data argument is a cell holding &AST_$DATA.clobbered_uid
  *     (0x00E0724E "lea (0x490,A5),A0" / 0x00E07252 "move.l A0,(-0x10,A6)" /
  *     0x00E07256 "pea (-0x10,A6)")
  *   - data_size is the word 8 (0x00E0724A "move.w #0x8,-(SP)") and check_dup
  *     is the Domain boolean true (0x00E07248 "st -(SP)")
- *   - the caller's UID is copied into ast_$clobbered_uid before the call
+ *   - the caller's UID is copied into AST_$DATA.clobbered_uid before the call
  *     (0x00E07230-0x00E07240)
  */
 
@@ -66,7 +66,9 @@ static int current_failed = 0;
 /* Globals the module under test refers to                             */
 /* ------------------------------------------------------------------ */
 
-uid_t ast_$clobbered_uid;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 dxm_queue_t DXM_$UNWIRED_Q;
 dxm_queue_t DXM_$WIRED_Q;
 uint32_t DXM_$OVERRUNS;
@@ -161,7 +163,7 @@ void AST_$SET_ATTRIBUTE(uid_t *uid, uint16_t attr_id, void *value,
 
 static void setup(void)
 {
-    memset(&ast_$clobbered_uid, 0, sizeof(ast_$clobbered_uid));
+    memset(&AST_$DATA.clobbered_uid, 0, sizeof(AST_$DATA.clobbered_uid));
     n_add_callback = 0;
     n_set_attribute = 0;
     last_queue = NULL;
@@ -191,8 +193,8 @@ TEST(uid_is_copied_to_the_global)
 
     AST_$SAVE_CLOBBERED_UID(&uid);
 
-    CHECK_EQ(0x11223344u, ast_$clobbered_uid.high);
-    CHECK_EQ(0x55667788u, ast_$clobbered_uid.low);
+    CHECK_EQ(0x11223344u, AST_$DATA.clobbered_uid.high);
+    CHECK_EQ(0x55667788u, AST_$DATA.clobbered_uid.low);
 }
 
 TEST(callback_is_queued_on_the_unwired_queue)
@@ -214,7 +216,7 @@ TEST(callback_is_queued_on_the_unwired_queue)
     CHECK_EQ(PTR_AST_$SET_TROUBLE_00e07272, last_cell_value);
     /* 0x00E0724E-0x00E07256: the datum is a cell holding the global's
      * address, not the UID bytes themselves. */
-    CHECK_EQ((uintptr_t)&ast_$clobbered_uid, (uintptr_t)last_data_value);
+    CHECK_EQ((uintptr_t)&AST_$DATA.clobbered_uid, (uintptr_t)last_data_value);
     /* 0x00E0724A move.w #0x8 / 0x00E07248 st */
     CHECK_EQ(8, last_data_size);
     CHECK_EQ((int8_t)0xFF, last_check_dup);
@@ -238,7 +240,7 @@ TEST(queued_callback_runs_set_trouble_on_the_saved_uid)
     dxm_$callback_fn(last_cell_value)(&datum);
 
     CHECK_EQ(1, n_set_attribute);
-    CHECK_EQ((uintptr_t)&ast_$clobbered_uid, (uintptr_t)last_attr_uid);
+    CHECK_EQ((uintptr_t)&AST_$DATA.clobbered_uid, (uintptr_t)last_attr_uid);
     CHECK_EQ(2, last_attr_id);
     CHECK_EQ(0xFF, last_attr_first_byte);
     CHECK_EQ(0xdeadbeefu, last_attr_uid->high);

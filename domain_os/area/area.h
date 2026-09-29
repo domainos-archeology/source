@@ -290,7 +290,7 @@ typedef struct area_$format_t {
 typedef struct area_$seg_slot_t {
     uint8_t  bits;              /* 0x00: eight "segment allocated" flags */
     uint8_t  state;             /* 0x01: bit 6 = ASTE in transition */
-    uint16_t aste_index;        /* 0x02: 1-based index into ASTE_BASE */
+    uint16_t aste_index;        /* 0x02: 1-based index, AST_ASTE_ENTRY */
 } area_$seg_slot_t;
 
 #if defined(ARCH_M68K)

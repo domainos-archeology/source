@@ -45,9 +45,8 @@ void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page,
 
     /* 0x00E0403A..0x00E04054: 0xED5000 + (seg_index << 7) + (start << 2,
      * a 16-bit index) - 0x80 */
-    entry = (uint32_t *)((char *)SEGMAP_BASE +
-                         ((uint32_t)aste->seg_index << 7) +
-                         (int16_t)(start_page << 2) - 0x80);
+    entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                         + (int16_t)(start_page << 2));
 
     /* 0x00E04058..0x00E0406A: 16-bit page count; zero skips the loop */
     remaining = (int16_t)(end_page - start_page + 1);

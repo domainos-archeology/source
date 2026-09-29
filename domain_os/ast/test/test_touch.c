@@ -53,18 +53,17 @@ static void reset_state(void);
 
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x1000
-static segmap_entry_t test_segmap[3 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uint16_t  PROC1_$CURRENT;
-uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt;
-uint16_t  ast_grow_ahead_cnt;
-ec_$eventcount_t ast_pmap_in_trans_ec;
 int8_t    NETLOG_$OK_TO_LOG;
 
 static aote_t test_aote;
@@ -113,11 +112,11 @@ void NETLOG_$LOG_IT(uint16_t k, uint32_t *u, uint16_t p3, uint16_t p4, uint16_t 
 static int crash_calls;
 void CRASH_SYSTEM(const status_$t *s) { (void)s; crash_calls++; }
 
-static uint32_t *row1(void) { return (uint32_t *)&test_segmap[TEST_N_PAGES]; }
+static uint32_t *row1(void) { return (uint32_t *)PMAP_SEGMAP_ROW(1); }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
@@ -126,7 +125,7 @@ static void reset_state(void)
     memset(&test_aste, 0, sizeof(test_aste));
     test_aste.aote = &test_aote; test_aste.seg_index = 1; test_aste.segment = 2;
     test_aote.length = 0x100000;
-    PROC1_$CURRENT = 3; ast_ws_flt_cnt = ast_page_flt_cnt = 0; ast_grow_ahead_cnt = 4;
+    PROC1_$CURRENT = 3; AST_$WS_FLT_CNT = AST_$PAGE_FLT_CNT = 0; AST_$GROW_AHEAD_CNT = 4;
     NETLOG_$OK_TO_LOG = 0;
     advance_calls = reclaim_calls = install_calls = cvp_calls = setup_calls = 0;
     rap_calls = rapn_calls = ctb_calls = log_calls = crash_calls = 0; rapn_count = 0;
@@ -166,10 +165,10 @@ TEST(installed_run)
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x300, m[4]);
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x301, m[5]);
     ASSERT_EQ(1, reclaim_calls); ASSERT_EQ(2, reclaim_count); ASSERT_EQ(0xFF, (uint8_t)reclaim_wired);
-    ASSERT_EQ(2, ast_ws_flt_cnt);
+    ASSERT_EQ(2, AST_$WS_FLT_CNT);
     ASSERT_EQ(AOTE_FLAG_BUSY | AOTE_FLAG_TOUCHED, test_aote.flags);
     ASSERT_EQ(ASTE_FLAG_LOCKED, test_aste.flags);
-    ASSERT_EQ(0, install_calls); ASSERT_EQ(0, ast_page_flt_cnt);
+    ASSERT_EQ(0, install_calls); ASSERT_EQ(0, AST_$PAGE_FLT_CNT);
 
     /* an unreal frame is not reclaimed; the run is clipped to `count` */
     reset_state();
@@ -204,7 +203,7 @@ TEST(bit22_run_counted)
     ASSERT_EQ(1, install_calls); ASSERT_EQ(2, install_count); ASSERT_EQ(0, install_wired);
     ASSERT_EQ(2, test_aste.page_count);
     ASSERT_EQ(1, advance_calls);
-    ASSERT_EQ(2, ast_page_flt_cnt);
+    ASSERT_EQ(2, AST_$PAGE_FLT_CNT);
     ASSERT_EQ(1, log_calls); ASSERT_EQ(8, log_kind); ASSERT_EQ(2, log_p3); ASSERT_EQ(2, log_p4);
     ASSERT_EQ(0x500, log_p5); ASSERT_EQ(2, log_p6); ASSERT_EQ(0, log_p7);
 }
@@ -311,7 +310,7 @@ TEST(remote_read)
     ASSERT_EQ(0, setup_calls);
     ASSERT_EQ(AOTE_FLAG_BUSY, test_aote.flags);   /* no TOUCHED on the remote path */
     ASSERT_EQ(1, log_p7);
-    ASSERT_EQ(3, ast_page_flt_cnt);
+    ASSERT_EQ(3, AST_$PAGE_FLT_CNT);
 }
 
 int main(void)

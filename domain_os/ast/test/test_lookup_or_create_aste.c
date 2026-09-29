@@ -55,15 +55,11 @@ static void reset_state(void);
 #include "ast/lookup_or_create_aste.c"
 
 #define TEST_N_PAGES 32
-static segmap_entry_t test_segmap[4 * TEST_N_PAGES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];   /* 1-based rows */
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 
-int16_t   ast_$vol_indices[AST_VOL_INDEX_SLOTS];
-uint16_t  ast_$vol_info_count;
-ec_$eventcount_t ast_dism_ec;
-ec_$eventcount_t ast_ast_in_trans_ec;
-uint16_t  ast_aste_r_cnt;
-uint16_t  ast_aste_l_cnt;
 int8_t    NETLOG_$OK_TO_LOG;
 
 static aote_t test_aote;
@@ -88,7 +84,7 @@ void AST_$WAIT_FOR_AST_INTRANS(void)
 {
     wait_calls++;
     if (wait_clear != NULL) { wait_clear->flags &= (uint16_t)~ASTE_FLAG_IN_TRANS; }
-    if (wait_sets_dismount_bit) { ast_$vol_info_count |= 1u << 3; }
+    if (wait_sets_dismount_bit) { AST_$DATA.vol_info_count |= 1u << 3; }
 }
 
 static int advance_calls;
@@ -149,17 +145,17 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid, uint16_t p3, uint16_t p4,
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0xAA, sizeof(test_segmap));
-    memset(ast_$vol_indices, 0, sizeof(ast_$vol_indices));
-    ast_$vol_info_count = 0;
-    ast_aste_r_cnt = 10; ast_aste_l_cnt = 20;
+    memset(&PMAP_$SEGMAP, 0xAA, sizeof(PMAP_$SEGMAP));
+    memset(AST_$DATA.vol_indices, 0, sizeof(AST_$DATA.vol_indices));
+    AST_$DATA.vol_info_count = 0;
+    AST_$ASTE_R_CNT = 10; AST_$ASTE_L_CNT = 20;
     NETLOG_$OK_TO_LOG = 0;
     memset(&test_aote, 0, sizeof(test_aote));
     test_aote.vol_index = 3;
     test_aote.ref_count = 1;
     memset(&fresh, 0, sizeof(fresh));
     fresh.flags = 0xFFFF;                 /* stale bits everywhere */
-    fresh.seg_index = 2;                  /* row 2 = test_segmap[64..95] */
+    fresh.seg_index = 2;                  /* row 2 = PMAP_$SEGMAP.row[1] */
     memset(&e1, 0, sizeof(e1)); memset(&e2, 0, sizeof(e2)); memset(&e3, 0, sizeof(e3));
     lock_calls = unlock_calls = 0;
     alloc_calls = 0; free_calls = 0; free_aste = NULL;
@@ -173,14 +169,14 @@ static void reset_state(void)
     log_calls = 0;
 }
 
-static uint32_t *row2(void) { return (uint32_t *)&test_segmap[2 * TEST_N_PAGES]; }
+static uint32_t *row2(void) { return (uint32_t *)PMAP_SEGMAP_ROW(2); }
 
 TEST(dismounting_volume_refused)
 {
     status_$t status = 0;
     aste_t *r;
 
-    ast_$vol_info_count = 1u << 3;
+    AST_$DATA.vol_info_count = 1u << 3;
     r = ast_$lookup_or_create_aste(&test_aote, 4, &status);
 
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)r);
@@ -188,7 +184,7 @@ TEST(dismounting_volume_refused)
     ASSERT_EQ(0x30F00, validate_flags);
     ASSERT_EQ(0x30F00, status);
     ASSERT_EQ(0, alloc_calls);
-    ASSERT_EQ(0, ast_$vol_indices[3]);
+    ASSERT_EQ(0, AST_$DATA.vol_indices[3]);
     ASSERT_EQ(1, test_aote.ref_count);
 }
 
@@ -218,8 +214,8 @@ TEST(create_local_head_insert_and_normalise)
     ASSERT_EQ(4, fresh.segment);
     ASSERT_EQ((uintptr_t)&test_aote, (uintptr_t)fresh.aote);
     ASSERT_EQ(0, fresh.page_count);
-    ASSERT_EQ(21, ast_aste_l_cnt);
-    ASSERT_EQ(10, ast_aste_r_cnt);
+    ASSERT_EQ(21, AST_$ASTE_L_CNT);
+    ASSERT_EQ(10, AST_$ASTE_R_CNT);
     ASSERT_EQ((uintptr_t)&fresh, (uintptr_t)test_aote.aste_list);
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)fresh.next);
     ASSERT_EQ(1, test_aote.status_flags);
@@ -241,9 +237,9 @@ TEST(create_local_head_insert_and_normalise)
     ASSERT_EQ(2, lock_calls);
     ASSERT_EQ(2, unlock_calls);
     ASSERT_EQ(1, advance_calls);
-    ASSERT_EQ((uintptr_t)&ast_ast_in_trans_ec, (uintptr_t)advance_last);
+    ASSERT_EQ((uintptr_t)&AST_$AST_IN_TRANS_EC, (uintptr_t)advance_last);
     /* holds released */
-    ASSERT_EQ(0, ast_$vol_indices[3]);
+    ASSERT_EQ(0, AST_$DATA.vol_indices[3]);
     ASSERT_EQ(1, test_aote.ref_count);
 }
 
@@ -260,12 +256,12 @@ TEST(create_remote_zeroes_map)
     ASSERT_EQ((uintptr_t)&fresh, (uintptr_t)r);
     ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(0x0FFF, fresh.flags);       /* bit 11 set, bit 15 cleared */
-    ASSERT_EQ(11, ast_aste_r_cnt);
-    ASSERT_EQ(20, ast_aste_l_cnt);
+    ASSERT_EQ(11, AST_$ASTE_R_CNT);
+    ASSERT_EQ(20, AST_$ASTE_L_CNT);
     for (i = 0; i < 32; i++) { ASSERT_EQ(0, row[i]); }
     ASSERT_EQ(0, lookup_fm_calls);
     ASSERT_EQ(0, lock_calls);
-    ASSERT_EQ(0, ast_$vol_indices[3]);   /* never held for remote */
+    ASSERT_EQ(0, AST_$DATA.vol_indices[3]);   /* never held for remote */
 }
 
 TEST(middle_and_tail_insert)
@@ -312,7 +308,7 @@ TEST(existing_after_transition)
     ASSERT_EQ(1, wait_calls);
     ASSERT_EQ(1, free_calls);
     ASSERT_EQ((uintptr_t)&fresh, (uintptr_t)free_aste);
-    ASSERT_EQ(11, ast_aste_r_cnt);        /* counted before the discovery */
+    ASSERT_EQ(11, AST_$ASTE_R_CNT);        /* counted before the discovery */
     ASSERT_EQ(1, test_aote.ref_count);
     ASSERT_EQ(0, test_aote.status_flags);
 }
@@ -337,7 +333,7 @@ TEST(fm_read_failure_unlinks)
     ASSERT_EQ(0, test_aote.status_flags);
     ASSERT_EQ(1, free_calls);
     ASSERT_EQ(0, advance_calls);
-    ASSERT_EQ(0, ast_$vol_indices[3]);
+    ASSERT_EQ(0, AST_$DATA.vol_indices[3]);
     ASSERT_EQ(1, test_aote.ref_count);
 }
 
@@ -355,9 +351,9 @@ TEST(last_hold_wakes_dismount)
     ast_$lookup_or_create_aste(&test_aote, 4, &status);
 
     ASSERT_EQ(1, wait_calls);
-    ASSERT_EQ(0, ast_$vol_indices[3]);
+    ASSERT_EQ(0, AST_$DATA.vol_indices[3]);
     ASSERT_EQ(1, advance_calls);
-    ASSERT_EQ((uintptr_t)&ast_dism_ec, (uintptr_t)advance_last);
+    ASSERT_EQ((uintptr_t)&AST_$DISM_EC, (uintptr_t)advance_last);
 
     /* with another hold outstanding there is no wake */
     reset_state();
@@ -365,9 +361,9 @@ TEST(last_hold_wakes_dismount)
     test_aote.aste_list = &e1;
     wait_clear = &e1;
     wait_sets_dismount_bit = 1;
-    ast_$vol_indices[3] = 1;
+    AST_$DATA.vol_indices[3] = 1;
     ast_$lookup_or_create_aste(&test_aote, 4, &status);
-    ASSERT_EQ(1, ast_$vol_indices[3]);
+    ASSERT_EQ(1, AST_$DATA.vol_indices[3]);
     ASSERT_EQ(0, advance_calls);
 }
 

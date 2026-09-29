@@ -46,7 +46,9 @@ static void reset_state(void);
 
 #include "ast/clear_transition_bits.c"
 
-ec_$eventcount_t ast_pmap_in_trans_ec;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 static int avail_calls;
 static uint32_t avail_vpns[8];
@@ -80,7 +82,7 @@ TEST(zero_count_only_advances)
 
     ASSERT_EQ(0, avail_calls);
     ASSERT_EQ(1, advance_calls);
-    ASSERT_EQ((uintptr_t)&ast_pmap_in_trans_ec, (uintptr_t)advance_ec);
+    ASSERT_EQ((uintptr_t)&AST_$PMAP_IN_TRANS_EC, (uintptr_t)advance_ec);
     ASSERT_EQ(0xC0000345u, map[0]);          /* untouched */
 }
 

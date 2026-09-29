@@ -42,27 +42,10 @@
 static const status_$t ast_$no_replaceable_astes_00e01f18 = 0x80030003;
 
 /*
- * AOTE management cells that ast/ast.h does not export.  The free-list
- * head and count are shared with ast/release_aote.c, which spells them the
- * same way; the scan position and the two counters are only used here.
- * AST_$AOTE_LIMIT (0x3F4) and AST_$SIZE_AOT (0x46E) come from ast/ast.h.
+ * The AOTE management cells are AST_$DATA fields (ast/ast.h); the free-list
+ * head and count are shared with ast/release_aote.c.  The scan wraps to
+ * the first AOTE, `AOT` in the SAU2 map, AST_$AOT.aote[0].
  */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_$FREE_AOTE_HEAD   (*(aote_t **)0xE1E06C)    /* A5+0x3EC */
-#define AST_$AOTE_SCAN_POS    (*(aote_t **)0xE1E070)    /* A5+0x3F0 */
-#define AST_$FREE_AOTES       (*(uint16_t *)0xE1E0EA)   /* A5+0x46A */
-#define AST_$ALLOC_WORST_AOT  (*(uint32_t *)0xE1E0BC)   /* A5+0x43C */
-#define AST_$ALLOC_TOTAL_AOT  (*(uint32_t *)0xE1E0C0)   /* A5+0x440 */
-#define AOTE_ARRAY_START      ((aote_t *)0xEC7B60)      /* `AOT` in the map */
-#else
-#define AST_$FREE_AOTE_HEAD   ast_$free_aote_head
-#define AST_$AOTE_SCAN_POS    ast_$aote_scan_pos
-#define AST_$FREE_AOTES       ast_$free_aotes
-#define AST_$ALLOC_WORST_AOT  ast_$alloc_worst_aot
-#define AST_$ALLOC_TOTAL_AOT  ast_$alloc_total_aot
-#define AOTE_ARRAY_START      aote_array_start
-#endif
 
 /*
  * `lea (0xc0,A2),A2` steps one AOTE; aote_t is 0xC0 bytes on the target
@@ -97,7 +80,7 @@ aote_t *ast_$allocate_aote(void)
         /* 0x00E01D9E..0x00E01DA8: advance, wrapping at the limit */
         aote = aote + 1;
         if (aote >= AST_$AOTE_LIMIT) {
-            aote = AOTE_ARRAY_START;
+            aote = &AST_$AOT.aote[0];
         }
 
         /*
@@ -213,7 +196,7 @@ next_scan:
         do {
             aote = aote + 1;
             if (aote >= AST_$AOTE_LIMIT) {
-                aote = AOTE_ARRAY_START;
+                aote = &AST_$AOT.aote[0];
             }
 
             /* 0x00E01EC2..0x00E01ED2: same busy second chance */

@@ -49,9 +49,9 @@ static void reset_state(void);
 #include "ast/locate_aste.c"
 
 #define TEST_N_ASTES 8
-static aste_t test_astes[TEST_N_ASTES];
-aste_t   *ast_aste_base = test_astes;
-uint16_t  ast_size_ast;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 static aote_t test_aote;
 
@@ -78,9 +78,9 @@ aote_t *ast_$lookup_aote_by_uid(uid_t *uid)
 
 static void reset_state(void)
 {
-    memset(test_astes, 0, sizeof(test_astes));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(&test_aote, 0, sizeof(test_aote));
-    ast_size_ast = TEST_N_ASTES;
+    AST_$SIZE_AST = TEST_N_ASTES;
     wait_calls = 0; ref_count_during_wait = -1; wait_clear = NULL;
     lookup_result = NULL; lookup_calls = 0;
 }
@@ -88,19 +88,19 @@ static void reset_state(void)
 /* list: [0] seg 9 -> [1] seg 5 -> [2] seg 2 */
 static void build_list(void)
 {
-    test_astes[0].segment = 9; test_astes[0].next = &test_astes[1];
-    test_astes[1].segment = 5; test_astes[1].next = &test_astes[2];
-    test_astes[2].segment = 2; test_astes[2].next = NULL;
-    test_aote.aste_list = &test_astes[0];
-    test_astes[0].aote = test_astes[1].aote = test_astes[2].aote = &test_aote;
+    AST_$AOT.aste[0].segment = 9; AST_$AOT.aste[0].next = &AST_$AOT.aste[1];
+    AST_$AOT.aste[1].segment = 5; AST_$AOT.aste[1].next = &AST_$AOT.aste[2];
+    AST_$AOT.aste[2].segment = 2; AST_$AOT.aste[2].next = NULL;
+    test_aote.aste_list = &AST_$AOT.aste[0];
+    AST_$AOT.aste[0].aote = AST_$AOT.aste[1].aote = AST_$AOT.aste[2].aote = &test_aote;
 }
 
 TEST(lookup_finds_middle)
 {
     build_list();
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)ast_$lookup_aste(&test_aote, 5));
-    ASSERT_EQ((uintptr_t)&test_astes[2], (uintptr_t)ast_$lookup_aste(&test_aote, 2));
-    ASSERT_EQ((uintptr_t)&test_astes[0], (uintptr_t)ast_$lookup_aste(&test_aote, 9));
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)ast_$lookup_aste(&test_aote, 5));
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[2], (uintptr_t)ast_$lookup_aste(&test_aote, 2));
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[0], (uintptr_t)ast_$lookup_aste(&test_aote, 9));
 }
 
 TEST(lookup_stops_past_wanted_segment)
@@ -125,13 +125,13 @@ TEST(lookup_waits_with_ref_held)
     aste_t *r;
 
     build_list();
-    test_astes[1].flags = ASTE_FLAG_IN_TRANS;
-    wait_clear = &test_astes[1];
+    AST_$AOT.aste[1].flags = ASTE_FLAG_IN_TRANS;
+    wait_clear = &AST_$AOT.aste[1];
     test_aote.ref_count = 2;
 
     r = ast_$lookup_aste(&test_aote, 5);
 
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)r);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)r);
     ASSERT_EQ(1, wait_calls);
     ASSERT_EQ(3, ref_count_during_wait);
     ASSERT_EQ(2, test_aote.ref_count);
@@ -146,11 +146,11 @@ TEST(locate_hint_hit)
     test_aote.uid.high = 0xAA; test_aote.uid.low = 0xBB;
     req.uid_high = 0xAA; req.uid_low = 0xBB;
     req.segment = 5;
-    req.hint = 0xFE00 | 2;               /* index 2 = test_astes[1] */
+    req.hint = 0xFE00 | 2;               /* index 2 = AST_$AOT.aste[1] */
 
     r = AST_$LOCATE_ASTE(&req);
 
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)r);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)r);
     ASSERT_EQ(0, lookup_calls);
 }
 
@@ -166,17 +166,17 @@ TEST(locate_hint_rejected_falls_back)
     lookup_result = &test_aote;
 
     /* wrong segment in the hinted ASTE */
-    req.hint = 1;                        /* test_astes[0], seg 9 */
+    req.hint = 1;                        /* AST_$AOT.aste[0], seg 9 */
     r = AST_$LOCATE_ASTE(&req);
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)r);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)r);
     ASSERT_EQ(1, lookup_calls);
 
     /* AREA flag */
-    test_astes[1].flags = ASTE_FLAG_AREA;
+    AST_$AOT.aste[1].flags = ASTE_FLAG_AREA;
     req.hint = 2;
     r = AST_$LOCATE_ASTE(&req);
     ASSERT_EQ(2, lookup_calls);
-    test_astes[1].flags = 0;
+    AST_$AOT.aste[1].flags = 0;
 
     /* AOTE in transition */
     test_aote.flags = AOTE_FLAG_IN_TRANS;
@@ -199,7 +199,7 @@ TEST(locate_hint_rejected_falls_back)
     req.hint = 0x1E00;
     r = AST_$LOCATE_ASTE(&req);
     ASSERT_EQ(6, lookup_calls);
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)r);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)r);
 }
 
 TEST(locate_unknown_object)

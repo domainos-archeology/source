@@ -67,9 +67,8 @@ void AST_$PMAP_ASSOC(aste_t *aste, uint16_t page, uint32_t ppn,
 
     /* 0x00E042D4..0x00E042F0: 0xED5000 + (seg_index << 7) + (page << 2,
      * 16-bit) - 0x80 */
-    entry = (uint32_t *)((char *)SEGMAP_BASE +
-                         ((uint32_t)aste->seg_index << 7) +
-                         (uint16_t)(page << 2) - 0x80);
+    entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                         + (uint16_t)(page << 2));
 
     /* 0x00E042F4..0x00E042FC: wait while in transition */
     while ((int32_t)*entry < 0) {

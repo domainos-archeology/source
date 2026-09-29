@@ -180,8 +180,7 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
 
         /* 0x00E057CC..0x00E05802: flag 4 when flags bit 15 is set */
         flush_flags = ((int16_t)flags < 0) ? 4 : 0;
-        row = (uint32_t *)((char *)SEGMAP_BASE +
-                           ((uint32_t)aste->seg_index << 7) - 0x80);
+        row = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
         flushed = PMAP_$FLUSH(aste, row, first_page, (int16_t)run,
                               flush_flags, &local_status);
 
@@ -234,8 +233,7 @@ mark_modified:
         ML_$LOCK(PMAP_LOCK_ID);
         if (aste->page_count != 0) {
             any_modified = 0;
-            ent = (uint32_t *)((char *)SEGMAP_BASE +
-                               ((uint32_t)aste->seg_index << 7) - 0x80);
+            ent = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
             for (i = 0x1F; i >= 0; i--) {
                 while ((int32_t)*ent < 0) {
                     ast_$wait_for_page_transition();

@@ -23,13 +23,8 @@
 #include "ast/ast_internal.h"
 #include "dbuf/dbuf.h"
 
-/* The first AOTE, `AOT` in the SAU2 map (`movea.l #0xec7b60,A2`). */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AOTE_ARRAY_START ((aote_t *)0xEC7B60)
-#else
-#define AOTE_ARRAY_START aote_array_start
-#endif
+/* The first AOTE, `AOT` in the SAU2 map (`movea.l #0xec7b60,A2`), is
+ * AST_$AOT.aote[0] (ast/ast.h). */
 
 void AST_$UPDATE(void)
 {
@@ -74,8 +69,7 @@ void AST_$UPDATE(void)
                 /* 0x00E0174C..0x00E0179C: `clr.w -(SP)` is the byte flag */
                 aste->flags |= ASTE_FLAG_IN_TRANS;
                 ML_$UNLOCK(AST_LOCK_ID);
-                row = (uint32_t *)((char *)SEGMAP_BASE +
-                                   ((uint32_t)aste->seg_index << 7) - 0x80);
+                row = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
                 ast_$update_aste(aste, (segmap_entry_t *)row, 0, &status);
                 ML_$LOCK(AST_LOCK_ID);
                 aste->flags &= (uint16_t)~ASTE_FLAG_IN_TRANS;
@@ -114,7 +108,7 @@ void AST_$UPDATE(void)
                 DBUF_$UPDATE_VOL(0, &UID_$NIL);
                 ML_$LOCK(AST_LOCK_ID);
             }
-            aote = AOTE_ARRAY_START;
+            aote = &AST_$AOT.aote[0];
             break;
         }
 

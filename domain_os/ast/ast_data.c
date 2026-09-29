@@ -1,11 +1,17 @@
 /*
  * ast/ast_data.c - AST Subsystem Global Data Definitions
  *
- * Holds the AST data cells that live in the image's own code/data region
- * and that no other AST translation unit owns.
+ * Module data blocks AST_$DATA / AST_$AOT: Claude Opus 5.5 (source-gmxj).
  *
- * Original addresses:
- *   PTR_AST_$SET_TROUBLE_00e07272:   0x00e07272
+ * The AST module's data (docs/design-per-process-data.md; the addresses are
+ * the SAU2 image's, used as ordering keys, not link addresses):
+ *
+ *   0x00E1DC80  AST_$DATA  map "D E1DC80 AST_ size = 498": the A5 block
+ *   0x00EC5400  AST_$AOT   map "D00 EC5400 AST_AOT ... size = F960": the
+ *                          ASTE (AST) and AOTE (AOT) tables
+ *
+ * plus the AST_ cells that live in the image's code region and the wired
+ * zero page.
  */
 
 #include "ast/ast_internal.h"
@@ -32,61 +38,67 @@ DXM_$DEFINE_CALLBACK_CELL(PTR_AST_$SET_TROUBLE_00e07272, AST_$SET_TROUBLE);
 
 /*
  * ============================================================================
- * AST_ module data block cells (A5 = 0xE1DC80, `D E1DC80 AST_ size = 498`)
+ * AST_$DATA - the AST_ module block, 0x00E1DC80..0x00E1E117
  * ============================================================================
+ *
+ * Layout, biases and asserts in ast/ast.h.  Image contents
+ * (`gsk read 0xE1DC80 0x498`); every byte not listed is zero:
+ *
+ *   +0x3F0 0xE1E070  00 ec 7b 60                   aote_scan_pos = AOT
+ *   +0x3F4 0xE1E074  00 ec 7b 60                   aote_limit    = AOT
+ *   +0x3FC 0xE1E07C  00 ec 54 00                   aste_scan_pos = AST
+ *   +0x400 0xE1E080  00 ec 54 00                   aste_limit    = AST
+ *   +0x408 0xE1E088  00 00 00 00 00 e1 e0 88 00 e1 e0 88   dism_ec
+ *   +0x428 0xE1E0A8  00 00 00 00 00 e1 e0 a8 00 e1 e0 a8   ast_in_trans_ec
+ *   +0x44C 0xE1E0CC  00 00 00 00 00 e1 e0 cc 00 e1 e0 cc   pmap_in_trans_ec
+ *   +0x46C 0xE1E0EC  00 08                          grow_ahead_cnt = 8
+ *   +0x484 0xE1E104  00 ec 7b 60                   update_scan   = AOT
+ *   +0x488 0xE1E108  ff ff                          update_timestamp
+ *   +0x48C 0xE1E10C  02 78 30 1c                   attr_timestamp_mask
+ *
+ * The table cells are the link-time addresses of AST_$AOT's two arrays
+ * (the image values, 0xEC7B60 / 0xEC5400, are the AOT / AST symbols); they
+ * are pointer fields, so the initialiser is the address itself rather than
+ * ARCH_PTR_TO_VA_STATIC, and a host test gets its own tables.  The
+ * eventcounts are the EC_$INIT state: an empty circular waiter list whose
+ * head and tail point back at the eventcount.
  */
+MODULE_DATA_DEFINE_INIT(ast_$data_t, AST_$DATA, 0x00E1DC80, {
+    .aote_scan_pos = &AST_$AOT.aote[0],
+    .aote_limit = &AST_$AOT.aote[0],
+    .aste_scan_pos = &AST_$AOT.aste[0],
+    .aste_limit = &AST_$AOT.aste[0],
+    .dism_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&AST_$DATA.dism_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&AST_$DATA.dism_ec,
+    },
+    .ast_in_trans_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&AST_$DATA.ast_in_trans_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&AST_$DATA.ast_in_trans_ec,
+    },
+    .pmap_in_trans_ec = {
+        .value = 0,
+        .waiter_list_head = (ec_$eventcount_waiter_t *)&AST_$DATA.pmap_in_trans_ec,
+        .waiter_list_tail = (ec_$eventcount_waiter_t *)&AST_$DATA.pmap_in_trans_ec,
+    },
+    .grow_ahead_cnt = 8,
+    .update_scan = &AST_$AOT.aote[0],
+    .update_timestamp = 0xFFFF,
+    .attr_timestamp_mask = 0x0278301Cu,
+});
 
 /*
- * ast_$vol_indices - per-volume activated-AOTE counts, block + 0x412.
- * Seven words, closed above by ast_$vol_info_count at block + 0x420.
- * Zero in the image.
+ * ============================================================================
+ * AST_$AOT - the ASTE and AOTE tables, 0x00EC5400..0x00ED4D5F
+ * ============================================================================
  *
- * Original address: 0xE1E092
+ * Layout in ast/ast.h.  No bytes in the image (AST_$INIT builds both tables
+ * at boot), so zero-filled.  The map places AST_AOT after AUDIT_LIST
+ * (0xEC4800) and before AST_PMAPS (PMAP_$SEGMAP, 0xED5000).
  */
-int16_t ast_$vol_indices[AST_VOL_INDEX_SLOTS];
-
-/*
- * ast_$vol_info_count - per-volume "dismount in progress" bit set,
- * block + 0x420.  Zero in the image.
- *
- * Original address: 0xE1E0A0
- */
-uint16_t ast_$vol_info_count;
-
-/*
- * AST_$DISMOUNT_FAILED_PTR - the AOTE whose flush failed during the last
- * AST_$DISMOUNT (0x00E06AC0 stores it).  Named by the SAU2 map.  NULL in the
- * image.
- *
- * Original address: 0xE1E0B8 (block + 0x438)
- */
-aote_t *AST_$DISMOUNT_FAILED_PTR;
-
-/*
- * ast_$clobbered_uid - the UID AST_$SAVE_CLOBBERED_UID copies aside before it
- * queues AST_$SET_TROUBLE.  Zero in the image.
- *
- * Original address: 0xE1E110 (block + 0x490)
- */
-uid_t ast_$clobbered_uid;
-
-/*
- * ast_$not_found - AST_$NOT_FOUND, block + 0x478: UID and flags of the last
- * failed object lookup (ast_$validate_uid writes it).  Named by the SAU2 map.
- * Zero in the image.
- *
- * Original address: 0xE1E0F8
- */
-ast_$not_found_t ast_$not_found;
-
-/*
- * ast_$attr_timestamp_mask - block + 0x48C: attribute types whose update
- * also refreshes the absolute clock (AST_$SET_ATTR_DISPATCH, 0x00E0511E).
- * Image bytes at 0xE1E10C: 02 78 30 1C.
- *
- * Original address: 0xE1E10C
- */
-uint32_t ast_$attr_timestamp_mask = 0x0278301Cu;
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 /*
  * ============================================================================

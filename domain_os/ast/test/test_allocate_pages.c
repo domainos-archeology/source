@@ -12,7 +12,7 @@
  *     static link at 0x00E00CC0 - the parent's `allocated` counter
  *     ((-0xe,A3)) and its `min_count` argument ((0xa,A3));
  *   - the ASTE cursor A4 is 0xEC5400 + seg*0x14, so (-0x10,A4) is the
- *     `aote` field and (-0x8,A4) the `segment` field of ASTE_BASE[seg-1];
+ *     `aote` field and (-0x8,A4) the `segment` field of AST_ASTE_ENTRY(seg);
  *     the tree subtracted a further 0x10 / 0x08;
  *   - NETLOG_$LOG_IT gets (4, uid, timestamp, pmape->seg_offset,
  *     ppn LOW word, allocated, min_count, 0);
@@ -81,23 +81,17 @@ static void reset_mocks(void);
 #define TEST_N_PAGES  32
 #define TEST_N_FRAMES 64
 
-static segmap_entry_t test_segmap[(TEST_N_SEGS + 1) * TEST_N_PAGES];
-static aste_t         test_astes[TEST_N_SEGS];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
 
-/*
- * SEGMAP_BASE is the BIASED base: the row for segment n lives at
- * SEGMAP_BASE + n*0x80 - 0x80, so offer one spare row below it.
- */
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
-aste_t         *ast_aste_base   = test_astes;
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
 
 /* The two counters ast/allocate_pages.c reaches on a non-m68k build. */
-uint32_t ast_$alloc_fail_cnt;
-uint32_t ast_$alloc_try_cnt;
 
 int8_t   NETLOG_$OK_TO_LOG;
 uid_t    ANON_$UID;
@@ -215,16 +209,15 @@ static aote_t test_aote;
 
 static uint32_t *segmap_entry_of(uint16_t seg, uint8_t page)
 {
-    return (uint32_t *)((char *)SEGMAP_BASE + (uint32_t)seg * 0x80
-                        + (uint32_t)page * 4 - 0x80);
+    return (uint32_t *)&PMAP_SEGMAP_ROW(seg)[page];
 }
 
 static void reset_mocks(void)
 {
     int i;
 
-    memset(test_segmap, 0, sizeof(test_segmap));
-    memset(test_astes, 0, sizeof(test_astes));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
@@ -240,8 +233,8 @@ static void reset_mocks(void)
     log_calls = 0;
     crash_calls = 0;
 
-    ast_$alloc_fail_cnt = 0;
-    ast_$alloc_try_cnt = 0;
+    AST_$ALLOC_TOO_FEW_CNT = 0;
+    AST_$ALLOC_CNT = 0;
     NETLOG_$OK_TO_LOG = 0;
     ANON_$UID.high = 0x00000407;
     ANON_$UID.low = 0;
@@ -257,9 +250,9 @@ static void reset_mocks(void)
 
     *segmap_entry_of(TEST_SEG, TEST_PAGE) = SEGMAP_FLAG_IN_USE | TEST_PPN;
 
-    test_astes[TEST_SEG - 1].aote = &test_aote;
-    test_astes[TEST_SEG - 1].segment = 0xBEEF;
-    test_astes[TEST_SEG - 1].page_count = 9;
+    AST_ASTE_ENTRY(TEST_SEG)->aote = &test_aote;
+    AST_ASTE_ENTRY(TEST_SEG)->segment = 0xBEEF;
+    AST_ASTE_ENTRY(TEST_SEG)->page_count = 9;
 
     test_aote.uid.high = 0x11112222;
     test_aote.uid.low  = 0x33334444;
@@ -281,8 +274,8 @@ TEST(free_pool_satisfies_the_request)
     got = ast_$allocate_pages(4, 1, ppns);
 
     ASSERT_EQ(4, got);
-    ASSERT_EQ(1u, ast_$alloc_try_cnt);
-    ASSERT_EQ(0u, ast_$alloc_fail_cnt);
+    ASSERT_EQ(1u, AST_$ALLOC_CNT);
+    ASSERT_EQ(0u, AST_$ALLOC_TOO_FEW_CNT);
     ASSERT_EQ(1, free_calls);
     ASSERT_EQ(0, pure_calls);
     ASSERT_EQ(0, purifier_calls);
@@ -303,7 +296,7 @@ TEST(short_allocation_wakes_the_purifier_and_retries)
     ASSERT_EQ(1, purifier_calls);
     ASSERT_EQ((int8_t)0xFF, purifier_last);
     ASSERT_EQ(2, free_calls);
-    ASSERT_EQ(0u, ast_$alloc_fail_cnt);
+    ASSERT_EQ(0u, AST_$ALLOC_TOO_FEW_CNT);
 }
 
 /* 0x00E00E6C-0x00E00E70 */
@@ -318,7 +311,7 @@ TEST(partial_allocation_counts_a_failure)
     got = ast_$allocate_pages(2, 1, ppns);
 
     ASSERT_EQ(1, got);
-    ASSERT_EQ(1u, ast_$alloc_fail_cnt);
+    ASSERT_EQ(1u, AST_$ALLOC_TOO_FEW_CNT);
 }
 
 /* 0x00E00E02/0x00E00E08/0x00E00E10: the segment map entry is rewritten */
@@ -338,7 +331,7 @@ TEST(pure_page_rewrites_the_segment_map_entry)
     /* bit 30 cleared, bits 22..0 replaced by pmape->disk_addr */
     ASSERT_EQ(0x00012345u, *entry);
     /* 0x00E00E2C */
-    ASSERT_EQ(8, test_astes[TEST_SEG - 1].page_count);
+    ASSERT_EQ(8, AST_ASTE_ENTRY(TEST_SEG)->page_count);
 }
 
 /* 0x00E00DD6-0x00E00DF4: a mismatched PPN crashes */
@@ -435,7 +428,7 @@ TEST(log_page_argument_list_local_object)
     /* the AOTE's own UID at aote+0x10 */
     ASSERT_EQ(0x11112222u, log_uid_high[0]);
     ASSERT_EQ(0x33334444u, log_uid_low[0]);
-    /* (-0x8,A4) = ASTE_BASE[seg-1].segment */
+    /* (-0x8,A4) = AST_ASTE_ENTRY(seg)->segment */
     ASSERT_EQ(0xBEEF, log_p3[0]);
     /* (0x1,A2) = pmape->seg_offset */
     ASSERT_EQ(TEST_PAGE, log_p4[0]);

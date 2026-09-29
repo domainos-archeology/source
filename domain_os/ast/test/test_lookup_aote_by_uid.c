@@ -7,7 +7,7 @@
  * through a mocked UID_$HASH and AST_$WAIT_FOR_AST_INTRANS.  It pins:
  *
  *   - UID_$HASH receives the caller's UID and the 251-bucket size word;
- *   - the chain is walked from AST_AOTH_BASE[hash] comparing aote+0x10;
+ *   - the chain is walked from AST_$DATA.aoth[hash] comparing aote+0x10;
  *   - a match in transition is waited for and the walk restarts from the
  *     chain head (so an entry inserted at the head meanwhile is seen);
  *   - no match yields NULL.
@@ -48,8 +48,9 @@ static void reset_state(void);
 #include "ast/lookup_aote_by_uid.c"
 
 #define TEST_BUCKETS 251
-static aote_t *test_aoth[TEST_BUCKETS];
-aote_t **ast_aoth_base = test_aoth;
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 static aote_t a1, a2, a3;
 
@@ -73,8 +74,8 @@ void AST_$WAIT_FOR_AST_INTRANS(void)
         wait_clear->flags &= (uint8_t)~AOTE_FLAG_IN_TRANS;
     }
     if (wait_insert != NULL) {
-        wait_insert->hash_next = test_aoth[hash_result];
-        test_aoth[hash_result] = wait_insert;
+        wait_insert->hash_next = AST_$DATA.aoth[hash_result];
+        AST_$DATA.aoth[hash_result] = wait_insert;
         wait_insert = NULL;
     }
 }
@@ -87,7 +88,7 @@ static void set_uid(aote_t *a, uint32_t high, uint32_t low)
 
 static void reset_state(void)
 {
-    memset(test_aoth, 0, sizeof(test_aoth));
+    memset(AST_$DATA.aoth, 0, sizeof(AST_$DATA.aoth));
     memset(&a1, 0, sizeof(a1)); memset(&a2, 0, sizeof(a2)); memset(&a3, 0, sizeof(a3));
     hash_uid_arg = NULL; hash_size_arg = 0; hash_result = 5;
     wait_calls = 0; wait_clear = NULL; wait_insert = NULL;
@@ -112,7 +113,7 @@ TEST(found_second_on_chain)
     set_uid(&a1, 0x11, 0x23);           /* low differs */
     set_uid(&a2, 0x11, 0x22);
     set_uid(&a3, 0x10, 0x22);
-    test_aoth[5] = &a1; a1.hash_next = &a2; a2.hash_next = &a3;
+    AST_$DATA.aoth[5] = &a1; a1.hash_next = &a2; a2.hash_next = &a3;
 
     r = ast_$lookup_aote_by_uid(&uid);
 
@@ -126,7 +127,7 @@ TEST(no_match_on_nonempty_chain)
     aote_t *r;
 
     set_uid(&a1, 0x11, 0x22);
-    test_aoth[5] = &a1;
+    AST_$DATA.aoth[5] = &a1;
 
     r = ast_$lookup_aote_by_uid(&uid);
 
@@ -140,7 +141,7 @@ TEST(in_transition_waits_and_restarts_from_head)
 
     set_uid(&a1, 0x11, 0x22);
     a1.flags = AOTE_FLAG_IN_TRANS;
-    test_aoth[5] = &a1;
+    AST_$DATA.aoth[5] = &a1;
     /* during the wait a fresh entry with the same UID lands on the head */
     set_uid(&a2, 0x11, 0x22);
     wait_clear = &a1;
@@ -158,7 +159,7 @@ TEST(other_bucket_not_searched)
     aote_t *r;
 
     set_uid(&a1, 0x11, 0x22);
-    test_aoth[6] = &a1;                  /* hash says bucket 5 */
+    AST_$DATA.aoth[6] = &a1;                  /* hash says bucket 5 */
 
     r = ast_$lookup_aote_by_uid(&uid);
 

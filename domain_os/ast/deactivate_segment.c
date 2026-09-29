@@ -85,7 +85,6 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, int8_t purge, int8_t keep,
                              status_$t *status)
 {
     uint16_t aste_flags;
-    uint32_t segmap_offset;
     uint16_t flush_mode;
     uint32_t *segmap_row;
     aote_t *aote;
@@ -122,10 +121,10 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, int8_t purge, int8_t keep,
 
     /*
      * 0x00E019B6-0x00E019C8: A3 = 0xED5000 + seg_index*0x80, and every use
-     * below is `(-0x80,A3)`, i.e. the row base 0xED4F80 + seg_index*0x80.
+     * below is `(-0x80,A3)`, i.e. the row base 0xED4F80 + seg_index*0x80:
+     * segment seg_index's row.
      */
-    segmap_offset = (uint32_t)aste->seg_index * 0x80;
-    segmap_row = (uint32_t *)((char *)SEGMAP_BASE + segmap_offset - 0x80);
+    segmap_row = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
 
     /* 0x00E019CC-0x00E019DC */
     if (NETLOG_$OK_TO_LOG < 0) {

@@ -53,14 +53,14 @@ static void reset_state(void);
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x1000
 #define TEST_N_ASTES 4
-static segmap_entry_t test_segmap[(TEST_N_ASTES + 1) * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-static aste_t         test_astes[TEST_N_ASTES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
-aste_t         *ast_aste_base   = test_astes;
 uint16_t        PROC1_$CURRENT;
 
 static aote_t test_aote;
@@ -84,14 +84,14 @@ void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *entry, uint32_t ppn) { inval_c
 static int save_calls; static uid_t *save_uid;
 void AST_$SAVE_CLOBBERED_UID(uid_t *uid) { save_calls++; save_uid = uid; }
 
-static uint32_t *row(int seg) { return (uint32_t *)&test_segmap[seg * TEST_N_PAGES]; }
+static uint32_t *row(int seg) { return (uint32_t *)PMAP_SEGMAP_ROW(seg); }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
-    memset(test_astes, 0, sizeof(test_astes));
+    memset(&AST_$AOT, 0, sizeof(AST_$AOT));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(lock_held, 0, sizeof(lock_held));
     PROC1_$CURRENT = 7;
@@ -152,7 +152,7 @@ static void setup_corrupt(uint32_t ppn, int seg, int page)
     test_mmapes[ppn].segment = (uint16_t)seg;
     test_mmapes[ppn].seg_offset = (uint8_t)page;
     row(seg)[page] = SEGMAP_VALID | ppn;
-    test_astes[seg - 1].aote = &test_aote;
+    AST_ASTE_ENTRY(seg)->aote = &test_aote;
 }
 
 TEST(corrupted_clean_page_invalidated)
@@ -164,7 +164,7 @@ TEST(corrupted_clean_page_invalidated)
 
     ASSERT_EQ(0xFF, r);
     ASSERT_EQ(1, inval_calls);
-    ASSERT_EQ((uintptr_t)&test_astes[1], (uintptr_t)inval_aste);
+    ASSERT_EQ((uintptr_t)&AST_$AOT.aste[1], (uintptr_t)inval_aste);
     ASSERT_EQ((uintptr_t)&row(2)[9], (uintptr_t)inval_entry);
     ASSERT_EQ(0x350, inval_ppn);
     ASSERT_EQ(0, save_calls);

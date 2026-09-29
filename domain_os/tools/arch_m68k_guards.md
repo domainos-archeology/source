@@ -18,14 +18,16 @@ Classes (the ones the step's bead defines):
 
 | class | meaning | allowed | guards |
 |---|---|---|---|
-| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 152 |
+| a | `_Static_assert`s on a pointer-bearing record, true only on the 32-bit target | yes | 154 |
 | b | host fallback body of a routine that is hand-written assembly on the target (`<subsystem>/sau2/*.s`) | yes | 35 |
 | c | `.text.<symbol>` section-attribute macro for the target's link order | yes | 5 |
 | d | hardware register access | only in `arch/` or a per-SAU header | 0 (see below) |
-| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 16 exempt |
+| e | data declaration / definition or absolute-address macro | no: converted, or exempt for a tracked bead | 5 exempt |
 | f | anything else (decided per guard below) | yes | 5 |
 
-213 guards in all.  At 2e17a86 there were 255: the first scan found 53 with a
+204 guards in all (213 at source-702z; source-gmxj converted the eleven
+AST_ guards and added two assert guards for the AST_$DATA / AST_$AOT
+blocks).  At 2e17a86 there were 255: the first scan found 53 with a
 forbidden form (11 absolute-address macros, 29 with externs, 13 with object
 definitions) and the macro-expanding scan four more (cal/cal.h, time/time.h,
 dir/dir_internal.h, volx/volx_internal.h).
@@ -42,7 +44,7 @@ plain object), `WIN_$DATA` (with the image's driver entry table),
 `DXM_$SIGNAL_ROUTINES` (the DXM_WIRED_ segment); `ML_$LOCK_BYTES` /
 `ML_$LOCK_EVENTS` (map LOCK_BYTE / LOCK_$EVENT_LISTS, self-linked
 eventcounts), `ast_$attr_timestamp_mask` and `ast_$not_found` (plain objects
-until source-gmxj), the FILE_$LOT_DATA tables (objects that already existed:
+until source-gmxj made them AST_$DATA fields), the FILE_$LOT_DATA tables (objects that already existed:
 the target now uses them), `DISK_$PER_PROC` (through `DISK_$DATA`).  Unused
 spellings were deleted (MAC_OS table / lock / port / socket macros,
 `PTE_BASE`, `IO_$INT_STACK`, `PEB_GLOBALS_BASE`, `PEB_WIRED_DATA_ADDR`,
@@ -68,7 +70,6 @@ fails the check, so the table shrinks as the beads land.
 
 | bead | guards | what |
 |---|---|---|
-| source-gmxj | ast/ast.h, ast/activate_aote_canned.c, allocate_aote.c, allocate_pages.c, dismount.c, force_activate_segment.c, load_aote.c, lookup_aote_by_uid.c, process_aote.c, release_aote.c, update.c | the AST_ segment cells and the AST / AOT tables (with source-avdg for `SEGMAP_BASE`) |
 | source-qiby | dir/dir_internal.h | `DIR_$BLOCK_BASE`, the DIR segment at A5 = 0xE7DC00 |
 | source-fyjc | mmap/mmap.h | `MMAPE_BASE`, the MMAP page table in OS_PMAPS |
 | source-o56c | mmu/mmu.h, mmu/mmu_data.c | the MMU_ASM cells the mmu/sau2 assembly owns, `MMU_$PTTX`, and the MMU register page |
@@ -99,23 +100,14 @@ fails the check, so the table shrinks as the beads land.
 | area/area.h:296 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `area_$seg_slot_t` |
 | area/area.h:419 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `area_$rpmap_cache_t`, `area_$format_t`, `area_$globals_t` |
 | as/as.h:101 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `as_$info_t` |
-| ast/activate_aote_canned.c:31 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_AOTH_BASE`... - source-gmxj |
-| ast/allocate_aote.c:51 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_$FREE_AOTE_HEAD`... - source-gmxj |
-| ast/allocate_pages.c:54 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_$ALLOC_FAIL_CNT`... - source-gmxj |
 | ast/ast.h:93 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aste_t` |
 | ast/ast.h:352 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aote_t` |
 | ast/ast.h:383 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aote_t` |
 | ast/ast.h:438 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$attr_rec_t`, `aote_t` |
 | ast/ast.h:466 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$subject_t` |
-| ast/ast.h:507 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AOTH`... - source-gmxj |
-| ast/ast.h:909 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$acl_attr_t` |
-| ast/dismount.c:32 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AOTE_ARRAY_START`... - source-gmxj |
-| ast/force_activate_segment.c:39 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_AOTH_BASE`... - source-gmxj |
-| ast/load_aote.c:35 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_AOTH_BASE`... - source-gmxj |
-| ast/lookup_aote_by_uid.c:17 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_AOTH_BASE`... - source-gmxj |
-| ast/process_aote.c:38 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_AOTH_BASE`... - source-gmxj |
-| ast/release_aote.c:18 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AST_$FREE_AOTE_HEAD`... - source-gmxj |
-| ast/update.c:28 | `#if defined(ARCH_M68K)` | e (exempt) | still to convert: `AOTE_ARRAY_START`... - source-gmxj |
+| ast/ast.h:641 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$data_t` (the AST_ block, source-gmxj) |
+| ast/ast.h:766 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `aste_t`, `aote_t`, `ast_$aot_t` (the AST_AOT block, source-gmxj) |
+| ast/ast.h:1050 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `ast_$acl_attr_t` |
 | audit/audit_internal.h:159 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_hash_node_t` |
 | audit/audit_internal.h:202 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_event_record_t` |
 | audit/audit_internal.h:332 | `#if defined(ARCH_M68K)` | a | layout asserts that hold only on the 32-bit target (pointer-bearing record): `audit_data_t` |

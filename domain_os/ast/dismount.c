@@ -1,9 +1,9 @@
 /*
  * AST_$DISMOUNT - Deactivate every object on a volume and dismount its VTOC
  *
- * Marks the volume as dismounting in ast_$vol_info_count, bumps the
+ * Marks the volume as dismounting in AST_$DATA.vol_info_count, bumps the
  * dismount sequence number, waits until no AOTE activation is in progress
- * on the volume (ast_$vol_indices[vol] == 0, watched through AST_$DISM_EC),
+ * on the volume (AST_$DATA.vol_indices[vol] == 0, watched through AST_$DISM_EC),
  * then walks the whole AOT: every local AOTE on this volume whose UID is
  * not the paging file's is processed with ast_$process_aote(purge = flags,
  * keep = TRUE, wait = TRUE) and released.  A processing failure records
@@ -18,8 +18,8 @@
  *
  * Original address: 0x00E069CA (340 bytes), A5 = 0xE1DC80 (AST_ block):
  *   (0x3F4,A5) AST_$AOTE_LIMIT   (0x404,A5) AST_$DISM_SEQN
- *   (0x408,A5) AST_$DISM_EC      (0x412,A5) ast_$vol_indices (word array)
- *   (0x420,A5) ast_$vol_info_count   (0x438,A5) AST_$DISMOUNT_FAILED_PTR
+ *   (0x408,A5) AST_$DISM_EC      (0x412,A5) AST_$DATA.vol_indices (word array)
+ *   (0x420,A5) AST_$DATA.vol_info_count   (0x438,A5) AST_$DISMOUNT_FAILED_PTR
  */
 
 #include "ast/ast_internal.h"
@@ -27,13 +27,8 @@
 #include "vtoc/vtoc.h"
 #include "network/network.h"
 
-/* The first AOTE, `AOT` in the SAU2 map (`movea.l #0xec7b60,A2`). */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AOTE_ARRAY_START ((aote_t *)0xEC7B60)
-#else
-#define AOTE_ARRAY_START aote_array_start
-#endif
+/* The first AOTE, `AOT` in the SAU2 map (`movea.l #0xec7b60,A2`), is
+ * AST_$AOT.aote[0] (ast/ast.h). */
 
 void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 {
@@ -49,7 +44,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
 
     /* 0x00E069F4..0x00E069FC: clr.w D3 / bset.l D2,D3 (mod 32) / or.w */
     vol_mask = (uint16_t)(1u << (vol_index & 0x1F));
-    ast_$vol_info_count |= vol_mask;
+    AST_$DATA.vol_info_count |= vol_mask;
     AST_$DISM_SEQN++;
 
     /*
@@ -57,7 +52,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
      * activation count is non-zero, wait for AST_$DISM_EC to pass its
      * current value.
      */
-    while (ast_$vol_indices[vol_index] != 0) {
+    while (AST_$DATA.vol_indices[vol_index] != 0) {
         wait_value = AST_$DISM_EC.value + 1;                /* 0x00E06A12 */
         ML_$UNLOCK(AST_LOCK_ID);
         /*
@@ -71,7 +66,7 @@ void AST_$DISMOUNT(uint16_t vol_index, uint8_t flags, status_$t *status)
     }
 
     /* 0x00E06A58..0x00E06ADC: walk the AOT up to AST_$AOTE_LIMIT (`bne`) */
-    aote = AOTE_ARRAY_START;
+    aote = &AST_$AOT.aote[0];
     while (aote != AST_$AOTE_LIMIT) {
         /* 0x00E06A60: remote objects are not ours */
         if (aote->remote_flag < 0) {
@@ -122,7 +117,7 @@ next:
 
 done:
     /* 0x00E06AFE..0x00E06B10 */
-    ast_$vol_info_count &= (uint16_t)~vol_mask;
+    AST_$DATA.vol_info_count &= (uint16_t)~vol_mask;
     PROC1_$INHIBIT_END();
     *status = local_status;
 }

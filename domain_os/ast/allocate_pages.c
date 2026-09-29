@@ -48,16 +48,9 @@ static void ast_$allocate_pages_log(const mmape_t *pmape, uint16_t seg,
                                     uint16_t min_count);
 
 /*
- * Allocation stats at A5+0x460 and A5+0x464
+ * Allocation stats at A5+0x460 and A5+0x464: the map's
+ * AST_$ALLOC_TOO_FEW_CNT and AST_$ALLOC_CNT (AST_$DATA fields).
  */
-/* TODO(source-gmxj): the AST_ segment and the AST/AOT tables are still absolute on the target (tools/check_guards.py exemption). */
-#if defined(ARCH_M68K)
-#define AST_$ALLOC_FAIL_CNT (*(uint32_t *)0xE1E0E0)  /* A5+0x460 */
-#define AST_$ALLOC_TRY_CNT  (*(uint32_t *)0xE1E0E4)  /* A5+0x464 */
-#else
-#define AST_$ALLOC_FAIL_CNT ast_$alloc_fail_cnt
-#define AST_$ALLOC_TRY_CNT  ast_$alloc_try_cnt
-#endif
 
 int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
                             uint32_t *ppn_array)
@@ -70,7 +63,7 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
     uint16_t seg_index;
 
     /* 0x00E00D56 */
-    AST_$ALLOC_TRY_CNT++;
+    AST_$ALLOC_CNT++;
 
     /* 0x00E00D5A / 0x00E00D4E */
     allocated = 0;
@@ -111,14 +104,12 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
                 seg_index = pmape->segment;
 
                 /*
-                 * 0x00E00DB8-0x00E00DD2 then `(-0x80,A2)`: the segment map
-                 * row is 0xED5000 + seg*0x80 and the entry within it is
-                 * seg_offset*4, both taken 0x80 below the biased cursor.
+                 * 0x00E00DB8-0x00E00DD2 then `(-0x80,A2)`: A2 is 0xED5000 +
+                 * seg*0x80 + seg_offset*4 and the displacement takes it
+                 * 0x80 down, onto entry seg_offset of segment seg's row.
                  */
-                segmap_entry = (uint32_t *)((char *)SEGMAP_BASE
-                                            + (uint32_t)seg_index * 0x80
-                                            + (uint32_t)pmape->seg_offset * 4
-                                            - 0x80);
+                segmap_entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(seg_index)
+                                            + (uint32_t)pmape->seg_offset * 4);
 
                 /*
                  * 0x00E00DD6-0x00E00DF4.  The PPN is the entry's low word
@@ -150,9 +141,9 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
                 /*
                  * 0x00E00E18-0x00E00E2C: `subq.b #0x1,(-0x4,A0,D0*0x1)`
                  * with A0 = 0xEC5400 and D0 = seg*0x14, i.e. the
-                 * page_count byte (+0x10) of the 1-based ASTE_BASE[seg-1].
+                 * page_count byte (+0x10) of the 1-based AST_ASTE_ENTRY(seg).
                  */
-                ASTE_BASE[seg_index - 1].page_count--;
+                AST_ASTE_ENTRY(seg_index)->page_count--;
 
                 /* 0x00E00E30-0x00E00E44 */
                 if (NETLOG_$OK_TO_LOG < 0) {
@@ -178,7 +169,7 @@ int16_t ast_$allocate_pages(int16_t count_arg, int16_t min_count,
 
     /* 0x00E00E6C-0x00E00E70 */
     if (num_pages != 0) {
-        AST_$ALLOC_FAIL_CNT++;
+        AST_$ALLOC_TOO_FEW_CNT++;
     }
 
 done:
@@ -215,7 +206,7 @@ done:
  * Both are passed explicitly here.  The ASTE cursor A4 is
  * 0xEC5400 + seg*0x14 (0x00E00CC4-0x00E00CD0), so (-0x10,A4) is the `aote`
  * field (+0x04) and (-0x8,A4) the `timestamp` field (+0x0C) of the 1-based
- * ASTE_BASE[seg-1].
+ * AST_ASTE_ENTRY(seg).
  *
  * Original address: 0x00E00CAC .. 0x00E00D44
  */
@@ -230,7 +221,7 @@ static void ast_$allocate_pages_log(const mmape_t *pmape, uint16_t seg,
     (void)seg;
 
     /* 0x00E00CBC-0x00E00CD0 */
-    aste = &ASTE_BASE[pmape->segment - 1];
+    aste = AST_ASTE_ENTRY(pmape->segment);
 
     /* 0x00E00CD4: `tst.b (0x9,A2)` / `bpl` - mmape flags2 bit 7 */
     if ((int8_t)pmape->flags2 < 0) {

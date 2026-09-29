@@ -84,9 +84,8 @@ void ast_$invalidate_no_wait(uint32_t end_page, aote_t *aote,
             ML_$LOCK(PMAP_LOCK_ID);
 
             /* 0x00E06556..0x00E0656C: the entry of the first page */
-            entry = (uint32_t *)((char *)SEGMAP_BASE +
-                                 ((uint32_t)aste->seg_index << 7) +
-                                 ((uint16_t)(first_in_seg << 2)) - 0x80);
+            entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(aste->seg_index)
+                                 + ((uint16_t)(first_in_seg << 2)));
 
             /* 0x00E06570..0x00E06576: pages first..last, upwards */
             pages_left = (int16_t)(last_in_seg - first_in_seg);

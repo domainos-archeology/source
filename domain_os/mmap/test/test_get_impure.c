@@ -42,7 +42,9 @@ static uint32_t pft_store[TEST_PAGES];
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 mmape_t  *mmap_mmape_base = mmape_store;
 uint32_t *mmu_pft_base    = pft_store;
-aste_t MMAP_$SEG_ASTE[TEST_SEGMENTS];
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 static aote_t aote_store[TEST_SEGMENTS];
 
 #include "../get_impure.c"
@@ -72,7 +74,7 @@ static void reset_module(void)
 
     memset(mmape_store, 0, sizeof(mmape_store));
     memset(&MMAP_GLOBALS, 0, sizeof(MMAP_GLOBALS));
-    memset(MMAP_$SEG_ASTE, 0, sizeof(MMAP_$SEG_ASTE));
+    memset(AST_$AOT.aste, 0, sizeof(AST_$AOT.aste));
     memset(aote_store, 0, sizeof(aote_store));
     for (s = 1; s <= TEST_SEGMENTS; s++) {
         MMAP_$SEG_ASTE_FOR(s)->aote = &aote_store[s - 1];

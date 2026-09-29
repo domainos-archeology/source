@@ -161,7 +161,7 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
     uid_t old_acl_uid;       /* A6-0x50 */
     uid_t new_acl_uid;       /* A6-0x48 */
     attr_tmp_t tmp;          /* A6-0x40 */
-    uint8_t truncate_out;    /* A6-0x56, the result byte AST_$TRUNCATE writes
+    boolean truncate_out;    /* A6-0x56, the result byte AST_$TRUNCATE writes
                               * (a bit field: see file/priv_unlock.c) */
 
     *status = status_$ok;                                   /* 0xE04B10 */

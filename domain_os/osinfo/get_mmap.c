@@ -157,10 +157,10 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
                 } else {
                     *status = status_$os_info_page_found;      /* 0x00E5C814 */
                     /* 0x00E5C81A .. 0x00E5C83C: ASTE index at +2; the
-                     * AOTE pointer of ASTE_BASE[idx-1] (+4 = idx*0x14-0x10);
+                     * AOTE pointer of AST_ASTE_ENTRY(idx) (+4 = idx*0x14-0x10);
                      * its uid at +0x10 -> *uid_out */
                     *(uid_t *)uid_out =
-                        ASTE_BASE[(int16_t)page_entry->segment - 1].aote->uid;
+                        AST_ASTE_ENTRY((int16_t)page_entry->segment)->aote->uid;
                 }
                 ppn++;                                          /* 0x00E5C840 */
                 break;                                          /* -> 0x00E5C852 */

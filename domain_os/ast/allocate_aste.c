@@ -73,7 +73,7 @@ aste_t *AST_$ALLOCATE_ASTE(void)
         /* 0x00E01F54..0x00E01F5E: advance, wrapping at the limit */
         aste = aste + 1;
         if (aste >= AST_$ASTE_LIMIT) {
-            aste = ASTE_BASE;
+            aste = &AST_$AOT.aste[0];
         }
 
         /* 0x00E01F60..0x00E01F70: btst.l #0xe / bclr.b #0x6,(0x12,A2) */
@@ -158,7 +158,7 @@ next_scan:
         do {
             aste = aste + 1;
             if (aste >= AST_$ASTE_LIMIT) {
-                aste = ASTE_BASE;
+                aste = &AST_$AOT.aste[0];
             }
 
             /* 0x00E0202A..0x00E0203A: same second chance on bit 14 */

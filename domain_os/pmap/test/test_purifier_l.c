@@ -131,8 +131,10 @@ int8_t   NETLOG_$OK_TO_LOG;
 int8_t   NETWORK_$DISKLESS;
 log_state_t LOG_$STATE;
 uid_t    UID_$NIL;
-struct aste_t *ast_aste_base;
-ec_$eventcount_t ast_pmap_in_trans_ec;
+#include "ast/ast.h"
+/* The AST_ module blocks (ast/ast.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 
 int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
 { (void)ecs; (void)vals; return 0; }

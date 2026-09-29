@@ -64,18 +64,6 @@ FORBIDDEN = ('object', 'extern', 'absaddr', 'record')
 # cites the bead that removes it.  Keep this list short: it is the
 # remainder of source-0i3, not a place for new guards.
 EXEMPT = [
-    # AST_ segment and the AST / AOT tables (0xE1DC80, 0xEC5400, 0xEC7B60)
-    ('ast/ast.h', 'AOTH', 'source-gmxj'),
-    ('ast/activate_aote_canned.c', 'AST_AOTH_BASE', 'source-gmxj'),
-    ('ast/allocate_aote.c', 'AST_$FREE_AOTE_HEAD', 'source-gmxj'),
-    ('ast/allocate_pages.c', 'AST_$ALLOC_FAIL_CNT', 'source-gmxj'),
-    ('ast/dismount.c', 'AOTE_ARRAY_START', 'source-gmxj'),
-    ('ast/force_activate_segment.c', 'AST_AOTH_BASE', 'source-gmxj'),
-    ('ast/load_aote.c', 'AST_AOTH_BASE', 'source-gmxj'),
-    ('ast/lookup_aote_by_uid.c', 'AST_AOTH_BASE', 'source-gmxj'),
-    ('ast/process_aote.c', 'AST_AOTH_BASE', 'source-gmxj'),
-    ('ast/release_aote.c', 'AST_$FREE_AOTE_HEAD', 'source-gmxj'),
-    ('ast/update.c', 'AOTE_ARRAY_START', 'source-gmxj'),
     # DIR segment (A5 = 0xE7DC00): the block-base hook
     ('dir/dir_internal.h', 'DIR_$BLOCK_BASE', 'source-qiby'),
     # MMAP page table in OS_PMAPS (element for ppn 0 at 0xEB2800)

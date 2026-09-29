@@ -237,8 +237,7 @@ retry:
         /* 0x00E05E56..0x00E05E82: the segment holding the new end.  The
          * VTOCE length is rounded up to the next segment; nothing to do
          * when the length is unchanged */
-        row = (uint32_t *)((char *)SEGMAP_BASE +
-                           ((uint32_t)aste->seg_index << 7) - 0x80);
+        row = (uint32_t *)PMAP_SEGMAP_ROW(aste->seg_index);
         rounded_size = ((uint32_t)(uint16_t)end_seg + 1) << 15;
         if (aote->length == new_size) {
             break;                                              /* 0x00E06074 */

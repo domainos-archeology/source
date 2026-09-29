@@ -49,10 +49,12 @@ static void reset_state(void);
 
 #define TEST_N_PAGES 32
 #define TEST_N_FRAMES 0x1000
-static segmap_entry_t test_segmap[3 * TEST_N_PAGES];
+/* The AST_ module blocks (ast/ast.h) and the segment map (pmap/pmap.h). */
+MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
+MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
+MODULE_DATA_DEFINE(pmap_$segmap_t, PMAP_$SEGMAP, 0x00ED5000);
 static mmape_t        test_mmapes[TEST_N_FRAMES];
 static uint32_t       test_pft[TEST_N_FRAMES];
-segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
 
@@ -77,11 +79,11 @@ void MMAP_$INSTALL_LIST(uint32_t *vpn_array, uint16_t count, int8_t use_wired)
 static int crash_calls; static const status_$t *crash_status;
 void CRASH_SYSTEM(const status_$t *s) { crash_calls++; crash_status = s; }
 
-static uint32_t *row1(void) { return (uint32_t *)&test_segmap[TEST_N_PAGES]; }
+static uint32_t *row1(void) { return (uint32_t *)PMAP_SEGMAP_ROW(1); }
 
 static void reset_state(void)
 {
-    memset(test_segmap, 0, sizeof(test_segmap));
+    memset(&PMAP_$SEGMAP, 0, sizeof(PMAP_$SEGMAP));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));

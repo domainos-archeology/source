@@ -59,10 +59,10 @@ uint8_t AST_$REMOVE_CORRUPTED_PAGE(uint32_t ppn)
     }
 
     /* 0x00E072E6..0x00E072FA: 0xEC5400 + seg*0x14 = the ASTE after
-     * ASTE_BASE[seg-1]; 0x00E072FE..0x00E07314: the map entry */
-    aste = &ASTE_BASE[seg - 1];
-    entry = (uint32_t *)((char *)SEGMAP_BASE + ((uint32_t)seg << 7) +
-                         (uint16_t)(mmape->seg_offset << 2) - 0x80);
+     * AST_ASTE_ENTRY(seg); 0x00E072FE..0x00E07314: the map entry */
+    aste = AST_ASTE_ENTRY(seg);
+    entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(seg)
+                         + (uint16_t)(mmape->seg_offset << 2));
 
     /* 0x00E07318..0x00E07326: in transition, or not installed */
     if ((int32_t)*entry < 0) {

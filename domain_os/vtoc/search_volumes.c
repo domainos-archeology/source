@@ -13,7 +13,7 @@
  *
  * The routine does not load A5 of its own: it inherits the AST_ module base
  * (0xE1DC80) from its caller, so the "(0x420,A5)" word it reads is
- * ast_$vol_info_count at 0xE1E0A0.
+ * AST_$DATA.vol_info_count at 0xE1E0A0.
  */
 
 #include "vtoc/vtoc_internal.h"
@@ -47,7 +47,7 @@ void VTOC_$SEARCH_VOLUMES(void *uid_info, status_$t *status)
              * abandoned.
              */
             if (vol_idx <= 0x0F) {
-                vol_flags = ast_$vol_info_count;
+                vol_flags = AST_$DATA.vol_info_count;
                 if ((vol_flags & (uint16_t)(1u << vol_idx)) != 0) {
                     /* volume unavailable, skip it */
                     goto next_volume;

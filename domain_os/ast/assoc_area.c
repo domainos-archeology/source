@@ -58,8 +58,8 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
      * to 32 bits, plus (page << 2) as a 16-bit index, minus 0x80: the
      * map is 1-based by segment.
      */
-    entry = (uint32_t *)((char *)SEGMAP_BASE + ((uint32_t)seg_index << 7) +
-                         (int16_t)(page << 2) - 0x80);
+    entry = (uint32_t *)((char *)PMAP_SEGMAP_ROW(seg_index)
+                         + (int16_t)(page << 2));
 
     /* 0x00E04578..0x00E04580: wait while the entry is in transition */
     while ((int32_t)*entry < 0) {
@@ -96,7 +96,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
 
         /* 0x00E045E8..0x00E045FA: subq.b #1 at 0xEC5400 + seg*0x14 - 4,
          * the page_count of the 1-based ASTE for this segment */
-        ASTE_BASE[seg_index - 1].page_count--;
+        AST_ASTE_ENTRY(seg_index)->page_count--;
     }
 
     /* 0x00E045FE..0x00E0460C */
@@ -138,7 +138,7 @@ void AST_$ASSOC_AREA(uint16_t seg_index, int16_t page, uint32_t ppn,
     *pft = (*pft & 0xFFFFBFFF) | 0x00002000;
 
     /* 0x00E046A0..0x00E046B4: addq.b #1 to the same ASTE page_count */
-    ASTE_BASE[seg_index - 1].page_count++;
+    AST_ASTE_ENTRY(seg_index)->page_count++;
 
     /* 0x00E046B8..0x00E046BC */
     *status = status_$ok;
