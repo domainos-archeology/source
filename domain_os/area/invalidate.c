@@ -31,7 +31,7 @@
  */
 void AREA_$INVALIDATE(int16_t gen, uint16_t area_id, uint16_t seg_idx,
                       uint16_t page_offset, uint32_t count,
-                      int16_t param_6, status_$t *status_ret)
+                      boolean param_6, status_$t *status_ret)
 {
     area_$entry_t *entry;
     int entry_offset;

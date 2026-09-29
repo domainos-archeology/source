@@ -659,4 +659,13 @@ _Static_assert(sizeof(rip_$rtwired_data_t) == RIP_$RTWIRED_DATA_SIZE, "RIP_RTWIR
 MODULE_DATA_DECLARE(rip_$rtwired_data_t, RIP_$RTWIRED_DATA, 0x00E87D68);
 
 
+/*
+ * Entry points NETWORK_$REQUEST_SERVER calls (declared here so the network
+ * subsystem need not include rip_internal.h):
+ *   RIP_$SERVER   (0x00E68A08) - service socket 8, a procedure
+ *   RIP_$STD_OPEN (0x00E15AAE) - open the standard IDP channel
+ */
+void RIP_$SERVER(void);
+void RIP_$STD_OPEN(void);
+
 #endif /* RIP_H */

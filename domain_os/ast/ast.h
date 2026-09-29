@@ -780,6 +780,17 @@ MODULE_DATA_DECLARE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 #define AST_ASTE_ENTRY(seg)     (&AST_$AOT.aste[(seg) - 1])
 
 /*
+ * The two wired 1KB mapping windows the SAU2 map places at the top of the
+ * I/O region: AST_$COPY_BUFF (0xFF8800) and AST_$ZERO_BUFF (0xFF8C00),
+ * followed by PAR_BUFF (0xFF9000), so each is one 0x400-byte page = 256
+ * longwords.  Code maps a frame at a window with MMU_$INSTALL(ppn,
+ * ARCH_PTR_TO_VA(window), 0x16) and reaches it through the object
+ * (AST_$FETCH_PMAP_PAGE, the NETWORK page copier 0x00E0F120).
+ */
+extern uint32_t AST_$COPY_BUFF[256];
+extern uint32_t AST_$ZERO_BUFF[256];
+
+/*
  * The segment map the AST sites index (image 0xED5000, map AST_PMAPS) is
  * the MODULE_DATA block PMAP_$SEGMAP (pmap/pmap.h, source-iq58); every
  * `0xED5000 + seg*0x80 ... (-0x80,An)' site is PMAP_SEGMAP_ROW(seg)

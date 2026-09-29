@@ -198,52 +198,8 @@ _Static_assert(offsetof(asknode_$reply_hdr_t, node_id)     == 0x0E, "reply_hdr.n
 _Static_assert(offsetof(asknode_$reply_hdr_t, src_socket)  == 0x12, "reply_hdr.src_socket");
 _Static_assert(offsetof(asknode_$reply_hdr_t, f14)         == 0x14, "reply_hdr.f14");
 
-/*
- * asknode_$server_ctx_t - the record ASKNODE_$SERVER's caller passes as its
- * first argument (A2), 0x22 bytes.
- *
- * This is NOT the reply buffer: the reply ASKNODE_$SERVER transmits is an
- * asknode_response_t built on its own stack at A6-0x250.  The context record
- * is what the server hands back to its caller so that a WHO query can be
- * propagated: on the way out ASKNODE_$SERVER copies the request's version
- * and its 20 bytes from +0x04 into it (0x00E65E60 - 0x00E65E72) and appends
- * the source port and request id (0x00E65E76 / 0x00E65E7C).  Fields +0x1C
- * and +0x1E are scratch that individual request types use: request 0x45
- * reads TIME_$CLOCK into +0x1C, zeroes the top word and leaves the
- * time-difference longword at +0x1E (0x00E65CA2 - 0x00E65CCA).
- */
-typedef struct asknode_$server_ctx_t {
-  uint16_t version;       /* 0x00 */
-  uint16_t request_type;  /* 0x02 */
-  uint32_t node_id;       /* 0x04 */
-  uint32_t param1;        /* 0x08 */
-  uint32_t param2;        /* 0x0C */
-  int8_t   forwarded;     /* 0x10: mirrors asknode_request_t.forwarded */
-  int8_t   _pad_11;       /* 0x11 */
-  int16_t  count;         /* 0x12: mirrors asknode_request_t.count */
-  uint32_t param3;        /* 0x14 */
-  int16_t  request_id;    /* 0x18: the request id, taken from the received
-                           *       reply header's +0x06 ("move.w (-0x29a,A6),
-                           *       (0x18,A2)" at 0x00E65E76).
-                           *       ASKNODE_$PROPAGATE_WHO passes it as
-                           *       PKT_$SEND_INTERNET's request_id
-                           *       (0x00E65F04). */
-  uint16_t socket;        /* 0x1A: the socket the request arrived on, from the
-                           *       reply header's +0x12 ("move.w (-0x29c,A6),
-                           *       (0x1a,A2)" at 0x00E65E7C).
-                           *       ASKNODE_$PROPAGATE_WHO uses it as the
-                           *       destination socket (0x00E65F18) or the
-                           *       source socket (0x00E65F4E). */
-  uint16_t clock_hi;      /* 0x1C */
-  uint32_t clock_lo;      /* 0x1E */
-} __attribute__((packed)) asknode_$server_ctx_t;
-
-_Static_assert(offsetof(asknode_$server_ctx_t, param3)     == 0x14, "server_ctx.param3");
-_Static_assert(offsetof(asknode_$server_ctx_t, request_id) == 0x18, "server_ctx.request_id");
-_Static_assert(offsetof(asknode_$server_ctx_t, socket)     == 0x1A, "server_ctx.socket");
-_Static_assert(offsetof(asknode_$server_ctx_t, clock_hi)   == 0x1C, "server_ctx.clock_hi");
-_Static_assert(offsetof(asknode_$server_ctx_t, clock_lo)   == 0x1E, "server_ctx.clock_lo");
-_Static_assert(sizeof(asknode_$server_ctx_t) == 0x22, "asknode_$server_ctx_t must be 0x22 bytes");
+/* asknode_$server_ctx_t is public (asknode/asknode.h): NETWORK_$REQUEST_SERVER
+ * builds one. */_Static_assert(sizeof(asknode_$server_ctx_t) == 0x22, "asknode_$server_ctx_t must be 0x22 bytes");
 
 /*
  * asknode_who_response_t - WHO response structure

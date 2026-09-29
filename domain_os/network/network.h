@@ -824,4 +824,18 @@ void NETWORK_$LOAD(void);
  */
 void NETWORK_$DISMISS_REQUEST_SERVERS(void);
 
+/*
+ * NETWORK_$REPORT_FAILURE (0x00E103FA) - record a transmit failure in
+ * NETWORK_$FAILURE_REC and announce it.  One argument: the address of the
+ * transmit-status word; bit 5 selects failure type 1, else 3.
+ */
+void NETWORK_$REPORT_FAILURE(uint16_t *xmit_status);
+
+/*
+ * NETWORK_$GET_CHKSUM (0x00E11EF0, 20 bytes, hand-written NETWORK_ASM) -
+ * rotate-left-and-add checksum of the 256 longwords of the page at `va`.
+ * m68k: network/sau2/get_chksum.s; host model: network/get_chksum.c.
+ */
+uint32_t NETWORK_$GET_CHKSUM(uint32_t va);
+
 #endif /* NETWORK_H */

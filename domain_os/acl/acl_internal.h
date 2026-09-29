@@ -451,7 +451,7 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
  *   A6+0x20  status
  */
 void acl_$prim_create_internal(void *acl_header, void *acl_data, int16_t data_len,
-                               void *subsys_uid, int16_t flag, void *image,
+                               void *subsys_uid, int8_t flag, void *image,
                                int16_t *image_len_ret, status_$t *status_ret);
 
 
@@ -763,6 +763,121 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
  */
 void acl_$get_obj_acl_attrs(uid_t *uid, file_$obj_loc_t *loc,
                             ast_$acl_attr_t *attrs, status_$t *status_ret);
+
+/*
+ * ACL_$SERVER request views (0x00E49594).  REM_FILE_$SERVER hands over its
+ * 0x298-byte request (rem_file_server_req_t: version, opcode at +3, object
+ * UID at +4); each opcode reads its own fields past the common header:
+ */
+typedef struct acl_$srv_hdr_t {
+    uint16_t version;           /* 0x00 */
+    uint8_t  _02;               /* 0x02 */
+    uint8_t  opcode;            /* 0x03: 0x64..0x6C, `move.b (0x3,A2)` */
+    uid_t    uid;               /* 0x04: the object */
+} acl_$srv_hdr_t;
+
+/* 0x64 ACL_IMAGE (0x00E495F6-0x00E49736) */
+typedef struct acl_$srv_image_req_t {
+    acl_$srv_hdr_t hdr;
+    uint16_t mode;              /* 0x0C: 4 = image into ACL_$UNWIRED_DATA.image_buf
+                                 *       and rebuild it into `buf` */
+    int8_t   flag;              /* 0x0E: acl_$image_internal's flag; forced TRUE
+                                 *       for mode 4 (`st (0xe,A2)` 0x00E4966C) */
+    uint8_t  _0f;
+    uint32_t buf;               /* 0x10: VA of the bulk page */
+} acl_$srv_image_req_t;
+
+/* 0x68 ACL_CREATE (0x00E4973A-0x00E49784) */
+typedef struct acl_$srv_create_req_t {
+    acl_$srv_hdr_t hdr;
+    uint8_t  _0c[4];
+    uid_t    type;              /* 0x10: ACL_$PRIM_CREATE's 4th argument */
+    uint8_t  _18[0x24];
+    uint32_t acl_data;          /* 0x3C: VA of the ACL data (a word at +0xE
+                                 *       counts its 0x20-byte entries) */
+    uid_t    acl_uid;           /* 0x40 */
+} acl_$srv_create_req_t;
+
+/* 0x6A ACL_SETIDS (0x00E497BE-0x00E497F4) */
+typedef struct acl_$srv_setids_req_t {
+    acl_$srv_hdr_t hdr;
+    uint8_t  _0c[4];
+    uid_t    sids[4];           /* 0x10 */
+    uint8_t  _30[4];
+    uint32_t owner_ext[3];      /* 0x34 */
+} acl_$srv_setids_req_t;
+
+/* 0x6C ACL_CHECK_RIGHTS (0x00E49788-0x00E497BA) */
+typedef struct acl_$srv_rights_req_t {
+    acl_$srv_hdr_t hdr;
+    uint8_t  _0c[2];
+    int16_t  option_flags;      /* 0x0E */
+    acl_sid_block_t sids;       /* 0x10 */
+    uid_t    proj[ACL_MAX_PROJECTS];  /* 0x34 */
+    uint32_t required_mask;     /* 0x74 */
+    int8_t   ignore_super;      /* 0x78 */
+    int8_t   in_super;          /* 0x79 */
+    int8_t   in_subsys;         /* 0x7A */
+} acl_$srv_rights_req_t;
+
+/* 0x66 SET_ACL (0x00E497F8-0x00E498EC) */
+typedef struct acl_$srv_set_acl_req_t {
+    acl_$srv_hdr_t hdr;
+    uint8_t  _0c[2];
+    int16_t  proj_count;        /* 0x0E */
+    acl_sid_block_t sids;       /* 0x10: new current SIDs */
+    uid_t    proj[ACL_MAX_PROJECTS];  /* 0x34 */
+    uid_t    acl_uid;           /* 0x74 */
+    acl_$prot_data_t prot;      /* 0x7C */
+    int16_t  op_type;           /* 0xA8 */
+} acl_$srv_set_acl_req_t;
+
+/* The reply ACL_$SERVER builds (0x00E495AE-0x00E495C4) */
+typedef struct acl_$srv_resp_t {
+    uint16_t one;               /* 0x00: always 1 */
+    uint8_t  flags;             /* 0x02: 0x80 */
+    uint8_t  opcode;            /* 0x03: request opcode + 1, or 3 */
+    status_$t status;           /* 0x04 */
+    uint8_t  _08[2];
+    union {
+        int16_t image_len;      /* 0x0A: ACL_IMAGE */
+        int8_t  changed;        /* 0x0A: ACL_SETIDS, a Domain boolean */
+    } a;
+    uint8_t  data[0x30];        /* 0x0C */
+} acl_$srv_resp_t;
+
+_Static_assert(offsetof(acl_$srv_image_req_t, mode) == 0x0C, "image.mode");
+_Static_assert(offsetof(acl_$srv_image_req_t, flag) == 0x0E, "image.flag");
+_Static_assert(offsetof(acl_$srv_image_req_t, buf) == 0x10, "image.buf");
+_Static_assert(offsetof(acl_$srv_create_req_t, type) == 0x10, "create.type");
+_Static_assert(offsetof(acl_$srv_create_req_t, acl_data) == 0x3C, "create.acl_data");
+_Static_assert(offsetof(acl_$srv_create_req_t, acl_uid) == 0x40, "create.acl_uid");
+_Static_assert(offsetof(acl_$srv_setids_req_t, sids) == 0x10, "setids.sids");
+_Static_assert(offsetof(acl_$srv_setids_req_t, owner_ext) == 0x34, "setids.owner_ext");
+_Static_assert(offsetof(acl_$srv_rights_req_t, option_flags) == 0x0E, "rights.option_flags");
+_Static_assert(offsetof(acl_$srv_rights_req_t, sids) == 0x10, "rights.sids");
+_Static_assert(offsetof(acl_$srv_rights_req_t, proj) == 0x34, "rights.proj");
+_Static_assert(offsetof(acl_$srv_rights_req_t, required_mask) == 0x74, "rights.required_mask");
+_Static_assert(offsetof(acl_$srv_rights_req_t, in_subsys) == 0x7A, "rights.in_subsys");
+_Static_assert(offsetof(acl_$srv_set_acl_req_t, proj_count) == 0x0E, "set_acl.proj_count");
+_Static_assert(offsetof(acl_$srv_set_acl_req_t, acl_uid) == 0x74, "set_acl.acl_uid");
+_Static_assert(offsetof(acl_$srv_set_acl_req_t, prot) == 0x7C, "set_acl.prot");
+_Static_assert(offsetof(acl_$srv_set_acl_req_t, op_type) == 0xA8, "set_acl.op_type");
+_Static_assert(offsetof(acl_$srv_resp_t, status) == 0x04, "resp.status");
+_Static_assert(offsetof(acl_$srv_resp_t, a) == 0x0A, "resp.a");
+_Static_assert(offsetof(acl_$srv_resp_t, data) == 0x0C, "resp.data");
+_Static_assert(sizeof(acl_$srv_resp_t) == 0x3C, "resp: reply_len 0x3C");
+
+/*
+ * acl_$setids (0x00E46B4E, was FUN_00e46b4e)
+ *
+ * Applies (set < 0) or checks the set-ID SIDs of `uid`'s protection and the
+ * required-subsystem UID of its ACL image against sids[0..3] /
+ * owner_ext[0..2]; forwards remote objects to REM_FILE_$ACL_SETIDS.
+ * Relies on the caller's A5 (ACL_$UNWIRED_DATA).  Emitted in acl/setids.c.
+ */
+void acl_$setids(uid_t *uid, int8_t set, uid_t *sids, uint32_t *owner_ext,
+                 int8_t *changed, status_$t *status_ret);
 
 /*
  * acl_$find_acl_slot (0x00E45E8E, was FUN_00e45e8e)

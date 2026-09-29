@@ -81,7 +81,38 @@ network_$failure_rec_t NETWORK_$FAILURE_REC;
 /*
  * Retry timeout
  */
-int16_t NETWORK_$RETRY_TIMEOUT;       /* 0xE24C18 */
+int16_t NETWORK_$SERVICE_TIME = 0x14;   /* 0xE24C18: `gsk read 0xE24C18 2` = 00 14 */
+
+/* 0xE24B9C (A5+0x2A0): PA of the zeroed page (network_internal.h) */
+uint32_t NETWORK_$ZERO_PAGE_PA;
+
+/*
+ * The server processes' cells (network_internal.h), with the image's
+ * contents: `gsk read 0xE248FC 0x20`, `gsk read 0xE24B54 0x20`,
+ * `gsk read 0xE24C5E 1`.
+ */
+pkt_$info_t NETWORK_$SERVER_PKT_INFO = {
+    .flags = 0x0008, .routing_type = 2, .addr_type = 2, .protocol = 0x8031,
+    .retry_limit = 0xFFFF, .field_0a = 0, .field_0c = 0xFFFF,
+};
+ec_$eventcount_t NETWORK_$RQST_DONE_EC = {
+    .value = 0,
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_DONE_EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_DONE_EC,
+};
+ec_$eventcount_t NETWORK_$RQST_QUIT_EC = {
+    .value = 0,
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_QUIT_EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_QUIT_EC,
+};
+uint32_t NETWORK_$RQST_WAIT[4];        /* 0xE24B74 (+0x278) */
+uint32_t NETWORK_$PAGE_WAIT[4];        /* 0xE24B8C (+0x290) */
+uint32_t NETWORK_$RING_DCTE;           /* 0xE24BA4 (+0x2A8) */
+uint16_t NETWORK_$AGE_TICKS;           /* 0xE24C1A (+0x31E) */
+int8_t   NETWORK_$STD_OPEN_FLAG = (int8_t)0xFF;   /* 0xE24C5E (+0x362) */
+uint16_t NETWORK_$REPORT_SEND_FLAGS = 0x0000;    /* 0xE24C58 (+0x35C): `gsk read 0xE24C58 2` = 00 00 */
+uint16_t NETWORK_$REPLY_SEND_FLAGS = 0x0000;     /* 0xE24C5A (+0x35E) */
+uint16_t NETWORK_$FILE_OVER_CNT;                 /* 0xE24C20 (+0x324) */
 
 /*
  * Spin lock for network data protection

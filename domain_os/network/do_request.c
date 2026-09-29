@@ -114,11 +114,11 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
 
         /*
          * Wait for the response with timeout.
-         * The timeout is adjusted by adding NETWORK_$RETRY_TIMEOUT.
+         * The timeout is adjusted by adding NETWORK_$SERVICE_TIME.
          * Returns 0xFF on success (packet received), 0 on timeout.
          */
         result = network_$wait_response(sock_num, pkt_id,
-                                        timeout_value + NETWORK_$RETRY_TIMEOUT,
+                                        timeout_value + NETWORK_$SERVICE_TIME,
                                         &event_count, (int16_t *)resp_buf,
                                         (int16_t *)resp_info, data_bufs, &data_len);
 

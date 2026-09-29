@@ -258,6 +258,23 @@ int16_t ring_$find_pkt_type(uint32_t pkt_type, ring_pkt_type_t *table,
                             uint16_t table_size);
 
 /*
+ * The packet-type table helpers that follow ring_$find_pkt_type in the
+ * RING_PROC code (module-local, no map symbols):
+ *   0x00E76352 ring_$pkt_type_overlaps          -> Domain boolean
+ *   0x00E7639E ring_$find_adjacent_pkt_type     index through idx_ptr
+ *   0x00E76422 ring_$find_overlapping_pkt_type  -> 1-based index or 0
+ * See the .c files of the same names for the frames.
+ */
+boolean ring_$pkt_type_overlaps(uint32_t low, uint32_t high,
+                                ring_pkt_type_t *table, uint16_t table_size);
+void ring_$find_adjacent_pkt_type(ring_unit_t *unit_data, int16_t *idx_ptr,
+                                  int16_t channel, uint32_t low, uint32_t high,
+                                  ring_pkt_type_t *table, uint16_t table_size);
+int16_t ring_$find_overlapping_pkt_type(uint32_t low, uint32_t high,
+                                        ring_pkt_type_t *table,
+                                        uint16_t table_size);
+
+/*
  * ring_$copy_to_user - Copy data to user buffer
  *
  * @param src_ptr       Source pointer (updated)

@@ -38,6 +38,9 @@
 #define status_$no_space_available 0x00040003   /* Segment table full */
 #define status_$mst_guard_fault 0x0004000a /* "guard fault" (SR10.4 stcodes 4000a) */
 #define status_$mst_access_violation 0x00040005 /* Access rights violation */
+#define status_$mst_invalid_length 0x00040002  /* "invalid length" (stcodes 40002) */
+#define status_$mst_insufficient_rights 0x00040009 /* "insufficient rights" (40009) */
+#define status_$mst_uid_mismatch 0x0004000d    /* "uid mismatch" (4000d) */
 
 /*
  * Lock identifiers used with ML_$LOCK/ML_$UNLOCK (declared in ml/ml.h)
@@ -126,12 +129,21 @@ _Static_assert(__builtin_offsetof(mst_entry_t, page_info) == 0x0C, "mst_entry_t.
 _Static_assert(__builtin_offsetof(mst_entry_t, _reserved) == 0x0D, "mst_entry_t._reserved");
 
 /*
- * MSTE flags field bits
+ * MSTE flags word (+0x0A), as a big-endian WORD.  The image mostly reaches
+ * it with byte operations on its HIGH byte (+0x0A), so a byte bit n is word
+ * bit n+8 (MST_$TOUCH 0x00E0DFE8 `btst.b #3`, 0x00E0DFF4 `btst.b #1`,
+ * 0x00E0E0BA `bclr.b #6`; mst_$va_to_pte / MST_$TOUCH read the protection
+ * field as `(byte & 0x3e) >> 1`).  The WRITABLE / COPY_ON_WRITE names are
+ * earlier guesses for the two protection-field bits MST_$TOUCH tests; their
+ * values were byte-bit numbers (0x0002 / 0x0008) until 2026-09-29.
  */
-#define MSTE_FLAG_AST_MASK 0x01ff      /* Cached AST entry index */
-#define MSTE_FLAG_WRITABLE 0x0002      /* Segment is writable */
-#define MSTE_FLAG_COPY_ON_WRITE 0x0008 /* Copy-on-write enabled */
-#define MSTE_FLAG_MODIFIED 0x4000      /* Segment has been modified */
+#define MSTE_FLAG_AST_MASK 0x01ff      /* Cached AST entry index (1-based ASTE) */
+#define MSTE_FLAG_PROT_MASK 0x3e00     /* 5-bit protection field, bits 13..9 */
+#define MSTE_FLAG_PROT_SHIFT 9
+#define MSTE_FLAG_WRITABLE 0x0200      /* prot bit 0 (byte +0x0A bit 1); name unverified */
+#define MSTE_FLAG_COPY_ON_WRITE 0x0800 /* prot bit 2 (byte +0x0A bit 3); name unverified */
+#define MSTE_FLAG_MODIFIED 0x4000      /* Guard: MST_$TOUCH clears it and reports
+                                          status_$mst_guard_fault (0x00E0E0B0) */
 #define MSTE_FLAG_ACTIVE 0x8000        /* Segment is currently active */
 
 /*
@@ -432,7 +444,18 @@ uint32_t MST_$WIRE(uint32_t vpn, status_$t *status_ret);
 void MST_$WIRE_AREA(const void *start_va_ptr, const void *end_va_ptr,
                     void *page_list, const void *max_pages_ptr,
                     void *page_count_ret);
-void MST_$INVALIDATE(void);
+/*
+ * MST_$INVALIDATE (0x00E441CA, 842 bytes) - discard the pages behind a range
+ * of the caller's private address space.  Reached only through the SVC
+ * table (DATA xref 0x00E7BB82).  Frame (link.w A6,-0x44):
+ *   +0x08 va_ptr      -> longword start VA       `movea.l (0x8,A6),A3; (A3)`
+ *   +0x0C length_ptr  -> longword byte count     `movea.l (0xc,A6),A1; (A1)`
+ *   +0x10 uid         -> 8-byte UID, copied      0x00E441D8-0x00E441E0
+ *   +0x14 zero_flag   -> BYTE, a Domain boolean  `move.b (A0),(-0x3a,A6)`
+ *   +0x18 status_ret
+ */
+void MST_$INVALIDATE(uint32_t *va_ptr, uint32_t *length_ptr, uid_t *uid,
+                     int8_t *zero_flag, status_$t *status_ret);
 void MST_$CHANGE_RIGHTS(void);
 void MST_$SET_GUARD(void);
 

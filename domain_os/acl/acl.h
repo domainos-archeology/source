@@ -292,7 +292,11 @@ typedef struct acl_$prot_data_t {
     uint8_t org_rights;        /* 0x1A */
     uint8_t world_rights;      /* 0x1B */
     uint8_t subsys_rights;     /* 0x1C */
-    uint8_t reserved_1d[15];   /* 0x1D..0x2B */
+    uint8_t reserved_1d[3];    /* 0x1D..0x1F */
+    uint32_t owner_ext[3];     /* 0x20: owner / group / org extension longs,
+                                * the aote_t owner1_ext..owner3_ext image;
+                                * acl_$setids hands them out with the SIDs
+                                * (0x00E46C68, 0x00E46CB2, 0x00E46D00) */
 } acl_$prot_data_t;
 
 #if defined(ARCH_M68K)
@@ -301,6 +305,7 @@ _Static_assert(__builtin_offsetof(acl_$prot_data_t, org)          == 0x10, "prot
 _Static_assert(__builtin_offsetof(acl_$prot_data_t, owner_rights) == 0x18, "prot.owner_rights");
 _Static_assert(__builtin_offsetof(acl_$prot_data_t, world_rights) == 0x1B, "prot.world_rights");
 _Static_assert(__builtin_offsetof(acl_$prot_data_t, subsys_rights)== 0x1C, "prot.subsys_rights");
+_Static_assert(__builtin_offsetof(acl_$prot_data_t, owner_ext)    == 0x20, "prot.owner_ext");
 _Static_assert(sizeof(acl_$prot_data_t) == 44, "sizeof acl_$prot_data_t");
 #endif
 

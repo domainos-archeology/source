@@ -238,12 +238,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
  */
 extern dxm_$callback_t PTR_AST_$SET_TROUBLE_00e07272;
 
-/*
- * Zero buffer for page operations: the wired 1KB page at 0xFF8C00.  The SAU2
- * map places it between AST_$COPY_BUFF (0xFF8800) and PAR_BUFF (0xFF9000), so
- * it is one 0x400-byte page = 256 longwords.
- */
-extern uint32_t AST_$ZERO_BUFF[256];
+/* AST_$ZERO_BUFF / AST_$COPY_BUFF are declared in ast/ast.h. */
 
 /*
  * The status AST_$ACTIVATE_AOTE_CANNED hands CRASH_SYSTEM.  The cell is a

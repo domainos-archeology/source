@@ -162,7 +162,7 @@ static int16_t  *internal_len_ret;
 static void     *internal_header;
 void acl_$prim_create_internal(void *acl_header, void *acl_data,
                                int16_t data_len, void *subsys_uid,
-                               int16_t flag, void *image,
+                               int8_t flag, void *image,
                                int16_t *image_len_ret, status_$t *status_ret)
 {
     internal_calls++;

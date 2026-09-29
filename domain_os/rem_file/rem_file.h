@@ -8,6 +8,7 @@
 #define REM_FILE_H
 
 #include "base/base.h"
+#include "ml/ml.h"         /* ml_$exclusion_t: REM_FILE_$SOCK_LOCK */
 #include "file/file.h"     /* file_$obj_loc_t - REM_FILE_$UNLOCK takes one */
 
 /*
@@ -548,6 +549,14 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buf,
  * Original address: 0x00E63586
  */
 void REM_FILE_$SERVER(void);
+
+/*
+ * REM_FILE_$SOCK_LOCK - 0x00E24B3C (A5+0x240 of the NETWORK data), the
+ * exclusion lock REM_FILE_$SERVER holds around socket 2; the request server
+ * initialises it with ML_$EXCLUSION_INIT (0x00E11A80).  Defined in
+ * rem_file/rem_file_data.c.
+ */
+extern ml_$exclusion_t REM_FILE_$SOCK_LOCK;
 
 /*
  * REM_FILE_$2LONG1 (0xE245A0) - one of the four cells of the NET_ASM assembly data

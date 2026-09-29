@@ -116,6 +116,15 @@ MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);
 uint32_t AST_$ZERO_BUFF[256];
 
 /*
+ * AST_$COPY_BUFF - the wired 1KB window below AST_$ZERO_BUFF, used as the
+ * source window by the NETWORK page copier (0x00E0F14E `add.l #0xff8800`).
+ * Not part of the loaded image.
+ *
+ * Original address: 0xFF8800 (0x400 bytes)
+ */
+uint32_t AST_$COPY_BUFF[256];
+
+/*
  * status_$t_00e2f1d0 - AST_$ACTIVATE_AOTE_CANNED's crash status.
  * Image bytes at 0x00E2F1D0: 80 03 00 03.
  *

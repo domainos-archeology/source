@@ -723,14 +723,16 @@ void AREA_$GROW_TO(uint16_t area_index, uint32_t virt_size,
  *   seg_idx     - Segment index
  *   page_offset - Page offset within segment
  *   count       - Number of pages to invalidate
- *   param_6     - Unknown parameter (unused?)
+ *   param_6     - BYTE at A6+0x14 (high half of its word slot; MST_$INVALIDATE
+ *                 pushes its zero-fill flag with `move.b (-0x3a,A6),-(SP)` at
+ *                 0x00E4447A); the body never reads it
  *   status_ret  - Output: status code
  *
  * Original address: 0x00E08DD0
  */
 void AREA_$INVALIDATE(int16_t gen, uint16_t area_id, uint16_t seg_idx,
                       uint16_t page_offset, uint32_t count,
-                      int16_t param_6, status_$t *status_ret);
+                      boolean param_6, status_$t *status_ret);
 
 /*
  * AREA_$COPY - Copy an area (copy-on-write)

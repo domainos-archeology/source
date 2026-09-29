@@ -52,7 +52,7 @@ static int tests_failed = 0;
 #include "misc/misc.h"
 
 uint32_t NETWORK_$MOTHER_NODE;
-int16_t  NETWORK_$RETRY_TIMEOUT;
+int16_t  NETWORK_$SERVICE_TIME;
 /* The SOCK module data block (sock/sock.h). */
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
@@ -151,7 +151,7 @@ static void reset_all(void)
     /* the mocked SOCK_$ALLOCATE hands out socket 1 (0x00E0F8BA-0x00E0F8C8) */
     SOCK_$DATA.socket_ptr[1] = (sock_$sock_t *)&sock_ec;
     NETWORK_$MOTHER_NODE = 0;
-    NETWORK_$RETRY_TIMEOUT = 0;
+    NETWORK_$SERVICE_TIME = 0;
     close_calls = crash_calls = note_visible_calls = wait_calls = 0;
     stub_send_status = status_$ok;
     stub_max_retries = 3;

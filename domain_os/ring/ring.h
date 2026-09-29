@@ -1050,18 +1050,68 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
                      status_$t *status_ret);
 
 /*
- * RING_$SVC_IOCTL - IOCTL for ring channel (service call)
+ * RING_$SVC_IOCTL argument blocks (the longword NET_$IOCTL passes through
+ * as its param3 is the address of one of these).
  *
- * @param unit_ptr      Pointer to unit number
- * @param cmd_args      Command and arguments
- * @param param3        Additional parameter
- * @param param4        Additional parameter
- * @param status_ret    Output: status code
+ * Commands 2 and 3 (add / remove packet types), read at 0x00E77710-
+ * 0x00E77778 and 0x00E779A8-0x00E779B4:
+ *   +0x00 cmd      word, 1..4
+ *   +0x02 channel  word, 1..10
+ *   +0x04 version  word, must be <= 1 (`cmpi.w #0x1,(0x4,A3)`)
+ *   +0x06 count    word, number of ranges
+ *   +0x08 ranges   count x { low, high } longwords (`addq.l #0x8,D7`)
+ * Command 4 (statistics), 0x00E77B4E-0x00E77B84:
+ *   +0x04 buf      longword VA of a 0x3C-byte ring_$stats_t buffer
+ *   +0x08 buf_len  word, must be >= 0x3C
+ * Commands 1 and 4 write a reply word back into +0x00 (1 and 0x3C).
+ */
+typedef struct ring_$pkt_range_t {
+    uint32_t    low;            /* 0x00 */
+    uint32_t    high;           /* 0x04 */
+} ring_$pkt_range_t;
+
+typedef struct ring_$svc_ioctl_types_t {
+    int16_t     cmd;            /* 0x00 */
+    int16_t     channel;        /* 0x02 */
+    int16_t     version;        /* 0x04 */
+    int16_t     count;          /* 0x06 */
+    ring_$pkt_range_t ranges[]; /* 0x08 */
+} ring_$svc_ioctl_types_t;
+
+typedef struct ring_$svc_ioctl_stats_t {
+    int16_t     cmd;            /* 0x00 */
+    int16_t     channel;        /* 0x02 */
+    uint32_t    buf;            /* 0x04: VA of the caller's buffer */
+    uint16_t    buf_len;        /* 0x08 */
+} ring_$svc_ioctl_stats_t;
+
+_Static_assert(sizeof(ring_$pkt_range_t) == 8, "ring_$pkt_range_t stride");
+_Static_assert(offsetof(ring_$svc_ioctl_types_t, version) == 0x04, "ioctl types.version");
+_Static_assert(offsetof(ring_$svc_ioctl_types_t, count) == 0x06, "ioctl types.count");
+_Static_assert(offsetof(ring_$svc_ioctl_types_t, ranges) == 0x08, "ioctl types.ranges");
+_Static_assert(offsetof(ring_$svc_ioctl_stats_t, buf) == 0x04, "ioctl stats.buf");
+_Static_assert(offsetof(ring_$svc_ioctl_stats_t, buf_len) == 0x08, "ioctl stats.buf_len");
+
+/* RING_$SVC_IOCTL commands (jump table at 0x00E77746) */
+#define RING_IOCTL_NOP          1   /* replies 1 */
+#define RING_IOCTL_ADD_TYPES    2
+#define RING_IOCTL_REMOVE_TYPES 3
+#define RING_IOCTL_GET_STATS    4
+
+/*
+ * RING_$SVC_IOCTL - Control a ring channel (driver slot 0x30, NET_$IOCTL)
+ *
+ * Frame (link.w A6,-0x44), the net_$svc_ctl_fn_t shape:
+ *   (0x08,A6) unit_ptr  -> word unit (0..1)
+ *   (0x0C,A6) args      a ring_$svc_ioctl_types_t / _stats_t block
+ *   (0x10,A6) param4    word, never read
+ *   (0x12,A6) param5    longword, never read
+ *   (0x16,A6) status_ret
  *
  * Original address: 0x00E776B8
  */
-void RING_$SVC_IOCTL(uint16_t *unit_ptr, void *cmd_args, void *param3,
-                     void *param4, status_$t *status_ret);
+void RING_$SVC_IOCTL(uint16_t *unit_ptr, void *args, int16_t param4,
+                     uint32_t param5, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -1092,21 +1142,22 @@ void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret);
 void RING_$CLOSE_OS(uint16_t param1, void *args, status_$t *status_ret);
 
 /*
- * RING_$SEND_OS - Send via ring for OS
+ * RING_$SEND_OS - Send an OS packet on a ring channel (driver slot 0x44)
  *
- * @param param1        Parameter 1
- * @param param2        Parameter 2
- * @param param3        Parameter 3
- * @param param4        Parameter 4
- * @param param5        Parameter 5
- * @param param6        Parameter 6
- * @param param7        Parameter 7
- * @param status_ret    Output: status code
+ * Frame read off the callee (0x00E77C6E-0x00E77C7E):
+ *   (0x08,A6) unit        word; its ADDRESS is RING_$SENDP's unit_ptr
+ *   (0x0A,A6) channel_ptr -> word, the channel 1..10
+ *   (0x0E,A6) pkt         -> the 0x4C-byte mac_os_$send_pkt_t
+ *   (0x12,A6) bytes_sent  -> word, cleared at entry, RING_$SENDP's result
+ *   (0x16,A6) status_ret
+ * MAC_OS_$SEND reaches it through the driver record with a word result
+ * slot (mac_os/send.c); the routine is a procedure and leaves D0 alone.
  *
  * Original address: 0x00E77C60
  */
-void RING_$SEND_OS(void *param1, void *param2, void *param3, void *param4,
-                   void *param5, void *param6, void *param7,
+struct mac_os_$send_pkt_t;
+void RING_$SEND_OS(uint16_t unit, int16_t *channel_ptr,
+                   struct mac_os_$send_pkt_t *pkt, int16_t *bytes_sent,
                    status_$t *status_ret);
 
 /*
@@ -1147,14 +1198,16 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit);
 /*
  * RING_$POLL_STICKY_BPHERR - Poll for sticky biphase errors
  *
- * Checks for persistent biphase errors on the ring.
- *
- * @param param1        Parameter 1
- * @param param2        Parameter 2
+ * One argument (0x00E76294 `movea.l (0x8,A6),A0 / movea.l (A0),A1`): the
+ * address of a longword holding the ring controller's DCTE.  Returns a
+ * Domain boolean in D0.b: FALSE when DCTE+0x10 is non-zero, else TRUE when
+ * register word +6 of the DCTE's register block (DCTE+0x34) has bits 13 and
+ * 12 set; the register word is then cleared.  NETWORK_$PAGE_SERVER passes
+ * &NETWORK_$RING_DCTE (0x00E11802).
  *
  * Original address: 0x00E76290
  */
-void RING_$POLL_STICKY_BPHERR(void *param1, void *param2);
+int8_t RING_$POLL_STICKY_BPHERR(uint32_t *dcte_cell);
 
 /*
  * RING_$PROC2_CLEANUP - Process cleanup handler
