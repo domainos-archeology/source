@@ -49,7 +49,7 @@ void PROC2_$SET_SIG_MASK(int16_t *priority_delta, uint32_t *clear_mask,
 
     /* 0x00E3F812-0x00E3F82A: delta and the index, before locking */
     delta = *priority_delta;
-    index = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    index = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
 
     /* 0x00E3F830-0x00E3F83C */
     ML_$LOCK(PROC2_LOCK_ID);

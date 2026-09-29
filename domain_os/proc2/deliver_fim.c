@@ -58,8 +58,8 @@ int8_t PROC2_$DELIVER_FIM(int16_t *signal_ret, status_$t *status,
     /* 0x00E3EDD6 st D2b */
     result = (int8_t)0xFF;
 
-    /* 0x00E3EDD8..0x00E3EDFA: idx = PROC2_$PID_TO_INDEX[PROC1_$CURRENT]; ML_$LOCK(4) */
-    idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    /* 0x00E3EDD8..0x00E3EDFA: idx = PROC2_$DATA.pid_to_index[PROC1_$CURRENT]; ML_$LOCK(4) */
+    idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     ML_$LOCK(PROC2_LOCK_ID);
     entry = P2_INFO_ENTRY(idx);
 

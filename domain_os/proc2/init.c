@@ -96,7 +96,7 @@ _Static_assert(sizeof(proc2_boot_shell_hdr_t) == 10, "proc2_boot_shell_hdr_t is 
 
 /*
  * 0x00E3047A-0x00E3048A clears the ref_count word of pgroup slots 1..70:
- * A0 = 0xEA551C + 8, `clr.w (0x3f30,A0)` = 0xEA9454 = PGROUP_TABLE[1],
+ * A0 = 0xEA551C + 8, `clr.w (0x3f30,A0)` = 0xEA9454 = PROC2_$DATA.pgroup[1],
  * `moveq #0x45` against the dbf = 70 iterations.  The table therefore has
  * 71 slots (0xEA944C + 71*8 = 0xEA9684 = the end of PROC2_$DATA).
  */
@@ -123,8 +123,8 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     uint16_t *stack_word;
 
     /* 0x00E303F4-0x00E30410: UID_$GEN(0xE7BE8C) and UID_$GEN(0xE7BE9C) */
-    UID_$GEN(&proc2_system_uid);
-    UID_$GEN(&PROC2_$UID[1]);
+    UID_$GEN(&PROC2_$UNWIRED_DATA.system_uid);
+    UID_$GEN(&PROC2_$UNWIRED_DATA.uid[1]);
 
     /* 0x00E30412-0x00E30434: both words 0x10, `st` = SET on PROC1_$CURRENT;
      * pushes (-0x38,A6) then (-0x36,A6), so arg 3 is A6-0x36, arg 4 A6-0x38 */
@@ -132,35 +132,35 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     max_pri = 0x10;
     PROC1_$SET_PRIORITY(PROC1_$CURRENT, PROC1_SET_PRIORITY_SET, &min_pri, &max_pri);
 
-    /* 0x00E30438-0x00E30446: PROC2_$UID[0] = proc2_system_uid */
-    PROC2_$UID[0].high = proc2_system_uid.high;
-    PROC2_$UID[0].low = proc2_system_uid.low;
+    /* 0x00E30438-0x00E30446: PROC2_$UNWIRED_DATA.uid[0] = PROC2_$UNWIRED_DATA.system_uid */
+    PROC2_$UNWIRED_DATA.uid[0].high = PROC2_$UNWIRED_DATA.system_uid.high;
+    PROC2_$UNWIRED_DATA.uid[0].low = PROC2_$UNWIRED_DATA.system_uid.low;
 
     /*
      * 0x00E3044A-0x00E30462: moveq #0x37 / dbf = 56 iterations starting at
      * (0x10,A0) with A0 = 0xE7BE94 -> slots 2..57.
      */
     for (i = 2; i <= 57; i++) {
-        PROC2_$UID[i].high = proc2_system_uid.high;
-        PROC2_$UID[i].low = proc2_system_uid.low;
+        PROC2_$UNWIRED_DATA.uid[i].high = PROC2_$UNWIRED_DATA.system_uid.high;
+        PROC2_$UNWIRED_DATA.uid[i].low = PROC2_$UNWIRED_DATA.system_uid.low;
     }
 
     /*
      * 0x00E30466-0x00E30476: moveq #0x3e / dbf = 63 iterations; the first
-     * word is 0xEA5520 + 0x3EB6 = 0xEA93D6 = P2_PID_TO_INDEX(2), so pids
+     * word is 0xEA5520 + 0x3EB6 = 0xEA93D6 = PROC2_$DATA.pid_to_index[2], so pids
      * 2..64 are cleared.
      */
     for (i = 2; i <= 64; i++) {
-        PROC2_$PID_TO_INDEX[i] = 0;
+        PROC2_$DATA.pid_to_index[i] = 0;
     }
 
     /* 0x00E3047A-0x00E3048A: pgroup slots 1..70, ref_count only */
     for (i = 1; i <= P2_PGROUP_LAST_ENTRY; i++) {
-        PGROUP_ENTRY(i)->ref_count = 0;
+        PROC2_$DATA.pgroup[i].ref_count = 0;
     }
 
-    /* 0x00E3048E-0x00E30494: P2_FREE_LIST_HEAD (0xE7C066) = 2 */
-    P2_FREE_LIST_HEAD = P2_FIRST_FREE_ENTRY;
+    /* 0x00E3048E-0x00E30494: PROC2_$UNWIRED_DATA.free_list_head (0xE7C066) = 2 */
+    PROC2_$UNWIRED_DATA.free_list_head = P2_FIRST_FREE_ENTRY;
 
     /*
      * 0x00E3049A-0x00E304D4: moveq #0x44 / dbf = 69 iterations, D1 = 2..70,
@@ -186,11 +186,11 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     /* 0x00E304D8: clr.w 0xEA92A2 = entry(70)+0x12 -- terminates the list */
     P2_INFO_ENTRY(P2_LAST_ENTRY)->next_index = 0;
 
-    /* 0x00E304DE-0x00E304E4: P2_INFO_ALLOC_PTR (0xE7C064) = 1 */
-    P2_INFO_ALLOC_PTR = 1;
+    /* 0x00E304DE-0x00E304E4: PROC2_$UNWIRED_DATA.info_alloc_ptr (0xE7C064) = 1 */
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 1;
 
-    /* 0x00E304EA: 0xEA93D4 = P2_PID_TO_INDEX(1) = 1 */
-    PROC2_$PID_TO_INDEX[1] = 1;
+    /* 0x00E304EA: 0xEA93D4 = PROC2_$DATA.pid_to_index[1] = 1 */
+    PROC2_$DATA.pid_to_index[1] = 1;
 
     /* 0x00E304F2: A2 = 0xEA551C = entry(1) */
     init_entry = P2_INFO_ENTRY(1);
@@ -200,9 +200,9 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     init_entry->asid = 1;                       /* 0x00E304FC */
     init_entry->self_index = 1;                 /* 0x00E30502 */
 
-    /* 0x00E30508-0x00E3050E: entry+0x00 = 0xE7BE9C = PROC2_$UID[1] */
-    init_entry->uid.high = PROC2_$UID[1].high;
-    init_entry->uid.low = PROC2_$UID[1].low;
+    /* 0x00E30508-0x00E3050E: entry+0x00 = 0xE7BE9C = PROC2_$UNWIRED_DATA.uid[1] */
+    init_entry->uid.high = PROC2_$UNWIRED_DATA.uid[1].high;
+    init_entry->uid.low = PROC2_$UNWIRED_DATA.uid[1].low;
 
     init_entry->level1_pid = PROC1_$CURRENT;    /* 0x00E30512 */
     init_entry->cleanup_flags = 0;              /* 0x00E3051A */
@@ -303,12 +303,12 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
      *   DTTY_$USE_DTTY: not.b; lsr.b #7; andi.b #-0x41 (high byte); lsl.b #6; or.b
      *                            -> bit 14 = NOT bit 7 of DTTY_$USE_DTTY
      */
-    proc2_boot_flags = (int16_t)(proc2_boot_flags & 0xC000);
+    PROC2_$UNWIRED_DATA.boot_flags = (int16_t)(PROC2_$UNWIRED_DATA.boot_flags & 0xC000);
     mmu_mode = MMU_$NORMAL_MODE();
-    proc2_boot_flags = (int16_t)((proc2_boot_flags & 0x7FFF) |
+    PROC2_$UNWIRED_DATA.boot_flags = (int16_t)((PROC2_$UNWIRED_DATA.boot_flags & 0x7FFF) |
                                  (((uint16_t)mmu_mode & 0x80) << 8));
     dtty_bit = (uint8_t)((uint8_t)~(uint8_t)DTTY_$USE_DTTY >> 7);
-    proc2_boot_flags = (int16_t)((proc2_boot_flags & 0xBFFF) |
+    PROC2_$UNWIRED_DATA.boot_flags = (int16_t)((PROC2_$UNWIRED_DATA.boot_flags & 0xBFFF) |
                                  ((uint16_t)dtty_bit << 14));
 
     /*
@@ -318,7 +318,7 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
     stack_word = (uint16_t *)ARCH_VA_TO_PTR(init_entry->cr_rec - 6);
     stack_word[1] = 0;
     stack_word[2] = 0;
-    stack_word[0] = (uint16_t)proc2_boot_flags;
+    stack_word[0] = (uint16_t)PROC2_$UNWIRED_DATA.boot_flags;
 
     /*
      * 0x00E306BA-0x00E306DE: btst.b #0,(0x1,A1) -- bit 0 of the low byte of
@@ -345,14 +345,14 @@ uint32_t PROC2_$INIT(uint16_t *boot_flags, status_$t *status_ret)
 
     /*
      * 0x00E3070A-0x00E30738: NAME_$RESOLVE("`node_data/proc_dir", &19,
-     * &proc2_proc_dir_uid (0xE7BE84), status_ret); on any error the UID
+     * &PROC2_$UNWIRED_DATA.proc_dir_uid (0xE7BE84), status_ret); on any error the UID
      * becomes UID_$NIL.
      */
     NAME_$RESOLVE((char *)proc2_init_proc_dir_path, (int16_t *)&proc2_init_len_19_00e308ae,
-                  &proc2_proc_dir_uid, status_ret);
+                  &PROC2_$UNWIRED_DATA.proc_dir_uid, status_ret);
     if (*status_ret != status_$ok) {
-        proc2_proc_dir_uid.high = UID_$NIL.high;
-        proc2_proc_dir_uid.low = UID_$NIL.low;
+        PROC2_$UNWIRED_DATA.proc_dir_uid.high = UID_$NIL.high;
+        PROC2_$UNWIRED_DATA.proc_dir_uid.low = UID_$NIL.low;
     }
 
     /* 0x00E3073C-0x00E30750: NAME_$RESOLVE("/sys/boot_shell", &15, &uid, status) */

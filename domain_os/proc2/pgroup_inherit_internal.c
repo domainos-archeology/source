@@ -22,7 +22,7 @@
  *   00e42182  beq.b 0x00e42198
  *   00e42184  move.w (0x10,A0),D0w
  *   00e4218e  lsl.w #0x3,D0w                 ; * 8 = sizeof(pgroup_entry_t)
- *   00e42194  addq.w #0x1,(0x3f30,A1)        ; PGROUP_TABLE[idx].ref_count++
+ *   00e42194  addq.w #0x1,(0x3f30,A1)        ; PROC2_$DATA.pgroup[idx].ref_count++
  *   00e42198  movea.l (0xc,A6),A1            ; A1 = to
  *   00e4219c  move.w (0x10,A0),(0x10,A1)
  */
@@ -33,8 +33,8 @@ void PROC2_$PGROUP_INHERIT_INTERNAL(proc2_info_t *from, proc2_info_t *to)
 {
     /* 0x00E4217E: only groups other than 0 are reference counted */
     if (from->pgroup_table_idx != 0) {
-        /* 0x00E42194: PGROUP_TABLE base is 0xEA551C + 0x3F30 = 0xEA944C */
-        PGROUP_ENTRY(from->pgroup_table_idx)->ref_count++;
+        /* 0x00E42194: PROC2_$DATA.pgroup[0] is 0xEA551C + 0x3F30 = 0xEA944C */
+        PROC2_$DATA.pgroup[from->pgroup_table_idx].ref_count++;
     }
 
     /* 0x00E4219C */

@@ -51,12 +51,8 @@ static int current_failed = 0;
 uint16_t          PROC1_$CURRENT;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
-acl_sid_block_t   ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-uid_t             ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
-uint8_t           ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];
-uint8_t           ACL_$ASID_SUSER_BITMAP[8];
-int16_t           ACL_$LOCAL_LOCKSMITH;
-acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 uid_t UID_$NIL              = { 0, 0 };
 uid_t RGYC_$G_LOCKSMITH_UID = { 0x00000542u, 0 };
@@ -181,12 +177,12 @@ static void reset(void)
     memset(ga_attrs, 0, sizeof(ga_attrs));
     memset(ga_loc, 0, sizeof(ga_loc));
     memset(&new_prot, 0, sizeof(new_prot));
-    memset(ACL_$CURRENT_SIDS, 0, sizeof(ACL_$CURRENT_SIDS));
-    memset(ACL_$PROJ_UIDS, 0, sizeof(ACL_$PROJ_UIDS));
-    memset(ACL_$LOCKSMITH_OVERRIDE_BITMAP, 0,
-           sizeof(ACL_$LOCKSMITH_OVERRIDE_BITMAP));
-    memset(ACL_$ASID_SUSER_BITMAP, 0, sizeof(ACL_$ASID_SUSER_BITMAP));
-    memset(ACL_$ACL_CACHE, 0, sizeof(ACL_$ACL_CACHE));
+    memset(ACL_$DATA.current_sids, 0, sizeof(ACL_$DATA.current_sids));
+    memset(ACL_$DATA.proj_uids, 0, sizeof(ACL_$DATA.proj_uids));
+    memset(ACL_$DATA.locksmith_override_bitmap, 0,
+           sizeof(ACL_$DATA.locksmith_override_bitmap));
+    memset(ACL_$DATA.asid_suser_bitmap, 0, sizeof(ACL_$DATA.asid_suser_bitmap));
+    memset(ACL_$DATA.acl_cache, 0, sizeof(ACL_$DATA.acl_cache));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     ga_calls = fs_calls = ar_calls = rs_calls = 0;
@@ -197,7 +193,7 @@ static void reset(void)
     ar_status_out = status_$ok;
     ar_result = 0xFFFFFFFFu;
     rs_status_out = status_$ok;
-    ACL_$LOCAL_LOCKSMITH = 0;
+    ACL_$UNWIRED_DATA.local_locksmith = 0;
     PROC1_$CURRENT = TEST_PID;
     setid_ret = 0x7F;                       /* poison */
 
@@ -210,7 +206,7 @@ static void reset(void)
     ga_attrs[1].obj_flags[ACL_ATTR_SUB_TYPE] = 3;
     ga_attrs[1].obj_flags[ACL_ATTR_OBJ_TYPE] = 1;
     ga_attrs[1].default_acl = UID_$NIL;
-    ACL_$CURRENT_SIDS[TEST_PID].login_sid = LOGIN;
+    ACL_$DATA.current_sids[TEST_PID].login_sid = LOGIN;
 }
 
 static boolean call(int16_t op_type, status_$t *st_out)
@@ -254,14 +250,14 @@ TEST(remote_object_is_forwarded_with_the_project_count)
     reset();
     ga_attrs[0].obj_flags[ACL_ATTR_FLAGS_LO] = 0;
     ga_loc[0].flags = (int8_t)0x80;
-    ACL_$PROJ_UIDS[TEST_PID][0].high = 1;
-    ACL_$PROJ_UIDS[TEST_PID][1].high = 2;
-    ACL_$PROJ_UIDS[TEST_PID][2] = UID_$NIL;
+    ACL_$DATA.proj_uids[TEST_PID][0].high = 1;
+    ACL_$DATA.proj_uids[TEST_PID][1].high = 2;
+    ACL_$DATA.proj_uids[TEST_PID][2] = UID_$NIL;
 
     ASSERT_EQ(0xFF, (unsigned char)call(7, NULL));
     ASSERT_EQ(1, rs_calls);
-    ASSERT_TRUE(rs_sid_data  == (void *)&ACL_$CURRENT_SIDS[TEST_PID]);
-    ASSERT_TRUE(rs_perm_data == (void *)&ACL_$PROJ_UIDS[TEST_PID][0]);
+    ASSERT_TRUE(rs_sid_data  == (void *)&ACL_$DATA.current_sids[TEST_PID]);
+    ASSERT_TRUE(rs_perm_data == (void *)&ACL_$DATA.proj_uids[TEST_PID][0]);
     ASSERT_EQ(2, rs_flags);             /* two non-NIL project slots */
     ASSERT_EQ(7, rs_extra);             /* *op_type */
     ASSERT_EQ(1, ga_calls);             /* the ACL object is never fetched */
@@ -273,7 +269,7 @@ TEST(remote_object_is_forwarded_with_the_project_count)
     ga_loc[0].flags = (int8_t)0x80;
     {
         int i;
-        for (i = 0; i < 8; i++) ACL_$PROJ_UIDS[TEST_PID][i].high = (uint32_t)(i + 1);
+        for (i = 0; i < 8; i++) ACL_$DATA.proj_uids[TEST_PID][i].high = (uint32_t)(i + 1);
     }
     (void)call(0, NULL);
     ASSERT_EQ(8, rs_flags);
@@ -401,19 +397,19 @@ TEST(find_acl_slot_is_skipped_when_there_is_no_image)
 TEST(locksmith_is_granted_and_marked)
 {
     reset();
-    ACL_$CURRENT_SIDS[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
+    ACL_$DATA.current_sids[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
     {
         status_$t st;
         ASSERT_EQ(0xFF, (unsigned char)call(0, &st));
         ASSERT_EQ(status_$ok, (uint32_t)st);
     }
     ASSERT_EQ(ACL_PID_BITMAP_MASK(TEST_PID),
-              ACL_$ASID_SUSER_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)]);
+              ACL_$DATA.asid_suser_bitmap[ACL_PID_BITMAP_BYTE(TEST_PID)]);
 
     /* The local-locksmith downgrade takes it away from a type-9 process. */
     reset();
-    ACL_$CURRENT_SIDS[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 1;
+    ACL_$DATA.current_sids[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
+    ACL_$UNWIRED_DATA.local_locksmith = 1;
     PROC1_$DATA.type[TEST_PID] = 9;
     ar_result = 0;                      /* and no change right either */
     {
@@ -421,14 +417,14 @@ TEST(locksmith_is_granted_and_marked)
         ASSERT_EQ(0x00, (unsigned char)call(0, &st));
         ASSERT_EQ(0x00230001u, (uint32_t)st);
     }
-    ASSERT_EQ(0, ACL_$ASID_SUSER_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)]);
+    ASSERT_EQ(0, ACL_$DATA.asid_suser_bitmap[ACL_PID_BITMAP_BYTE(TEST_PID)]);
 
     /* ...unless the override bit is set. */
     reset();
-    ACL_$CURRENT_SIDS[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 1;
+    ACL_$DATA.current_sids[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
+    ACL_$UNWIRED_DATA.local_locksmith = 1;
     PROC1_$DATA.type[TEST_PID] = 9;
-    ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
+    ACL_$DATA.locksmith_override_bitmap[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
         ACL_PID_BITMAP_MASK(TEST_PID);
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
 }
@@ -492,14 +488,14 @@ TEST(owner_sid_change_must_match_the_callers_own)
     reset();
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
     new_prot.owner = SUBSYS;
-    ACL_$CURRENT_SIDS[TEST_PID].user_sid = SUBSYS;
+    ACL_$DATA.current_sids[TEST_PID].user_sid = SUBSYS;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
     ASSERT_EQ(0xFF, (unsigned char)setid_ret);
 
     reset();
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
     new_prot.owner = SUBSYS;
-    ACL_$CURRENT_SIDS[TEST_PID].user_sid = LOGIN;
+    ACL_$DATA.current_sids[TEST_PID].user_sid = LOGIN;
     ASSERT_EQ(0x00, (unsigned char)call(0, NULL));
     ASSERT_EQ(0xFF, (unsigned char)setid_ret);      /* still set at 0x00E4775C */
 
@@ -508,19 +504,19 @@ TEST(owner_sid_change_must_match_the_callers_own)
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
     new_prot.owner = SUBSYS;                        /* would not match */
     ACL_$PROT_DATA(&ga_attrs[0])->owner = LOGIN;
-    ACL_$CURRENT_SIDS[TEST_PID].user_sid = LOGIN;
+    ACL_$DATA.current_sids[TEST_PID].user_sid = LOGIN;
     ASSERT_EQ(0xFF, (unsigned char)call(ACL_SET_OP_MERGE, NULL));
 }
 
 /*
  * 0x00E4773A-0x00E47756: a type-9 process may not set-id at all while
- * ACL_$LOCAL_LOCKSMITH is in force.
+ * ACL_$UNWIRED_DATA.local_locksmith is in force.
  */
 TEST(type_nine_process_may_not_setid_under_local_locksmith)
 {
     reset();
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
-    ACL_$LOCAL_LOCKSMITH = 1;
+    ACL_$UNWIRED_DATA.local_locksmith = 1;
     PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x00, (unsigned char)call(0, NULL));
     ASSERT_EQ(0x00, (unsigned char)setid_ret);
@@ -529,8 +525,8 @@ TEST(type_nine_process_may_not_setid_under_local_locksmith)
     reset();
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
     new_prot.owner = SUBSYS;
-    ACL_$CURRENT_SIDS[TEST_PID].user_sid = SUBSYS;
-    ACL_$LOCAL_LOCKSMITH = 1;
+    ACL_$DATA.current_sids[TEST_PID].user_sid = SUBSYS;
+    ACL_$UNWIRED_DATA.local_locksmith = 1;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
 }
 
@@ -544,23 +540,23 @@ TEST(group_sid_change_scans_the_project_list)
     reset();
     new_prot.group_rights = ACL_PROT_SETID_BIT;
     new_prot.group = SUBSYS;
-    ACL_$CURRENT_SIDS[TEST_PID].group_sid = SUBSYS;
+    ACL_$DATA.current_sids[TEST_PID].group_sid = SUBSYS;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
 
     reset();
     new_prot.group_rights = ACL_PROT_SETID_BIT;
     new_prot.group = SUBSYS;
-    ACL_$PROJ_UIDS[TEST_PID][0] = LOGIN;
-    ACL_$PROJ_UIDS[TEST_PID][1] = SUBSYS;
+    ACL_$DATA.proj_uids[TEST_PID][0] = LOGIN;
+    ACL_$DATA.proj_uids[TEST_PID][1] = SUBSYS;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
 
     /* A NIL slot before the match stops the walk. */
     reset();
     new_prot.group_rights = ACL_PROT_SETID_BIT;
     new_prot.group = SUBSYS;
-    ACL_$PROJ_UIDS[TEST_PID][0] = LOGIN;
-    ACL_$PROJ_UIDS[TEST_PID][1] = UID_$NIL;
-    ACL_$PROJ_UIDS[TEST_PID][2] = SUBSYS;
+    ACL_$DATA.proj_uids[TEST_PID][0] = LOGIN;
+    ACL_$DATA.proj_uids[TEST_PID][1] = UID_$NIL;
+    ACL_$DATA.proj_uids[TEST_PID][2] = SUBSYS;
     ASSERT_EQ(0x00, (unsigned char)call(0, NULL));
 }
 
@@ -570,7 +566,7 @@ TEST(org_sid_change_must_match)
     reset();
     new_prot.org_rights = ACL_PROT_SETID_BIT;
     new_prot.org = SUBSYS;
-    ACL_$CURRENT_SIDS[TEST_PID].org_sid = SUBSYS;
+    ACL_$DATA.current_sids[TEST_PID].org_sid = SUBSYS;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
 
     reset();
@@ -589,8 +585,8 @@ TEST(both_acl_images_must_agree_on_the_type)
     ga_attrs[0].default_acl = ACL_UID;
     ga_attrs[1].default_acl = ACL_UID;
     fs_result[0] = 2; fs_result[1] = 3;
-    ACL_$ACL_CACHE[2].type_uid = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[3].type_uid = ACL_$DIR_ACL;
+    ACL_$DATA.acl_cache[2].type_uid = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[3].type_uid = ACL_$DIR_ACL;
     {
         status_$t st;
         ASSERT_EQ(0x00, (unsigned char)call(0, &st));
@@ -602,8 +598,8 @@ TEST(both_acl_images_must_agree_on_the_type)
     ga_attrs[0].default_acl = ACL_UID;
     ga_attrs[1].default_acl = ACL_UID;
     fs_result[0] = 2; fs_result[1] = 3;
-    ACL_$ACL_CACHE[2].type_uid = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[3].type_uid = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[2].type_uid = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[3].type_uid = ACL_$FILE_ACL;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
     ASSERT_EQ(0x00, (unsigned char)setid_ret);
 }
@@ -620,10 +616,10 @@ TEST(subsystem_manager_handover)
     ga_attrs[0].default_acl = ACL_UID;
     ga_attrs[1].default_acl = ACL_UID;
     fs_result[0] = 2; fs_result[1] = 3;
-    ACL_$ACL_CACHE[2].type_uid   = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[3].type_uid   = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[2].subsys_uid = ACL_$FILE_ACL;   /* == its own type */
-    ACL_$ACL_CACHE[3].subsys_uid = LOGIN;
+    ACL_$DATA.acl_cache[2].type_uid   = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[3].type_uid   = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[2].subsys_uid = ACL_$FILE_ACL;   /* == its own type */
+    ACL_$DATA.acl_cache[3].subsys_uid = LOGIN;
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
     ASSERT_EQ(0xFF, (unsigned char)setid_ret);
 
@@ -632,10 +628,10 @@ TEST(subsystem_manager_handover)
     ga_attrs[0].default_acl = ACL_UID;
     ga_attrs[1].default_acl = ACL_UID;
     fs_result[0] = 2; fs_result[1] = 3;
-    ACL_$ACL_CACHE[2].type_uid   = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[3].type_uid   = ACL_$FILE_ACL;
-    ACL_$ACL_CACHE[2].subsys_uid = SUBSYS;
-    ACL_$ACL_CACHE[3].subsys_uid = ACL_UID;
+    ACL_$DATA.acl_cache[2].type_uid   = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[3].type_uid   = ACL_$FILE_ACL;
+    ACL_$DATA.acl_cache[2].subsys_uid = SUBSYS;
+    ACL_$DATA.acl_cache[3].subsys_uid = ACL_UID;
     {
         status_$t st;
         ASSERT_EQ(0x00, (unsigned char)call(0, &st));

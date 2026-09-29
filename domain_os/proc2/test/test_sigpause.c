@@ -20,14 +20,8 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT, PROC1_$AS_ID;
 uid_t UID_$NIL = { 0xAAAA5555u, 0x12345678u };
 #include "fim/fim.h"
@@ -82,12 +76,12 @@ static int tests_run, tests_failed;
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec)); memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
     n_lock = n_unlock = n_deliver = n_waitn = n_clear = n_set_asid = n_clear_super = n_set_valid = n_fim_startup = 0;
     mock_find_index = 3; mock_find_status = status_$ok; mock_find_by_upgid = 0;
-    PROC1_$CURRENT = 5; PROC1_$AS_ID = 3; mock_pid_to_index[5] = 2;
-    E(2)->self_index = 2; P2_INFO_ALLOC_PTR = 0;
+    PROC1_$CURRENT = 5; PROC1_$AS_ID = 3; PROC2_$DATA.pid_to_index[5] = 2;
+    E(2)->self_index = 2; PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
 }
 
 TEST(sigpause_waits_then_delivers)
@@ -151,7 +145,7 @@ TEST(uid_to_pgroup_index_paths)
 TEST(uid_to_upid_paths)
 {
     uid_t u = { 7, 8 }; uint16_t p = 0; status_$t st;
-    P2_INFO_ALLOC_PTR = 2; E(2)->next_index = 3; E(3)->uid.high = 7; E(3)->uid.low = 8; E(3)->upid = 42;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 2; E(2)->next_index = 3; E(3)->uid.high = 7; E(3)->uid.low = 8; E(3)->upid = 42;
     PROC2_$UID_TO_UPID(&u, &p, &st);
     ASSERT_EQ(st, status_$ok); ASSERT_EQ(p, 42);
     E(3)->flags = PROC2_FLAG_ZOMBIE;

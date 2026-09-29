@@ -18,6 +18,7 @@
 #define ACL_H
 
 #include "base/base.h"
+#include "proc1/proc1_config.h"   /* PROC1_MAX_PROCESSES */
 
 /*
  * Status codes, module 0x23 ("OS / ACL manager" in the SR10.4 status-code
@@ -852,8 +853,260 @@ extern uid_t ACL_$DIRIN_ACL;   /* 0xE1745C: {0x00000603, 0} (used by dir/) */
 /* Nil ACL UID (0xE17384): {0x00000100, 0}.  Defined in acl/acl_data.c. */
 extern uid_t ACL_$NIL;
 
-/* Per-process super-user nesting counts, indexed by PROC1_$CURRENT (0xE7DACA) */
-extern int16_t ACL_$SUPER_COUNT[];
+/*
+ * acl_$cache_slot_t - one slot of the in-memory ACL image cache at 0xE88834.
+ *
+ * ACL_$INIT zeroes 0xE88834..0xE935CC (0x00E310AA-0x00E310C0) and builds a
+ * 31-entry circular free list with `divs.w #0x1f` (0x00E31140-0x00E3117A), so
+ * the cache holds 31 slots of 0x400 bytes: 0xE88834 + 31*0x400 = 0xE90434,
+ * exactly where ACL_$DATA.original_sids[1] begins.
+ *
+ * acl_$eval_rights indexes it with `lsl.l #0x8` + `lsl.l #0x2` (= *0x400) at
+ * 0x00E4680C and 0x00E46870.  ACL_$SET_ACL_CHECK uses the same stride.
+ *
+ * Packed: type_uid lands on an odd multiple of two, which the m68k ABI allows
+ * but a 4-byte-aligning host would pad.
+ */
+#define ACL_CACHE_SLOTS         31
+#define ACL_CACHE_SLOT_SIZE     0x400
+#define ACL_CACHE_NO_SLOT       ((int16_t)-1)
+
+typedef struct __attribute__((packed)) acl_$cache_slot_t {
+    int16_t  version;           /* 0x00: image format version.  acl_$load_acl_image
+                                 *       tests it with `cmpi.w #0x3,(A2)`
+                                 *       (0x00E45BF6) and `cmpi.w #0x5,(A2)` +
+                                 *       `bge` (0x00E45C52); acl_$convert_image
+                                 *       stamps 5 into the image it builds
+                                 *       (`move.w #0x5,(A2)`, 0x00E44E86).  The
+                                 *       compare is signed, hence int16_t. */
+    uid_t    type_uid;          /* 0x02: ACL_$FILE_ACL / ACL_$DIR_ACL / ...
+                                 *       (0x00E4745C, 0x00E4763A) */
+    uint32_t reserved_0a;       /* 0x0A */
+    uint16_t entry_count;       /* 0x0E: `move.w (0xe,A1),D2w`, 0x00E461B6 */
+    uint16_t reserved_10;       /* 0x10 */
+    uid_t    required_uid;      /* 0x12: 0x00E474E6, 0x00E475C6 */
+    uid_t    subsys_uid;        /* 0x1A: subsystem manager; compared against
+                                 *       sids->login_sid at 0x00E46828 */
+    uint32_t reserved_22;       /* 0x22: `clr.l (0x22,A1)` 0x00E45C1C */
+    uint16_t reserved_26;       /* 0x26: `clr.w (0x26,A1)` 0x00E45C20 */
+    int8_t   world_entry_present;
+                                /* 0x28: Pascal boolean.  Its ONE reader is the
+                                 *       version-3/4 directory fixup in
+                                 *       acl_$load_acl_image: `tst.b (0x28,A2)`
+                                 *       + `bmi` at 0x00E45CA0 skips appending
+                                 *       the all-nil (person = group = org =
+                                 *       UID_$NIL) entry with rights
+                                 *       ACL_V4_RIGHTS_DEFAULT when the flag is
+                                 *       negative.  That all-nil entry is what
+                                 *       acl_$convert_image turns into
+                                 *       prot->world_rights (0x00E44F44-
+                                 *       0x00E44F56), so a true flag means "this
+                                 *       image already carries its world entry".
+                                 *       The version-3 promotion clears it unless
+                                 *       the image is a directory ACL
+                                 *       (0x00E45C38); every version-5 image the
+                                 *       kernel builds clears it outright
+                                 *       (acl_$convert_image 0x00E44EC6,
+                                 *       acl_$image_internal 0x00E47DD8). */
+    int8_t   unused_29;         /* 0x29: no reader anywhere in the image; the
+                                 *       three writers only ever clear it
+                                 *       alongside world_entry_present
+                                 *       (0x00E45C3C, 0x00E44ECA, 0x00E47DDC). */
+    uint8_t  reserved_2a[0x0A]; /* 0x2A..0x33: five words the version-3 fixup
+                                 *       zeroes (0x00E45C40-0x00E45C4E) */
+    uint8_t  entries[0x3CC];    /* 0x34: 0x20-byte ACL entries
+                                 *       (`lea (0x34,A0),A0` + `lea (0x20,A0),A0`
+                                 *        at 0x00E461AC / 0x00E46232) */
+} acl_$cache_slot_t;
+
+/* Packed, so the layout holds on every build: unconditional. */
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, type_uid)    == 0x02, "cache.type_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, world_entry_present) == 0x28,
+               "cache.world_entry_present");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, unused_29)  == 0x29, "cache.unused_29");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, entry_count) == 0x0E, "cache.entry_count");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, required_uid)== 0x12, "cache.required_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, subsys_uid)  == 0x1A, "cache.subsys_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_slot_t, entries)     == 0x34, "cache.entries");
+_Static_assert(sizeof(acl_$cache_slot_t) == ACL_CACHE_SLOT_SIZE, "sizeof acl_$cache_slot_t");
+
+/*
+ * ----------------------------------------------------------------------------
+ * The ACL image cache directory (ACL module A5 data, A5 = 0xE7CF54)
+ * ----------------------------------------------------------------------------
+ *
+ * ACL_$DATA.acl_cache holds the 31 raw 0x400-byte ACL images.  The
+ * bookkeeping that decides which image lives in which slot is a set of
+ * parallel A5-relative arrays in ACL_$UNWIRED_DATA that acl_$find_acl_slot
+ * (0x00E45E8E) walks:
+ *
+ *   A5+0x800  cache_dir[31]            16 bytes each  (0xE7D754)
+ *   A5+0x9F0  cache_lru_links[32]       4 bytes each  (0xE7D944)
+ *   A5+0xA70  cache_hash_links[32]      4 bytes each  (0xE7D9C4)
+ *   A5+0xAF0  cache_hash_buckets[61]    2 bytes each  (0xE7DA44)
+ *   A5+0xB74  cache_free_head                         (0xE7DAC8)
+ *   A5+0xB76  cache_lru_head                          (0xE7DACA)
+ *
+ * The first three are contiguous, which fixes their element counts:
+ * 0x800 + 31*0x10 = 0x9F0, 0x9F0 + 32*4 = 0xA70, 0xA70 + 32*4 = 0xAF0.  The
+ * bucket array is the 61 words the hash modulus can produce: the image
+ * initialises exactly 0xAF0..0xB69 to -1, and ACL_$ENTER_SUBS keeps its
+ * magic longword at A5+0xB6C (`move.l D0,(0xb6c,A5)' 0x00E46E08), so a
+ * 64-word array (the earlier reading) would overlap it.
+ *
+ * cache_lru_head is also super_count[0] (see ACL_$UNWIRED_DATA).
+ */
+
+/* UID_$HASH modulus for the ACL cache: the word at 0x00E45E8C, reached by the
+ * `pea (-0x20,PC)` at 0x00E45EAA.  Raw bytes 00 3D. */
+#define ACL_CACHE_HASH_MOD          61
+/* One bucket per value the modulus can produce (A5+0xAF0..0xB69). */
+#define ACL_CACHE_HASH_BUCKETS      ACL_CACHE_HASH_MOD
+/* Both link arrays are 32 elements wide even though only slots 0..30 exist. */
+#define ACL_CACHE_LINK_SLOTS        32
+
+/*
+ * One directory entry: which ACL UID a slot currently holds, plus the two
+ * rights bytes acl_$find_acl_slot replays into the caller's protection record
+ * when the cached image is a "default ACL" (flag byte negative).
+ */
+typedef struct acl_$cache_dir_t {
+    uid_t    acl_uid;           /* 0x00: `cmpm.l` pair at 0x00E45F06 */
+    uint16_t hash_bucket;       /* 0x08: the UID_$HASH bucket this slot is
+                                 *       chained in.  acl_$load_acl_image stores
+                                 *       it (`move.w D0w,(0x808,A2)`, 0x00E45E5E)
+                                 *       and acl_$alloc_cache_slot reads it back
+                                 *       to unlink an evicted slot from its
+                                 *       bucket (`move.w (0x808,A0),D2w`,
+                                 *       0x00E45954). */
+    int8_t   cached_flag;       /* 0x0A: `move.b (0x80a,A2),(A1)` 0x00E45F10 */
+    uint8_t  reserved_0b;       /* 0x0B */
+    uint16_t world_rights;      /* 0x0C: WORD - acl_$load_acl_image widens
+                                 *       prot->world_rights into it
+                                 *       (`move.w D5w,(0x80c,A2)`, 0x00E45E40).
+                                 *       acl_$find_acl_slot reads only its low
+                                 *       byte at +0x0D (0x00E45F24). */
+    uint16_t subsys_rights;     /* 0x0E: WORD, same treatment
+                                 *       (`move.w D5w,(0x80e,A2)`, 0x00E45E4A;
+                                 *        low byte read at +0x0F, 0x00E45F2A) */
+} acl_$cache_dir_t;
+
+/* uid_t and words only, 4-byte alignment at most: unconditional. */
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, acl_uid)       == 0x00, "cache_dir.acl_uid");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, cached_flag)   == 0x0A, "cache_dir.cached_flag");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, hash_bucket)   == 0x08, "cache_dir.hash_bucket");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, world_rights)  == 0x0C, "cache_dir.world_rights");
+_Static_assert(__builtin_offsetof(acl_$cache_dir_t, subsys_rights) == 0x0E, "cache_dir.subsys_rights");
+_Static_assert(sizeof(acl_$cache_dir_t) == 0x10, "sizeof acl_$cache_dir_t");
+
+/*
+ * One node of a circular doubly-linked slot list.  acl_$cache_list_insert /
+ * acl_$cache_list_remove read `next` at +0 and `prev` at +2 (0x00E44C54,
+ * 0x00E44CB2) and index the array with `lsl.l #0x2`.
+ */
+typedef struct acl_$cache_link_t {
+    int16_t next;               /* 0x00 */
+    int16_t prev;               /* 0x02 */
+} acl_$cache_link_t;
+
+_Static_assert(sizeof(acl_$cache_link_t) == 4, "sizeof acl_$cache_link_t");
+
+/*
+ * ============================================================================
+ * ACL_$UNWIRED_DATA - the ACL_ module data block (map "D E7CF54 ACL_
+ * size = BFC")
+ * ============================================================================
+ *
+ * Module data block ACL_$UNWIRED_DATA: Claude Opus 5.5 (source-l2yd).
+ *
+ * Every Pascal ACL_ routine loads A5 with `lea (0xe7cf54).l,A5'; ACL_$INIT
+ * (boot segment) uses the literal base (`movea.l #0xe7cf54,A0' 0x00E31142)
+ * and REM_FILE reaches super_count through the map symbol ACL_$SUPER_COUNT
+ * (`movea.l #0xe7dacc,A0' / `tst.w (-0x2,A0,D2w*0x1)', 0x00E619BC).  A
+ * MODULE_DATA block linked in the SAU2 map's order after MST_UNWIRED and
+ * before HINT_; the address is the ordering key, not the link address.
+ *
+ *   A5 off  image      field
+ *   0x000   0xE7CF54   workspace[0x400]     `pea (A5)' (ACL_$CONVERT_TO_9ACL)
+ *   0x400   0xE7D354   image_buf            `pea (0x400,A5)' 0x00E45D64
+ *   0x800   0xE7D754   cache_dir[31]        (0x800,A2) with A2 = A5 + slot*0x10
+ *   0x9F0   0xE7D944   cache_lru_links[32]  `pea (0x9f0,A5)' 0x00E45F4C
+ *   0xA70   0xE7D9C4   cache_hash_links[32] (0xa70,A1) with A1 = A5 + slot*4
+ *   0xAF0   0xE7DA44   cache_hash_buckets[61] (0xaf0,A0) with A0 = A5 + h*2
+ *   0xB6A   0xE7DABE   (1 word, never addressed)
+ *   0xB6C   0xE7DAC0   subs_magic           ACL_$ENTER_SUBS 0x00E46E08
+ *   0xB70   0xE7DAC4   local_locksmith      `(0xb70,A5)'
+ *   0xB72   0xE7DAC6   locksmith_owner_pid  `(0xb72,A5)'
+ *   0xB74   0xE7DAC8   cache_free_head
+ *   0xB76   0xE7DACA   cache_lru_head       `pea (0xb76,A5)' 0x00E45F50
+ *   0xB76   0xE7DACA   super_count[0..64]   map ACL_$SUPER_COUNT is [1]
+ *   0xBF8   0xE7DB4C   locksmith_override   `st (0xbf8,A5)'
+ *   0xBF9   0xE7DB4D   (3 bytes, never addressed)
+ *
+ * super_count[pid]: A5 + 0xB76 + pid*2, ACL_$ENTER_SUPER `addq.w
+ * #0x1,(0xb76,A0)' with A0 = A5 + PROC1_$CURRENT*2 (0x00E46FA8).  Pascal
+ * [1..64] whose bias slot is cache_lru_head, so the two are union arms and
+ * every user indexes with the pid; super_count[64] ends at
+ * locksmith_override.
+ *
+ * Pointer-free.  acl_$cache_slot_t is packed and the other records are
+ * uid_t / word records, so the layout is the same on a host and every
+ * assert is unconditional.  Image contents (`gsk read 0xE7CF54 3068'): zero
+ * except cache_hash_buckets[0..60] = -1 (0xE7DA44..0xE7DABD) and
+ * cache_lru_head = -1 (0xE7DACA) - the empty-cache state.
+ */
+#define ACL_$UNWIRED_DATA_SIZE 0xBFC        /* map: ACL_ size = BFC */
+
+/* The 0x400-byte workspace ACL_$CONVERT_TO_9ACL / _FROM_9ACL hand to
+ * acl_$image_internal and ACL_$PRIM_CREATE with capacity 0x400; it ends
+ * exactly at image_buf (A5+0x400). */
+#define ACL_WORKSPACE_SIZE 0x400
+
+typedef struct acl_$unwired_data_t {
+    uint8_t           workspace[ACL_WORKSPACE_SIZE];         /* +0x000 */
+    acl_$cache_slot_t image_buf;                            /* +0x400 */
+    acl_$cache_dir_t  cache_dir[ACL_CACHE_SLOTS];           /* +0x800 */
+    acl_$cache_link_t cache_lru_links[ACL_CACHE_LINK_SLOTS];  /* +0x9F0 */
+    acl_$cache_link_t cache_hash_links[ACL_CACHE_LINK_SLOTS]; /* +0xA70 */
+    int16_t           cache_hash_buckets[ACL_CACHE_HASH_BUCKETS]; /* +0xAF0 */
+    int16_t           _0b6a;                                /* +0xB6A never addressed */
+    int32_t           subs_magic;                           /* +0xB6C ACL_$ENTER_SUBS
+                                                             *        (not yet emitted,
+                                                             *        source-m5y2) */
+    int16_t           local_locksmith;                      /* +0xB70 */
+    int16_t           locksmith_owner_pid;                  /* +0xB72 */
+    int16_t           cache_free_head;                      /* +0xB74 */
+    union {                                                 /* +0xB76 */
+        int16_t       cache_lru_head;
+        /* [0..64], indexed with the pid; [0] is cache_lru_head */
+        int16_t       super_count[PROC1_MAX_PROCESSES];
+    };
+    int8_t            locksmith_override;                   /* +0xBF8 Domain boolean */
+    uint8_t           _0bf9[3];                             /* +0xBF9 never addressed */
+} acl_$unwired_data_t;
+
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, workspace) == 0x000, "workspace (A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, image_buf) == 0x400, "image_buf (0x400,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_dir) == 0x800, "cache_dir (0x800,A2)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_lru_links) == 0x9F0, "cache_lru_links (0x9f0,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_hash_links) == 0xA70, "cache_hash_links (0xa70,A1)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_hash_buckets) == 0xAF0, "cache_hash_buckets (0xaf0,A0)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, _0b6a) == 0xB6A, "61 buckets end at 0xB6A");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, subs_magic) == 0xB6C, "subs_magic (0xb6c,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, local_locksmith) == 0xB70, "local_locksmith (0xb70,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, locksmith_owner_pid) == 0xB72, "locksmith_owner_pid (0xb72,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_free_head) == 0xB74, "cache_free_head (0xb74,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, cache_lru_head) == 0xB76, "cache_lru_head (0xb76,A5)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, super_count) == 0xB76, "super_count[0] (0xb76,A0)");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, super_count[1]) == 0xB78,
+               "map ACL_$SUPER_COUNT (0xE7DACC) = super_count[1]; stride 2");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, super_count[PROC1_MAX_PROCESSES]) == 0xBF8,
+               "super_count[64] ends at locksmith_override");
+_Static_assert(__builtin_offsetof(acl_$unwired_data_t, locksmith_override) == 0xBF8, "locksmith_override (0xbf8,A5)");
+_Static_assert(sizeof(acl_$unwired_data_t) == ACL_$UNWIRED_DATA_SIZE, "ACL_: map size 0xBFC");
+
+MODULE_DATA_DECLARE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+
 
 
 /*

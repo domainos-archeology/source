@@ -69,7 +69,7 @@ static int current_failed = 0;
  * ============================================================================ */
 
 uint16_t REM_FILE_$MAX_PROJ_LIST = 8;       /* 0xE61718 */
-int16_t  ACL_$SUPER_COUNT[8];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 uint16_t PROC1_$CURRENT;
 
 /* what the last ACL_$GET_RE_SIDS call was handed */
@@ -178,7 +178,7 @@ static void reset(void)
 
     PROC1_$CURRENT = 3;
     for (i = 0; i < 8; i++) {
-        ACL_$SUPER_COUNT[i] = 0;
+        ACL_$UNWIRED_DATA.super_count[i] = 0;
     }
 
     dir_uid.high = 0xDEADBEEFu;
@@ -277,11 +277,11 @@ TEST(fixed_request_bytes)
     ASSERT_EQ(1,    mock_send_calls);
 }
 
-/* 0x00E620F0: sgt on ACL_$SUPER_COUNT[PROC1_$CURRENT] gives a Pascal true. */
+/* 0x00E620F0: sgt on ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] gives a Pascal true. */
 TEST(privileged_flag_is_all_ones_when_super_count_is_positive)
 {
     reset();
-    ACL_$SUPER_COUNT[3] = 1;
+    ACL_$UNWIRED_DATA.super_count[3] = 1;
     call(5);
     ASSERT_EQ(0xFF, (uint8_t)mock_request.privileged);
 }

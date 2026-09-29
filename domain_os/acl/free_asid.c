@@ -24,7 +24,7 @@
 /*
  * The default 12-byte project-list cell, pushed by the `lea (0xb8,PC),A3` at
  * 0x00E74CE2 (extension word at 0x00E74CE4, so the cell is 0x00E74D9C) and
- * copied a longword at a time into ACL_$PROJ_LISTS[asid].
+ * copied a longword at a time into ACL_$DATA.proj_lists[asid].
  *
  * Image bytes at 0x00E74D9C: 00 00 00 0d  00 00 00 0d  00 00 00 0d.
  */
@@ -36,8 +36,8 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
     acl_proj_list_t *proj;
     int i;
 
-    current = &ACL_$CURRENT_SIDS[asid];
-    proj = &ACL_$PROJ_LISTS[asid];
+    current = &ACL_$DATA.current_sids[asid];
+    proj = &ACL_$DATA.proj_lists[asid];
 
     /*
      * Set current SIDs to system defaults
@@ -55,43 +55,43 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret)
     /*
      * Copy current SIDs to original (pre-subsystem entry) array
      */
-    ACL_$ORIGINAL_SIDS[asid] = *current;
+    ACL_$DATA.original_sids[asid] = *current;
 
     /*
      * Copy current SIDs to saved (pre-enter_super) array
      */
-    ACL_$SAVED_SIDS[asid] = *current;
+    ACL_$DATA.saved_sids[asid] = *current;
 
     /*
      * Copy project list to saved project list
      */
-    ACL_$SAVED_PROJ[asid] = *proj;
+    ACL_$DATA.saved_proj[asid] = *proj;
 
     /*
      * 0x00E74D20-0x00E74D48: clear the eight project UIDs for this ASID.
      * `moveq #0x7,D1` + `dbf` is eight iterations; A0 = 0xE97294 + asid*0x40
      * and D2 starts at 8, so the addresses written are
-     * 0xE924F4 + asid*0x40 + 8 + i*8 = &ACL_$PROJ_UIDS[asid][i] with the
+     * 0xE924F4 + asid*0x40 + 8 + i*8 = &ACL_$DATA.proj_uids[asid][i] with the
      * 0xE924FC base recorded in acl/acl_internal.h (source-4h7g).
      */
     /* TODO(source-x5dd): the routine indexes the SID and project tables with
      * `asid` but the two bitmaps with (asid-1); confirm ASID == PID here. */
     for (i = 0; i <= 7; i++) {
-        ACL_$PROJ_UIDS[asid][i] = UID_$NIL;
+        ACL_$DATA.proj_uids[asid][i] = UID_$NIL;
     }
 
     /*
      * Clear subsystem level
      */
-    ACL_$SUBSYS_LEVEL[asid] = 0;
+    ACL_$DATA.subsys_level[asid] = 0;
 
     /*
      * Update bitmaps:
      * - Mark ASID as free (set bit in free bitmap)
      * - Clear suser flag (clear bit in suser bitmap)
      */
-    ACL_$ASID_FREE_BITMAP[(asid - 1) >> 3] |= (0x80 >> ((asid - 1) & 7));
-    ACL_$ASID_SUSER_BITMAP[(asid - 1) >> 3] &= ~(0x80 >> ((asid - 1) & 7));
+    ACL_$DATA.asid_free_bitmap[(asid - 1) >> 3] |= (0x80 >> ((asid - 1) & 7));
+    ACL_$DATA.asid_suser_bitmap[(asid - 1) >> 3] &= ~(0x80 >> ((asid - 1) & 7));
 
     *status_ret = status_$ok;
 }

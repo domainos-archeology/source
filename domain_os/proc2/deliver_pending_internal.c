@@ -98,7 +98,7 @@ void PROC2_$DELIVER_PENDING_INTERNAL(int16_t proc_index)
      * process) and for 0x13 carrying the BLAST status */
     if (FIM_$WIRED_DATA.quit_inh[asid] != 0) {
         if (signal == 9 &&
-            entry->debugger_idx == P2_PID_TO_INDEX(PROC1_$CURRENT)) {
+            entry->debugger_idx == PROC2_$DATA.pid_to_index[PROC1_$CURRENT]) {
             /* 0x00E3ED46 beq -> deliver */
         } else if (signal == 0x13 &&
                    entry->sig_status == (uint32_t)status_$fault_process_BLAST) {

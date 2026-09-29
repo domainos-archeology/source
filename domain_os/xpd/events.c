@@ -328,7 +328,7 @@ void XPD_$GET_EC(int16_t *key, void **ec_ret, status_$t *status_ret)
  *
  * Walks target records 1..57 (`moveq #0x38` / `dbf`) for one whose slot is
  * the caller's, not yet ACKED, ENABLED, with a non-zero event code; returns
- * its UID (PROC2_$UID[idx]), event code and status, and marks it ACKED.
+ * its UID (PROC2_$UNWIRED_DATA.uid[idx]), event code and status, and marks it ACKED.
  * None (or the caller is no debugger): event 0, UID_$NIL, status 0.
  */
 void XPD_$GET_EVENT_AND_DATA(uid_t *proc_uid, uint16_t *event_type,
@@ -361,7 +361,7 @@ void XPD_$GET_EVENT_AND_DATA(uid_t *proc_uid, uint16_t *event_type,
                 continue;
             }
             /* 0x00E5BE84-0x00E5BEAC */
-            *proc_uid = PROC2_$UID[idx];
+            *proc_uid = PROC2_$UNWIRED_DATA.uid[idx];
             *event_type = state;
             *status_ret = tgt->status;
             tgt->state |= XPD_STATE_ACKED;
@@ -434,7 +434,7 @@ void XPD_$SET_ENABLE(uid_t *proc_uid, int8_t *enable, status_$t *status_ret)
         if (*enable < 0) {
             tgt->state &= (uint16_t)~XPD_STATE_EVENT;
         } else if (((tgt->state & XPD_STATE_EVENT) >> XPD_STATE_EVENT_SHIFT) != 0) {
-            XPD_$CONTINUE_PROC(&PROC2_$UID[idx], &xpd_$response_two, status_ret);
+            XPD_$CONTINUE_PROC(&PROC2_$UNWIRED_DATA.uid[idx], &xpd_$response_two, status_ret);
         }
     }
     /* 0x00E5BFE6-0x00E5BFF2 */

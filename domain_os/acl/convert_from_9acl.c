@@ -48,12 +48,12 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     (void)acl_type;
 
     /* 0x00E48F68-0x00E48F78: enter super mode for the duration. */
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]++;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]++;
 
     /* 0x00E48F7C-0x00E48F94 */
-    ML_$EXCLUSION_START(&ACL_$EXCLUSION_LOCK);
-    ACL_$LOCKSMITH_OWNER_PID = (int16_t)PROC1_$CURRENT;
-    ACL_$LOCKSMITH_OVERRIDE  = true;            /* `st (0xbf8,A5)` */
+    ML_$EXCLUSION_START(&ACL_$WIRED_DATA.exclusion_lock);
+    ACL_$UNWIRED_DATA.locksmith_owner_pid = (int16_t)PROC1_$CURRENT;
+    ACL_$UNWIRED_DATA.locksmith_override  = true;            /* `st (0xbf8,A5)` */
 
     ML_$LOCK(ML_LOCK_ACL);                      /* 0x00E48F9C */
 
@@ -61,7 +61,7 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     acl_$image_internal(source_acl,
                         ACL_9ACL_IMAGE_BUF_LEN,
                         ACL_9ACL_IMAGE_FLAG,
-                        ACL_$WORKSPACE,         /* `pea (A5)` = 0xE7CF54 */
+                        ACL_$UNWIRED_DATA.workspace,         /* `pea (A5)` = 0xE7CF54 */
                         &image_len,
                         prot_buf_out,
                         &image_flag,
@@ -70,9 +70,9 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     ML_$UNLOCK(ML_LOCK_ACL);                    /* 0x00E48FCC */
 
     /* 0x00E48FD4-0x00E48FF2 */
-    ACL_$LOCKSMITH_OVERRIDE = false;
-    ML_$EXCLUSION_STOP(&ACL_$EXCLUSION_LOCK);
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]--;
+    ACL_$UNWIRED_DATA.locksmith_override = false;
+    ML_$EXCLUSION_STOP(&ACL_$WIRED_DATA.exclusion_lock);
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;
 
     /*
      * 0x00E48FF4-0x00E48FFC.  The status acl_$image_internal produced is left

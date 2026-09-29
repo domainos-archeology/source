@@ -13,5 +13,5 @@
 
 void ACL_$ENTER_SUPER(void)
 {
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]++;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]++;
 }

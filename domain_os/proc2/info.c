@@ -38,8 +38,8 @@ void PROC2_$INFO(int16_t *scan_key, int16_t *pid, void *info,
     if (*scan_key == 0) {
         proc2_idx = 0;                                       /* 0x00E407F8 */
     } else {
-        /* 0x00E407D0: D3 = P2_INFO_ALLOC_PTR (0x1E0,A5); beq -> lock with 0 */
-        proc2_idx = (int16_t)P2_INFO_ALLOC_PTR;
+        /* 0x00E407D0: D3 = PROC2_$UNWIRED_DATA.info_alloc_ptr (0x1E0,A5); beq -> lock with 0 */
+        proc2_idx = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
         while (proc2_idx != 0) {
             proc2_info_t *entry = P2_INFO_ENTRY(proc2_idx);  /* 0x00E407D8-0x00E407E0 */
             /* 0x00E407E4-0x00E407EA: entry+0x96 == *scan_key -> found */

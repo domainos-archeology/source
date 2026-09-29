@@ -26,8 +26,8 @@ void ACL_$INHERIT_SUBSYS(uint8_t *inherit_flag, status_$t *status_ret)
 
     /* Copy the inheritance bit from source to destination */
     /* Clear the target bit, then OR in the source bit if set */
-    ACL_$ASID_FREE_BITMAP[byte_index] =
-        (ACL_$ASID_FREE_BITMAP[byte_index] & ~bit_mask) |
+    ACL_$DATA.asid_free_bitmap[byte_index] =
+        (ACL_$DATA.asid_free_bitmap[byte_index] & ~bit_mask) |
         (*inherit_flag & bit_mask);
 
     *status_ret = status_$ok;

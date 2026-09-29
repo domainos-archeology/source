@@ -3,7 +3,7 @@
  *
  * Re-emitted from the image (0x00E42224..0x00E42270, 78 bytes).
  *
- * Scans PGROUP_TABLE slots 1..70 (`moveq #0x45` against the dbf, A1 =
+ * Scans PROC2_$DATA.pgroup slots 1..70 (`moveq #0x45` against the dbf, A1 =
  * 0xEA551C + 8 + i*8, fields at (0x3F30,A1) ref_count and (0x3F34,A1)
  * upgid).  Free slots (ref_count 0) are skipped.  The comparison is a
  * 32-bit one between the SIGN-extended argument (`ext.l D4`) and the
@@ -28,7 +28,7 @@ int16_t PGROUP_FIND_BY_UPGID(uint16_t upgid)
 
     /* 0x00E42236-0x00E42262: 70 iterations, i = 1..70 */
     for (i = 1; i <= 70; i++) {
-        pgroup_entry_t *entry = PGROUP_ENTRY(i);
+        pgroup_entry_t *entry = &PROC2_$DATA.pgroup[i];
 
         /* 0x00E42246: tst.w ref_count / beq next */
         if (entry->ref_count == 0) {

@@ -33,10 +33,7 @@ static int tests_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-static proc2_info_t mock_entries[8];
-proc2_info_t *P2_INFO_TABLE = mock_entries;
-static uint16_t pid_to_index[64];
-uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uid_t UID_$NIL = { 0, 0 };
 
 static int lock_held;
@@ -58,15 +55,15 @@ int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
 
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(pid_to_index, 0, sizeof(pid_to_index));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
     PROC1_$CURRENT = 3;
-    pid_to_index[3] = 2;            /* the current process is index 2 */
-    mock_entries[1].self_index = 2;
-    mock_entries[3].self_index = 4;
-    mock_entries[3].debugger_idx = 2;
-    mock_entries[4].self_index = 5;
-    mock_entries[4].debugger_idx = 6;
+    PROC2_$DATA.pid_to_index[3] = 2;            /* the current process is index 2 */
+    PROC2_$DATA.info[1].self_index = 2;
+    PROC2_$DATA.info[3].self_index = 4;
+    PROC2_$DATA.info[3].debugger_idx = 2;
+    PROC2_$DATA.info[4].self_index = 5;
+    PROC2_$DATA.info[4].debugger_idx = 6;
     find_index_result = 4;
     find_index_status = status_$ok;
     lock_held = 0;
@@ -82,7 +79,7 @@ TEST(set_on_self_via_nil)
     reset();
     XPD_$SET_PTRACE_OPTS(&nil, &o, &st);
     ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(0, memcmp(mock_entries[1].ptrace_opts, &sample, 14));
+    ASSERT_EQ(0, memcmp(PROC2_$DATA.info[1].ptrace_opts, &sample, 14));
     ASSERT_EQ(0, lock_held);
 }
 
@@ -94,12 +91,12 @@ TEST(set_on_target_as_debugger)
     reset();
     XPD_$SET_PTRACE_OPTS(&u, &o, &st);
     ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(0, memcmp(mock_entries[3].ptrace_opts, &sample, 14));
+    ASSERT_EQ(0, memcmp(PROC2_$DATA.info[3].ptrace_opts, &sample, 14));
     /* neither self nor debugger */
     find_index_result = 5;
     XPD_$SET_PTRACE_OPTS(&u, &o, &st);
     ASSERT_EQ(status_$proc2_proc_not_debug_target, st);
-    ASSERT_EQ(0, mock_entries[4].ptrace_opts[0]);
+    ASSERT_EQ(0, PROC2_$DATA.info[4].ptrace_opts[0]);
     /* the lookup fails: its status, nothing written */
     find_index_status = 0x00190001;
     XPD_$SET_PTRACE_OPTS(&u, &o, &st);
@@ -114,7 +111,7 @@ TEST(inq)
     status_$t st = 0x55;
     reset();
     memset(&o, 0xEE, sizeof(o));
-    memcpy(mock_entries[3].ptrace_opts, &sample, 14);
+    memcpy(PROC2_$DATA.info[3].ptrace_opts, &sample, 14);
     XPD_$INQ_PTRACE_OPTS(&u, &o, &st);
     ASSERT_EQ(status_$ok, st);
     ASSERT_EQ(0, memcmp(&o, &sample, 14));
@@ -143,10 +140,10 @@ TEST(find_index)
     uid_t u = { 1, 2 };
     status_$t st = 0x55;
     reset();
-    mock_entries[3].flags = XPD_PF_SUSPENDED;
+    PROC2_$DATA.info[3].flags = XPD_PF_SUSPENDED;
     ASSERT_EQ(4, XPD_$FIND_INDEX(&u, &st));
     ASSERT_EQ(status_$ok, st);
-    mock_entries[3].flags = 0;
+    PROC2_$DATA.info[3].flags = 0;
     ASSERT_EQ(4, XPD_$FIND_INDEX(&u, &st));
     ASSERT_EQ(status_$xpd_target_not_suspended, st);
     find_index_result = 5;              /* debugger is 6, not us */

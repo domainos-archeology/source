@@ -18,13 +18,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT, PROC1_$AS_ID;
 int __host_intr_disable_count = 0;
 
@@ -61,14 +55,14 @@ static int tests_run, tests_failed;
         tests_failed++; return; } } while (0)
 
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
-static pgroup_entry_t *G(int i) { return PGROUP_ENTRY(i); }
+static pgroup_entry_t *G(int i) { return (&PROC2_$DATA.pgroup[i]); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     n_lock = n_unlock = n_set_internal = n_cleanup = n_p1_set = 0;
     mock_find_index = 3; mock_find_status = status_$ok; mock_set_status = status_$ok;
-    PROC1_$CURRENT = 5; PROC1_$AS_ID = 2; mock_pid_to_index[5] = 2;
+    PROC1_$CURRENT = 5; PROC1_$AS_ID = 2; PROC2_$DATA.pid_to_index[5] = 2;
     E(2)->self_index = 2; E(2)->session_id = 9;
     E(3)->self_index = 3; E(3)->parent_pgroup_idx = 2; E(3)->session_id = 9; E(3)->upid = 30;
 }

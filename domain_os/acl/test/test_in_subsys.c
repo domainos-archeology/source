@@ -5,7 +5,7 @@
  *
  *   00e470a4  move.w (0x00e20608).l,D0w    PROC1_$CURRENT
  *   00e470b0  add.w D0w,D0w                *2, the table holds words
- *   00e470b6  tst.w (-0x3d5a,A1)           ACL_$SUBSYS_LEVEL[current]
+ *   00e470b6  tst.w (-0x3d5a,A1)           ACL_$DATA.subsys_level[current]
  *   00e470ba  sgt D0b                      SIGNED greater-than, LOW BYTE only
  *
  * `sgt D0b` writes one byte, so D0's high half still holds PROC1_$CURRENT * 2
@@ -51,7 +51,7 @@ static int current_failed = 0;
  * ========================================================================== */
 
 uint16_t PROC1_$CURRENT;
-int16_t ACL_$SUBSYS_LEVEL[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 #include "../in_subsys.c"
 
@@ -62,9 +62,9 @@ int16_t ACL_$SUBSYS_LEVEL[PROC1_MAX_PROCESSES];
 /* The result is a byte-wide Domain boolean, so it must be signed-negative. */
 TEST(true_is_a_negative_byte)
 {
-    memset(ACL_$SUBSYS_LEVEL, 0, sizeof(ACL_$SUBSYS_LEVEL));
+    memset(ACL_$DATA.subsys_level, 0, sizeof(ACL_$DATA.subsys_level));
     PROC1_$CURRENT = 4;
-    ACL_$SUBSYS_LEVEL[4] = 1;
+    ACL_$DATA.subsys_level[4] = 1;
 
     ASSERT_EQ(sizeof(int8_t), sizeof(ACL_$IN_SUBSYS()));
     ASSERT_EQ((int8_t)0xFF, ACL_$IN_SUBSYS());
@@ -74,9 +74,9 @@ TEST(true_is_a_negative_byte)
 
 TEST(zero_level_is_false)
 {
-    memset(ACL_$SUBSYS_LEVEL, 0, sizeof(ACL_$SUBSYS_LEVEL));
+    memset(ACL_$DATA.subsys_level, 0, sizeof(ACL_$DATA.subsys_level));
     PROC1_$CURRENT = 4;
-    ACL_$SUBSYS_LEVEL[4] = 0;
+    ACL_$DATA.subsys_level[4] = 0;
 
     ASSERT_EQ(0, ACL_$IN_SUBSYS());
     ASSERT_EQ(0, ACL_$IN_SUBSYS() < 0);
@@ -85,9 +85,9 @@ TEST(zero_level_is_false)
 /* "sgt" is a SIGNED test, so a negative level is false, not true. */
 TEST(negative_level_is_false)
 {
-    memset(ACL_$SUBSYS_LEVEL, 0, sizeof(ACL_$SUBSYS_LEVEL));
+    memset(ACL_$DATA.subsys_level, 0, sizeof(ACL_$DATA.subsys_level));
     PROC1_$CURRENT = 4;
-    ACL_$SUBSYS_LEVEL[4] = -1;
+    ACL_$DATA.subsys_level[4] = -1;
 
     ASSERT_EQ(0, ACL_$IN_SUBSYS());
 }
@@ -95,8 +95,8 @@ TEST(negative_level_is_false)
 /* The table is indexed by PROC1_$CURRENT, one word per process. */
 TEST(indexed_by_the_current_process)
 {
-    memset(ACL_$SUBSYS_LEVEL, 0, sizeof(ACL_$SUBSYS_LEVEL));
-    ACL_$SUBSYS_LEVEL[7] = 3;
+    memset(ACL_$DATA.subsys_level, 0, sizeof(ACL_$DATA.subsys_level));
+    ACL_$DATA.subsys_level[7] = 3;
 
     PROC1_$CURRENT = 6;
     ASSERT_EQ(0, ACL_$IN_SUBSYS());

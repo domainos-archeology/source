@@ -52,7 +52,7 @@ void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
 
     /* 0x00E3FB6E-0x00E3FB8E */
     if (child->pad_14 == 0) {
-        P2_INFO_ALLOC_PTR = child->next_index;
+        PROC2_$UNWIRED_DATA.info_alloc_ptr = child->next_index;
     } else {
         other = P2_INFO_ENTRY((int16_t)child->pad_14);       /* mulu */
         other->next_index = child->next_index;
@@ -79,8 +79,8 @@ void PROC2_$WAIT_REAP_CHILD(int16_t child_idx, int16_t parent_idx,
     child->flags &= (uint16_t)~PROC2_FLAG_ZOMBIE;
 
     /* 0x00E3FBEE-0x00E3FBF4 */
-    child->next_index = P2_FREE_LIST_HEAD;
-    P2_FREE_LIST_HEAD = (uint16_t)child_idx;
+    child->next_index = PROC2_$UNWIRED_DATA.free_list_head;
+    PROC2_$UNWIRED_DATA.free_list_head = (uint16_t)child_idx;
 
     /* 0x00E3FBF8-0x00E3FC00: child+0x98 / +0x9C */
     result->exit_status = PROC2_ZOMBIE_EXIT_98(child);

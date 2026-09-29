@@ -9,7 +9,7 @@
  *
  *   00e470a4  move.w (0x00e20608).l,D0w   ; PROC1_$CURRENT
  *   00e470b0  add.w D0w,D0w               ; *2: the table holds words
- *   00e470b6  tst.w (-0x3d5a,A1)          ; ACL_$SUBSYS_LEVEL[current]
+ *   00e470b6  tst.w (-0x3d5a,A1)          ; ACL_$DATA.subsys_level[current]
  *   00e470ba  sgt D0b                     ; SIGNED greater-than, LOW BYTE
  *
  * The answer is a BYTE.  `sgt D0b` writes only D0's low byte, so the upper
@@ -26,5 +26,5 @@
 boolean ACL_$IN_SUBSYS(void)
 {
     /* 0x00E470B6 "tst.w" then 0x00E470BA "sgt": a SIGNED greater-than. */
-    return (ACL_$SUBSYS_LEVEL[PROC1_$CURRENT] > 0) ? (boolean)0xFF : 0;
+    return (ACL_$DATA.subsys_level[PROC1_$CURRENT] > 0) ? (boolean)0xFF : 0;
 }

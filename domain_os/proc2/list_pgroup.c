@@ -48,7 +48,7 @@ void PROC2_$LIST_PGROUP(uid_t *pgroup_uid, uid_t *uid_list, uint16_t *max_count,
         pgroup_idx = PROC2_$UID_TO_PGROUP_INDEX(pgroup_uid);
         if (pgroup_idx != 0) {
             /* 0x00E40244-0x00E4024E: D1 = alloc ptr (the beq tests that move) */
-            index = (int16_t)P2_INFO_ALLOC_PTR;
+            index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
             out = uid_list;
             while (index != 0) {
                 entry = P2_INFO_ENTRY(index);                /* 0x00E40250-0x00E4025C */

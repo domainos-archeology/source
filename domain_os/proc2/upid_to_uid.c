@@ -33,7 +33,7 @@ void PROC2_$UPID_TO_UID(int16_t *upid, uid_t *uid_ret, status_$t *status_ret)
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* 0x00E40EF4: D0 = alloc ptr; beq not-found */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);                        /* 0x00E40EFC-0x00E40F08 */
         if (entry->upid == (uint16_t)search_upid) {          /* 0x00E40F0C */

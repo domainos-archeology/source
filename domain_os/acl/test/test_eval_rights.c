@@ -58,11 +58,8 @@ static int current_failed = 0;
 uint16_t          PROC1_$CURRENT;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
-acl_sid_block_t   ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-uid_t             ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
-uint8_t           ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];
-int16_t           ACL_$LOCAL_LOCKSMITH;
-acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 uid_t UID_$NIL                = { 0, 0 };
 uid_t RGYC_$G_LOCKSMITH_UID   = { 0x00000542u, 0 };
@@ -201,11 +198,11 @@ static void reset(void)
     memset(&ga_loc_out,   0, sizeof(ga_loc_out));
     memset(&caller_sids,  0, sizeof(caller_sids));
     memset(caller_proj,   0, sizeof(caller_proj));
-    memset(ACL_$CURRENT_SIDS, 0, sizeof(ACL_$CURRENT_SIDS));
-    memset(ACL_$PROJ_UIDS, 0, sizeof(ACL_$PROJ_UIDS));
-    memset(ACL_$LOCKSMITH_OVERRIDE_BITMAP, 0,
-           sizeof(ACL_$LOCKSMITH_OVERRIDE_BITMAP));
-    memset(ACL_$ACL_CACHE, 0, sizeof(ACL_$ACL_CACHE));
+    memset(ACL_$DATA.current_sids, 0, sizeof(ACL_$DATA.current_sids));
+    memset(ACL_$DATA.proj_uids, 0, sizeof(ACL_$DATA.proj_uids));
+    memset(ACL_$DATA.locksmith_override_bitmap, 0,
+           sizeof(ACL_$DATA.locksmith_override_bitmap));
+    memset(ACL_$DATA.acl_cache, 0, sizeof(ACL_$DATA.acl_cache));
     memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     ga_calls = fs_calls = ee_calls = rf_calls = 0;
@@ -218,7 +215,7 @@ static void reset(void)
     rf_result_out = 0;
     ml_lock_calls = ml_unlock_calls = 0;
     ml_last_id = -1;
-    ACL_$LOCAL_LOCKSMITH = 0;
+    ACL_$UNWIRED_DATA.local_locksmith = 0;
     PROC1_$CURRENT = TEST_PID;
 
     /* The "object has its own protection record, no ACL" shape: default_acl
@@ -351,8 +348,8 @@ TEST(remote_objects_are_forwarded_with_the_global_tables)
     ASSERT_EQ(0x00230002u, (uint32_t)st);
     ASSERT_TRUE(rf_addr_info == (void *)&ga_loc_out.loc_info ||
                 rf_addr_info != NULL);   /* the loc record is a local copy */
-    ASSERT_TRUE(rf_sid_data  == (void *)&ACL_$CURRENT_SIDS[TEST_PID]);
-    ASSERT_TRUE(rf_perm_data == (void *)&ACL_$PROJ_UIDS[TEST_PID][0]);
+    ASSERT_TRUE(rf_sid_data  == (void *)&ACL_$DATA.current_sids[TEST_PID]);
+    ASSERT_TRUE(rf_perm_data == (void *)&ACL_$DATA.proj_uids[TEST_PID][0]);
     ASSERT_EQ(0xFF, rf_check_flag);      /* ignore_super */
     ASSERT_EQ(0x00000048u, rf_access_mask);
     ASSERT_EQ(1, rf_flags);
@@ -525,9 +522,9 @@ TEST(locksmith_gets_the_privileged_mask)
 }
 
 /*
- * 0x00E4653E-0x00E465D6: ACL_$LOCAL_LOCKSMITH != 0 plus PROC1_$DATA.type[cur] == 9
+ * 0x00E4653E-0x00E465D6: ACL_$UNWIRED_DATA.local_locksmith != 0 plus PROC1_$DATA.type[cur] == 9
  * plus a clear override bit downgrades the locksmith to the generic user, and
- * ACL_$LOCAL_LOCKSMITH == 1 adds read+execute back at 0x00E468A0.
+ * ACL_$UNWIRED_DATA.local_locksmith == 1 adds read+execute back at 0x00E468A0.
  */
 TEST(local_locksmith_downgrade)
 {
@@ -542,14 +539,14 @@ TEST(local_locksmith_downgrade)
      * RGYC_$G_NIL_UID / PPO_$NIL_ORG_UID, none of which owns the object. */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 2;
+    ACL_$UNWIRED_DATA.local_locksmith = 2;
     PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x00u, call(false, 0x0000000Fu, 1, false, false, &st));
 
-    /* ACL_$LOCAL_LOCKSMITH == 1 hands read+execute (0x5) back. */
+    /* ACL_$UNWIRED_DATA.local_locksmith == 1 hands read+execute (0x5) back. */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 1;
+    ACL_$UNWIRED_DATA.local_locksmith = 1;
     PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x05u, call(false, 0x0000000Fu, 1, false, false, &st));
 
@@ -557,7 +554,7 @@ TEST(local_locksmith_downgrade)
      * RGYC_$P_USER_UID matches. */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 2;
+    ACL_$UNWIRED_DATA.local_locksmith = 2;
     PROC1_$DATA.type[TEST_PID] = 9;
     attrs_prot()->owner = RGYC_$P_USER_UID;
     ASSERT_EQ(0x0Fu, call(false, 0x0000000Fu, 1, false, false, &st));
@@ -565,16 +562,16 @@ TEST(local_locksmith_downgrade)
     /* The override bit (0x00E4657C) cancels the downgrade. */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 2;
+    ACL_$UNWIRED_DATA.local_locksmith = 2;
     PROC1_$DATA.type[TEST_PID] = 9;
-    ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
+    ACL_$DATA.locksmith_override_bitmap[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
         ACL_PID_BITMAP_MASK(TEST_PID);
     ASSERT_EQ(0x0000000Fu, call(false, 0x0000000Fu, 1, false, false, &st));
 
     /* A non-type-9 process is never downgraded (0x00E4655A). */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
-    ACL_$LOCAL_LOCKSMITH = 2;
+    ACL_$UNWIRED_DATA.local_locksmith = 2;
     PROC1_$DATA.type[TEST_PID] = 2;
     ASSERT_EQ(0x0000000Fu, call(false, 0x0000000Fu, 1, false, false, &st));
 }
@@ -617,7 +614,7 @@ TEST(acl_image_path_locks_and_masks_bit_4)
     ASSERT_EQ(1, ml_unlock_calls);
     ASSERT_EQ(ML_LOCK_ACL, ml_last_id);
     ASSERT_EQ(0x0000000Fu, r);               /* 0x1F & ~0x10 */
-    ASSERT_TRUE(ee_slot_seen == &ACL_$ACL_CACHE[3]);
+    ASSERT_TRUE(ee_slot_seen == &ACL_$DATA.acl_cache[3]);
     ASSERT_TRUE(ee_sids_seen == &caller_sids.user_sid);
     ASSERT_TRUE(ee_proj_seen == caller_proj);
     ASSERT_EQ(ACL_UID.high, fs_acl_uid_seen.high);
@@ -679,7 +676,7 @@ TEST(subsystem_manager_short_circuit)
     reset();
     ga_attrs_out.default_acl = ACL_UID;
     fs_result = 5;
-    ACL_$ACL_CACHE[5].subsys_uid = ORG_UID;
+    ACL_$DATA.acl_cache[5].subsys_uid = ORG_UID;
     caller_sids.login_sid = ORG_UID;
     ee_result = 0;      /* the entry walk would have granted nothing */
     ASSERT_EQ(0x0000000Fu, call(false, 0x0000000Fu, 1, false, true, &st));
@@ -690,7 +687,7 @@ TEST(subsystem_manager_short_circuit)
     reset();
     ga_attrs_out.default_acl = ACL_UID;
     fs_result = 5;
-    ACL_$ACL_CACHE[5].subsys_uid = ORG_UID;
+    ACL_$DATA.acl_cache[5].subsys_uid = ORG_UID;
     caller_sids.login_sid = ORG_UID;
     ASSERT_EQ(0x00000000u, call(false, 0x00000050u, 1, false, true, &st));
     ASSERT_EQ(0, ee_calls);
@@ -699,7 +696,7 @@ TEST(subsystem_manager_short_circuit)
     reset();
     ga_attrs_out.default_acl = ACL_UID;
     fs_result = 5;
-    ACL_$ACL_CACHE[5].subsys_uid = ORG_UID;
+    ACL_$DATA.acl_cache[5].subsys_uid = ORG_UID;
     caller_sids.login_sid = ORG_UID;
     ee_result = 0x0010;
     /* the entry-walk result is masked with ~0x10 at 0x00E46894 */
@@ -710,7 +707,7 @@ TEST(subsystem_manager_short_circuit)
     reset();
     ga_attrs_out.default_acl = ACL_UID;
     fs_result = 5;
-    ACL_$ACL_CACHE[5].subsys_uid = ORG_UID;
+    ACL_$DATA.acl_cache[5].subsys_uid = ORG_UID;
     caller_sids.login_sid = ORG_UID;
     ee_result = 0x000F;
     ASSERT_EQ(0x0000000Fu, call(true, 0x0000000Fu, 1, false, true, &st));

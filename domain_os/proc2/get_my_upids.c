@@ -7,7 +7,7 @@
  *   (0x8,A6)  upid_ret   -> A3  <- entry+0x16                (0x00E739A8)
  *   (0xC,A6)  uppid_ret  -> A1  <- P2[entry+0x1E]->upid, or 1 when the
  *                                  entry has no parent      (0x00E739C4/CA)
- *   (0x10,A6) upgid_ret  -> A2  <- PGROUP_TABLE[entry+0x10].upgid, or 0
+ *   (0x10,A6) upgid_ret  -> A2  <- PROC2_$DATA.pgroup[entry+0x10].upgid, or 0
  *                                  when it is in no group   (0x00E739E4/EA)
  *
  * The entry is A0 = 0xEA551C + idx*0xE4 = entry + 0xE4: (-0xCE) = +0x16
@@ -29,7 +29,7 @@ void PROC2_$GET_MY_UPIDS(uint16_t *upid_ret, uint16_t *uppid_ret, uint16_t *upgi
     proc2_info_t *parent;
 
     /* 0x00E7397E-0x00E739A4 */
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E739A8: entry+0x16 */
     *upid_ret = entry->upid;
@@ -44,7 +44,7 @@ void PROC2_$GET_MY_UPIDS(uint16_t *upid_ret, uint16_t *uppid_ret, uint16_t *upgi
 
     /* 0x00E739CE-0x00E739EA: entry+0x10 */
     if (entry->pgroup_table_idx != 0) {
-        *upgid_ret = PGROUP_ENTRY(entry->pgroup_table_idx)->upgid;   /* 0x00E739E4 */
+        *upgid_ret = PROC2_$DATA.pgroup[entry->pgroup_table_idx].upgid;   /* 0x00E739E4 */
     } else {
         *upgid_ret = 0;                                              /* 0x00E739EA */
     }

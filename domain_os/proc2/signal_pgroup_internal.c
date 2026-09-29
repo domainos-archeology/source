@@ -58,7 +58,7 @@ void PROC2_$SIGNAL_PGROUP_INTERNAL(int16_t pgroup_idx, int16_t signal,
     param_copy = param;
 
     /* 0x00E3F18E-0x00E3F208 */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);                        /* 0x00E3F194-0x00E3F1A4 */
         session_ref = entry;

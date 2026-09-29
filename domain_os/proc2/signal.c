@@ -50,7 +50,7 @@ void PROC2_$SIGNAL(uid_t *proc_uid, int16_t *signal, uint32_t *param,
     index = PROC2_$FIND_INDEX(&uid, &status);
 
     /* 0x00E3EFE6-0x00E3F00A */
-    current = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    current = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
     target = P2_INFO_ENTRY(index);
 
     /* 0x00E3F00E-0x00E3F01A: status 0 or status_$proc2_zombie */

@@ -11,7 +11,7 @@
  * Frame (link.w A6,-0xC):
  *   (0x8,A6)  child_idx         word -> D2
  *   (0xA,A6)  prev_sibling_idx  word -> D0 (0 = child is the first child)
- *   A5 = 0xE7BE84: (0x1E0,A5) P2_INFO_ALLOC_PTR, (0x1E2,A5) P2_FREE_LIST_HEAD
+ *   A5 = 0xE7BE84: (0x1E0,A5) PROC2_$UNWIRED_DATA.info_alloc_ptr, (0x1E2,A5) PROC2_$UNWIRED_DATA.free_list_head
  *
  * The child is A2 = 0xEA551C + idx*0xE4 = entry + 0xE4: (-0xC6,A2) = +0x1E
  * parent, (-0xC4) = +0x20 first child, (-0xC2) = +0x22 next sibling,
@@ -65,7 +65,7 @@ void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx)
 
         /* 0x00E40E74-0x00E40E94: unlink from the allocated list */
         if (entry->pad_14 == 0) {
-            P2_INFO_ALLOC_PTR = entry->next_index;          /* 0x00E40E7A */
+            PROC2_$UNWIRED_DATA.info_alloc_ptr = entry->next_index;          /* 0x00E40E7A */
         } else {
             other = P2_INFO_ENTRY((int16_t)entry->pad_14);  /* mulu */
             other->next_index = entry->next_index;          /* 0x00E40E94 */
@@ -74,13 +74,17 @@ void PROC2_$DETACH_FROM_PARENT(int16_t child_idx, int16_t prev_sibling_idx)
         /*
          * 0x00E40E9A-0x00E40EAC: P2[next]->pad_14 = entry->pad_14,
          * UNCONDITIONALLY (a zero next_index writes entry(0)+0x14).
+         * Entry 0 is not part of PROC2_$DATA: in the image the store lands
+         * at 0xEA544C, inside the preceding XPD_$DATA segment, and in our
+         * link 0xE4 bytes before the PROC2_$DATA block (see proc2/proc2.h;
+         * what precedes it there is source-c6cy).
          */
         other = P2_INFO_ENTRY((int16_t)entry->next_index);
         other->pad_14 = entry->pad_14;
 
         /* 0x00E40EB2-0x00E40EB8: push onto the free list */
-        entry->next_index = P2_FREE_LIST_HEAD;
-        P2_FREE_LIST_HEAD = (uint16_t)child_idx;
+        entry->next_index = PROC2_$UNWIRED_DATA.free_list_head;
+        PROC2_$UNWIRED_DATA.free_list_head = (uint16_t)child_idx;
     } else {
         /* 0x00E40EBE: bset.b #0x7,(-0xba,A2) -- HIGH byte bit 7 = 0x8000 */
         entry->flags |= 0x8000;

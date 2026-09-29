@@ -5,7 +5,7 @@
  * verified; the previous body was faithful.
  *
  *   00e41c10  move.w PROC1_$CURRENT,D0w ; add.w D0w,D0w
- *   00e41c22  move.w (0x3eb6,A1),D0w      ; P2_PID_TO_INDEX
+ *   00e41c22  move.w (0x3eb6,A1),D0w      ; PROC2_$DATA.pid_to_index[PROC1_$CURRENT]
  *   00e41c26  mulu.w #0xe4,D0
  *   00e41c2e  movea.l (0x8,A6),A0         ; tty_uid
  *   00e41c32  move.l (A0)+,(-0x84,A1)     ; entry+0x60
@@ -20,7 +20,7 @@
 
 void PROC2_$SET_TTY(uid_t *tty_uid)
 {
-    proc2_info_t *entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    proc2_info_t *entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E41C32-0x00E41C36 */
     entry->tty_uid.high = tty_uid->high;

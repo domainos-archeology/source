@@ -5,7 +5,7 @@
  * Pinned by the disassembly: the output order is (own upid, PARENT's upid
  * or 1, process-group upgid or 0) -- the parent comes from
  * P2[entry+0x1E]->upid (0x00E73912 / 0x00E739C4) and the group id from
- * PGROUP_TABLE[entry+0x10].upgid (0x00E73930 / 0x00E739E4).
+ * PROC2_$DATA.pgroup[entry+0x10].upgid (0x00E73930 / 0x00E739E4).
  */
 
 #include <stdio.h>
@@ -14,13 +14,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT;
 int __host_intr_disable_count = 0;
 
@@ -46,12 +40,12 @@ static int tests_run, tests_failed;
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     n_lock = n_unlock = 0; mock_find_index = 3; mock_find_status = status_$ok;
-    PROC1_$CURRENT = 5; mock_pid_to_index[5] = 3;
+    PROC1_$CURRENT = 5; PROC2_$DATA.pid_to_index[5] = 3;
     E(3)->upid = 300; E(3)->parent_pgroup_idx = 2; E(2)->upid = 200;
-    E(3)->pgroup_table_idx = 4; mock_pgroups[4].upgid = 400;
+    E(3)->pgroup_table_idx = 4; PROC2_$DATA.pgroup[4].upgid = 400;
 }
 
 TEST(get_upids_success_order)

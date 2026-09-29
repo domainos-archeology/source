@@ -27,10 +27,10 @@ static status_$t acl_$exit_super_unbalanced_status =
 void ACL_$EXIT_SUPER(void)
 {
     /*
-     * 0x00E46FC0-0x00E46FD0: index ACL_$SUPER_COUNT by PROC1_$CURRENT (the
+     * 0x00E46FC0-0x00E46FD0: index ACL_$UNWIRED_DATA.super_count by PROC1_$CURRENT (the
      * word is doubled, so the array is of words) and crash on zero.
      */
-    if (ACL_$SUPER_COUNT[PROC1_$CURRENT] == 0) {
+    if (ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] == 0) {
         CRASH_SYSTEM(&acl_$exit_super_unbalanced_status);
     }
 
@@ -38,5 +38,5 @@ void ACL_$EXIT_SUPER(void)
      * 0x00E46FDC-0x00E46FE8: PROC1_$CURRENT is re-read and the index
      * recomputed before the decrement, exactly as the image does.
      */
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]--;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;
 }

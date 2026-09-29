@@ -32,7 +32,7 @@ void PROC2_$NAME_TO_UID(char *name, int16_t *name_len, uid_t *uid_ret, status_$t
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* 0x00E3EB12: D0 = alloc ptr; beq not-found */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);                        /* 0x00E3EB18-0x00E3EB24 */
 

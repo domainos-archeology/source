@@ -55,12 +55,8 @@ static int current_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 
-acl_sid_block_t ACL_$ORIGINAL_SIDS[PROC1_MAX_PROCESSES];
-acl_sid_block_t ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-acl_sid_block_t ACL_$SAVED_SIDS[PROC1_MAX_PROCESSES];
-acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];
-acl_proj_list_t ACL_$PROJ_LISTS[PROC1_MAX_PROCESSES];
-int16_t         ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 int8_t AUDIT_$ENABLED;
 uid_t  AUDIT_$SET_SID_EU = { 0x00040007u, 0x00000000u };
@@ -88,7 +84,7 @@ void ACL_$ADD_PROJ(uid_t *proj_acl, status_$t *status_ret)
 {
     add_proj_calls++;
     add_proj_uid = *proj_acl;
-    super_count_during_proj = ACL_$SUPER_COUNT[PROC1_$CURRENT];
+    super_count_during_proj = ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT];
     (void)status_ret;
 }
 
@@ -145,12 +141,12 @@ static void fill_block(acl_sid_block_t *b, uint32_t seed)
 
 static void reset_all(int8_t audit_enabled, int8_t suser)
 {
-    memset(ACL_$ORIGINAL_SIDS, 0, sizeof(ACL_$ORIGINAL_SIDS));
-    memset(ACL_$CURRENT_SIDS, 0, sizeof(ACL_$CURRENT_SIDS));
-    memset(ACL_$SAVED_SIDS, 0, sizeof(ACL_$SAVED_SIDS));
-    memset(ACL_$SAVED_PROJ, 0, sizeof(ACL_$SAVED_PROJ));
-    memset(ACL_$PROJ_LISTS, 0, sizeof(ACL_$PROJ_LISTS));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$DATA.original_sids, 0, sizeof(ACL_$DATA.original_sids));
+    memset(ACL_$DATA.current_sids, 0, sizeof(ACL_$DATA.current_sids));
+    memset(ACL_$DATA.saved_sids, 0, sizeof(ACL_$DATA.saved_sids));
+    memset(ACL_$DATA.saved_proj, 0, sizeof(ACL_$DATA.saved_proj));
+    memset(ACL_$DATA.proj_lists, 0, sizeof(ACL_$DATA.proj_lists));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     memset(log_data, 0, sizeof(log_data));
 
     PROC1_$CURRENT = TEST_PID;
@@ -202,12 +198,12 @@ TEST(re_audit_disabled_never_logs)
 
     ASSERT_EQ(0, log_calls);
     ASSERT_EQ(status_$ok, status);
-    ASSERT_EQ(0x1000, ((uint32_t *)&ACL_$ORIGINAL_SIDS[TEST_PID])[0]);
-    ASSERT_EQ(0x2000, ((uint32_t *)&ACL_$CURRENT_SIDS[TEST_PID])[0]);
+    ASSERT_EQ(0x1000, ((uint32_t *)&ACL_$DATA.original_sids[TEST_PID])[0]);
+    ASSERT_EQ(0x2000, ((uint32_t *)&ACL_$DATA.current_sids[TEST_PID])[0]);
     /* 0x00E4845C: the ORIGINAL block changed, so SAVED took the NEW one. */
-    ASSERT_EQ(0x1000, ((uint32_t *)&ACL_$SAVED_SIDS[TEST_PID])[0]);
-    ASSERT_EQ(1, ACL_$SAVED_PROJ[TEST_PID].field_00);
-    ASSERT_EQ(4, ACL_$PROJ_LISTS[TEST_PID].field_00);
+    ASSERT_EQ(0x1000, ((uint32_t *)&ACL_$DATA.saved_sids[TEST_PID])[0]);
+    ASSERT_EQ(1, ACL_$DATA.saved_proj[TEST_PID].field_00);
+    ASSERT_EQ(4, ACL_$DATA.proj_lists[TEST_PID].field_00);
 }
 
 /* AUDIT_$ENABLED == 0xFF and something changed: one log, flag 0. */
@@ -219,8 +215,8 @@ TEST(re_audit_enabled_logs_success)
     const acl_$set_re_sids_audit_t *rec;
 
     reset_all((int8_t)0xFF, (int8_t)-1);
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
-    fill_block(&ACL_$CURRENT_SIDS[TEST_PID], 0x0200);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.current_sids[TEST_PID], 0x0200);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
 
@@ -249,8 +245,8 @@ TEST(re_refusal_falls_into_audit_tail)
     status_$t status = 0;
 
     reset_all((int8_t)0xFF, 0);          /* auditing on, NOT a super-user */
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
-    fill_block(&ACL_$CURRENT_SIDS[TEST_PID], 0x0200);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.current_sids[TEST_PID], 0x0200);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
 
@@ -259,7 +255,7 @@ TEST(re_refusal_falls_into_audit_tail)
     ASSERT_EQ(TEST_PID, suser_pid_seen);
     ASSERT_EQ(status_$no_right_to_perform_operation, status);
     /* Nothing was written. */
-    ASSERT_EQ(0x0100, ((uint32_t *)&ACL_$ORIGINAL_SIDS[TEST_PID])[0]);
+    ASSERT_EQ(0x0100, ((uint32_t *)&ACL_$DATA.original_sids[TEST_PID])[0]);
     /* 0x00E48282 jumps to 0x00E484C4, the audit tail, not to the epilogue. */
     ASSERT_EQ(1, log_calls);
     ASSERT_EQ(1, log_flag);              /* 0x00E481D8: move.w #0x1 */
@@ -275,8 +271,8 @@ TEST(re_refusal_audit_disabled)
     status_$t status = 0;
 
     reset_all(0, 0);
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
-    fill_block(&ACL_$CURRENT_SIDS[TEST_PID], 0x0200);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.current_sids[TEST_PID], 0x0200);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
 
@@ -296,8 +292,8 @@ TEST(re_no_change_no_log)
     reset_all((int8_t)0xFF, (int8_t)-1);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
-    ACL_$ORIGINAL_SIDS[TEST_PID] = new_orig;
-    ACL_$CURRENT_SIDS[TEST_PID]  = new_curr;
+    ACL_$DATA.original_sids[TEST_PID] = new_orig;
+    ACL_$DATA.current_sids[TEST_PID]  = new_curr;
 
     ACL_$SET_RE_ALL_SIDS(&new_orig, &new_curr, &sproj, &cproj, &status);
 
@@ -305,7 +301,7 @@ TEST(re_no_change_no_log)
     /* 0x00E4850E: both blocks match and the status is 0 -> plain return. */
     ASSERT_EQ(0, log_calls);
     /* 0x00E4845C: nothing changed, so SAVED was left alone. */
-    ASSERT_EQ(0, ((uint32_t *)&ACL_$SAVED_SIDS[TEST_PID])[0]);
+    ASSERT_EQ(0, ((uint32_t *)&ACL_$DATA.saved_sids[TEST_PID])[0]);
 }
 
 /* The group-SID move brackets the two project calls with SUPER_COUNT++. */
@@ -316,7 +312,7 @@ TEST(re_group_change_bumps_super_count)
     status_$t status = 0;
 
     reset_all(0, (int8_t)-1);
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
 
@@ -325,7 +321,7 @@ TEST(re_group_change_bumps_super_count)
     ASSERT_EQ(1, del_proj_calls);
     ASSERT_EQ(1, add_proj_calls);
     ASSERT_EQ(1, super_count_during_proj);          /* 0x00E48430: addq.w #1 */
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[TEST_PID]);       /* 0x00E48458: subq.w #1 */
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[TEST_PID]);       /* 0x00E48458: subq.w #1 */
     /* The deleted UID is the OLD original group SID (offset 8 = words 2,3). */
     ASSERT_EQ(0x0102, del_proj_uid.high);
     ASSERT_EQ(0x1002, add_proj_uid.high);
@@ -343,9 +339,9 @@ TEST(res_audit_enabled_logs_success)
     const acl_$set_res_sids_audit_t *rec;
 
     reset_all((int8_t)0xFF, (int8_t)-1);
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
-    fill_block(&ACL_$CURRENT_SIDS[TEST_PID], 0x0200);
-    fill_block(&ACL_$SAVED_SIDS[TEST_PID], 0x0300);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.current_sids[TEST_PID], 0x0200);
+    fill_block(&ACL_$DATA.saved_sids[TEST_PID], 0x0300);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
     fill_block(&new_save, 0x3000);
@@ -368,8 +364,8 @@ TEST(res_audit_enabled_logs_success)
     ASSERT_EQ(0x2000, ((const uint32_t *)&rec->new_current)[0]);
     ASSERT_EQ(0x3000, ((const uint32_t *)&rec->new_saved)[0]);
 
-    ASSERT_EQ(7,  ACL_$SAVED_PROJ[TEST_PID].field_00);
-    ASSERT_EQ(10, ACL_$PROJ_LISTS[TEST_PID].field_00);
+    ASSERT_EQ(7,  ACL_$DATA.saved_proj[TEST_PID].field_00);
+    ASSERT_EQ(10, ACL_$DATA.proj_lists[TEST_PID].field_00);
 }
 
 /* 0x00E4861E: `bpl.w 0x00E486DA` - the refusal reaches the audit tail. */
@@ -380,7 +376,7 @@ TEST(res_non_suser_is_audited)
     status_$t status = 0;
 
     reset_all((int8_t)0xFF, 0);
-    fill_block(&ACL_$ORIGINAL_SIDS[TEST_PID], 0x0100);
+    fill_block(&ACL_$DATA.original_sids[TEST_PID], 0x0100);
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
     fill_block(&new_save, 0x3000);
@@ -389,7 +385,7 @@ TEST(res_non_suser_is_audited)
                           &status);
 
     ASSERT_EQ(status_$no_right_to_perform_operation, status);
-    ASSERT_EQ(0x0100, ((uint32_t *)&ACL_$ORIGINAL_SIDS[TEST_PID])[0]);
+    ASSERT_EQ(0x0100, ((uint32_t *)&ACL_$DATA.original_sids[TEST_PID])[0]);
     ASSERT_EQ(0, add_proj_calls);
     ASSERT_EQ(1, log_calls);
     ASSERT_EQ(1, log_flag);
@@ -424,9 +420,9 @@ TEST(res_no_change_no_log)
     fill_block(&new_orig, 0x1000);
     fill_block(&new_curr, 0x2000);
     fill_block(&new_save, 0x3000);
-    ACL_$ORIGINAL_SIDS[TEST_PID] = new_orig;
-    ACL_$CURRENT_SIDS[TEST_PID]  = new_curr;
-    ACL_$SAVED_SIDS[TEST_PID]    = new_save;
+    ACL_$DATA.original_sids[TEST_PID] = new_orig;
+    ACL_$DATA.current_sids[TEST_PID]  = new_curr;
+    ACL_$DATA.saved_sids[TEST_PID]    = new_save;
 
     ACL_$SET_RES_ALL_SIDS(&new_orig, &new_curr, &new_save, &sproj, &cproj,
                           &status);

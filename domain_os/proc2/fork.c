@@ -15,8 +15,8 @@
  *   A1 = 0xE7BE84                      == the PROC2 module data base
  *
  * so every (-d,A2)/(-d,A3) displacement is entry offset 0xE4 - d, and
- * (0x1E0,A1) / (0x1E2,A1) are P2_INFO_ALLOC_PTR (0xE7C064) and
- * P2_FREE_LIST_HEAD (0xE7C066).
+ * (0x1E0,A1) / (0x1E2,A1) are PROC2_$UNWIRED_DATA.info_alloc_ptr (0xE7C064) and
+ * PROC2_$UNWIRED_DATA.free_list_head (0xE7C066).
  *
  * Flag bits: the original manipulates the 16-bit flags word at entry+0x2A
  * with BYTE operations.  (-0xBA,A2) is the HIGH byte, so bit n there is
@@ -39,8 +39,8 @@
 /*
  * Globals used here (declared in subsystem headers):
  *   FIM_$USER_FIM_ADDR (0xE212A8), FIM_$QUIT_INH (0xE2248A)   - fim/fim.h
- *   PROC2_$EC / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978),
- *   PROC2_$UID table (0xE7BE94), proc2_system_uid (0xE7BE8C)  - proc2 headers
+ *   PROC2_$WIRED_DATA.ec / PROC_FORK_EC / PROC_CR_REC_EC (0xE2B978),
+ *   PROC2_$UNWIRED_DATA.uid table (0xE7BE94), PROC2_$UNWIRED_DATA.system_uid (0xE7BE8C)  - proc2 headers
  */
 
 #if defined(ARCH_M68K)
@@ -128,7 +128,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     file_locked = false;
 
     /* 0x00E72BDC-0x00E72BF0 */
-    parent_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    parent_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
 
     /* 0x00E72BF8 */
     ML_$LOCK(PROC2_LOCK_ID);
@@ -137,7 +137,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     TIME_$CLOCK(&creation_time);
 
     /* 0x00E72C12: the free-list head lives at 0xE7C066 */
-    new_idx = (int16_t)P2_FREE_LIST_HEAD;
+    new_idx = (int16_t)PROC2_$UNWIRED_DATA.free_list_head;
     if (new_idx == 0) {
         /* 0x00E72C18: written straight to the caller's status */
         *status_ret = status_$proc2_table_full;
@@ -152,9 +152,9 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
 
     /* 0x00E72C52-0x00E72C5E: unlink from the free list, push onto the
      * allocated list */
-    P2_FREE_LIST_HEAD = new_entry->next_index;
-    new_entry->next_index = P2_INFO_ALLOC_PTR;
-    P2_INFO_ALLOC_PTR = (uint16_t)new_idx;
+    PROC2_$UNWIRED_DATA.free_list_head = new_entry->next_index;
+    new_entry->next_index = PROC2_$UNWIRED_DATA.info_alloc_ptr;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = (uint16_t)new_idx;
 
     /*
      * 0x00E72C62-0x00E72C74: UNCONDITIONAL.  When next_index is 0 this
@@ -253,7 +253,7 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     new_entry->flags |= PROC2_FLAG_BOUND;
 
     /* 0x00E72D70 */
-    PROC2_$PID_TO_INDEX[new_pid] = (uint16_t)new_idx;
+    PROC2_$DATA.pid_to_index[new_pid] = (uint16_t)new_idx;
 
     /*
      * 0x00E72D80-0x00E72D9E.  Six longwords: 0x70, 0x74, 0x78, 0x7C, 0x84
@@ -316,8 +316,8 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
     /*
      * 0x00E72E2C-0x00E72E3E: the eventcount pair is indexed by
      * entry+0x1C (self_index), NOT by the table index.  A4 lands on
-     * PROC2_$EC + idx*0x18, and the two pea's are (-0x18,A4) and
-     * (-0xC,A4), i.e. PROC2_$EC[idx-1].fork_ec / .cr_rec_ec.
+     * PROC2_$WIRED_DATA.ec + idx*0x18, and the two pea's are (-0x18,A4) and
+     * (-0xC,A4), i.e. PROC2_$WIRED_DATA.ec[idx-1].fork_ec / .cr_rec_ec.
      */
     fork_ec = PROC_FORK_EC(new_entry->self_index);
     EC_$INIT(fork_ec);
@@ -570,11 +570,11 @@ cleanup_locked:
         /* 0x00E731D8: release the alternate ASID and restore the
          * parent's own UID into the per-ASID table (parent+0x00). */
         MST_$FREE_ASID(new_entry->asid_alt, &temp_status);
-        PROC2_$UID[new_entry->asid] = parent_entry->uid;
+        PROC2_$UNWIRED_DATA.uid[new_entry->asid] = parent_entry->uid;
     } else {
         /* 0x00E73204 */
         MST_$FREE_ASID(new_entry->asid, &temp_status);
-        PROC2_$UID[new_entry->asid] = proc2_system_uid;
+        PROC2_$UNWIRED_DATA.uid[new_entry->asid] = PROC2_$UNWIRED_DATA.system_uid;
     }
 
     /* 0x00E7322E */
@@ -588,7 +588,7 @@ cleanup_entry:
 
     /* 0x00E73252-0x00E7327C: unlink from the allocated list */
     if (new_entry->pad_14 == 0) {
-        P2_INFO_ALLOC_PTR = new_entry->next_index;
+        PROC2_$UNWIRED_DATA.info_alloc_ptr = new_entry->next_index;
     } else {
         P2_INFO_ENTRY(new_entry->pad_14)->next_index = new_entry->next_index;
     }
@@ -600,8 +600,8 @@ cleanup_entry:
     P2_INFO_ENTRY(new_entry->next_index)->pad_14 = new_entry->pad_14;
 
     /* 0x00E73296-0x00E732A4: push the entry back onto the free list */
-    new_entry->next_index = P2_FREE_LIST_HEAD;
-    P2_FREE_LIST_HEAD = (uint16_t)new_idx;
+    new_entry->next_index = PROC2_$UNWIRED_DATA.free_list_head;
+    PROC2_$UNWIRED_DATA.free_list_head = (uint16_t)new_idx;
 
     /* 0x00E732A6 */
     new_entry->parent_uid = UID_$NIL;
@@ -609,8 +609,8 @@ cleanup_entry:
     /* 0x00E732B4: bclr.b #0x0 on the HIGH byte -> flags bit 8 == 0x0100 */
     new_entry->flags &= (uint16_t)~PROC2_FLAG_BOUND;
 
-    /* 0x00E732BA: 0xE7BE84 + 8 == proc2_system_uid (0xE7BE8C) */
-    new_entry->uid = proc2_system_uid;
+    /* 0x00E732BA: 0xE7BE84 + 8 == PROC2_$UNWIRED_DATA.system_uid (0xE7BE8C) */
+    new_entry->uid = PROC2_$UNWIRED_DATA.system_uid;
 
     /* 0x00E732CC */
     ML_$UNLOCK(PROC2_LOCK_ID);

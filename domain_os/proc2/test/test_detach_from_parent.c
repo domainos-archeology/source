@@ -18,15 +18,21 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+/*
+ * PROC2_$DATA with the storage entry(0) names in front of it: in the image
+ * P2_INFO_ENTRY(0) is the 0xE4 bytes before the block (the tail of
+ * XPD_$DATA, source-c6cy), and the zombie arm writes its pad_14.  The test
+ * gives that store somewhere defined to land by standing the block in an
+ * arena behind one spare entry.
+ */
+static struct {
+    proc2_info_t  entry0;
+    proc2_$data_t data;
+} p2_arena;
+_Static_assert(__builtin_offsetof(__typeof__(p2_arena), data) == sizeof(proc2_info_t),
+               "the arena puts entry(0) directly before the block");
+#define PROC2_$DATA p2_arena.data
 status_$t PROC2_Internal_Error = status_$proc2_internal_error;
 int __host_intr_disable_count = 0;
 
@@ -54,9 +60,9 @@ static int tests_run, tests_failed;
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     n_crash = n_pgroup_cleanup = 0; last_crash = NULL;
-    P2_INFO_ALLOC_PTR = 0; P2_FREE_LIST_HEAD = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0; PROC2_$UNWIRED_DATA.free_list_head = 0;
 }
 
 TEST(first_child_live_becomes_orphan)
@@ -95,16 +101,16 @@ TEST(zombie_head_of_alloc_list_goes_to_free_list)
 {
     E(2)->first_child_idx = 3;
     E(3)->parent_pgroup_idx = 2; E(3)->flags = PROC2_FLAG_ZOMBIE;
-    P2_INFO_ALLOC_PTR = 3; E(3)->pad_14 = 0; E(3)->next_index = 6; E(6)->pad_14 = 3;
-    P2_FREE_LIST_HEAD = 7;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 3; E(3)->pad_14 = 0; E(3)->next_index = 6; E(6)->pad_14 = 3;
+    PROC2_$UNWIRED_DATA.free_list_head = 7;
     PROC2_$DETACH_FROM_PARENT(3, 0);
     ASSERT_EQ(n_pgroup_cleanup, 1);
     ASSERT_EQ(last_cleanup_mode, 1);
     ASSERT_EQ(last_cleanup_entry == E(3), 1);
-    ASSERT_EQ(P2_INFO_ALLOC_PTR, 6);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.info_alloc_ptr, 6);
     ASSERT_EQ(E(6)->pad_14, 0);
     ASSERT_EQ(E(3)->next_index, 7);
-    ASSERT_EQ(P2_FREE_LIST_HEAD, 3);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, 3);
     ASSERT_EQ(E(3)->flags, PROC2_FLAG_ZOMBIE);   /* orphan bit NOT set */
 }
 
@@ -112,14 +118,17 @@ TEST(zombie_middle_of_alloc_list_unconditional_backlink)
 {
     E(2)->first_child_idx = 3;
     E(3)->parent_pgroup_idx = 2; E(3)->flags = PROC2_FLAG_ZOMBIE;
-    P2_INFO_ALLOC_PTR = 5; E(5)->next_index = 3;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 5; E(5)->next_index = 3;
     E(3)->pad_14 = 5; E(3)->next_index = 0;      /* last on the list */
-    mock_entries[0].pad_14 = 0x1234;             /* entry(0) canary */
+    /* entry(0) canary: p2_arena.entry0 is where P2_INFO_ENTRY(0) lands
+     * (static assert above); named directly so the host compiler does not
+     * flag the info[-1] index the accessor forms */
+    p2_arena.entry0.pad_14 = 0x1234;
     PROC2_$DETACH_FROM_PARENT(3, 0);
     ASSERT_EQ(E(5)->next_index, 0);
-    ASSERT_EQ(P2_INFO_ALLOC_PTR, 5);
-    ASSERT_EQ(mock_entries[0].pad_14, 5);        /* entry(0)+0x14 written */
-    ASSERT_EQ(P2_FREE_LIST_HEAD, 3);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.info_alloc_ptr, 5);
+    ASSERT_EQ(p2_arena.entry0.pad_14, 5);        /* entry(0)+0x14 written */
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, 3);
 }
 
 int main(void)

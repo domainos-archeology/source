@@ -32,13 +32,10 @@ static int tests_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-static proc2_info_t mock_entries[8];
-proc2_info_t *P2_INFO_TABLE = mock_entries;
-static uint16_t pid_to_index[64];
-uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
+uint32_t PTR_PROC2_$DATA = ARCH_PTR_TO_VA_STATIC(&PROC2_$DATA, 0x00EA551C);
 #include "fim/fim.h"
 MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
-void *PTR_PROC2_$DATA = mock_entries;
 
 static int lock_held;
 void ML_$LOCK(int16_t id)   { (void)id; lock_held++; }
@@ -94,18 +91,18 @@ static uint8_t src_area[0x900], dst_area[0x900];
 static void reset(void)
 {
     int i;
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     memset(FIM_$WIRED_DATA.trace_sts, 0x55, sizeof(FIM_$WIRED_DATA.trace_sts));
     for (i = 0; i < 0x900; i++) { src_area[i] = (uint8_t)(i * 7); dst_area[i] = 0; }
     PROC1_$CURRENT = 3; PROC1_$AS_ID = 5;
-    pid_to_index[3] = 2;
+    PROC2_$DATA.pid_to_index[3] = 2;
     asid_now = 5;
     cleanup_status = status_$fault_cleanup_in_progress;
     rls_calls = pop_calls = 0;
     set_asid_calls = 0;
     guard_lo = guard_hi = NULL; guard_asid = 0;
     xfind_result = 4; xfind_status = status_$ok;
-    mock_entries[3].asid = 9; mock_entries[3].debugger_idx = 2; mock_entries[3].level1_pid = 0x1F;
+    PROC2_$DATA.info[3].asid = 9; PROC2_$DATA.info[3].debugger_idx = 2; PROC2_$DATA.info[3].level1_pid = 0x1F;
     acl_result = 0;
     lock_held = 0;
     wire_calls = 0; ec_init_calls = 0;
@@ -225,15 +222,15 @@ TEST(read_proc_async_rights)
     ASSERT_EQ(2, set_asid_calls);
     /* not the debugger, rights granted */
     reset();
-    mock_entries[3].debugger_idx = 6;
+    PROC2_$DATA.info[3].debugger_idx = 6;
     acl_result = -1;
     XPD_$READ_PROC_ASYNC(&u, src_area, &len, dst_area, &st);
     ASSERT_EQ(status_$ok, st);
     ASSERT_EQ((long long)(intptr_t)&PROC1_$CURRENT, (long long)(intptr_t)acl_a);
-    ASSERT_EQ((long long)(intptr_t)&mock_entries[3].level1_pid, (long long)(intptr_t)acl_b);
+    ASSERT_EQ((long long)(intptr_t)&PROC2_$DATA.info[3].level1_pid, (long long)(intptr_t)acl_b);
     /* rights denied */
     reset();
-    mock_entries[3].debugger_idx = 6;
+    PROC2_$DATA.info[3].debugger_idx = 6;
     XPD_$READ_PROC_ASYNC(&u, src_area, &len, dst_area, &st);
     ASSERT_EQ(status_$proc2_permission_denied, st);
     ASSERT_EQ(0, set_asid_calls);

@@ -14,13 +14,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT;
 int __host_intr_disable_count = 0;
 
@@ -49,10 +43,10 @@ static uint32_t clr[8], set[8], res[2];
 static int16_t delta;
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     memset(clr, 0, sizeof(clr)); memset(set, 0, sizeof(set)); memset(res, 0xEE, sizeof(res));
     n_lock = n_unlock = n_detach = n_deliver = 0; delta = 0;
-    PROC1_$CURRENT = 5; mock_pid_to_index[5] = 2;
+    PROC1_$CURRENT = 5; PROC2_$DATA.pid_to_index[5] = 2;
     E(2)->self_index = 2;
 }
 

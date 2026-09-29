@@ -121,7 +121,7 @@ void AUDIT_$INIT(void)
     /*
      * 0x00E70BDC: the image jumps to 0x00E46F90 a SECOND time, i.e. it calls
      * ACL_$ENTER_SUPER again rather than ACL_$EXIT_SUPER (0x00E46FB4).  That
-     * leaves ACL_$SUPER_COUNT[pid] permanently at 2 for the initialisation
+     * leaves ACL_$UNWIRED_DATA.super_count[pid] permanently at 2 for the initialisation
      * process; it looks like an original bug, but the archive reproduces the
      * image, so this is ENTER_SUPER here too.
      */

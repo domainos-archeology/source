@@ -39,9 +39,8 @@
 extern term_data_t TERM_$DATA;
 
 /*
- * Note: PROC2_$UID is declared in proc2/proc2.h
- * On m68k: #define PROC2_$UID (*(uid_t*)0xE7BE8C)
- * On other platforms: extern uid_t proc2_uid
+ * Note: the per-ASID UID table (map PROC2_$UID, 0xE7BE94) is
+ * PROC2_$UNWIRED_DATA.uid, declared in proc2/proc2.h.
  */
 
 /*

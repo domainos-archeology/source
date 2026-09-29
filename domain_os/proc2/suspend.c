@@ -35,7 +35,7 @@
  *   00e412b2  lea (A2),A3
  *   00e412b4  lea (0x0,A0,D1w),A1      ; 0xEA551C + pid*0xE4
  *   00e412b8  moveq #0x1,D1            ; dead: D1 is not read again
- *   00e412ba  lea (-0xe4,A1),A4        ; = &P2_INFO_TABLE[pid - 1]
+ *   00e412ba  lea (-0xe4,A1),A4        ; = P2_INFO_ENTRY(PROC1_$CURRENT)
  *   00e412be  cmpm.l (A4)+,(A3)+       ; compare the 8-byte UID
  *   00e412c2  cmpm.l (A4)+,(A3)+
  *   00e412c6  jsr 0x00e20b62.l         ; equal: ML_$UNLOCK(4) ...
@@ -86,7 +86,7 @@
  *  - The "is this me?" test at 0x00E412B4 indexes the process table with
  *    PROC1_$CURRENT (a level-1 PID) scaled by 0xE4, i.e. it evaluates
  *    P2_INFO_ENTRY(PROC1_$CURRENT).  Every other PROC2 routine maps the PID
- *    through P2_PID_TO_INDEX first.  This is reproduced as found.
+ *    through PROC2_$DATA.pid_to_index first.  This is reproduced as found.
  *
  *  - Every status test in this function and in its nested procedure is
  *    `tst.w (-0x6,An)`, the LOW word of the status longword, not the high
@@ -170,7 +170,7 @@ void PROC2_$SUSPEND(uid_t *proc_uid, status_$t *status_ret)
     if ((status & 0xFFFF) == 0) {
         /*
          * 0x00E412B4/0x00E412BA: indexed by the level-1 PID, not by
-         * P2_PID_TO_INDEX(PROC1_$CURRENT); see the note in the header.
+         * PROC2_$DATA.pid_to_index[PROC1_$CURRENT]; see the note in the header.
          */
         self = P2_INFO_ENTRY(PROC1_$CURRENT);
 

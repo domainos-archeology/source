@@ -16,7 +16,7 @@
  *   00e58a62  tst.w (0x10,A0) / beq -> return
  *   00e58a6c  pea (0x26,PC)              ; -> 0xE58A94, status cell
  *   00e58a70  pea (0x20,PC)              ; -> 0xE58A92, signal-number cell
- *   00e58a80  pea (0x0,A1,D1w*0x1)       ; &PROC2_$UID[as_id]
+ *   00e58a80  pea (0x0,A1,D1w*0x1)       ; &PROC2_$UNWIRED_DATA.uid[as_id]
  *   00e58a84  jsr PROC2_$SIGNAL_OS
  */
 
@@ -54,7 +54,7 @@ void TIME_$SET_ITIMER_REAL_CALLBACK(time_$callback_arg_t arg)
      * The signal is raised only while a non-zero expiry is recorded.
      */
     if (entry->expire_high != 0 || entry->expire_low != 0) {
-        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
+        PROC2_$SIGNAL_OS(&PROC2_$UNWIRED_DATA.uid[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_itimer_real_signal,
                          (uint32_t *)&time_$c_itimer_real_fault,
                          &status);

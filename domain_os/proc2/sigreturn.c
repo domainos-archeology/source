@@ -41,7 +41,7 @@ NORETURN void PROC2_$SIGRETURN(void *context_ptr, void *regs_ptr,
     new_mask = sigctx->sc_mask;
 
     /* 0x00E3F5A0-0x00E3F5BE (before the lock) */
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E3F5AE/0x00E3F5C2-0x00E3F5CC */
     ML_$LOCK(PROC2_LOCK_ID);

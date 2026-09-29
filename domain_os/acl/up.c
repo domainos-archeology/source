@@ -11,5 +11,5 @@
 
 void ACL_$UP(void)
 {
-    ACL_$SUBSYS_LEVEL[PROC1_$CURRENT]++;
+    ACL_$DATA.subsys_level[PROC1_$CURRENT]++;
 }

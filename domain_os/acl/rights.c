@@ -20,10 +20,10 @@
  *   00e46a1e  move.w  (0x00e20608).l,D2w ; PROC1_$CURRENT
  *   00e46a24  movea.l #0xe97294,A0
  *   00e46a2a  add.w   D2w,D2w
- *   00e46a30  tst.w   (-0x3d5a,A1)       ; ACL_$SUBSYS_LEVEL[cur] (0xE9353A)
+ *   00e46a30  tst.w   (-0x3d5a,A1)       ; ACL_$DATA.subsys_level[cur] (0xE9353A)
  *   00e46a34  sgt     D0b
  *   00e46a36  move.b  D0b,-(SP)          ; arg8  in_subsys
- *   00e46a3c  tst.w   (0xb76,A1)         ; ACL_$SUPER_COUNT[cur]  (0xE7DACA)
+ *   00e46a3c  tst.w   (0xb76,A1)         ; ACL_$UNWIRED_DATA.super_count[cur]  (0xE7DACA)
  *   00e46a40  sgt     D1b
  *   00e46a42  move.b  D1b,-(SP)          ; arg7  in_super
  *   00e46a44  movea.l (0x14,A6),A1
@@ -57,7 +57,7 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
      * arg1 is 0xE90D10 + PROC1_$CURRENT * 0x24, the current process' SID
      * block (0x00E46A6A-0x00E46A7C computes cur*4 + cur*32 = cur*36).
      *
-     * arg2 is 0xE924FC + PROC1_$CURRENT * 0x40, i.e. &ACL_$PROJ_UIDS[cur][0]
+     * arg2 is 0xE924FC + PROC1_$CURRENT * 0x40, i.e. &ACL_$DATA.proj_uids[cur][0]
      * with the base 0xE924FC recorded in acl/acl_internal.h (source-4h7g).
      * ACL_$ADD_PROJ (0x00E47EFE), ACL_$DELETE_PROJ (0x00E47FA4),
      * ACL_$GET_PROJ_LIST (0x00E48052) and ACL_$SET_PROJ_LIST (0x00E4815A) all
@@ -67,15 +67,15 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
      * Each of the three PROC1_$CURRENT reads in the original is a separate
      * load of the global at 0xE20608; they are kept separate here.
      */
-    return acl_$eval_rights(&ACL_$CURRENT_SIDS[PROC1_$CURRENT],
-                            &ACL_$PROJ_UIDS[PROC1_$CURRENT][0],
+    return acl_$eval_rights(&ACL_$DATA.current_sids[PROC1_$CURRENT],
+                            &ACL_$DATA.proj_uids[PROC1_$CURRENT][0],
                             &local_uid,
                             *ignore_super,      /* 0x00E46A54 move.b (A3) */
                             *required_mask,     /* 0x00E46A4E move.l (A2) */
                             *option_flags,      /* 0x00E46A48 move.w (A1) */
                             /* 0x00E46A3C `tst.w` + `sgt`: 0xFF when > 0 */
-                            ACL_$SUPER_COUNT[PROC1_$CURRENT] > 0 ? true : false,
+                            ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] > 0 ? true : false,
                             /* 0x00E46A30 `tst.w` + `sgt`: 0xFF when > 0 */
-                            ACL_$SUBSYS_LEVEL[PROC1_$CURRENT] > 0 ? true : false,
+                            ACL_$DATA.subsys_level[PROC1_$CURRENT] > 0 ? true : false,
                             status_ret);
 }

@@ -70,8 +70,8 @@ void PROC2_$LOG_SIGNAL_EVENT(uint16_t event_type, int16_t target_idx,
 
     /* 0x00E3E792: cmpi.w #0x2 */
     if (event_type == 2) {
-        /* 0x00E3E798-0x00E3E7AE: PGROUP_TABLE[idx].upgid (0x3F34,A1), asid 0 */
-        event.upid = PGROUP_ENTRY(target_idx)->upgid;
+        /* 0x00E3E798-0x00E3E7AE: PROC2_$DATA.pgroup[idx].upgid (0x3F34,A1), asid 0 */
+        event.upid = PROC2_$DATA.pgroup[target_idx].upgid;
         event.asid = 0;
     } else {
         /* 0x00E3E7B4-0x00E3E7CA: entry+0x96 and entry+0x16 */

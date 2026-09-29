@@ -30,7 +30,7 @@ void PROC2_$SET_ACCT_INFO(uint8_t *info, int16_t *info_len, uid_t *acct_uid,
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* 0x00E41AE0-0x00E41B00 (mulu) */
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E41AFE-0x00E41B0A: signed clamp to 32 (ble); negatives pass */
     len = *info_len;

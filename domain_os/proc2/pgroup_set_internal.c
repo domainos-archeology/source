@@ -8,7 +8,7 @@
  *   (0xC,A6)  new_upgid  -> D2 (word)
  *   (0xE,A6)  status_ret -> A3
  *
- * PGROUP_TABLE fields are addressed as (0x3F30,A0) ref_count, (0x3F32)
+ * PROC2_$DATA.pgroup fields are addressed as (0x3F30,A0) ref_count, (0x3F32)
  * leader_count, (0x3F34) upgid, (0x3F36) session_id with A0 = 0xEA551C +
  * idx*8.  Other entries are biased (base + idx*0xE4): (-0xD4) = +0x10
  * pgroup index, (-0x88) = +0x5C session, (-0xC2) = +0x22 next sibling.
@@ -56,11 +56,11 @@ void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *sta
          * zero-extended PGROUP[new].session_id, compared as longwords.
          */
         if ((int32_t)(int16_t)entry->session_id !=
-            (int32_t)(uint32_t)PGROUP_ENTRY(new_idx)->session_id) {
+            (int32_t)(uint32_t)PROC2_$DATA.pgroup[new_idx].session_id) {
             *status_ret = status_$proc2_pgroup_in_different_session;   /* 0x00E41EE2 */
             return;                                          /* 0x00E41EE8 */
         }
-        PGROUP_ENTRY(new_idx)->ref_count += 1;               /* 0x00E41EEC */
+        PROC2_$DATA.pgroup[new_idx].ref_count += 1;               /* 0x00E41EEC */
     } else {
         /*
          * 0x00E41EF2-0x00E41F0A: scan slots 1..70 (moveq #0x45 + dbf) for
@@ -68,7 +68,7 @@ void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *sta
          */
         new_idx = 1;
         for (i = 0; i < 70; i++) {
-            if (PGROUP_ENTRY(new_idx)->ref_count == 0) {
+            if (PROC2_$DATA.pgroup[new_idx].ref_count == 0) {
                 break;
             }
             new_idx++;
@@ -83,15 +83,15 @@ void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *sta
         }
 
         /* 0x00E41F26-0x00E41F42: move.l #0x10000 -> ref_count 1, leader 0 */
-        PGROUP_ENTRY(new_idx)->ref_count = 1;
-        PGROUP_ENTRY(new_idx)->leader_count = 0;
-        PGROUP_ENTRY(new_idx)->upgid = new_upgid;
-        PGROUP_ENTRY(new_idx)->session_id = entry->session_id;
+        PROC2_$DATA.pgroup[new_idx].ref_count = 1;
+        PROC2_$DATA.pgroup[new_idx].leader_count = 0;
+        PROC2_$DATA.pgroup[new_idx].upgid = new_upgid;
+        PROC2_$DATA.pgroup[new_idx].session_id = entry->session_id;
     }
 
     /* 0x00E41F48-0x00E41F5E: drop the old group's reference */
     if (entry->pgroup_table_idx != 0) {
-        PGROUP_ENTRY(entry->pgroup_table_idx)->ref_count -= 1;
+        PROC2_$DATA.pgroup[entry->pgroup_table_idx].ref_count -= 1;
     }
 
     /* 0x00E41F62-0x00E41FB6: the parent, if in the same session */
@@ -102,11 +102,11 @@ void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *sta
              * parent's, loses a leader */
             if (entry->pgroup_table_idx != 0 &&
                 entry->pgroup_table_idx != other->pgroup_table_idx) {
-                PGROUP_ENTRY(entry->pgroup_table_idx)->leader_count -= 1;
+                PROC2_$DATA.pgroup[entry->pgroup_table_idx].leader_count -= 1;
             }
             /* 0x00E41FA0-0x00E41FB6: new group, if not the parent's, gains one */
             if ((uint16_t)new_idx != other->pgroup_table_idx) {
-                PGROUP_ENTRY(new_idx)->leader_count += 1;
+                PROC2_$DATA.pgroup[new_idx].leader_count += 1;
             }
         }
     }
@@ -120,11 +120,11 @@ void PGROUP_SET_INTERNAL(proc2_info_t *entry, uint16_t new_upgid, status_$t *sta
             /* 0x00E41FDE-0x00E41FF2: child in our OLD group -> that group
              * gains a leader (we are leaving it) */
             if (child_pgroup != 0 && child_pgroup == entry->pgroup_table_idx) {
-                PGROUP_ENTRY(child_pgroup)->leader_count += 1;
+                PROC2_$DATA.pgroup[child_pgroup].leader_count += 1;
             }
             /* 0x00E41FF6-0x00E4200C: child in our NEW group -> it loses one */
             if ((uint16_t)new_idx == other->pgroup_table_idx) {
-                PGROUP_ENTRY(other->pgroup_table_idx)->leader_count -= 1;
+                PROC2_$DATA.pgroup[other->pgroup_table_idx].leader_count -= 1;
             }
         }
         i = (int16_t)other->next_child_sibling;              /* 0x00E42010 */

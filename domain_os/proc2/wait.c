@@ -58,7 +58,7 @@ int16_t PROC2_$WAIT(uint16_t *options, int16_t *pid, void *result,
 
     /* 0x00E3FDFA-0x00E3FE22 */
     opt = *options;
-    cur_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    cur_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     current = P2_INFO_ENTRY(cur_idx);
 
     /* 0x00E3FE26-0x00E3FE6C */

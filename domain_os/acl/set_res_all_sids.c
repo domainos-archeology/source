@@ -2,7 +2,7 @@
  * ACL_$SET_RES_ALL_SIDS - set the requestor, current and saved SID blocks
  *
  * The super-user-only sibling of ACL_$SET_RE_ALL_SIDS: it also replaces
- * ACL_$SAVED_SIDS[pid] and it has no "the SID is one you already hold"
+ * ACL_$DATA.saved_sids[pid] and it has no "the SID is one you already hold"
  * fallback.  A non-super-user is refused, but the refusal still runs through
  * the audit tail (`bpl.w 0x00E486DA` at 0x00E4861E), so the attempt is logged.
  *
@@ -11,20 +11,20 @@
  * Frame (link.w A6,-0xf4):
  *   A6-0xF0  long  saved 0xE97294 + pid*0x0C base
  *   A6-0xDE  word  audit event flag: 1 = attempt, 0 = success
- *   A6-0xD8  36 B  ACL_$ORIGINAL_SIDS[pid] on entry
- *   A6-0xB4  36 B  ACL_$CURRENT_SIDS[pid] on entry
- *   A6-0x90  36 B  ACL_$SAVED_SIDS[pid] on entry
- *   A6-0x6C  36 B  ACL_$ORIGINAL_SIDS[pid] on exit
- *   A6-0x48  36 B  ACL_$CURRENT_SIDS[pid] on exit
- *   A6-0x24  36 B  ACL_$SAVED_SIDS[pid] on exit
+ *   A6-0xD8  36 B  ACL_$DATA.original_sids[pid] on entry
+ *   A6-0xB4  36 B  ACL_$DATA.current_sids[pid] on entry
+ *   A6-0x90  36 B  ACL_$DATA.saved_sids[pid] on entry
+ *   A6-0x6C  36 B  ACL_$DATA.original_sids[pid] on exit
+ *   A6-0x48  36 B  ACL_$DATA.current_sids[pid] on exit
+ *   A6-0x24  36 B  ACL_$DATA.saved_sids[pid] on exit
  * The last six are the 0xD8-byte audit record; see acl_$set_res_sids_audit_t.
  *
  * Parameters (A6+0x08 .. A6+0x1C):
- *   new_original_sids - 36-byte SID block for ACL_$ORIGINAL_SIDS[pid]
- *   new_current_sids  - 36-byte SID block for ACL_$CURRENT_SIDS[pid]
- *   new_saved_sids    - 36-byte SID block for ACL_$SAVED_SIDS[pid]
- *   new_saved_proj    - 12-byte cell for ACL_$SAVED_PROJ[pid]
- *   new_current_proj  - 12-byte cell for ACL_$PROJ_LISTS[pid]
+ *   new_original_sids - 36-byte SID block for ACL_$DATA.original_sids[pid]
+ *   new_current_sids  - 36-byte SID block for ACL_$DATA.current_sids[pid]
+ *   new_saved_sids    - 36-byte SID block for ACL_$DATA.saved_sids[pid]
+ *   new_saved_proj    - 12-byte cell for ACL_$DATA.saved_proj[pid]
+ *   new_current_proj  - 12-byte cell for ACL_$DATA.proj_lists[pid]
  *   status_ret        - status, 0x00230001 on refusal
  *
  * A Pascal procedure: D0 is left holding whatever the last compare or
@@ -66,17 +66,17 @@ void ACL_$SET_RES_ALL_SIDS(void *new_original_sids, void *new_current_sids,
     audit_flag = 0;
     if (AUDIT_$ENABLED < 0) {
         audit_flag = 1;                                          /* 0x00E48584 */
-        aud.old_original = ACL_$ORIGINAL_SIDS[PROC1_$CURRENT];   /* 0x00E485A8 */
-        aud.old_current  = ACL_$CURRENT_SIDS[PROC1_$CURRENT];    /* 0x00E485B2 */
-        aud.old_saved    = ACL_$SAVED_SIDS[PROC1_$CURRENT];      /* 0x00E485C2 */
+        aud.old_original = ACL_$DATA.original_sids[PROC1_$CURRENT];   /* 0x00E485A8 */
+        aud.old_current  = ACL_$DATA.current_sids[PROC1_$CURRENT];    /* 0x00E485B2 */
+        aud.old_saved    = ACL_$DATA.saved_sids[PROC1_$CURRENT];      /* 0x00E485C2 */
     }
 
     /* 0x00E485D2-0x00E4860A: the five per-process bases. */
-    orig  = &ACL_$ORIGINAL_SIDS[PROC1_$CURRENT];   /* base - 0x6E84 */
-    curr  = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];    /* base - 0x6584 */
-    saved = &ACL_$SAVED_SIDS[PROC1_$CURRENT];      /* base - 0x5C84 */
-    sproj = &ACL_$SAVED_PROJ[PROC1_$CURRENT];      /* base - 0x536C */
-    cproj = &ACL_$PROJ_LISTS[PROC1_$CURRENT];      /* base - 0x506C */
+    orig  = &ACL_$DATA.original_sids[PROC1_$CURRENT];   /* base - 0x6E84 */
+    curr  = &ACL_$DATA.current_sids[PROC1_$CURRENT];    /* base - 0x6584 */
+    saved = &ACL_$DATA.saved_sids[PROC1_$CURRENT];      /* base - 0x5C84 */
+    sproj = &ACL_$DATA.saved_proj[PROC1_$CURRENT];      /* base - 0x536C */
+    cproj = &ACL_$DATA.proj_lists[PROC1_$CURRENT];      /* base - 0x506C */
 
     /*
      * 0x00E4860C-0x00E4861E: super-user only.  The `bpl.w` goes to the audit
@@ -88,14 +88,14 @@ void ACL_$SET_RES_ALL_SIDS(void *new_original_sids, void *new_current_sids,
 
     /*
      * 0x00E48622-0x00E4867F: mirror a real group-SID change into the
-     * project-UID row, with ACL_$SUPER_COUNT[pid] bumped across the pair.
+     * project-UID row, with ACL_$UNWIRED_DATA.super_count[pid] bumped across the pair.
      */
     if (!acl_$uid_eq(&new_orig->group_sid, &orig->group_sid) &&    /* 0x00E48622 */
         !acl_$uid_eq(&new_orig->group_sid, &new_curr->group_sid)) {/* 0x00E48634 */
-        ACL_$SUPER_COUNT[PROC1_$CURRENT]++;                        /* 0x00E48648 */
+        ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]++;                        /* 0x00E48648 */
         ACL_$DELETE_PROJ(&orig->group_sid, status_ret);            /* 0x00E4865E */
         ACL_$ADD_PROJ((uid_t *)&new_orig->group_sid, status_ret);  /* 0x00E4866A */
-        ACL_$SUPER_COUNT[PROC1_$CURRENT]--;                        /* 0x00E48670 */
+        ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;                        /* 0x00E48670 */
     }
 
     /* 0x00E48680-0x00E486AF: three nine-longword copies. */

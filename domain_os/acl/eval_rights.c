@@ -33,7 +33,7 @@
  *      protection record                           (0x00E466D6)
  *   5. the object's full ACL image, under ML lock 10 (0x00E467C4)
  *
- * A5 for this module is 0xE7CF54, so `(0xb70,A5)` is ACL_$LOCAL_LOCKSMITH.
+ * A5 for this module is 0xE7CF54, so `(0xb70,A5)` is ACL_$UNWIRED_DATA.local_locksmith.
  */
 
 #include "acl/acl_internal.h"
@@ -111,9 +111,9 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
          * locksmith identity and evaluates as the generic user instead.
          */
         pid = PROC1_$CURRENT;                       /* 0x00E46546 */
-        if (ACL_$LOCAL_LOCKSMITH != 0 &&
+        if (ACL_$UNWIRED_DATA.local_locksmith != 0 &&
             PROC1_$DATA.type[pid] == 9 &&
-            (ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
+            (ACL_$DATA.locksmith_override_bitmap[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
              ACL_PID_BITMAP_MASK(PROC1_$CURRENT)) == 0) {
 
             is_locksmith = false;                   /* 0x00E46582 */
@@ -123,7 +123,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
             local_sids[3] = UID_$NIL;               /* 0x00E1737C */
             sid_p  = local_sids;                    /* 0x00E465BE */
             proj_p = &UID_$NIL;                     /* 0x00E465C6 */
-            if (ACL_$LOCAL_LOCKSMITH == 1) {        /* 0x00E465CE */
+            if (ACL_$UNWIRED_DATA.local_locksmith == 1) {        /* 0x00E465CE */
                 add_read_exec = true;
             }
         }
@@ -152,8 +152,8 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
     if ((attrs.obj_flags[ACL_ATTR_FLAGS_LO] & ACL_ATTR_FLAG_LOCAL) == 0 &&
         loc.flags < 0) {
         REM_FILE_$ACL_CHECK_RIGHTS(&loc.loc_info,
-                                   &ACL_$CURRENT_SIDS[PROC1_$CURRENT],
-                                   &ACL_$PROJ_UIDS[PROC1_$CURRENT][0],
+                                   &ACL_$DATA.current_sids[PROC1_$CURRENT],
+                                   &ACL_$DATA.proj_uids[PROC1_$CURRENT][0],
                                    uid,
                                    (uint8_t)ignore_super,
                                    required_mask,
@@ -264,8 +264,8 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
     if (slot != ACL_CACHE_NO_SLOT && in_subsys < 0) {
         /* Compared field by field: acl_$cache_slot_t is packed, so taking the
          * address of subsys_uid would be an unaligned pointer on the host. */
-        if (sids->login_sid.high == ACL_$ACL_CACHE[slot].subsys_uid.high &&
-            sids->login_sid.low  == ACL_$ACL_CACHE[slot].subsys_uid.low &&
+        if (sids->login_sid.high == ACL_$DATA.acl_cache[slot].subsys_uid.high &&
+            sids->login_sid.low  == ACL_$DATA.acl_cache[slot].subsys_uid.low &&
             (ignore_super >= 0 || in_super < 0)) {
             rights = ACL_RIGHTS_PRIVILEGED & required_mask;  /* 0x00E46838 */
             ML_$UNLOCK(ML_LOCK_ACL);
@@ -278,7 +278,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
         rights = prot->world_rights;
     } else {
         /* `clr.l D1 / move.w D0w,D1w`: the result is a zero-extended word. */
-        rights = (uint32_t)acl_$eval_acl_entries(&ACL_$ACL_CACHE[slot],
+        rights = (uint32_t)acl_$eval_acl_entries(&ACL_$DATA.acl_cache[slot],
                                                  sid_p, proj_p, prot);
     }
     ML_$UNLOCK(ML_LOCK_ACL);                            /* 0x00E46888 */

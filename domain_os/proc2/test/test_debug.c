@@ -23,17 +23,10 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
 
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 uint16_t PROC1_$CURRENT;
 uid_t UID_$NIL = { 0, 0 };
 
@@ -55,8 +48,8 @@ static jmp_buf crash_jmp;
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
     n_lock = n_unlock = n_awaken = n_reset = n_write = n_resume = n_crash = 0;
     last_awaken_idx = -1;
     last_write_asid = NULL;
@@ -310,7 +303,7 @@ TEST(debug_nil_uid_attaches_caller_to_parent)
 {
     uid_t nil = { 0, 0 };
     status_$t st = 0x5555;
-    mock_pid_to_index[5] = 3;             /* caller is entry 3 */
+    PROC2_$DATA.pid_to_index[5] = 3;             /* caller is entry 3 */
     E(3)->parent_pgroup_idx = 2;
     PROC2_$DEBUG(&nil, &st);
     ASSERT_EQ(st, status_$ok);
@@ -357,7 +350,7 @@ TEST(debug_success_caller_becomes_debugger_with_flag_true)
     uid_t u = { 1, 2 };
     status_$t st = 0;
     mock_find_index = 4;
-    mock_pid_to_index[5] = 3;
+    PROC2_$DATA.pid_to_index[5] = 3;
     E(4)->cr_rec_2 = 0x3000;
     PROC2_$DEBUG(&u, &st);
     ASSERT_EQ(st, status_$ok);

@@ -9,7 +9,7 @@
 #define XPD_INTERNAL_H
 
 #include "xpd/xpd.h"
-#include "proc2/proc2_internal.h"   /* PROC2_$EC / PROC_CR_REC_EC - TODO: no
+#include "proc2/proc2_internal.h"   /* PROC2_$WIRED_DATA.ec / PROC_CR_REC_EC - TODO: no
                                      * public declaration exists yet (bead
                                      * source-xpd-ec) */
 #include "fim/fim.h"
@@ -35,7 +35,7 @@
  *                                  (-0x16) +0xCE ptrace_opts (14 bytes)
  */
 #define XPD_ENTRY(idx)        P2_INFO_ENTRY(idx)
-#define XPD_CURRENT_INDEX()   P2_PID_TO_INDEX(PROC1_$CURRENT)
+#define XPD_CURRENT_INDEX()   PROC2_$DATA.pid_to_index[PROC1_$CURRENT]
 #define XPD_PTRACE_OPTS(e)    ((xpd_$ptrace_opts_t *)(e)->ptrace_opts)
 
 /* The word at +0x2A, touched by byte ops on its LOW byte (+0x2B) */

@@ -43,7 +43,7 @@ void PROC2_$AWAKEN_GUARDIAN(int16_t *proc_index)
         PROC2_$DELIVER_SIGNAL_INTERNAL(guardian_idx, 0x17, param, &status);
 
         /* 0x00E3E9CA..0x00E3E9E6: pea (-0xc,A0,D0) with A0 = 0xE2B978,
-         * D0 = guardian*0x18 -> PROC2_$EC[guardian-1].cr_rec_ec */
+         * D0 = guardian*0x18 -> PROC2_$WIRED_DATA.ec[guardian-1].cr_rec_ec */
         EC_$ADVANCE(PROC_CR_REC_EC(guardian_idx));
     }
 
@@ -51,7 +51,7 @@ void PROC2_$AWAKEN_GUARDIAN(int16_t *proc_index)
      * debugger (i.e. it is the parent, or both are zero and this is skipped) */
     if (guardian_idx != (int16_t)entry->debugger_idx) {
         /* 0x00E3E9EE..0x00E3EA0A: pea (-0x18,A2) with A2 = 0xE2B978 +
-         * self_index*0x18 -> PROC2_$EC[self-1].fork_ec */
+         * self_index*0x18 -> PROC2_$WIRED_DATA.ec[self-1].fork_ec */
         ec = PROC_FORK_EC(entry->self_index);
         EC_$ADVANCE(ec);
         /* 0x00E3EA12 tst.l (-0x18,A2): advance again while the value is 0 */

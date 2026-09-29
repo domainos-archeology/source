@@ -71,7 +71,7 @@ typedef struct rem_file_unlock_req_t {
     uint16_t    lock_mode;      /* 0x14: arg unlock_mode (0x00E61D66) */
     uint16_t    uninit_16;      /* 0x16: never written */
     uint16_t    version;        /* 0x18: 3           (0x00E61D6A) */
-    boolean     super_user;     /* 0x1A: ACL_$SUPER_COUNT[cur] > 0
+    boolean     super_user;     /* 0x1A: ACL_$UNWIRED_DATA.super_count[cur] > 0
                                  *       (0x00E61D70-0x00E61D84) */
     uint8_t     uninit_1b;      /* 0x1B: never written */
     uint16_t    lock_key;       /* 0x1C: arg lock_key (0x00E61D62); the server

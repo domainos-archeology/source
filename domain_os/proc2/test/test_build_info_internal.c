@@ -20,13 +20,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT;
 uid_t UID_$NIL = { 0, 0 };
 #include "proc1/proc1.h"
@@ -38,8 +32,8 @@ static int n_get_info, n_set_priority, n_sid, n_usage;
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     mock_get_info_status = mock_sid_status = status_$ok;
     n_get_info = n_set_priority = n_sid = n_usage = 0;
@@ -157,7 +151,7 @@ TEST(bound_process_fields)
     memset(&out, 0, sizeof(out));
     E(3)->flags = 0x0100 | 0x0200;
     E(3)->parent_uid.high = 0xAA; E(3)->cr_rec = 0xC0DE; E(3)->asid = 7;
-    E(3)->pgroup_table_idx = 2; mock_pgroups[2].upgid = 0x1234;
+    E(3)->pgroup_table_idx = 2; PROC2_$DATA.pgroup[2].upgid = 0x1234;
     E(3)->tty_uid.low = 0x77;
     E(3)->name_len = 5; memset(E(3)->name, 'n', 32);
     E(3)->upid = 100; E(3)->parent_pgroup_idx = 4; E(4)->upid = 90;

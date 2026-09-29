@@ -37,7 +37,7 @@ void PROC2_$UID_TO_UPID(uid_t *proc_uid, uint16_t *upid_ret, status_$t *status_r
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* 0x00E40F98: D0 = alloc ptr; beq not-found */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);                        /* 0x00E40FA0-0x00E40FB0 */
         /* 0x00E40FBA-0x00E40FC0: cmpm.l twice */

@@ -36,11 +36,8 @@ static int tests_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-static proc2_info_t mock_entries[8];
-proc2_info_t *P2_INFO_TABLE = mock_entries;
-static uint16_t pid_to_index[64];
-uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 int8_t peb_$installed_flag;
 int8_t m68881_$save_flag;
 
@@ -122,7 +119,7 @@ static proc2_info_t *entry;
 
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     memset(arena, 0, sizeof(arena));
     memset(XPD_$DATA, 0, sizeof(XPD_$DATA));
     PROC1_$CURRENT = 3;

@@ -21,21 +21,14 @@
 /* Mock storage                                                        */
 /* ------------------------------------------------------------------ */
 
-#define MOCK_ENTRIES 8
 
 /* slot 0 is the out-of-band "index 0" entry the table is biased against */
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
+MODULE_DATA_DEFINE_INIT(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84, {
+    .next_upid = P2_UPID_WRAP_TO,
+});
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
 
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 
 uint16_t PROC1_$CURRENT;
 
@@ -60,17 +53,17 @@ static proc2_info_t *fresh(void)   { return P2_INFO_ENTRY(NEW_IDX); }
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
 
-    P2_INFO_ALLOC_PTR = 0;
-    P2_FREE_LIST_HEAD = 0;
-    PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
+    PROC2_$UNWIRED_DATA.free_list_head = 0;
+    PROC2_$UNWIRED_DATA.next_upid = P2_UPID_WRAP_TO;
 
     PROC1_$CURRENT = 5;
-    mock_pid_to_index[5] = CREATOR_IDX;
+    PROC2_$DATA.pid_to_index[5] = CREATOR_IDX;
 
     n_uid_gen = n_init_pid = n_reset_opts = n_pgroup_set = n_find_by_upgid = 0;
     last_init_pid_arg = NULL;
@@ -145,7 +138,7 @@ static void setup_table(void)
 {
     reset_mocks();
 
-    P2_INFO_ALLOC_PTR = 0;          /* nothing allocated -> no UPID conflicts */
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;          /* nothing allocated -> no UPID conflicts */
 
     creator()->self_index = CREATOR_IDX;
     creator()->session_id = 0x0777;
@@ -195,10 +188,10 @@ static void test_uid_publication_and_fim_init(void)
     assert(fresh()->uid.high == 0x11223344u);
     assert(fresh()->uid.low == 0x55667788u);
 
-    /* PROC2_$UID is indexed by the ASID, not by the table index */
-    assert(PROC2_$UID[3].high == 0x11223344u);
-    assert(PROC2_$UID[3].low == 0x55667788u);
-    assert(PROC2_$UID[NEW_IDX].high == 0);
+    /* PROC2_$UNWIRED_DATA.uid is indexed by the ASID, not by the table index */
+    assert(PROC2_$UNWIRED_DATA.uid[3].high == 0x11223344u);
+    assert(PROC2_$UNWIRED_DATA.uid[3].low == 0x55667788u);
+    assert(PROC2_$UNWIRED_DATA.uid[NEW_IDX].high == 0);
 
     /* 0x00E73310 passes the ADDRESS of entry->asid */
     assert(n_init_pid == 1);
@@ -211,18 +204,18 @@ static void test_uid_publication_and_fim_init(void)
 static void test_upid_counter_advance_and_wrap(void)
 {
     setup_table();
-    PROC2_$NEXT_UPID = 100;
+    PROC2_$UNWIRED_DATA.next_upid = 100;
 
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
     assert(fresh()->upid == 100);
-    assert(PROC2_$NEXT_UPID == 101);
+    assert(PROC2_$UNWIRED_DATA.next_upid == 101);
 
     setup_table();
-    PROC2_$NEXT_UPID = P2_UPID_WRAP_AT;         /* 30000 */
+    PROC2_$UNWIRED_DATA.next_upid = P2_UPID_WRAP_AT;         /* 30000 */
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
     /* The candidate is the pre-wrap value; the counter resets to 0x41 */
     assert(fresh()->upid == P2_UPID_WRAP_AT);
-    assert(PROC2_$NEXT_UPID == P2_UPID_WRAP_TO);
+    assert(PROC2_$UNWIRED_DATA.next_upid == P2_UPID_WRAP_TO);
 
     printf("test_upid_counter_advance_and_wrap: PASSED\n");
 }
@@ -231,16 +224,16 @@ static void test_upid_counter_advance_and_wrap(void)
 static void test_upid_conflicts_with_live_upid(void)
 {
     setup_table();
-    PROC2_$NEXT_UPID = 100;
+    PROC2_$UNWIRED_DATA.next_upid = 100;
 
-    P2_INFO_ALLOC_PTR = CREATOR_IDX;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = CREATOR_IDX;
     creator()->next_index = 0;
     creator()->upid = 100;
 
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
 
     assert(fresh()->upid == 101);
-    assert(PROC2_$NEXT_UPID == 102);
+    assert(PROC2_$UNWIRED_DATA.next_upid == 102);
 
     printf("test_upid_conflicts_with_live_upid: PASSED\n");
 }
@@ -249,9 +242,9 @@ static void test_upid_conflicts_with_live_upid(void)
 static void test_upid_conflicts_with_session_id(void)
 {
     setup_table();
-    PROC2_$NEXT_UPID = 200;
+    PROC2_$UNWIRED_DATA.next_upid = 200;
 
-    P2_INFO_ALLOC_PTR = CREATOR_IDX;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = CREATOR_IDX;
     creator()->next_index = 0;
     creator()->upid = 0;
     creator()->session_id = 200;
@@ -273,9 +266,9 @@ static void test_upid_conflicts_with_session_id(void)
 static void test_upid_conflicts_with_pgroup(void)
 {
     setup_table();
-    PROC2_$NEXT_UPID = 300;
+    PROC2_$UNWIRED_DATA.next_upid = 300;
 
-    P2_INFO_ALLOC_PTR = CREATOR_IDX;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = CREATOR_IDX;
     creator()->next_index = 0;
     creator()->upid = 0;
     creator()->session_id = 0;
@@ -296,8 +289,8 @@ static void test_upid_conflicts_with_pgroup(void)
      * even though the creator carries a non-zero pgroup index.
      */
     setup_table();
-    PROC2_$NEXT_UPID = 300;
-    P2_INFO_ALLOC_PTR = CREATOR_IDX;
+    PROC2_$UNWIRED_DATA.next_upid = 300;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = CREATOR_IDX;
     creator()->next_index = 0;
     creator()->upid = 0;
     creator()->session_id = 0;
@@ -356,14 +349,14 @@ static void test_session_and_pgroup_inheritance(void)
 
     creator()->session_id = 0x0777;
     creator()->pgroup_table_idx = 5;
-    mock_pgroups[5].ref_count = 2;
+    PROC2_$DATA.pgroup[5].ref_count = 2;
     fresh()->flags = 0;                 /* bit 15 clear -> inherit branch */
 
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
 
     assert(fresh()->session_id == 0x0777);
     assert(fresh()->pgroup_table_idx == 5);
-    assert(mock_pgroups[5].ref_count == 3);
+    assert(PROC2_$DATA.pgroup[5].ref_count == 3);
     assert(n_pgroup_set == 0);
 
     printf("test_session_and_pgroup_inheritance: PASSED\n");
@@ -375,7 +368,7 @@ static void test_leader_branch_on_flag_bit15(void)
     setup_table();
 
     creator()->pgroup_table_idx = 5;
-    mock_pgroups[5].ref_count = 2;
+    PROC2_$DATA.pgroup[5].ref_count = 2;
     fresh()->flags = 0x8000u;           /* PROC2_FLAG_INIT */
 
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
@@ -386,7 +379,7 @@ static void test_leader_branch_on_flag_bit15(void)
 
     /* the inherit branch did not run */
     assert(fresh()->pgroup_table_idx == 0);
-    assert(mock_pgroups[5].ref_count == 2);
+    assert(PROC2_$DATA.pgroup[5].ref_count == 2);
 
     printf("test_leader_branch_on_flag_bit15: PASSED\n");
 }
@@ -465,13 +458,13 @@ static void test_pgroup_inherit_zero_index(void)
     setup_table();
 
     creator()->pgroup_table_idx = 0;
-    mock_pgroups[0].ref_count = 7;
+    PROC2_$DATA.pgroup[0].ref_count = 7;
     fresh()->flags = 0;
 
     PROC2_$INIT_ENTRY_INTERNAL(fresh());
 
     assert(fresh()->pgroup_table_idx == 0);
-    assert(mock_pgroups[0].ref_count == 7);
+    assert(PROC2_$DATA.pgroup[0].ref_count == 7);
 
     printf("test_pgroup_inherit_zero_index: PASSED\n");
 }

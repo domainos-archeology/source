@@ -52,10 +52,10 @@ int8_t ACL_$CHECK_FAULT_RIGHTS(const uint16_t *pid1_ptr, const uint16_t *pid2_pt
     }
 
     /* Get SID blocks for both processes */
-    p1_orig = &ACL_$ORIGINAL_SIDS[pid1];
-    p1_curr = &ACL_$CURRENT_SIDS[pid1];
-    p2_saved = &ACL_$SAVED_SIDS[pid2];
-    p2_curr = &ACL_$CURRENT_SIDS[pid2];
+    p1_orig = &ACL_$DATA.original_sids[pid1];
+    p1_curr = &ACL_$DATA.current_sids[pid1];
+    p2_saved = &ACL_$DATA.saved_sids[pid2];
+    p2_curr = &ACL_$DATA.current_sids[pid2];
 
     /*
      * Check if SIDs match in any allowed combination:

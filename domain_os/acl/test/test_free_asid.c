@@ -39,15 +39,7 @@ static int current_failed = 0;
 /* Globals                                                             */
 /* ------------------------------------------------------------------ */
 
-acl_sid_block_t ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-acl_sid_block_t ACL_$ORIGINAL_SIDS[PROC1_MAX_PROCESSES];
-acl_sid_block_t ACL_$SAVED_SIDS[PROC1_MAX_PROCESSES];
-acl_proj_list_t ACL_$PROJ_LISTS[PROC1_MAX_PROCESSES];
-acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];
-uid_t           ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
-int16_t         ACL_$SUBSYS_LEVEL[PROC1_MAX_PROCESSES];
-uint8_t         ACL_$ASID_FREE_BITMAP[8];
-uint8_t         ACL_$ASID_SUSER_BITMAP[8];
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 uid_t UID_$NIL             = { 0, 0 };
 uid_t RGYC_$P_SYS_USER_UID = { 0x0000041Cu, 0x00000001u };  /* 0x00E1741C */
@@ -62,15 +54,15 @@ static status_$t run_free(int16_t asid)
 {
     status_$t status = 0x11111111;
 
-    memset(ACL_$CURRENT_SIDS, 0xEE, sizeof(ACL_$CURRENT_SIDS));
-    memset(ACL_$ORIGINAL_SIDS, 0xEE, sizeof(ACL_$ORIGINAL_SIDS));
-    memset(ACL_$SAVED_SIDS, 0xEE, sizeof(ACL_$SAVED_SIDS));
-    memset(ACL_$PROJ_LISTS, 0xEE, sizeof(ACL_$PROJ_LISTS));
-    memset(ACL_$SAVED_PROJ, 0xEE, sizeof(ACL_$SAVED_PROJ));
-    memset(ACL_$PROJ_UIDS, 0xEE, sizeof(ACL_$PROJ_UIDS));
-    memset(ACL_$SUBSYS_LEVEL, 0xEE, sizeof(ACL_$SUBSYS_LEVEL));
-    memset(ACL_$ASID_FREE_BITMAP, 0x00, sizeof(ACL_$ASID_FREE_BITMAP));
-    memset(ACL_$ASID_SUSER_BITMAP, 0xFF, sizeof(ACL_$ASID_SUSER_BITMAP));
+    memset(ACL_$DATA.current_sids, 0xEE, sizeof(ACL_$DATA.current_sids));
+    memset(ACL_$DATA.original_sids, 0xEE, sizeof(ACL_$DATA.original_sids));
+    memset(ACL_$DATA.saved_sids, 0xEE, sizeof(ACL_$DATA.saved_sids));
+    memset(ACL_$DATA.proj_lists, 0xEE, sizeof(ACL_$DATA.proj_lists));
+    memset(ACL_$DATA.saved_proj, 0xEE, sizeof(ACL_$DATA.saved_proj));
+    memset(ACL_$DATA.proj_uids, 0xEE, sizeof(ACL_$DATA.proj_uids));
+    memset(ACL_$DATA.subsys_level, 0xEE, sizeof(ACL_$DATA.subsys_level));
+    memset(ACL_$DATA.asid_free_bitmap, 0x00, sizeof(ACL_$DATA.asid_free_bitmap));
+    memset(ACL_$DATA.asid_suser_bitmap, 0xFF, sizeof(ACL_$DATA.asid_suser_bitmap));
 
     ACL_$FREE_ASID(asid, &status);
     return status;
@@ -93,17 +85,17 @@ TEST(proj_lists_get_the_constant)
 {
     run_free(TEST_ASID);
 
-    ASSERT_EQ(0x0000000Du, ACL_$PROJ_LISTS[TEST_ASID].field_00);
-    ASSERT_EQ(0x0000000Du, ACL_$PROJ_LISTS[TEST_ASID].field_04);
-    ASSERT_EQ(0x0000000Du, ACL_$PROJ_LISTS[TEST_ASID].field_08);
+    ASSERT_EQ(0x0000000Du, ACL_$DATA.proj_lists[TEST_ASID].field_00);
+    ASSERT_EQ(0x0000000Du, ACL_$DATA.proj_lists[TEST_ASID].field_04);
+    ASSERT_EQ(0x0000000Du, ACL_$DATA.proj_lists[TEST_ASID].field_08);
 
     /* 0x00E74D12: SAVED_PROJ is copied FROM the just-written PROJ_LISTS. */
-    ASSERT_EQ(0x0000000Du, ACL_$SAVED_PROJ[TEST_ASID].field_00);
-    ASSERT_EQ(0x0000000Du, ACL_$SAVED_PROJ[TEST_ASID].field_08);
+    ASSERT_EQ(0x0000000Du, ACL_$DATA.saved_proj[TEST_ASID].field_00);
+    ASSERT_EQ(0x0000000Du, ACL_$DATA.saved_proj[TEST_ASID].field_08);
 
     /* Neighbouring rows untouched. */
-    ASSERT_EQ(0xEEEEEEEEu, ACL_$PROJ_LISTS[TEST_ASID - 1].field_00);
-    ASSERT_EQ(0xEEEEEEEEu, ACL_$PROJ_LISTS[TEST_ASID + 1].field_00);
+    ASSERT_EQ(0xEEEEEEEEu, ACL_$DATA.proj_lists[TEST_ASID - 1].field_00);
+    ASSERT_EQ(0xEEEEEEEEu, ACL_$DATA.proj_lists[TEST_ASID + 1].field_00);
 }
 
 /* 0x00E74CAE-0x00E74CDF then 0x00E74CF0-0x00E74D11. */
@@ -111,16 +103,16 @@ TEST(sid_defaults_and_copies)
 {
     run_free(TEST_ASID);
 
-    ASSERT_EQ(0x0000041Cu, ACL_$CURRENT_SIDS[TEST_ASID].user_sid.high);
-    ASSERT_EQ(0x00000424u, ACL_$CURRENT_SIDS[TEST_ASID].group_sid.high);
-    ASSERT_EQ(0x0000043Cu, ACL_$CURRENT_SIDS[TEST_ASID].org_sid.high);
-    ASSERT_EQ(0u,          ACL_$CURRENT_SIDS[TEST_ASID].login_sid.high);
+    ASSERT_EQ(0x0000041Cu, ACL_$DATA.current_sids[TEST_ASID].user_sid.high);
+    ASSERT_EQ(0x00000424u, ACL_$DATA.current_sids[TEST_ASID].group_sid.high);
+    ASSERT_EQ(0x0000043Cu, ACL_$DATA.current_sids[TEST_ASID].org_sid.high);
+    ASSERT_EQ(0u,          ACL_$DATA.current_sids[TEST_ASID].login_sid.high);
 
     /* The whole 36-byte block, `pad` included, is copied twice. */
-    ASSERT_EQ(0, memcmp(&ACL_$ORIGINAL_SIDS[TEST_ASID],
-                        &ACL_$CURRENT_SIDS[TEST_ASID], 36));
-    ASSERT_EQ(0, memcmp(&ACL_$SAVED_SIDS[TEST_ASID],
-                        &ACL_$CURRENT_SIDS[TEST_ASID], 36));
+    ASSERT_EQ(0, memcmp(&ACL_$DATA.original_sids[TEST_ASID],
+                        &ACL_$DATA.current_sids[TEST_ASID], 36));
+    ASSERT_EQ(0, memcmp(&ACL_$DATA.saved_sids[TEST_ASID],
+                        &ACL_$DATA.current_sids[TEST_ASID], 36));
 }
 
 /* 0x00E74D20-0x00E74D5D */
@@ -131,11 +123,11 @@ TEST(clears_proj_uids_and_subsys_level)
     run_free(TEST_ASID);
 
     for (i = 0; i < 8; i++) {
-        ASSERT_EQ(0u, ACL_$PROJ_UIDS[TEST_ASID][i].high);
-        ASSERT_EQ(0u, ACL_$PROJ_UIDS[TEST_ASID][i].low);
+        ASSERT_EQ(0u, ACL_$DATA.proj_uids[TEST_ASID][i].high);
+        ASSERT_EQ(0u, ACL_$DATA.proj_uids[TEST_ASID][i].low);
     }
-    ASSERT_EQ(0xEEEEEEEEu, ACL_$PROJ_UIDS[TEST_ASID + 1][0].high);
-    ASSERT_EQ(0, ACL_$SUBSYS_LEVEL[TEST_ASID]);
+    ASSERT_EQ(0xEEEEEEEEu, ACL_$DATA.proj_uids[TEST_ASID + 1][0].high);
+    ASSERT_EQ(0, ACL_$DATA.subsys_level[TEST_ASID]);
 }
 
 /* 0x00E74D5E-0x00E74D8B: byte (asid-1)>>3, mask 0x80 >> ((asid-1)&7). */
@@ -144,18 +136,18 @@ TEST(bitmaps)
     status_$t status;
 
     status = run_free(5);
-    ASSERT_EQ(0x08, ACL_$ASID_FREE_BITMAP[0]);   /* 0x80 >> ((5-1) & 7) */
-    ASSERT_EQ(0xF7, ACL_$ASID_SUSER_BITMAP[0]);
+    ASSERT_EQ(0x08, ACL_$DATA.asid_free_bitmap[0]);   /* 0x80 >> ((5-1) & 7) */
+    ASSERT_EQ(0xF7, ACL_$DATA.asid_suser_bitmap[0]);
     ASSERT_EQ(status_$ok, status);
 
     run_free(64);
-    ASSERT_EQ(0x01, ACL_$ASID_FREE_BITMAP[7]);
-    ASSERT_EQ(0xFE, ACL_$ASID_SUSER_BITMAP[7]);
-    ASSERT_EQ(0x00, ACL_$ASID_FREE_BITMAP[0]);
+    ASSERT_EQ(0x01, ACL_$DATA.asid_free_bitmap[7]);
+    ASSERT_EQ(0xFE, ACL_$DATA.asid_suser_bitmap[7]);
+    ASSERT_EQ(0x00, ACL_$DATA.asid_free_bitmap[0]);
 
     run_free(1);
-    ASSERT_EQ(0x80, ACL_$ASID_FREE_BITMAP[0]);
-    ASSERT_EQ(0x7F, ACL_$ASID_SUSER_BITMAP[0]);
+    ASSERT_EQ(0x80, ACL_$DATA.asid_free_bitmap[0]);
+    ASSERT_EQ(0x7F, ACL_$DATA.asid_suser_bitmap[0]);
 }
 
 int main(void)

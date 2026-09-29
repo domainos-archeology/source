@@ -18,7 +18,7 @@
  *   00e58b28  pea (-0x8,A6)                           ; status (never read)
  *   00e58b2c  pea (0x26,PC)                           ; 0xE58B54 status cell
  *   00e58b30  pea (0x20,PC)                           ; 0xE58B52 signal cell
- *   00e58b34  move.w (0x2,A2),D1w / lsl.w #3 / pea (0xe7be94,D1w)  ; &PROC2_$UID[as_id]
+ *   00e58b34  move.w (0x2,A2),D1w / lsl.w #3 / pea (0xe7be94,D1w)  ; &PROC2_$UNWIRED_DATA.uid[as_id]
  *   00e58b44  jsr PROC2_$SIGNAL_OS                    ; args reclaimed by unlk
  *
  * Like the itimer callbacks (bead source-e4a2), the words tested are the
@@ -58,7 +58,7 @@ void TIME_$SET_CPU_LIMIT_CALLBACK(time_$callback_arg_t arg)
     /* 0x00E58B1C..0x00E58B26 */
     if (entry->expire_high != 0 || entry->expire_low != 0) {
         /* 0x00E58B28..0x00E58B44 */
-        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],
+        PROC2_$SIGNAL_OS(&PROC2_$UNWIRED_DATA.uid[as_id],
                          (int16_t *)&time_$c_cpu_limit_signal,
                          (uint32_t *)&time_$c_cpu_limit_fault,
                          &status);

@@ -53,7 +53,7 @@ static int current_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-int16_t  ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 uid_t    UID_$NIL = { 0, 0 };
 
 /* ------------------------------------------------------------------ */
@@ -194,7 +194,7 @@ static status_$t run_create(uint8_t obj_type, uint8_t flags_lo,
 
     memset(acl_buf, 0, sizeof(acl_buf));
     memset(page, 0, sizeof(page));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     memset(&ga_attr_to_return, 0, sizeof(ga_attr_to_return));
 
     PROC1_$CURRENT = TEST_PID;
@@ -271,7 +271,7 @@ TEST(purify_gets_the_cell_address)
 TEST(super_count_is_balanced)
 {
     run_create(1, ACL_ATTR_FLAG_LOCAL, 0x00, 1);
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[TEST_PID]);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[TEST_PID]);
     ASSERT_EQ(1, create_calls);
     ASSERT_EQ(1, unmap_calls);
     ASSERT_EQ(1, immutable_calls);
@@ -285,7 +285,7 @@ TEST(length_check)
     int16_t data_len = 0x34;   /* but the buffer claims 2 entries */
 
     memset(acl_buf, 0, sizeof(acl_buf));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     memset(&ga_attr_to_return, 0, sizeof(ga_attr_to_return));
     ga_attr_to_return.obj_flags[ACL_ATTR_FLAGS_LO] = ACL_ATTR_FLAG_LOCAL;
     ga_status = status_$ok;
@@ -298,7 +298,7 @@ TEST(length_check)
 
     ASSERT_EQ(status_$image_buffer_too_small, status);
     ASSERT_EQ(0, create_calls);
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[TEST_PID]);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[TEST_PID]);
 }
 
 /*
@@ -314,7 +314,7 @@ TEST(remote_path_passes_the_header_pointer)
     ASSERT_TRUE(rem_header == (const void *)header_obj);
     ASSERT_EQ(0, create_calls);
     /* 0x00E479E6 branches past the super-count bracket entirely. */
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[TEST_PID]);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[TEST_PID]);
     ASSERT_EQ(0, maps_calls);
 }
 

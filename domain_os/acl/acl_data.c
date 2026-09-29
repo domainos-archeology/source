@@ -1,98 +1,56 @@
 /*
  * ACL Data - Global variables for ACL subsystem
  *
- * Original m68k addresses documented in comments.
- * A5-relative base: 0xE7CF54
+ * Module data blocks ACL_$WIRED_DATA, ACL_$UNWIRED_DATA and ACL_$DATA:
+ * Claude Opus 5.5 (source-l2yd).
+ *
+ * ACL_ has three data segments in the SAU2 map that C addresses, each a
+ * MODULE_DATA block linked in the map's order (the address is the ordering
+ * key, not the link address); layouts, biases and asserts in acl/acl.h and
+ * acl/acl_internal.h:
+ *
+ *   D    E2C014  ACL_WIRED   size = 14    ACL_$WIRED_DATA
+ *   D    E7CF54  ACL_        size = BFC   ACL_$UNWIRED_DATA (A5)
+ *   D69  E88834  ACL_$DATA   size = AD98  ACL_$DATA
+ *
+ * The three 4-byte ACL_ segments (0xE35034, 0xE86054 inside
+ * PROC2_CREATE_DAT, 0xE86060 inside PROC2_DELETE_DAT) are A5 anchors of the
+ * boot, ALLOC_ASID and FREE_ASID code; nothing addresses their bytes, so
+ * they have no C object.
  */
 
 #include "acl/acl_internal.h"
 
-/*
- * Per-process SID arrays (indexed by PID, stride 0x24 = 36 bytes)
- */
-
-/* Current SIDs: 0xE90D10 */
-acl_sid_block_t ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-
-/* Saved SIDs (pre-enter_super): 0xE91610 */
-acl_sid_block_t ACL_$SAVED_SIDS[PROC1_MAX_PROCESSES];
-
-/* Original SIDs (pre-enter_subs): 0xE90410 */
-acl_sid_block_t ACL_$ORIGINAL_SIDS[PROC1_MAX_PROCESSES];
+/* ACL_$WIRED_DATA, 0xE2C014..0xE2C027: zero in the image; ACL_$INIT runs
+ * ML_$EXCLUSION_INIT on the lock (0x00E3117E). */
+MODULE_DATA_DEFINE(acl_$wired_data_t, ACL_$WIRED_DATA, 0x00E2C014);
 
 /*
- * Project lists metadata (indexed by PID, stride 0x0C = 12 bytes)
+ * ACL_$UNWIRED_DATA, 0xE7CF54..0xE7DB4F (`gsk read 0xE7CF54 3068'): zero
+ * except the empty-cache markers - cache_hash_buckets[0..60] = ff ff
+ * (0xE7DA44..0xE7DABD) and cache_lru_head = ff ff (0xE7DACA, which is also
+ * super_count[0]).
  */
-acl_proj_list_t ACL_$PROJ_LISTS[PROC1_MAX_PROCESSES];   /* 0xE92228 */
-acl_proj_list_t ACL_$SAVED_PROJ[PROC1_MAX_PROCESSES];   /* 0xE91F28 */
+#define ACL_NO_SLOT_x8 \
+    ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, \
+    ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT
+MODULE_DATA_DEFINE_INIT(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54, {
+    .cache_hash_buckets = {
+        ACL_NO_SLOT_x8, ACL_NO_SLOT_x8, ACL_NO_SLOT_x8, ACL_NO_SLOT_x8,
+        ACL_NO_SLOT_x8, ACL_NO_SLOT_x8, ACL_NO_SLOT_x8,
+        ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT,
+        ACL_CACHE_NO_SLOT, ACL_CACHE_NO_SLOT,               /* [0..60] */
+    },
+    .cache_lru_head = ACL_CACHE_NO_SLOT,
+});
+#undef ACL_NO_SLOT_x8
+_Static_assert(ACL_CACHE_HASH_BUCKETS == 7 * 8 + 5, "the initialiser covers every bucket");
 
 /*
- * Per-process project UID array (indexed by PID, 8 UIDs per process)
- * Stride 0x40 = 64 bytes per process
+ * ACL_$DATA, 0xE88834..0xE935CB: loaded at file offset 0x196B4E, the end of
+ * the SR10.2 SAU2 file, so zero-filled; ACL_$INIT zeroes it again.
  */
-uid_t ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS]; /* 0xE924FC */
-
-/*
- * Per-process subsystem level counter (indexed by PID, stride 2)
- * 0xE9353A
- */
-int16_t ACL_$SUBSYS_LEVEL[PROC1_MAX_PROCESSES];
-
-/*
- * Per-process superuser mode counter (indexed by PID, stride 2)
- * 0xE7DACA (A5+0xB76)
- */
-int16_t ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
-
-/*
- * ASID bitmaps (8 bytes each, 64 bits for 64 ASIDs)
- */
-uint8_t ACL_$ASID_FREE_BITMAP[8];           /* 0xE92534: 1=free */
-uint8_t ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];  /* 0xE935BC */
-uint8_t ACL_$ASID_SUSER_BITMAP[8];          /* 0xE935C4: 1=used suser */
-
-/*
- * The 31-slot ACL image cache (0xE88834, stride 0x400).  ACL_$INIT zeroes it
- * at 0x00E310AA and builds its mod-31 free list at 0x00E31140.
- */
-acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];  /* 0xE88834 */
-
-/*
- * The 0x400-byte scratch image acl_$load_acl_image hands to
- * acl_$convert_image (A5+0x400 = 0xE7D354).  It ends exactly where
- * ACL_$CACHE_DIR (A5+0x800) begins.
- */
-acl_$cache_slot_t ACL_$IMAGE_BUF;                               /* 0xE7D354 */
-
-/*
- * The ACL image cache directory, in the ACL module's A5 data area
- * (A5 = 0xE7CF54).  See acl/acl_internal.h for how the element counts were
- * fixed; ACL_$CACHE_LRU_HEAD shares its address with ACL_$SUPER_COUNT[0],
- * which is never used because process numbers start at 1.
- */
-acl_$cache_dir_t  ACL_$CACHE_DIR[ACL_CACHE_SLOTS];              /* 0xE7D754 */
-acl_$cache_link_t ACL_$CACHE_LRU_LINKS[ACL_CACHE_LINK_SLOTS];   /* 0xE7D944 */
-acl_$cache_link_t ACL_$CACHE_HASH_LINKS[ACL_CACHE_LINK_SLOTS];  /* 0xE7D9C4 */
-int16_t ACL_$CACHE_HASH_BUCKETS_TAB[ACL_CACHE_HASH_BUCKETS];    /* 0xE7DA44 */
-int16_t ACL_$CACHE_FREE_HEAD;                                   /* 0xE7DAC8 */
-int16_t ACL_$CACHE_LRU_HEAD;                                    /* 0xE7DACA */
-
-/*
- * Locksmith state
- */
-int16_t ACL_$LOCAL_LOCKSMITH;       /* 0xE7DAC4 (A5+0xB70) */
-int16_t ACL_$LOCKSMITH_OWNER_PID;   /* 0xE7DAC6 (A5+0xB72) */
-int8_t ACL_$LOCKSMITH_OVERRIDE;     /* 0xE7DB4C (A5+0xBF8) */
-
-/*
- * Subsystem entry magic value
- */
-int32_t ACL_$SUBS_MAGIC;            /* 0xE7DAC0 (A5+0xB6C) */
-
-/*
- * Exclusion lock for ACL operations
- */
-ml_$exclusion_t ACL_$EXCLUSION_LOCK; /* 0xE2C014 */
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 /*
  * Default ACL UIDs
@@ -126,10 +84,3 @@ uid_t ACL_$NIL = UID_CONST(0x00000100, 0);
  * address" half of TODO(source-yii).
  */
 uid_t ACL_$DIR_ACL;         /* 0xE1744C */
-
-/*
- * ACL_$WORKSPACE - the ACL_ module block's 0x400-byte image workspace
- * (A5 + 0 = 0xE7CF54).  Zero in the image.  See acl/acl_internal.h for how
- * the 0x400 extent is pinned.
- */
-uint8_t ACL_$WORKSPACE[ACL_WORKSPACE_SIZE];                     /* 0xE7CF54 */

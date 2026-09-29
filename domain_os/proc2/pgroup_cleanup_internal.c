@@ -7,7 +7,7 @@
  *   (0x8,A6)  entry  -> A2  (UNBIASED entry base)
  *   (0xC,A6)  mode   -> D2  word: 1 = ref count only, 0 = leader counts
  *                            only, anything else = both
- *   A3 = 0xEA551C + pgidx*8, so (0x3F30,A3) = PGROUP_TABLE[pgidx].ref_count
+ *   A3 = 0xEA551C + pgidx*8, so (0x3F30,A3) = PROC2_$DATA.pgroup[pgidx].ref_count
  *   A0 = 0xEA551C + parent*0xE4 (biased parent entry, computed even when
  *        the parent index is 0)
  *
@@ -68,7 +68,7 @@ void PGROUP_CLEANUP_INTERNAL(proc2_info_t *entry, int16_t mode)
     /* 0x00E42158: tst.w D2w / beq exit */
     if (mode != 0) {
         /* 0x00E4215C: subq.w #1,(0x3f30,A3); 0x00E42160: clr.w (0x10,A2) */
-        PGROUP_ENTRY(entry->pgroup_table_idx)->ref_count -= 1;
+        PROC2_$DATA.pgroup[entry->pgroup_table_idx].ref_count -= 1;
         entry->pgroup_table_idx = 0;
     }
 }

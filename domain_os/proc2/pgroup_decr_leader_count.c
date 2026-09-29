@@ -14,7 +14,7 @@
  * Frame (link.w A6,-0x14): (0x8,A6) pgroup_idx word -> D2.  The zero test
  * at 0x00E42036 is on that move.w (movea sets no flags).
  *
- * When the group's leader count (PGROUP_TABLE[idx].leader_count, at
+ * When the group's leader count (PROC2_$DATA.pgroup[idx].leader_count, at
  * (0x3F32,A0) with A0 = 0xEA551C + idx*8) reaches zero and some allocated
  * entry in the group has flags bit 0x0040 set (btst.b #6 on the low byte),
  * the whole group is sent SIGHUP (1) and then SIGCONT (0x16 = 22 in this
@@ -49,14 +49,14 @@ void PGROUP_DECR_LEADER_COUNT(int16_t pgroup_idx)
     }
 
     /* 0x00E42038-0x00E4204C: leader_count -= 1; bne exit */
-    PGROUP_ENTRY(pgroup_idx)->leader_count -= 1;
-    if (PGROUP_ENTRY(pgroup_idx)->leader_count != 0) {
+    PROC2_$DATA.pgroup[pgroup_idx].leader_count -= 1;
+    if (PROC2_$DATA.pgroup[pgroup_idx].leader_count != 0) {
         return;
     }
 
     /* 0x00E4204E-0x00E4207C: walk the allocated list; no early exit */
     has_leader = 0;
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);
         /* 0x00E42068: btst.b #0x6,(-0xb9,A0) -> flags & 0x0040;

@@ -43,12 +43,7 @@ static int current_failed = 0;
 
 uid_t UID_$NIL = { 0, 0 };
 
-acl_$cache_dir_t  ACL_$CACHE_DIR[ACL_CACHE_SLOTS];
-acl_$cache_link_t ACL_$CACHE_LRU_LINKS[ACL_CACHE_LINK_SLOTS];
-acl_$cache_link_t ACL_$CACHE_HASH_LINKS[ACL_CACHE_LINK_SLOTS];
-int16_t ACL_$CACHE_HASH_BUCKETS_TAB[ACL_CACHE_HASH_BUCKETS];
-int16_t ACL_$CACHE_FREE_HEAD;
-int16_t ACL_$CACHE_LRU_HEAD;
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                                */
@@ -116,14 +111,14 @@ static void reset_world(void)
 {
     int i;
 
-    memset(ACL_$CACHE_DIR, 0, sizeof(ACL_$CACHE_DIR));
-    memset(ACL_$CACHE_LRU_LINKS, 0, sizeof(ACL_$CACHE_LRU_LINKS));
-    memset(ACL_$CACHE_HASH_LINKS, 0, sizeof(ACL_$CACHE_HASH_LINKS));
+    memset(ACL_$UNWIRED_DATA.cache_dir, 0, sizeof(ACL_$UNWIRED_DATA.cache_dir));
+    memset(ACL_$UNWIRED_DATA.cache_lru_links, 0, sizeof(ACL_$UNWIRED_DATA.cache_lru_links));
+    memset(ACL_$UNWIRED_DATA.cache_hash_links, 0, sizeof(ACL_$UNWIRED_DATA.cache_hash_links));
     for (i = 0; i < ACL_CACHE_HASH_BUCKETS; i++) {
-        ACL_$CACHE_HASH_BUCKETS_TAB[i] = ACL_CACHE_NO_SLOT;
+        ACL_$UNWIRED_DATA.cache_hash_buckets[i] = ACL_CACHE_NO_SLOT;
     }
-    ACL_$CACHE_LRU_HEAD  = ACL_CACHE_NO_SLOT;
-    ACL_$CACHE_FREE_HEAD = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_lru_head  = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_free_head = ACL_CACHE_NO_SLOT;
 
     memset(&prot, 0, sizeof(prot));
     cached_flag = 0x55;
@@ -147,10 +142,10 @@ static void chain(const int16_t *slots, int n)
 {
     int i;
 
-    ACL_$CACHE_HASH_BUCKETS_TAB[BUCKET] = slots[0];
+    ACL_$UNWIRED_DATA.cache_hash_buckets[BUCKET] = slots[0];
     for (i = 0; i < n; i++) {
-        ACL_$CACHE_HASH_LINKS[slots[i]].next = slots[(i + 1) % n];
-        ACL_$CACHE_HASH_LINKS[slots[(i + 1) % n]].prev = slots[i];
+        ACL_$UNWIRED_DATA.cache_hash_links[slots[i]].next = slots[(i + 1) % n];
+        ACL_$UNWIRED_DATA.cache_hash_links[slots[(i + 1) % n]].prev = slots[i];
     }
 }
 
@@ -187,9 +182,9 @@ TEST(empty_bucket_loads_and_links_the_new_slot)
     ASSERT_EQ(5, run());
     ASSERT_EQ(1, mock_load_calls);
     /* Only the insert runs on a miss (0x00E45EF0 skips 0x00E45F48). */
-    ASSERT_EQ(5, ACL_$CACHE_LRU_HEAD);
-    ASSERT_EQ(5, ACL_$CACHE_LRU_LINKS[5].next);
-    ASSERT_EQ(5, ACL_$CACHE_LRU_LINKS[5].prev);
+    ASSERT_EQ(5, ACL_$UNWIRED_DATA.cache_lru_head);
+    ASSERT_EQ(5, ACL_$UNWIRED_DATA.cache_lru_links[5].next);
+    ASSERT_EQ(5, ACL_$UNWIRED_DATA.cache_lru_links[5].prev);
 }
 
 TEST(load_failure_status_returns_without_touching_the_lru)
@@ -198,7 +193,7 @@ TEST(load_failure_status_returns_without_touching_the_lru)
     mock_load_result  = 5;
     mock_load_status  = 0x00230001;         /* low word non-zero */
     ASSERT_EQ(5, run());
-    ASSERT_EQ(ACL_CACHE_NO_SLOT, ACL_$CACHE_LRU_HEAD);
+    ASSERT_EQ(ACL_CACHE_NO_SLOT, ACL_$UNWIRED_DATA.cache_lru_head);
 }
 
 TEST(load_status_high_half_alone_is_not_a_failure)
@@ -208,7 +203,7 @@ TEST(load_status_high_half_alone_is_not_a_failure)
     /* `tst.w (0x2,A0)` only looks at the LOW word. */
     mock_load_status = 0x12340000;
     ASSERT_EQ(5, run());
-    ASSERT_EQ(5, ACL_$CACHE_LRU_HEAD);
+    ASSERT_EQ(5, ACL_$UNWIRED_DATA.cache_lru_head);
 }
 
 TEST(load_returning_no_slot_skips_the_lru_insert)
@@ -216,7 +211,7 @@ TEST(load_returning_no_slot_skips_the_lru_insert)
     reset_world();
     mock_load_result = ACL_CACHE_NO_SLOT;
     ASSERT_EQ(ACL_CACHE_NO_SLOT, run());
-    ASSERT_EQ(ACL_CACHE_NO_SLOT, ACL_$CACHE_LRU_HEAD);
+    ASSERT_EQ(ACL_CACHE_NO_SLOT, ACL_$UNWIRED_DATA.cache_lru_head);
 }
 
 TEST(hit_on_the_bucket_head_returns_its_slot)
@@ -224,8 +219,8 @@ TEST(hit_on_the_bucket_head_returns_its_slot)
     static const int16_t s[] = { 3 };
     reset_world();
     chain(s, 1);
-    ACL_$CACHE_DIR[3].acl_uid = want;
-    ACL_$CACHE_DIR[3].cached_flag = 0x21;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid = want;
+    ACL_$UNWIRED_DATA.cache_dir[3].cached_flag = 0x21;
     ASSERT_EQ(3, run());
     ASSERT_EQ(0, mock_load_calls);
     ASSERT_EQ(0x21, cached_flag);           /* 0x00E45F10 */
@@ -237,9 +232,9 @@ TEST(hit_further_down_the_chain)
     static const int16_t s[] = { 3, 9, 11 };
     reset_world();
     chain(s, 3);
-    ACL_$CACHE_DIR[3].acl_uid  = (uid_t){ 1, 1 };
-    ACL_$CACHE_DIR[9].acl_uid  = (uid_t){ 2, 2 };
-    ACL_$CACHE_DIR[11].acl_uid = want;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid  = (uid_t){ 1, 1 };
+    ACL_$UNWIRED_DATA.cache_dir[9].acl_uid  = (uid_t){ 2, 2 };
+    ACL_$UNWIRED_DATA.cache_dir[11].acl_uid = want;
     ASSERT_EQ(11, run());
     ASSERT_EQ(0, mock_load_calls);
 }
@@ -249,9 +244,9 @@ TEST(chain_wraparound_is_a_miss)
     static const int16_t s[] = { 3, 9, 11 };
     reset_world();
     chain(s, 3);
-    ACL_$CACHE_DIR[3].acl_uid  = (uid_t){ 1, 1 };
-    ACL_$CACHE_DIR[9].acl_uid  = (uid_t){ 2, 2 };
-    ACL_$CACHE_DIR[11].acl_uid = (uid_t){ 3, 3 };
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid  = (uid_t){ 1, 1 };
+    ACL_$UNWIRED_DATA.cache_dir[9].acl_uid  = (uid_t){ 2, 2 };
+    ACL_$UNWIRED_DATA.cache_dir[11].acl_uid = (uid_t){ 3, 3 };
     mock_load_result = 20;
     /* 0x00E45F3E: `cmp.w (0xaf0,A0),D2w` back at the head -> `moveq #-1`. */
     ASSERT_EQ(20, run());
@@ -263,8 +258,8 @@ TEST(uid_compare_needs_both_halves)
     static const int16_t s[] = { 3 };
     reset_world();
     chain(s, 1);
-    ACL_$CACHE_DIR[3].acl_uid.high = want.high;
-    ACL_$CACHE_DIR[3].acl_uid.low  = want.low ^ 1u;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid.high = want.high;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid.low  = want.low ^ 1u;
     mock_load_result = 20;
     ASSERT_EQ(20, run());
 }
@@ -274,10 +269,10 @@ TEST(negative_cached_flag_rebuilds_the_default_prot_record)
     static const int16_t s[] = { 3 };
     reset_world();
     chain(s, 1);
-    ACL_$CACHE_DIR[3].acl_uid       = want;
-    ACL_$CACHE_DIR[3].cached_flag   = (int8_t)0xFF;
-    ACL_$CACHE_DIR[3].world_rights  = 0x0A;
-    ACL_$CACHE_DIR[3].subsys_rights = 0x0C;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid       = want;
+    ACL_$UNWIRED_DATA.cache_dir[3].cached_flag   = (int8_t)0xFF;
+    ACL_$UNWIRED_DATA.cache_dir[3].world_rights  = 0x0A;
+    ACL_$UNWIRED_DATA.cache_dir[3].subsys_rights = 0x0C;
     prot.owner_rights = 0xEE;               /* clobbered by ACL_$DEF_ACLDATA */
 
     ASSERT_EQ(3, run());
@@ -294,22 +289,22 @@ TEST(a_hit_moves_the_slot_to_the_front_of_the_lru)
     static const int16_t s[] = { 3, 9 };
     reset_world();
     chain(s, 2);
-    ACL_$CACHE_DIR[3].acl_uid = (uid_t){ 1, 1 };
-    ACL_$CACHE_DIR[9].acl_uid = want;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid = (uid_t){ 1, 1 };
+    ACL_$UNWIRED_DATA.cache_dir[9].acl_uid = want;
 
     /* Seed the LRU list as 9 -> 3 (head 9) by inserting 3 then 9. */
-    acl_$cache_list_insert(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, 3);
-    acl_$cache_list_insert(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, 9);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, 3);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, 9);
     /* Touch 3 by looking it up instead. */
-    ACL_$CACHE_DIR[3].acl_uid = want;
-    ACL_$CACHE_DIR[9].acl_uid = (uid_t){ 1, 1 };
-    ACL_$CACHE_HASH_BUCKETS_TAB[BUCKET] = 3;
+    ACL_$UNWIRED_DATA.cache_dir[3].acl_uid = want;
+    ACL_$UNWIRED_DATA.cache_dir[9].acl_uid = (uid_t){ 1, 1 };
+    ACL_$UNWIRED_DATA.cache_hash_buckets[BUCKET] = 3;
 
     ASSERT_EQ(3, run());
     /* remove (0x00E45F54) then insert (0x00E45F68). */
-    ASSERT_EQ(3, ACL_$CACHE_LRU_HEAD);
-    ASSERT_EQ(9, ACL_$CACHE_LRU_LINKS[3].next);
-    ASSERT_EQ(9, ACL_$CACHE_LRU_LINKS[3].prev);
+    ASSERT_EQ(3, ACL_$UNWIRED_DATA.cache_lru_head);
+    ASSERT_EQ(9, ACL_$UNWIRED_DATA.cache_lru_links[3].next);
+    ASSERT_EQ(9, ACL_$UNWIRED_DATA.cache_lru_links[3].prev);
 }
 
 /* ------------------------------------------------------------------ */
@@ -321,21 +316,21 @@ TEST(list_insert_builds_a_ring_and_remove_empties_it)
     int16_t head = ACL_CACHE_NO_SLOT;
     reset_world();
 
-    acl_$cache_list_insert(&head, ACL_$CACHE_LRU_LINKS, 4);
+    acl_$cache_list_insert(&head, ACL_$UNWIRED_DATA.cache_lru_links, 4);
     ASSERT_EQ(4, head);
-    ASSERT_EQ(4, ACL_$CACHE_LRU_LINKS[4].next);
-    ASSERT_EQ(4, ACL_$CACHE_LRU_LINKS[4].prev);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_lru_links[4].next);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_lru_links[4].prev);
 
-    acl_$cache_list_insert(&head, ACL_$CACHE_LRU_LINKS, 6);
+    acl_$cache_list_insert(&head, ACL_$UNWIRED_DATA.cache_lru_links, 6);
     ASSERT_EQ(6, head);
-    ASSERT_EQ(4, ACL_$CACHE_LRU_LINKS[6].next);
-    ASSERT_EQ(4, ACL_$CACHE_LRU_LINKS[6].prev);
-    ASSERT_EQ(6, ACL_$CACHE_LRU_LINKS[4].next);
-    ASSERT_EQ(6, ACL_$CACHE_LRU_LINKS[4].prev);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_lru_links[6].next);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_lru_links[6].prev);
+    ASSERT_EQ(6, ACL_$UNWIRED_DATA.cache_lru_links[4].next);
+    ASSERT_EQ(6, ACL_$UNWIRED_DATA.cache_lru_links[4].prev);
 
-    acl_$cache_list_remove(&head, ACL_$CACHE_LRU_LINKS, 6);
+    acl_$cache_list_remove(&head, ACL_$UNWIRED_DATA.cache_lru_links, 6);
     ASSERT_EQ(4, head);                     /* 0x00E44CDC */
-    acl_$cache_list_remove(&head, ACL_$CACHE_LRU_LINKS, 4);
+    acl_$cache_list_remove(&head, ACL_$UNWIRED_DATA.cache_lru_links, 4);
     ASSERT_EQ(ACL_CACHE_NO_SLOT, head);     /* 0x00E44CD6 */
 }
 
@@ -343,23 +338,23 @@ TEST(list_remove_on_an_empty_list_is_a_no_op)
 {
     int16_t head = ACL_CACHE_NO_SLOT;
     reset_world();
-    ACL_$CACHE_LRU_LINKS[4].next = 0x1234;
-    acl_$cache_list_remove(&head, ACL_$CACHE_LRU_LINKS, 4);
+    ACL_$UNWIRED_DATA.cache_lru_links[4].next = 0x1234;
+    acl_$cache_list_remove(&head, ACL_$UNWIRED_DATA.cache_lru_links, 4);
     ASSERT_EQ(ACL_CACHE_NO_SLOT, head);     /* 0x00E44CA6 `beq` */
-    ASSERT_EQ(0x1234, ACL_$CACHE_LRU_LINKS[4].next);
+    ASSERT_EQ(0x1234, ACL_$UNWIRED_DATA.cache_lru_links[4].next);
 }
 
 TEST(list_remove_of_a_non_head_leaves_the_head_alone)
 {
     int16_t head = ACL_CACHE_NO_SLOT;
     reset_world();
-    acl_$cache_list_insert(&head, ACL_$CACHE_LRU_LINKS, 1);
-    acl_$cache_list_insert(&head, ACL_$CACHE_LRU_LINKS, 2);
-    acl_$cache_list_insert(&head, ACL_$CACHE_LRU_LINKS, 3);
-    acl_$cache_list_remove(&head, ACL_$CACHE_LRU_LINKS, 1);
+    acl_$cache_list_insert(&head, ACL_$UNWIRED_DATA.cache_lru_links, 1);
+    acl_$cache_list_insert(&head, ACL_$UNWIRED_DATA.cache_lru_links, 2);
+    acl_$cache_list_insert(&head, ACL_$UNWIRED_DATA.cache_lru_links, 3);
+    acl_$cache_list_remove(&head, ACL_$UNWIRED_DATA.cache_lru_links, 1);
     ASSERT_EQ(3, head);
-    ASSERT_EQ(2, ACL_$CACHE_LRU_LINKS[3].next);
-    ASSERT_EQ(3, ACL_$CACHE_LRU_LINKS[2].next);
+    ASSERT_EQ(2, ACL_$UNWIRED_DATA.cache_lru_links[3].next);
+    ASSERT_EQ(3, ACL_$UNWIRED_DATA.cache_lru_links[2].next);
 }
 
 int main(void)

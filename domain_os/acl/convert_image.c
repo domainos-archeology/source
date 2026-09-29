@@ -5,7 +5,7 @@
  *
  * The only caller is acl_$load_acl_image (0x00E45D6E), which runs it on the
  * slot it has just filled from the mapped ACL object and hands it
- * ACL_$IMAGE_BUF as the destination.  Argument order from the pushes at
+ * ACL_$UNWIRED_DATA.image_buf as the destination.  Argument order from the pushes at
  * 0x00E45D5C-0x00E45D6C; frame slots A6+0x08 src, +0x0C prot, +0x10 dst,
  * +0x14 length_ret, +0x18 status_ret.
  *

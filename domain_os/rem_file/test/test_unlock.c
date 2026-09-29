@@ -55,7 +55,7 @@ static int current_failed = 0;
  * Globals the code under test references
  * ============================================================================ */
 
-int16_t  ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 uint16_t PROC1_$CURRENT;
 
 /* ============================================================================
@@ -157,7 +157,7 @@ static void reset(void)
     canned_status    = status_$ok;
 
     PROC1_$CURRENT = 7;
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
 }
 
 /*
@@ -289,19 +289,19 @@ TEST(super_user_byte_tracks_acl_super_count)
     status_$t st = 0;
 
     reset();
-    ACL_$SUPER_COUNT[7] = 0;
+    ACL_$UNWIRED_DATA.super_count[7] = 0;
     (void)REM_FILE_$UNLOCK(&desc, 0, 0, 0, 0, false, &st);
     ASSERT_EQ(0x00, rq_b(0x1A));
 
     reset();
-    ACL_$SUPER_COUNT[7] = 1;
+    ACL_$UNWIRED_DATA.super_count[7] = 1;
     (void)REM_FILE_$UNLOCK(&desc, 0, 0, 0, 0, false, &st);
     ASSERT_EQ(0xFF, rq_b(0x1A));
 
     /* The count is indexed by PROC1_$CURRENT, so another slot must not
      * change the answer. */
     reset();
-    ACL_$SUPER_COUNT[8] = 5;
+    ACL_$UNWIRED_DATA.super_count[8] = 5;
     (void)REM_FILE_$UNLOCK(&desc, 0, 0, 0, 0, false, &st);
     ASSERT_EQ(0x00, rq_b(0x1A));
 }

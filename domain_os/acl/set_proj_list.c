@@ -46,13 +46,13 @@ void ACL_$SET_PROJ_LIST(uid_t *proj_acls, int16_t *count, status_$t *status_ret)
 
     /* Copy the provided project UIDs */
     for (i = 0; i < num; i++) {
-        ACL_$PROJ_UIDS[pid][i].high = proj_acls[i].high;
-        ACL_$PROJ_UIDS[pid][i].low = proj_acls[i].low;
+        ACL_$DATA.proj_uids[pid][i].high = proj_acls[i].high;
+        ACL_$DATA.proj_uids[pid][i].low = proj_acls[i].low;
     }
 
     /* Clear remaining slots with UID_$NIL */
     for (i = num; i < ACL_MAX_PROJECTS; i++) {
-        ACL_$PROJ_UIDS[pid][i].high = UID_$NIL.high;
-        ACL_$PROJ_UIDS[pid][i].low = UID_$NIL.low;
+        ACL_$DATA.proj_uids[pid][i].high = UID_$NIL.high;
+        ACL_$DATA.proj_uids[pid][i].low = UID_$NIL.low;
     }
 }

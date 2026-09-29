@@ -37,7 +37,7 @@ static int tests_run = 0;
         }                                                                     \
     } while (0)
 
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
 
 static int signal_calls;
 static uid_t *signal_uid;
@@ -83,7 +83,7 @@ TEST(signals_when_expiry_set)
     TIME_$SET_CPU_LIMIT_CALLBACK((time_$callback_arg_t)&data_ptr);
 
     ASSERT_EQ(1, signal_calls);
-    ASSERT_EQ((uintptr_t)&PROC2_$UID[4], (uintptr_t)signal_uid);
+    ASSERT_EQ((uintptr_t)&PROC2_$UNWIRED_DATA.uid[4], (uintptr_t)signal_uid);
     ASSERT_EQ(0x001B, signal_number);
     ASSERT_EQ(0x000D000B, signal_param);
 }

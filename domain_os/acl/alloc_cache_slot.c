@@ -5,8 +5,8 @@
  *
  * Takes the head of the free list when there is one, otherwise evicts the
  * least-recently-used slot.  The free list is threaded through the SAME link
- * array as the hash chains (ACL_$CACHE_HASH_LINKS, A5+0xA70) - only the head
- * differs (ACL_$CACHE_FREE_HEAD, A5+0xB74) - which is what lets
+ * array as the hash chains (ACL_$UNWIRED_DATA.cache_hash_links, A5+0xA70) - only the head
+ * differs (ACL_$UNWIRED_DATA.cache_free_head, A5+0xB74) - which is what lets
  * acl_$load_acl_image put a slot back on the free list with a single
  * acl_$cache_list_insert at 0x00E45BD0.
  *
@@ -43,35 +43,35 @@ int16_t acl_$alloc_cache_slot(status_$t *status_ret)
     *status_ret = status_$ok;                           /* 0x00E458F0 */
 
     /* 0x00E458F2-0x00E45910: the free list. */
-    if (ACL_$CACHE_FREE_HEAD != ACL_CACHE_NO_SLOT) {
-        slot = ACL_$CACHE_FREE_HEAD;
+    if (ACL_$UNWIRED_DATA.cache_free_head != ACL_CACHE_NO_SLOT) {
+        slot = ACL_$UNWIRED_DATA.cache_free_head;
         /* The `move.w (0xb74,A5),-(SP)` at 0x00E45900 re-reads the head
          * rather than reusing D2; the two are the same value. */
-        acl_$cache_list_remove(&ACL_$CACHE_FREE_HEAD, ACL_$CACHE_HASH_LINKS,
-                               ACL_$CACHE_FREE_HEAD);
+        acl_$cache_list_remove(&ACL_$UNWIRED_DATA.cache_free_head, ACL_$UNWIRED_DATA.cache_hash_links,
+                               ACL_$UNWIRED_DATA.cache_free_head);
         return slot;                                    /* 0x00E45974 */
     }
 
     /* 0x00E45912-0x00E45924 */
-    if (ACL_$CACHE_LRU_HEAD == ACL_CACHE_NO_SLOT) {
+    if (ACL_$UNWIRED_DATA.cache_lru_head == ACL_CACHE_NO_SLOT) {
         CRASH_SYSTEM(&acl_$alloc_cache_slot_crash_00e45980);
     }
 
     /*
      * 0x00E45926-0x00E45932: the LRU list is circular, so the victim is the
      * predecessor of the head - `(0x9f2,A5 + head*4)` is
-     * ACL_$CACHE_LRU_LINKS[head].prev.
+     * ACL_$UNWIRED_DATA.cache_lru_links[head].prev.
      */
-    victim = ACL_$CACHE_LRU_LINKS[ACL_$CACHE_LRU_HEAD].prev;
+    victim = ACL_$UNWIRED_DATA.cache_lru_links[ACL_$UNWIRED_DATA.cache_lru_head].prev;
 
     /* 0x00E45936-0x00E45946 */
-    acl_$cache_list_remove(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, victim);
+    acl_$cache_list_remove(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, victim);
 
     /* 0x00E4594A-0x00E4596E: unlink it from the hash bucket it was chained
      * in.  The bucket number is remembered in the directory entry. */
-    slot = (int16_t)ACL_$CACHE_DIR[victim].hash_bucket;
-    acl_$cache_list_remove(&ACL_$CACHE_HASH_BUCKETS_TAB[slot],
-                           ACL_$CACHE_HASH_LINKS, victim);
+    slot = (int16_t)ACL_$UNWIRED_DATA.cache_dir[victim].hash_bucket;
+    acl_$cache_list_remove(&ACL_$UNWIRED_DATA.cache_hash_buckets[slot],
+                           ACL_$UNWIRED_DATA.cache_hash_links, victim);
 
     slot = victim;                                      /* 0x00E45972 */
     return slot;                                        /* 0x00E45974 */

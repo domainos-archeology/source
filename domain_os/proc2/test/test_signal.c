@@ -18,14 +18,8 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT, PROC1_$AS_ID;
 int __host_intr_disable_count = 0;
 
@@ -69,14 +63,14 @@ static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static uid_t U = { 1, 2 };
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     n_lock = n_unlock = n_deliver = n_log = n_suspend = n_acl = 0;
     mock_find_index = 3; mock_find_status = status_$ok; mock_pgroup_idx = 4;
     mock_acl = 0; mock_deliver_status = status_$ok;
-    PROC1_$CURRENT = 5; PROC1_$AS_ID = 7; mock_pid_to_index[5] = 2;
+    PROC1_$CURRENT = 5; PROC1_$AS_ID = 7; PROC2_$DATA.pid_to_index[5] = 2;
     E(2)->self_index = 2; E(2)->session_id = 9; E(2)->level1_pid = 5;
     E(3)->session_id = 9; E(3)->level1_pid = 17;
-    P2_INFO_ALLOC_PTR = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
 }
 
 TEST(signal_permission_chain)
@@ -109,7 +103,7 @@ TEST(pgroup_internal_ladder)
     status_$t st = 5;
     PROC2_$SIGNAL_PGROUP_INTERNAL(0, 1, 0, 0, &st);
     ASSERT_EQ(st, status_$proc2_uid_not_found); ASSERT_EQ(n_log, 1); ASSERT_EQ(log_type, 2);
-    P2_INFO_ALLOC_PTR = 3; E(3)->next_index = 4; E(4)->next_index = 6; E(6)->next_index = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 3; E(3)->next_index = 4; E(4)->next_index = 6; E(6)->next_index = 0;
     E(3)->pgroup_table_idx = 4; E(4)->pgroup_table_idx = 4; E(6)->pgroup_table_idx = 5;
     PROC2_$SIGNAL_PGROUP_INTERNAL(4, 1, 0, 0, &st);          /* no perms: both */
     ASSERT_EQ(st, status_$ok); ASSERT_EQ(n_deliver, 2); ASSERT_EQ(deliver_idx[1], 4);
@@ -131,7 +125,7 @@ TEST(pgroup_internal_ladder)
 TEST(pgroup_wrappers_and_check_perms)
 {
     int16_t sig = 2; uint32_t p = 0; status_$t st;
-    P2_INFO_ALLOC_PTR = 3; E(3)->pgroup_table_idx = 4;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 3; E(3)->pgroup_table_idx = 4;
     PROC2_$SIGNAL_PGROUP(&U, &sig, &p, &st);                 /* perms on: ACL denies */
     /* denied, nobody delivered to, no zombie -> uid_not_found (0x00E3F21C) */
     ASSERT_EQ(st, status_$proc2_uid_not_found); ASSERT_EQ(n_acl, 1);
@@ -153,14 +147,14 @@ TEST(sigblock_returns_old_mask)
 
 TEST(shutdown_filters)
 {
-    P2_INFO_ALLOC_PTR = 2; E(2)->next_index = 3; E(3)->next_index = 4; E(4)->next_index = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 2; E(2)->next_index = 3; E(3)->next_index = 4; E(4)->next_index = 0;
     E(2)->asid = 7; E(2)->flags = 0x0100;      /* my own AS */
     E(3)->asid = 8; E(3)->flags = 0x0100;      /* suspended */
     E(4)->asid = 9; E(4)->flags = 0x8000;      /* not bound */
     PROC2_$SHUTDOWN();
     ASSERT_EQ(n_suspend, 1); ASSERT_EQ(suspend_uid[0] == &E(3)->uid, 1);
     ASSERT_EQ(n_lock, 0);
-    P2_INFO_ALLOC_PTR = 0; PROC2_$SHUTDOWN(); ASSERT_EQ(n_suspend, 1);
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0; PROC2_$SHUTDOWN(); ASSERT_EQ(n_suspend, 1);
 }
 
 TEST(set_tty)

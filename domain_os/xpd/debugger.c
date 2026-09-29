@@ -215,7 +215,7 @@ unlock_ok:
  * Frame (link.w A6,-0x1c; A4 A3 A2 D4 D3 D2 saved):
  *   A6-0x08  4  cont_status
  *   D2  asid, then the target loop counter; D3 the slot; D4 status_ret
- *   A2  &PROC2_$UID[idx]; A3 the target record
+ *   A2  &PROC2_$UNWIRED_DATA.uid[idx]; A3 the target record
  */
 void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
 {
@@ -243,7 +243,7 @@ void XPD_$UNREGISTER_DEBUGGER(int16_t asid, status_$t *status_ret)
             }
             tgt->state &= (uint16_t)~XPD_STATE_DEBUGGER;
             if (((tgt->state & XPD_STATE_EVENT) >> XPD_STATE_EVENT_SHIFT) != 0) {
-                XPD_$CONTINUE_PROC(&PROC2_$UID[idx], &xpd_$unreg_response,
+                XPD_$CONTINUE_PROC(&PROC2_$UNWIRED_DATA.uid[idx], &xpd_$unreg_response,
                                    &cont_status);
             }
         }

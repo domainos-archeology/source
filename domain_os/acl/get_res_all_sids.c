@@ -26,11 +26,11 @@ void ACL_$GET_RES_ALL_SIDS(void *original_sids, void *current_sids, void *saved_
     uint32_t *save_out = (uint32_t *)saved_sids;
     uint32_t *sproj_out = (uint32_t *)saved_proj;
     uint32_t *cproj_out = (uint32_t *)current_proj;
-    uint32_t *orig_src = (uint32_t *)&ACL_$ORIGINAL_SIDS[pid];
-    uint32_t *curr_src = (uint32_t *)&ACL_$CURRENT_SIDS[pid];
-    uint32_t *save_src = (uint32_t *)&ACL_$SAVED_SIDS[pid];
-    uint32_t *sproj_src = (uint32_t *)&ACL_$SAVED_PROJ[pid];
-    uint32_t *cproj_src = (uint32_t *)&ACL_$PROJ_LISTS[pid];
+    uint32_t *orig_src = (uint32_t *)&ACL_$DATA.original_sids[pid];
+    uint32_t *curr_src = (uint32_t *)&ACL_$DATA.current_sids[pid];
+    uint32_t *save_src = (uint32_t *)&ACL_$DATA.saved_sids[pid];
+    uint32_t *sproj_src = (uint32_t *)&ACL_$DATA.saved_proj[pid];
+    uint32_t *cproj_src = (uint32_t *)&ACL_$DATA.proj_lists[pid];
     int i;
 
     /* Copy 9 uint32_t values (36 bytes) for each SID block */

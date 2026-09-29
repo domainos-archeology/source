@@ -33,7 +33,7 @@ int8_t acl_$check_suser_pid(int16_t pid)
     acl_sid_block_t *sids;
     int8_t is_suser = 0;
 
-    sids = &ACL_$CURRENT_SIDS[pid];
+    sids = &ACL_$DATA.current_sids[pid];
 
     /*
      * Check conditions for superuser status:
@@ -45,7 +45,7 @@ int8_t acl_$check_suser_pid(int16_t pid)
      * 6. Login SID matches RGYC_$G_LOCKSMITH_UID
      */
     if (pid == 1 ||
-        ACL_$SUPER_COUNT[pid] > 0 ||
+        ACL_$UNWIRED_DATA.super_count[pid] > 0 ||
         uid_equal(&sids->login_sid, &RGYC_$G_LOGIN_UID) ||
         uid_equal(&sids->user_sid, &RGYC_$G_LOCKSMITH_UID) ||
         uid_equal(&sids->group_sid, &RGYC_$G_LOCKSMITH_UID) ||
@@ -54,7 +54,7 @@ int8_t acl_$check_suser_pid(int16_t pid)
         is_suser = -1;  /* 0xFF */
 
         /* Mark this ASID as having used suser privilege */
-        ACL_$ASID_SUSER_BITMAP[(pid - 1) >> 3] |= (0x80 >> ((pid - 1) & 7));
+        ACL_$DATA.asid_suser_bitmap[(pid - 1) >> 3] |= (0x80 >> ((pid - 1) & 7));
     }
 
     return is_suser;

@@ -15,8 +15,8 @@ void PROC2_$DELIVER_PENDING(void)
 {
     int16_t current_idx;    /* (-0x2,A6) */
 
-    /* 0x00E3F52C..0x00E3F53E: idx = PROC2_$PID_TO_INDEX[PROC1_$CURRENT] */
-    current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    /* 0x00E3F52C..0x00E3F53E: idx = PROC2_$DATA.pid_to_index[PROC1_$CURRENT] */
+    current_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
 
     /* 0x00E3F544 ML_$LOCK(4) */
     ML_$LOCK(PROC2_LOCK_ID);

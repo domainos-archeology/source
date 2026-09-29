@@ -49,7 +49,7 @@ void TIME_$SET_ITIMER_VIRT_CALLBACK(time_$callback_arg_t arg)
      * The signal is raised only while a non-zero expiry is recorded.
      */
     if (entry->expire_high != 0 || entry->expire_low != 0) {
-        PROC2_$SIGNAL_OS(&PROC2_$UID[as_id],   /* 0xE7BE94 + as_id*8 */
+        PROC2_$SIGNAL_OS(&PROC2_$UNWIRED_DATA.uid[as_id],   /* 0xE7BE94 + as_id*8 */
                          (int16_t *)&time_$c_itimer_virt_signal,
                          (uint32_t *)&time_$c_itimer_virt_fault,
                          &status);

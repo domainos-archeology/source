@@ -27,7 +27,7 @@ uint32_t PROC2_$SIGSETMASK(uint32_t *mask_ptr, uint32_t *result)
 
     /* 0x00E3F6CE-0x00E3F6F6 */
     new_mask = *mask_ptr;
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E3F6E6/0x00E3F6FA-0x00E3F704 */
     ML_$LOCK(PROC2_LOCK_ID);

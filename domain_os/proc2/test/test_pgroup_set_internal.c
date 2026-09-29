@@ -23,14 +23,8 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 int __host_intr_disable_count = 0;
 
 static int n_lock, n_unlock, n_cleanup, n_crash, n_sig;
@@ -60,13 +54,13 @@ static int tests_run, tests_failed;
         tests_failed++; return; } } while (0)
 
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
-static pgroup_entry_t *G(int i) { return PGROUP_ENTRY(i); }
+static pgroup_entry_t *G(int i) { return (&PROC2_$DATA.pgroup[i]); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     n_lock = n_unlock = n_cleanup = n_crash = n_sig = 0; last_crash = NULL;
-    P2_INFO_ALLOC_PTR = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
 }
 
 TEST(find_scans_1_to_70_and_sign_quirk)
@@ -82,7 +76,7 @@ TEST(find_scans_1_to_70_and_sign_quirk)
 TEST(decr_signals_only_at_zero_with_flag_0x40)
 {
     G(4)->leader_count = 2;
-    P2_INFO_ALLOC_PTR = 2; E(2)->next_index = 0; E(2)->pgroup_table_idx = 4; E(2)->flags = 0x0040;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 2; E(2)->next_index = 0; E(2)->pgroup_table_idx = 4; E(2)->flags = 0x0040;
     PGROUP_DECR_LEADER_COUNT(4);
     ASSERT_EQ(G(4)->leader_count, 1); ASSERT_EQ(n_sig, 0);
     PGROUP_DECR_LEADER_COUNT(4);
@@ -169,7 +163,7 @@ TEST(info_paths)
     id = 44; PROC2_$PGROUP_INFO(&id, &sess, &lead, &st);
     ASSERT_EQ(st, status_$ok); ASSERT_EQ(sess, 9); ASSERT_EQ(lead, 0); ASSERT_EQ(n_lock, 1);
     /* fallback through a process upid */
-    P2_INFO_ALLOC_PTR = 3; E(3)->upid = 45; E(3)->pgroup_table_idx = 4; G(4)->leader_count = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 3; E(3)->upid = 45; E(3)->pgroup_table_idx = 4; G(4)->leader_count = 0;
     id = 45; PROC2_$PGROUP_INFO(&id, &sess, &lead, &st);
     ASSERT_EQ(st, status_$ok); ASSERT_EQ(lead, 0xFF);
     id = 46; sess = 77; PROC2_$PGROUP_INFO(&id, &sess, &lead, &st);

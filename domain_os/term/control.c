@@ -186,9 +186,9 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
         case CTRL_ENABLE_STATUS:                            /* 0x00E66AC0 */
             TTY_$K_ENABLE_FUNC(line_ptr, &tty_num_10, (const char *)value_ptr, status_ret);
         set_pgroup_self:
-            /* 0x00E66AD6..0x00E66AEA: &PROC2_$UID[PROC1_$AS_ID]
+            /* 0x00E66AD6..0x00E66AEA: &PROC2_$UNWIRED_DATA.uid[PROC1_$AS_ID]
              * (move.w PROC1_$AS_ID; lsl.w #3; pea (0,A0,D0w)). */
-            pgroup_ptr = &PROC2_$UID[PROC1_$AS_ID];
+            pgroup_ptr = &PROC2_$UNWIRED_DATA.uid[PROC1_$AS_ID];
             goto set_pgroup;                                /* 0x00E66AF8 */
 
         case CTRL_SET_PGROUP:                               /* 0x00E66AEC */
@@ -255,7 +255,7 @@ void TERM_$CONTROL(short *line_ptr, unsigned short *option_ptr, unsigned short *
             } else {
                 params.flags2 &= ~0x00000004u;
             }
-            TTY_$K_SET_PGROUP(line_ptr, &PROC2_$UID[PROC1_$AS_ID], status_ret);
+            TTY_$K_SET_PGROUP(line_ptr, &PROC2_$UNWIRED_DATA.uid[PROC1_$AS_ID], status_ret);
             param_mask = 0x800;
             goto set_sio_param;
 

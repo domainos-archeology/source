@@ -54,7 +54,7 @@ time_queue_t TIME_$RTEQ;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
 
 /* The CPU-limit constant cells live in time/set_cpu_limit_callback.c. */
 const int16_t time_$c_cpu_limit_signal = 0x001B;
@@ -755,7 +755,7 @@ TEST(set_cpu_limit_absolute_past_signals)
 
     ASSERT_EQ(1, signal_calls);
     ASSERT_EQ(0, add_calls);
-    ASSERT_EQ((uintptr_t)&PROC2_$UID[5], (uintptr_t)signal_uid);
+    ASSERT_EQ((uintptr_t)&PROC2_$UNWIRED_DATA.uid[5], (uintptr_t)signal_uid);
     ASSERT_EQ(0x001B, signal_number);
     ASSERT_EQ(0x000D000B, signal_param);
 }

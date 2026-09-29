@@ -7,7 +7,7 @@
  *   (0x8,A6)  proc_uid    copied to A6-0x8
  *   (0xC,A6)  upid_ret    <- D4 = entry+0x16
  *   (0x10,A6) uppid_ret   <- D3 = P2[entry+0x1E]->upid, or 1 without a parent
- *   (0x14,A6) upgid_ret   <- D2 = PGROUP_TABLE[entry+0x10].upgid, or 0
+ *   (0x14,A6) upgid_ret   <- D2 = PROC2_$DATA.pgroup[entry+0x10].upgid, or 0
  *   (0x18,A6) status_ret  <- A6-0xC (from PROC2_$FIND_INDEX)
  *
  * The three result registers are written only on the success path; when
@@ -63,7 +63,7 @@ void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid_ret, uint16_t *uppid_ret,
 
         /* 0x00E7391A-0x00E73936: entry+0x10 */
         if (entry->pgroup_table_idx != 0) {
-            upgid = PGROUP_ENTRY(entry->pgroup_table_idx)->upgid;        /* 0x00E73930 */
+            upgid = PROC2_$DATA.pgroup[entry->pgroup_table_idx].upgid;        /* 0x00E73930 */
         } else {
             upgid = 0;                                                   /* 0x00E73936 */
         }

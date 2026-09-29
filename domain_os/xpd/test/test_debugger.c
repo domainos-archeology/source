@@ -39,12 +39,9 @@ static int tests_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-static proc2_info_t mock_entries[8];
-proc2_info_t *P2_INFO_TABLE = mock_entries;
-static uint16_t pid_to_index[64];
-uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uid_t UID_$NIL = { 0, 0 };
 #include "fim/fim.h"
 MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
@@ -114,9 +111,9 @@ void XPD_$FP_PUT_STATE(void *a, void *b) { (void)a; (void)b; }
 static void reset(void)
 {
     memset(XPD_$DATA, 0, sizeof(XPD_$DATA));
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(pid_to_index, 0, sizeof(pid_to_index));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
     memset(known_uid, 0, sizeof(known_uid));
     memset(known_idx, 0, sizeof(known_idx));
     PROC1_$CURRENT = 3;
@@ -131,7 +128,7 @@ static void reset(void)
 
 /* uid U(n) is process index n */
 #define U(n) ((uid_t){ 0x1000u + (n), (n) })
-static void know(int i, uid_t u, uint16_t idx) { known_uid[i] = u; known_idx[i] = idx; PROC2_$UID[idx] = u; }
+static void know(int i, uid_t u, uint16_t idx) { known_uid[i] = u; known_idx[i] = idx; PROC2_$UNWIRED_DATA.uid[idx] = u; }
 
 /* ==========================================================================
  * The debugger table
@@ -364,7 +361,7 @@ TEST(get_event_and_data)
     status_$t st = 0x55;
     reset();
     XPD_DEBUGGER(2)->asid = 5;
-    PROC2_$UID[7] = U(7);
+    PROC2_$UNWIRED_DATA.uid[7] = U(7);
     /* 6: wrong slot; 7: acked; 8: not enabled; 9: no event; 10: the one */
     XPD_TARGET(6)->state = (1 << XPD_STATE_DEBUGGER_SHIFT) | XPD_STATE_ENABLED | (1 << XPD_STATE_EVENT_SHIFT);
     XPD_TARGET(7)->state = (2 << XPD_STATE_DEBUGGER_SHIFT) | XPD_STATE_ENABLED | XPD_STATE_ACKED | (1 << XPD_STATE_EVENT_SHIFT);
@@ -372,7 +369,7 @@ TEST(get_event_and_data)
     XPD_TARGET(9)->state = (2 << XPD_STATE_DEBUGGER_SHIFT) | XPD_STATE_ENABLED;
     XPD_TARGET(10)->state = (2 << XPD_STATE_DEBUGGER_SHIFT) | XPD_STATE_ENABLED | (6 << XPD_STATE_EVENT_SHIFT);
     XPD_TARGET(10)->status = 0x00120015;
-    PROC2_$UID[10] = U(10);
+    PROC2_$UNWIRED_DATA.uid[10] = U(10);
     XPD_$GET_EVENT_AND_DATA(&u, &ev, &st);
     ASSERT_EQ(6, ev);
     ASSERT_EQ(0x00120015, st);

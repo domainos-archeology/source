@@ -3,7 +3,7 @@
  *
  * Re-emitted from the image (0x00E415C2..0x00E4161E, 94 bytes).
  *
- *   00e415d0  move.w (0x1e0,A5),D0w       ; P2_INFO_ALLOC_PTR
+ *   00e415d0  move.w (0x1e0,A5),D0w       ; PROC2_$UNWIRED_DATA.info_alloc_ptr
  *   00e415d4  movea.l #0xe2060a,A0 ; A2   ; &PROC1_$AS_ID (movea sets no flags)
  *   00e415dc  beq.b exit                  ; hence the beq tests the move.w
  *   00e415f0  move.w (-0x4e,A3),D1w       ; entry+0x96 asid
@@ -27,7 +27,7 @@ void PROC2_$SHUTDOWN(void)
     status_$t status;            /* A6-0x2C */
 
     /* 0x00E415D0-0x00E415DC */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     while (index != 0) {
         entry = P2_INFO_ENTRY(index);                        /* 0x00E415E0-0x00E415EC */
         /* 0x00E415F0-0x00E41600 */

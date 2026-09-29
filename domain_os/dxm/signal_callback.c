@@ -16,9 +16,9 @@
  *   00e7219c  pea (0x4,A2)             ; &rec->param
  *   00e721a0  pea (0x2,A2)             ; &rec->signal
  *   00e721a4  move.w (0x8,A2),D0w      ; rec->proc_index
- *   00e721a8  movea.l #0xe7be94,A1     ; A1 = PROC2_$UID
+ *   00e721a8  movea.l #0xe7be94,A1     ; A1 = PROC2_$UNWIRED_DATA.uid
  *   00e721ae  lsl.w #0x3,D0w           ; *8 == sizeof(uid_t)
- *   00e721b0  pea (0x0,A1,D0w*0x1)     ; &PROC2_$UID[rec->proc_index]
+ *   00e721b0  pea (0x0,A1,D0w*0x1)     ; &PROC2_$UNWIRED_DATA.uid[rec->proc_index]
  *   00e721b4  move.w (A2),D1w          ; rec->routine
  *   00e721b6  lsl.w #0x2,D1w           ; *4 == sizeof(routine pointer)
  *   00e721b8  lea (0x0,A5,D1w*0x1),A1
@@ -52,6 +52,6 @@ void DXM_$ADD_SIGNAL_CALLBACK(void *data)
     routine = DXM_$SIGNAL_ROUTINES[rec->routine];
 
     /* 0x00E721BE */
-    routine(&PROC2_$UID[rec->proc_index], &rec->signal, &rec->param,
+    routine(&PROC2_$UNWIRED_DATA.uid[rec->proc_index], &rec->signal, &rec->param,
             &local_status);
 }

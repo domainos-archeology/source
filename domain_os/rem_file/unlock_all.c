@@ -62,7 +62,7 @@ void REM_FILE_$UNLOCK_ALL(void)
     request.opcode   = REM_FILE_OP_UNLOCK_ALL;  /* 0x00E61C84 */
     request.nil_uid  = UID_$NIL;                /* 0x00E61C90 */
     request.reserved = 3;                       /* 0x00E61C98 */
-    /* 0x00E61C9E-0x00E61CB2: `sgt` on ACL_$SUPER_COUNT[PROC1_$CURRENT]. */
+    /* 0x00E61C9E-0x00E61CB2: `sgt` on ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]. */
     request.admin_flag = REM_FILE_PROCESS_HAS_ADMIN() ? true : false;
 
     /* 0x00E61CB6-0x00E61CCA: copy the client packet-info template, then

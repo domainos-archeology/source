@@ -175,7 +175,7 @@ void REM_FILE_$NAME_GET_ENTRYU(void *addr_info, uid_t *dir_uid,
 
     request.name_len = name_len;                         /* 0x00E620E6 */
     request.flags    = 3;                                /* 0x00E620EA */
-    /* 0x00E620F0: tst.w ACL_$SUPER_COUNT[PROC1_$CURRENT] / sgt */
+    /* 0x00E620F0: tst.w ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] / sgt */
     request.privileged = REM_FILE_PROCESS_HAS_ADMIN() ? -1 : 0;
     request._zero_32 = 0;                                /* 0x00E62108 */
 

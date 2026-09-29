@@ -48,7 +48,7 @@ void PROC2_$SET_PGROUP(uid_t *proc_uid, uint16_t *new_upgid, status_$t *status_r
     }
 
     /* 0x00E4111A-0x00E4113E */
-    current = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    current = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
     target = P2_INFO_ENTRY(target_idx);
 
     /* 0x00E41142-0x00E4114A: the target is me */
@@ -84,7 +84,7 @@ void PROC2_$SET_PGROUP(uid_t *proc_uid, uint16_t *new_upgid, status_$t *status_r
              * idx 0) vs sign-extended caller+0x5C, then idx != 0.
              */
             pgroup_idx = PGROUP_FIND_BY_UPGID(upgid);
-            if ((int32_t)(uint32_t)PGROUP_ENTRY(pgroup_idx)->session_id !=
+            if ((int32_t)(uint32_t)PROC2_$DATA.pgroup[pgroup_idx].session_id !=
                 (int32_t)(int16_t)current->session_id) {
                 goto different_session;
             }

@@ -32,7 +32,7 @@ void PROC2_$SET_SESSION_ID(int8_t *flags, int16_t *session_id, status_$t *status
 
     /* 0x00E41C6A-0x00E41C88 */
     status = status_$ok;
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E41C8C: cmp.w (-0xce,A2),D2w */
     if ((uint16_t)new_session == entry->upid) {

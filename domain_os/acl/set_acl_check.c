@@ -139,7 +139,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
          * index of the first NIL slot, or 8 when none is NIL.
          */
         proj_count = 8;
-        proj_row = &ACL_$PROJ_UIDS[PROC1_$CURRENT][0];
+        proj_row = &ACL_$DATA.proj_uids[PROC1_$CURRENT][0];
         for (i = 1; i <= 8; i++) {
             if (acl_$uid_eq(&proj_row[i - 1], &UID_$NIL) < 0) {
                 proj_count = (int16_t)(i - 1);
@@ -156,8 +156,8 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
                           &local_uid,
                           acl_uid,
                           new_prot,
-                          &ACL_$CURRENT_SIDS[PROC1_$CURRENT],
-                          &ACL_$PROJ_UIDS[PROC1_$CURRENT][0],
+                          &ACL_$DATA.current_sids[PROC1_$CURRENT],
+                          &ACL_$DATA.proj_uids[PROC1_$CURRENT][0],
                           (uint16_t)proj_count,
                           (uint16_t)*op_type,
                           status_ret);
@@ -243,19 +243,19 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
      * 0x00E47310-0x00E473D8: a locksmith is allowed everything, unless the
      * local-locksmith downgrade applies to this type-9 process.
      */
-    sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+    sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
     if (acl_$uid_eq(&sid_row->login_sid, &RGYC_$G_LOCKSMITH_UID) < 0 ||
         acl_$uid_eq(&sid_row->group_sid, &RGYC_$G_LOCKSMITH_UID) < 0 ||
         acl_$uid_eq(&sid_row->user_sid,  &RGYC_$G_LOCKSMITH_UID) < 0) {
 
-        if (ACL_$LOCAL_LOCKSMITH == 0 ||
+        if (ACL_$UNWIRED_DATA.local_locksmith == 0 ||
             PROC1_$DATA.type[PROC1_$CURRENT] != 9 ||
-            (ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
+            (ACL_$DATA.locksmith_override_bitmap[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
              ACL_PID_BITMAP_MASK(PROC1_$CURRENT)) != 0) {
 
             /* 0x00E473AA-0x00E473D6 */
             result = true;
-            ACL_$ASID_SUSER_BITMAP[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] |=
+            ACL_$DATA.asid_suser_bitmap[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] |=
                 ACL_PID_BITMAP_MASK(PROC1_$CURRENT);
             result_status = status_$ok;
             goto unlock_and_store;
@@ -279,8 +279,8 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         acl_$uid_eq(&attrs2.default_acl, &UID_$NIL) >= 0) {
 
         /* ---- 0x00E47430-0x00E47708: both objects carry an ACL image ---- */
-        acl_$cache_slot_t *s1 = &ACL_$ACL_CACHE[slot1];
-        acl_$cache_slot_t *s2 = &ACL_$ACL_CACHE[slot2];
+        acl_$cache_slot_t *s1 = &ACL_$DATA.acl_cache[slot1];
+        acl_$cache_slot_t *s2 = &ACL_$DATA.acl_cache[slot2];
 
         /* 0x00E47454-0x00E4746E: the two ACLs must protect the same kind of
          * object. */
@@ -291,7 +291,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         }
 
         result_status = status_$acl_no_right_to_set_subsystem_data;
-        sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+        sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
 
         /* 0x00E4747E-0x00E474E4: the subsystem manager may change hands only
          * between "no subsystem" and the caller's own login SID. */
@@ -346,11 +346,11 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         acl_$uid_eq(&attrs2.default_acl, &UID_$NIL) < 0) {
 
         /* 0x00E4758C-0x00E475F2: only the OBJECT has an ACL today. */
-        acl_$cache_slot_t *s1 = &ACL_$ACL_CACHE[slot1];
+        acl_$cache_slot_t *s1 = &ACL_$DATA.acl_cache[slot1];
 
         if (!(s1->subsys_uid.high == s1->type_uid.high &&
               s1->subsys_uid.low  == s1->type_uid.low)) {
-            sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+            sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
             if (!(s1->subsys_uid.high == sid_row->login_sid.high &&
                   s1->subsys_uid.low  == sid_row->login_sid.low)) {
                 goto unlock_and_store;
@@ -360,7 +360,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
             s1->required_uid.low  == UID_$NIL.low) {
             goto set_setid;
         }
-        sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+        sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
         if (!(s1->required_uid.high == sid_row->login_sid.high &&
               s1->required_uid.low  == sid_row->login_sid.low)) {
             goto unlock_and_store;
@@ -373,7 +373,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         acl_$uid_eq(&attrs2.default_acl, &UID_$NIL) >= 0) {
 
         /* 0x00E47624-0x00E476FE: only the incoming ACL has an image. */
-        acl_$cache_slot_t *s2 = &ACL_$ACL_CACHE[slot2];
+        acl_$cache_slot_t *s2 = &ACL_$DATA.acl_cache[slot2];
 
         obj_type = (int16_t)attrs1.obj_flags[ACL_ATTR_SUB_TYPE];
 
@@ -398,7 +398,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         /* 0x00E47698-0x00E476C0 */
         if (!(s2->subsys_uid.high == s2->type_uid.high &&
               s2->subsys_uid.low  == s2->type_uid.low)) {
-            sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+            sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
             if (!(s2->subsys_uid.high == sid_row->login_sid.high &&
                   s2->subsys_uid.low  == sid_row->login_sid.low)) {
                 goto unlock_and_store;
@@ -410,7 +410,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
             s2->required_uid.low  == UID_$NIL.low) {
             goto set_setid;
         }
-        sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+        sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
         if (s2->required_uid.high == sid_row->login_sid.high &&
             s2->required_uid.low  == sid_row->login_sid.low) {
             goto set_setid;
@@ -443,12 +443,12 @@ sid_checks:                                             /* 0x00E4770A */
 
     /* 0x00E4773A-0x00E47756: a type-9 process may not set-id while the
      * local-locksmith feature is in force. */
-    if (ACL_$LOCAL_LOCKSMITH != 0 && PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
+    if (ACL_$UNWIRED_DATA.local_locksmith != 0 && PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
         goto unlock_and_store;
     }
 
     *setid_ret = true;                                  /* 0x00E4775C */
-    sid_row = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];
+    sid_row = &ACL_$DATA.current_sids[PROC1_$CURRENT];
 
     /*
      * 0x00E4775E-0x00E4779C: each SID being changed must be one the caller
@@ -471,7 +471,7 @@ sid_checks:                                             /* 0x00E4770A */
             /* Not the caller's own group - it must be one of the eight
              * project UIDs, and a NIL slot ends the list. */
             boolean found = false;
-            proj_row = &ACL_$PROJ_UIDS[PROC1_$CURRENT][0];
+            proj_row = &ACL_$DATA.proj_uids[PROC1_$CURRENT][0];
             for (i = 0; i <= 7; i++) {
                 if (acl_$uid_eq(&proj_row[i], &UID_$NIL) < 0) {
                     break;                              /* 0x00E47800 */

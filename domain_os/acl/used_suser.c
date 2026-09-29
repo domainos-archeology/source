@@ -22,7 +22,7 @@ int8_t ACL_$USED_SUSER(void)
     int16_t byte_index = bit_index >> 3;
     int16_t bit_offset = 7 - (bit_index & 7);
 
-    if (ACL_$ASID_SUSER_BITMAP[byte_index] & (1 << bit_offset)) {
+    if (ACL_$DATA.asid_suser_bitmap[byte_index] & (1 << bit_offset)) {
         return -1;  /* 0xFF */
     }
     return 0;

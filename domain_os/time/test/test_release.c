@@ -63,7 +63,7 @@ time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
 time_queue_t TIME_$RTEQ;
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
 uint8_t IN_RT_INT;
 
 /* ==========================================================================
@@ -225,7 +225,7 @@ TEST(real_callback_signals_when_expiry_set)
     TIME_$SET_ITIMER_REAL_CALLBACK((time_$callback_arg_t)&data_ptr);
 
     ASSERT_EQ(1, signal_calls);
-    ASSERT_PTR_EQ(&PROC2_$UID[7], signal_uid);
+    ASSERT_PTR_EQ(&PROC2_$UNWIRED_DATA.uid[7], signal_uid);
     ASSERT_EQ(0x000E, signal_number);
     ASSERT_EQ(0x000D0007, signal_param);
 }
@@ -261,7 +261,7 @@ TEST(virt_callback_uses_virtual_half)
     virt->expire_high = 0x10;
     TIME_$SET_ITIMER_VIRT_CALLBACK((time_$callback_arg_t)&data_ptr);
     ASSERT_EQ(1, signal_calls);
-    ASSERT_PTR_EQ(&PROC2_$UID[9], signal_uid);
+    ASSERT_PTR_EQ(&PROC2_$UNWIRED_DATA.uid[9], signal_uid);
     ASSERT_EQ(0x001D, signal_number);
     ASSERT_EQ(0x000D0008, signal_param);
 }

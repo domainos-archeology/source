@@ -9,7 +9,7 @@
  *
  *   00e41844  PROC2_$FIND_INDEX(&uid, &status) -> D2; tst.l / bne unlock
  *   00e41874  move.w (-0xbe,A0),D0w           ; target+0x26 debugger_idx
- *   00e41878  cmp.w (0x3eb6,A1),D0w           ; == P2_PID_TO_INDEX[PROC1_$CURRENT]
+ *   00e41878  cmp.w (0x3eb6,A1),D0w           ; == PROC2_$DATA.pid_to_index[PROC1_$CURRENT]
  *   00e4187e  status_$proc2_proc_not_debug_target (0x190010) when not
  *   00e41888  st ; move.w D2w ; bsr DEBUG_CLEAR_INTERNAL(idx, TRUE)
  *
@@ -42,7 +42,7 @@ void PROC2_$UNDEBUG(uid_t *proc_uid, status_$t *status_ret)
     if (status == status_$ok) {
         entry = P2_INFO_ENTRY(proc_idx);                     /* 0x00E41852-0x00E4185E */
         /* 0x00E41862-0x00E4187C */
-        if (entry->debugger_idx == P2_PID_TO_INDEX(PROC1_$CURRENT)) {
+        if (entry->debugger_idx == PROC2_$DATA.pid_to_index[PROC1_$CURRENT]) {
             DEBUG_CLEAR_INTERNAL(proc_idx, (int8_t)0xFF);    /* 0x00E41888-0x00E4188C */
         } else {
             status = status_$proc2_proc_not_debug_target;    /* 0x00E4187E */

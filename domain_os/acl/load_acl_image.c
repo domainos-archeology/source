@@ -5,7 +5,7 @@
  *
  * Takes a cache slot (free-list head, or the LRU victim), maps the ACL object
  * into the address space, copies its 0x400-byte image into
- * ACL_$ACL_CACHE[slot], upgrades pre-version-5 images in place, registers the
+ * ACL_$DATA.acl_cache[slot], upgrades pre-version-5 images in place, registers the
  * slot in the cache directory and hash bucket, and returns the slot index.
  * Returns ACL_CACHE_NO_SLOT when the UID turned out to describe a default ACL
  * (nothing needs caching) or when the map/unmap failed.
@@ -24,7 +24,7 @@
  *   -0x2C conv_len     word, acl_$convert_image's length-out
  *   -0x2A slot         word, the slot acl_$alloc_cache_slot handed out
  *   -0x28 map_out      longword, MST_$MAPS' out parameter
- *   -0x24 image        longword, the mapped VA, later &ACL_$IMAGE_BUF
+ *   -0x24 image        longword, the mapped VA, later &ACL_$UNWIRED_DATA.image_buf
  *   -0x1C saved_status longword, the status FIM_$CLEANUP came back with
  *   -0x18 cleanup      0x18 bytes, the FIM cleanup record
  *
@@ -117,14 +117,14 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
      * ACL_$ENTER_SUPER / ACL_$EXIT_SUPER (`lea (0x0,A5,D0w*0x1),A0` +
      * `(0xb76,A0)` with D0 = PROC1_$CURRENT * 2).
      */
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]++;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]++;
 
     /* 0x00E45ABA-0x00E45AE6 */
     image = MST_$MAPS((int16_t)PROC1_$AS_ID, true, acl_uid, 0,
                       ACL_CACHE_SLOT_SIZE, ACL_MAPS_PROT, 0, 0,
                       &map_out, status_ret);
 
-    ACL_$SUPER_COUNT[PROC1_$CURRENT]--;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;
 
     /* 0x00E45AFA-0x00E45B16 */
     if (((uint32_t)*status_ret & 0xFFFFu) != 0) {
@@ -153,7 +153,7 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
 
     /* 0x00E45B30-0x00E45B60: 0x100 longwords = one whole slot. */
     src = (uint32_t *)image;
-    dst = (uint32_t *)&ACL_$ACL_CACHE[slot];
+    dst = (uint32_t *)&ACL_$DATA.acl_cache[slot];
     for (i = 0xFF; i != -1; i--) {
         *dst++ = *src++;
     }
@@ -168,7 +168,7 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
 
     /* 0x00E45BE2-0x00E45BF4 */
     *cached_flag_ret = (int8_t)false;
-    cs = &ACL_$ACL_CACHE[slot];
+    cs = &ACL_$DATA.acl_cache[slot];
 
     if (cs->version == 3) {
         /*
@@ -249,8 +249,8 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
         }
 
         /* 0x00E45D5C-0x00E45D86 */
-        acl_$convert_image(cs, prot, &ACL_$IMAGE_BUF, &conv_len, status_ret);
-        image = &ACL_$IMAGE_BUF;
+        acl_$convert_image(cs, prot, &ACL_$UNWIRED_DATA.image_buf, &conv_len, status_ret);
+        image = &ACL_$UNWIRED_DATA.image_buf;
         *cached_flag_ret = (int8_t)true;
 
         /*
@@ -259,16 +259,16 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
          * information, so it is not worth a cache slot.
          */
         if (conv_len == 0x34 &&
-            ACL_$IMAGE_BUF.required_uid.high == UID_$NIL.high &&
-            ACL_$IMAGE_BUF.required_uid.low  == UID_$NIL.low &&
-            ((ACL_$IMAGE_BUF.subsys_uid.high == ACL_$FILE_ACL.high &&
-              ACL_$IMAGE_BUF.subsys_uid.low  == ACL_$FILE_ACL.low) ||
-             (ACL_$IMAGE_BUF.subsys_uid.high == ACL_$DIR_ACL.high &&
-              ACL_$IMAGE_BUF.subsys_uid.low  == ACL_$DIR_ACL.low))) {
+            ACL_$UNWIRED_DATA.image_buf.required_uid.high == UID_$NIL.high &&
+            ACL_$UNWIRED_DATA.image_buf.required_uid.low  == UID_$NIL.low &&
+            ((ACL_$UNWIRED_DATA.image_buf.subsys_uid.high == ACL_$FILE_ACL.high &&
+              ACL_$UNWIRED_DATA.image_buf.subsys_uid.low  == ACL_$FILE_ACL.low) ||
+             (ACL_$UNWIRED_DATA.image_buf.subsys_uid.high == ACL_$DIR_ACL.high &&
+              ACL_$UNWIRED_DATA.image_buf.subsys_uid.low  == ACL_$DIR_ACL.low))) {
 
             /* 0x00E45DEC-0x00E45E14 */
-            acl_$cache_list_insert(&ACL_$CACHE_FREE_HEAD,
-                                   ACL_$CACHE_HASH_LINKS, slot);
+            acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_free_head,
+                                   ACL_$UNWIRED_DATA.cache_hash_links, slot);
             result   = ACL_CACHE_NO_SLOT;
             *acl_uid = UID_$NIL;
             goto ret;
@@ -276,14 +276,14 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
 
         /* 0x00E45DD0-0x00E45DEA: install the converted image. */
         src = (uint32_t *)image;
-        dst = (uint32_t *)&ACL_$ACL_CACHE[slot];
+        dst = (uint32_t *)&ACL_$DATA.acl_cache[slot];
         for (i = 0xFF; i != -1; i--) {
             *dst++ = *src++;
         }
     }
 
     /* 0x00E45E16-0x00E45E4C: register the slot in the cache directory. */
-    dir          = &ACL_$CACHE_DIR[slot];
+    dir          = &ACL_$UNWIRED_DATA.cache_dir[slot];
     dir->acl_uid = *acl_uid;
     dir->cached_flag = *cached_flag_ret;
     if (dir->cached_flag < 0) {
@@ -299,8 +299,8 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
                             (uint16_t *)&acl_$load_acl_image_hash_mod_00e45e8c);
 
     /* 0x00E45E62-0x00E45E7A */
-    acl_$cache_list_insert(&ACL_$CACHE_HASH_BUCKETS_TAB[dir->hash_bucket],
-                           ACL_$CACHE_HASH_LINKS, slot);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_hash_buckets[dir->hash_bucket],
+                           ACL_$UNWIRED_DATA.cache_hash_links, slot);
     goto ret;
 
 bad_status:                                             /* 0x00E45BCC */
@@ -312,7 +312,7 @@ free_relink:                                            /* 0x00E45BD0 */
      * The slot never made it into a hash bucket, so it goes straight back on
      * the free list - which is threaded through the hash-link array.
      */
-    acl_$cache_list_insert(&ACL_$CACHE_FREE_HEAD, ACL_$CACHE_HASH_LINKS, slot);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_free_head, ACL_$UNWIRED_DATA.cache_hash_links, slot);
 
 ret:                                                    /* 0x00E45E7E */
     return result;

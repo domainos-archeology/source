@@ -15,13 +15,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 int8_t AUDIT_$ENABLED;
 int __host_intr_disable_count = 0;
 
@@ -49,8 +43,8 @@ static int tests_run, tests_failed;
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     n_decr = 0; n_log = 0; AUDIT_$ENABLED = 0;
     /* entry 3 in group 4 session 9, parent 2 in group 5 session 9,
      * children 6 (group 7, session 9) and 7 (group 4) */
@@ -59,7 +53,7 @@ static void reset(void)
     E(2)->pgroup_table_idx = 5; E(2)->session_id = 9;
     E(6)->pgroup_table_idx = 7; E(6)->session_id = 9;
     E(7)->pgroup_table_idx = 4; E(7)->session_id = 9;
-    mock_pgroups[4].ref_count = 3;
+    PROC2_$DATA.pgroup[4].ref_count = 3;
 }
 
 TEST(mode_2_full)
@@ -68,7 +62,7 @@ TEST(mode_2_full)
     ASSERT_EQ(n_decr, 2);
     ASSERT_EQ(decr_idx[0], 4);      /* parent differs -> this entry's group */
     ASSERT_EQ(decr_idx[1], 7);      /* child 6's group; child 7 same group */
-    ASSERT_EQ(mock_pgroups[4].ref_count, 2);
+    ASSERT_EQ(PROC2_$DATA.pgroup[4].ref_count, 2);
     ASSERT_EQ(E(3)->pgroup_table_idx, 0);
 }
 
@@ -76,7 +70,7 @@ TEST(mode_1_refcount_only)
 {
     PGROUP_CLEANUP_INTERNAL(E(3), 1);
     ASSERT_EQ(n_decr, 0);
-    ASSERT_EQ(mock_pgroups[4].ref_count, 2);
+    ASSERT_EQ(PROC2_$DATA.pgroup[4].ref_count, 2);
     ASSERT_EQ(E(3)->pgroup_table_idx, 0);
 }
 
@@ -84,7 +78,7 @@ TEST(mode_0_leaders_only)
 {
     PGROUP_CLEANUP_INTERNAL(E(3), 0);
     ASSERT_EQ(n_decr, 2);
-    ASSERT_EQ(mock_pgroups[4].ref_count, 3);
+    ASSERT_EQ(PROC2_$DATA.pgroup[4].ref_count, 3);
     ASSERT_EQ(E(3)->pgroup_table_idx, 4);
 }
 
@@ -95,7 +89,7 @@ TEST(other_session_and_no_parent_and_no_group)
     ASSERT_EQ(n_decr, 0);
     E(3)->pgroup_table_idx = 0;
     PGROUP_CLEANUP_INTERNAL(E(3), 2);
-    ASSERT_EQ(mock_pgroups[4].ref_count, 2);   /* second call was a no-op */
+    ASSERT_EQ(PROC2_$DATA.pgroup[4].ref_count, 2);   /* second call was a no-op */
     E(5)->pgroup_table_idx = 4; E(5)->session_id = 9; E(5)->parent_pgroup_idx = 0;
     PGROUP_CLEANUP_INTERNAL(E(5), 2);
     ASSERT_EQ(n_decr, 0);
@@ -124,7 +118,7 @@ TEST(log_disabled_and_process_event)
 TEST(log_pgroup_event)
 {
     AUDIT_$ENABLED = (int8_t)0xFF;
-    mock_pgroups[4].upgid = 0x777;
+    PROC2_$DATA.pgroup[4].upgid = 0x777;
     PROC2_$LOG_SIGNAL_EVENT(2, 4, 15, 0, 0);
     uint16_t asid, upid; memcpy(&asid, log_data + 4, 2); memcpy(&upid, log_data + 8, 2);
     ASSERT_EQ(log_uid.low, 0x0200FDEDu); ASSERT_EQ(log_flags, 0);

@@ -14,10 +14,10 @@
  *   - the object UID is COPIED into ACL_$RIGHTS' own frame (0x00E46A12) and
  *     the copy, not the caller's pointer, is what acl_$eval_rights sees;
  *   - the two privilege booleans come from `tst.w` + `sgt` on
- *     ACL_$SUPER_COUNT[cur] (0x00E46A3C) and ACL_$SUBSYS_LEVEL[cur]
+ *     ACL_$UNWIRED_DATA.super_count[cur] (0x00E46A3C) and ACL_$DATA.subsys_level[cur]
  *     (0x00E46A30), i.e. 0xFF when strictly greater than zero;
- *   - the SID block is ACL_$CURRENT_SIDS[cur] (0xE90D10 + cur*0x24) and the
- *     project list is 0xE924FC + cur*0x40 = &ACL_$PROJ_UIDS[cur][0]
+ *   - the SID block is ACL_$DATA.current_sids[cur] (0xE90D10 + cur*0x24) and the
+ *     project list is 0xE924FC + cur*0x40 = &ACL_$DATA.proj_uids[cur][0]
  *     (source-4h7g);
  *   - the longword acl_$eval_rights leaves in D0 is ACL_$RIGHTS' own result
  *     (callers test it with `tst.l` / `cmpi.l`, e.g. 0x00E71504).
@@ -69,10 +69,8 @@ static int current_failed = 0;
 #include "acl/acl_internal.h"
 
 uint16_t        PROC1_$CURRENT;
-acl_sid_block_t ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
-uid_t           ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
-int16_t         ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
-int16_t         ACL_$SUBSYS_LEVEL[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 /* ------------------------------------------------------------------ */
 /* Mock of acl_$eval_rights (0x00E464B8)                                */
@@ -145,10 +143,10 @@ static void reset(void)
     ev_result        = 0;
     ev_status_out    = status_$ok;
 
-    memset(ACL_$CURRENT_SIDS, 0, sizeof(ACL_$CURRENT_SIDS));
-    memset(ACL_$PROJ_UIDS, 0, sizeof(ACL_$PROJ_UIDS));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
-    memset(ACL_$SUBSYS_LEVEL, 0, sizeof(ACL_$SUBSYS_LEVEL));
+    memset(ACL_$DATA.current_sids, 0, sizeof(ACL_$DATA.current_sids));
+    memset(ACL_$DATA.proj_uids, 0, sizeof(ACL_$DATA.proj_uids));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
+    memset(ACL_$DATA.subsys_level, 0, sizeof(ACL_$DATA.subsys_level));
 
     PROC1_$CURRENT = TEST_PID;
 }
@@ -244,23 +242,23 @@ TEST(privilege_booleans_are_sgt_of_the_per_process_counters)
     status_$t status = 0xdeadbeef;
 
     reset();
-    ACL_$SUPER_COUNT[TEST_PID]  = 0;
-    ACL_$SUBSYS_LEVEL[TEST_PID] = 0;
+    ACL_$UNWIRED_DATA.super_count[TEST_PID]  = 0;
+    ACL_$DATA.subsys_level[TEST_PID] = 0;
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
     ASSERT_EQ(0x00, (unsigned char)ev_in_super);
     ASSERT_EQ(0x00, (unsigned char)ev_in_subsys);
 
     reset();
-    ACL_$SUPER_COUNT[TEST_PID]  = 1;
-    ACL_$SUBSYS_LEVEL[TEST_PID] = 3;
+    ACL_$UNWIRED_DATA.super_count[TEST_PID]  = 1;
+    ACL_$DATA.subsys_level[TEST_PID] = 3;
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
     ASSERT_EQ(0xFF, (unsigned char)ev_in_super);
     ASSERT_EQ(0xFF, (unsigned char)ev_in_subsys);
 
     /* `sgt` is a SIGNED test: a negative counter is not "in super". */
     reset();
-    ACL_$SUPER_COUNT[TEST_PID]  = -1;
-    ACL_$SUBSYS_LEVEL[TEST_PID] = -1;
+    ACL_$UNWIRED_DATA.super_count[TEST_PID]  = -1;
+    ACL_$DATA.subsys_level[TEST_PID] = -1;
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
     ASSERT_EQ(0x00, (unsigned char)ev_in_super);
     ASSERT_EQ(0x00, (unsigned char)ev_in_subsys);
@@ -269,7 +267,7 @@ TEST(privilege_booleans_are_sgt_of_the_per_process_counters)
 /*
  * 0x00E46A7C `pea (-0x6584,A0)` -> 0xE90D10 + cur*0x24 and 0x00E46A66
  * `pea (-0x4d98,A4)` -> 0xE924FC + cur*0x40, i.e. the first slot of the
- * current process' project list.  ACL_$PROJ_UIDS is declared with the base
+ * current process' project list.  ACL_$DATA.proj_uids is declared with the base
  * 0xE924FC that ACL_$INIT proves (0x00E31122-0x00E3113C writes UID_$NIL to
  * eight slots starting at 0xE9253C = 0xE924FC + 1*0x40), so this is [cur][0].
  */
@@ -284,21 +282,21 @@ TEST(tables_are_indexed_by_the_current_process)
     reset();
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
 
-    ASSERT_TRUE(ev_sids == &ACL_$CURRENT_SIDS[TEST_PID]);
-    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[TEST_PID][0]);
+    ASSERT_TRUE(ev_sids == &ACL_$DATA.current_sids[TEST_PID]);
+    ASSERT_TRUE(ev_proj_uids == &ACL_$DATA.proj_uids[TEST_PID][0]);
 
     /* The image reloads PROC1_$CURRENT for every table; a different process
      * selects a different pair of rows. */
     reset();
     PROC1_$CURRENT = 0;
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
-    ASSERT_TRUE(ev_sids == &ACL_$CURRENT_SIDS[0]);
-    ASSERT_TRUE(ev_proj_uids == &ACL_$PROJ_UIDS[0][0]);
+    ASSERT_TRUE(ev_sids == &ACL_$DATA.current_sids[0]);
+    ASSERT_TRUE(ev_proj_uids == &ACL_$DATA.proj_uids[0][0]);
 }
 
 /*
  * The project pointer is exactly 0xE924FC + cur*0x40 - the row base, with no
- * 8-byte bias, now that ACL_$PROJ_UIDS is declared at 0xE924FC (source-4h7g).
+ * 8-byte bias, now that ACL_$DATA.proj_uids is declared at 0xE924FC (source-4h7g).
  */
 TEST(project_pointer_is_the_row_base)
 {
@@ -312,9 +310,9 @@ TEST(project_pointer_is_the_row_base)
     ACL_$RIGHTS(&uid, &flag, &mask, &opts, &status);
 
     ASSERT_EQ(0, (const char *)ev_proj_uids -
-                 (const char *)&ACL_$PROJ_UIDS[TEST_PID][0]);
+                 (const char *)&ACL_$DATA.proj_uids[TEST_PID][0]);
     ASSERT_EQ(TEST_PID * 0x40,
-              (const char *)ev_proj_uids - (const char *)&ACL_$PROJ_UIDS[0][0]);
+              (const char *)ev_proj_uids - (const char *)&ACL_$DATA.proj_uids[0][0]);
 }
 
 /*

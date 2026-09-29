@@ -21,7 +21,7 @@
  * the hash chain links, the hash buckets and the LRU list - see
  * acl/acl_internal.h.
  *
- * Result: the 0-based slot index into ACL_$ACL_CACHE, or ACL_CACHE_NO_SLOT.
+ * Result: the 0-based slot index into ACL_$DATA.acl_cache, or ACL_CACHE_NO_SLOT.
  */
 
 #include "acl/acl_internal.h"
@@ -48,7 +48,7 @@ int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
      * `swap`) is used; `ext.l` then `add.l D1,D1` is the word index. */
     hash = (int16_t)UID_$HASH(acl_uid,
                               (uint16_t *)&acl_$find_acl_slot_hash_mod_00e45e8c);
-    slot = ACL_$CACHE_HASH_BUCKETS_TAB[hash];
+    slot = ACL_$UNWIRED_DATA.cache_hash_buckets[hash];
 
     for (;;) {
         if (slot == ACL_CACHE_NO_SLOT) {                    /* 0x00E45EC8 */
@@ -66,7 +66,7 @@ int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
             goto link_lru;                                  /* 0x00E45EF0 */
         }
 
-        dir = &ACL_$CACHE_DIR[slot];                        /* 0x00E45EF2 */
+        dir = &ACL_$UNWIRED_DATA.cache_dir[slot];                        /* 0x00E45EF2 */
 
         /* 0x00E45F02-0x00E45F0C: the two-longword UID compare. */
         if (dir->acl_uid.high == acl_uid->high &&
@@ -89,20 +89,20 @@ int16_t acl_$find_acl_slot(uid_t *acl_uid, int8_t *cached_flag_ret,
 
             /* 0x00E45F48: a hit moves the slot to the front of the LRU list -
              * remove, then fall into the insert below. */
-            acl_$cache_list_remove(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS,
+            acl_$cache_list_remove(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links,
                                    slot);
             goto link_lru;
         }
 
         /* 0x00E45F32-0x00E45F46: follow the circular hash chain; coming back
          * to the bucket head means the UID is not cached. */
-        slot = ACL_$CACHE_HASH_LINKS[slot].next;
-        if (slot == ACL_$CACHE_HASH_BUCKETS_TAB[hash]) {
+        slot = ACL_$UNWIRED_DATA.cache_hash_links[slot].next;
+        if (slot == ACL_$UNWIRED_DATA.cache_hash_buckets[hash]) {
             slot = ACL_CACHE_NO_SLOT;
         }
     }
 
 link_lru:                                                   /* 0x00E45F5C */
-    acl_$cache_list_insert(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, slot);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, slot);
     return slot;                                            /* 0x00E45F6C */
 }

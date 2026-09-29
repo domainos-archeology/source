@@ -14,5 +14,5 @@
 
 int16_t ACL_$GET_LOCAL_LOCKSMITH(void)
 {
-    return ACL_$LOCAL_LOCKSMITH;
+    return ACL_$UNWIRED_DATA.local_locksmith;
 }

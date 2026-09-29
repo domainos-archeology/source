@@ -14,12 +14,12 @@
 void ACL_$CLEAR_SUPER(void)
 {
     /* Clear the super mode counter */
-    ACL_$SUPER_COUNT[PROC1_$CURRENT] = 0;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] = 0;
 
     /* If we hold the locksmith override, release it */
-    if (ACL_$LOCKSMITH_OVERRIDE < 0 &&
-        PROC1_$CURRENT == ACL_$LOCKSMITH_OWNER_PID) {
-        ML_$EXCLUSION_STOP(&ACL_$EXCLUSION_LOCK);
-        ACL_$LOCKSMITH_OVERRIDE = 0;
+    if (ACL_$UNWIRED_DATA.locksmith_override < 0 &&
+        PROC1_$CURRENT == ACL_$UNWIRED_DATA.locksmith_owner_pid) {
+        ML_$EXCLUSION_STOP(&ACL_$WIRED_DATA.exclusion_lock);
+        ACL_$UNWIRED_DATA.locksmith_override = 0;
     }
 }

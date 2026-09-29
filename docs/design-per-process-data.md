@@ -266,6 +266,28 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    `fim/sau2/bus_err.s` reach the block fields through `.set` aliases with
    their bytes unchanged.  PARITY's absolute state macros became
    `FIM_$WIRED_DATA.parity` fields.
+   Amended 2026-09-29 (proc2/acl half, source-l2yd): blocks
+   `PROC2_$UNWIRED_DATA` (0xE7BE84, the PROC2 A5 block: the per-ASID
+   `uid[0..57]` from its map symbol PROC2_$UID, list heads, boot flags,
+   `next_upid` = 0x41 as in the image), `PROC2_$DATA` (0xEA551C: `info[]`
+   stays 1-based via `P2_INFO_ENTRY` because entry 0 is the tail of
+   XPD_$DATA - PROC2_$DETACH_FROM_PARENT really writes it, source-c6cy -
+   while `pid_to_index[0..64]` and `pgroup[0..70]` are union arms, pgroup's
+   bias slot over pid_to_index[61..64]), `PROC2_$WIRED_DATA` (0xE2B978, the
+   PROC2_WIRED_ASM segment: the fork / creation-record eventcount pairs,
+   pair 0 outside the segment, so `PROC_FORK_EC` / `PROC_CR_REC_EC` keep the
+   bias), `ACL_$UNWIRED_DATA` (0xE7CF54: workspace, image buffer, cache
+   directory, 61 hash buckets - not 64, ACL_$ENTER_SUBS's magic is at
+   A5+0xB6C - locksmith state, and `super_count[0..64]` as a union arm
+   over the LRU head; public in acl/acl.h for REM_FILE), `ACL_$DATA`
+   (0xE88834: the image cache and seven per-process tables reached from
+   the shared 0xE97294 base, each `[0..64]` from its bias slot; the bias
+   slots chain through the tails of the preceding tables, so the block is
+   one union of arms each padded from the block start) and
+   `ACL_$WIRED_DATA` (0xE2C014: `ACL_$EXCLUSION_LOCK`).  `PTR_PROC2_$DATA`
+   (0xE3238C, read by MST_$WIRE_AREA as a longword VA) is a stored-VA
+   cell, `ARCH_PTR_TO_VA_STATIC(&PROC2_$DATA, 0xEA551C)`.  The six 4-byte PROC2/ACL_ A5 anchor segments
+   hold nothing C addresses.
 5. **Sweep**: remove `__A5_BASE()` callers, then the macro; ban
    `#if defined(ARCH_M68K)` around data declarations by a grep in the
    Makefile's `check` target.

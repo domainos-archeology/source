@@ -25,31 +25,13 @@
 /* Mock storage                                                        */
 /* ------------------------------------------------------------------ */
 
-/*
- * Slot 0 is the out-of-band "index 0" entry the table is biased against;
- * slot P2_INFO_TABLE_SIZE + 1 is a canary standing in for the index-71
- * storage the image does not have (there the PID-to-index table starts).
- */
-#define MOCK_SLOTS (P2_INFO_TABLE_SIZE + 2)
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE_INIT(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84, {
+    .next_upid = P2_UPID_WRAP_TO,
+});
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 
-#define MOCK_PID_ENTRIES 66   /* pids 0..65; the image clears 2..64 */
 
-static proc2_info_t mock_entries[MOCK_SLOTS];
-static uint16_t mock_pid_to_index[MOCK_PID_ENTRIES];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
-uint16_t PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
-
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
-uid_t proc2_system_uid;
-uid_t proc2_proc_dir_uid;
-int16_t proc2_boot_flags;
 status_$t PROC2_Internal_Error = status_$proc2_internal_error;
 
 uid_t UID_$NIL = { 0xAAAABBBBu, 0xCCCCDDDDu };
@@ -208,20 +190,21 @@ static void run_init(void)
 {
     size_t slot;
 
-    memset(mock_entries, CANARY, sizeof(mock_entries));
-    memset(mock_pid_to_index, CANARY, sizeof(mock_pid_to_index));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$DATA.info, CANARY, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA._3e58, CANARY, sizeof(PROC2_$DATA._3e58));
+    memset(PROC2_$DATA.pid_to_index, CANARY, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
 
-    P2_INFO_ALLOC_PTR = 0;
-    P2_FREE_LIST_HEAD = 0;
-    proc2_boot_flags = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
+    PROC2_$UNWIRED_DATA.free_list_head = 0;
+    PROC2_$UNWIRED_DATA.boot_flags = 0;
     n_uid_gen = n_ec_init = n_map_area_at = n_boot_errchk = 0;
 
     AS_$INFO.stack_high = 0;
 
-    for (slot = 1; slot < MOCK_SLOTS - 1; slot++) {
-        mock_entries[slot].flags = flags_preset;
+    for (slot = 1; slot <= P2_INFO_TABLE_SIZE; slot++) {
+        (*P2_INFO_ENTRY(slot)).flags = flags_preset;
     }
 
     boot_flags_word = 0;
@@ -237,7 +220,7 @@ static void run_init(void)
 TEST(free_list_head_is_slot_2)
 {
     run_init();
-    ASSERT_EQ(P2_FREE_LIST_HEAD, P2_FIRST_FREE_ENTRY, "P2_FREE_LIST_HEAD");
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, P2_FIRST_FREE_ENTRY, "PROC2_$UNWIRED_DATA.free_list_head");
 }
 
 /*
@@ -273,7 +256,7 @@ TEST(free_list_walks_69_slots_and_terminates)
     uint16_t idx;
 
     run_init();
-    idx = P2_FREE_LIST_HEAD;
+    idx = PROC2_$UNWIRED_DATA.free_list_head;
     while (idx != 0 && n <= P2_INFO_TABLE_SIZE) {
         ASSERT_EQ(idx >= P2_FIRST_FREE_ENTRY && idx <= P2_LAST_ENTRY, 1,
                   "free list index in range");
@@ -290,11 +273,12 @@ TEST(free_list_walks_69_slots_and_terminates)
  */
 TEST(nothing_is_written_past_slot_70)
 {
-    const uint8_t *canary = (const uint8_t *)&mock_entries[MOCK_SLOTS - 1];
+    /* The 0x5E never-addressed bytes between entry 70 and the table. */
+    const uint8_t *canary = PROC2_$DATA._3e58;
     size_t i;
 
     run_init();
-    for (i = 0; i < sizeof(proc2_info_t); i++) {
+    for (i = 0; i < sizeof(PROC2_$DATA._3e58); i++) {
         ASSERT_EQ(canary[i], CANARY, "byte past the last entry");
     }
 }
@@ -348,18 +332,18 @@ TEST(pid_map_covers_pid_1_through_64)
     int i;
 
     run_init();
-    ASSERT_EQ(P2_PID_TO_INDEX(1), 1, "P2_PID_TO_INDEX(1)");
+    ASSERT_EQ(PROC2_$DATA.pid_to_index[1], 1, "PROC2_$DATA.pid_to_index[1]");
     for (i = 2; i <= 64; i++) {
-        ASSERT_EQ(P2_PID_TO_INDEX(i), 0, "cleared pid slot");
+        ASSERT_EQ(PROC2_$DATA.pid_to_index[i], 0, "cleared pid slot");
     }
-    ASSERT_EQ(mock_pid_to_index[65], (uint16_t)0x5A5A, "pid slot 65 untouched");
+    ASSERT_EQ(PROC2_$DATA.pid_to_index[0], (uint16_t)0x5A5A, "pid slot 0 untouched");
 }
 
 /* 0x00E304E4 move.w #0x1,(0x1e0,A3) */
 TEST(alloc_pointer_is_slot_1)
 {
     run_init();
-    ASSERT_EQ(P2_INFO_ALLOC_PTR, 1, "P2_INFO_ALLOC_PTR");
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.info_alloc_ptr, 1, "PROC2_$UNWIRED_DATA.info_alloc_ptr");
     ASSERT_EQ(P2_INFO_ENTRY(1)->next_index, 0, "entry(1)->next_index");
 }
 
@@ -371,8 +355,8 @@ TEST(eventcount_table_covers_every_slot)
 {
     ASSERT_EQ(PROC2_EC_ENTRIES, P2_INFO_TABLE_SIZE, "PROC2_EC_ENTRIES");
     ASSERT_EQ(PROC_FORK_EC(P2_INFO_TABLE_SIZE) ==
-                  &PROC2_$EC[P2_INFO_TABLE_SIZE - 1].fork_ec,
-              1, "last fork EC");
+                  &PROC2_$WIRED_DATA.ec[PROC2_EC_ENTRIES - 1].fork_ec,
+              1, "last fork EC is the block's last pair");
 }
 
 int main(void)

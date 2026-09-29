@@ -56,15 +56,8 @@ uid_t ACL_$FNDWRX   = { 0x0001800Fu, 0 };
 uid_t ACL_$FILE_ACL = { 0x00000601u, 0 };
 uid_t ACL_$DIR_ACL  = { 0x00000600u, 0 };
 
-acl_$cache_slot_t ACL_$ACL_CACHE[ACL_CACHE_SLOTS];
-acl_$cache_slot_t ACL_$IMAGE_BUF;
-acl_$cache_dir_t  ACL_$CACHE_DIR[ACL_CACHE_SLOTS];
-acl_$cache_link_t ACL_$CACHE_LRU_LINKS[ACL_CACHE_LINK_SLOTS];
-acl_$cache_link_t ACL_$CACHE_HASH_LINKS[ACL_CACHE_LINK_SLOTS];
-int16_t ACL_$CACHE_HASH_BUCKETS_TAB[ACL_CACHE_HASH_BUCKETS];
-int16_t ACL_$CACHE_FREE_HEAD;
-int16_t ACL_$CACHE_LRU_HEAD;
-int16_t ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
+MODULE_DATA_DEFINE(acl_$data_t, ACL_$DATA, 0x00E88834);
 
 uint16_t PROC1_$CURRENT = 3;
 uint16_t PROC1_$AS_ID   = 9;
@@ -88,7 +81,7 @@ void CRASH_SYSTEM(const status_$t *status_p)
 static acl_$cache_slot_t mapped_image;
 static int       maps_calls;
 static status_$t maps_status;
-static int16_t   maps_super_count_seen;    /* ACL_$SUPER_COUNT during the map */
+static int16_t   maps_super_count_seen;    /* ACL_$UNWIRED_DATA.super_count during the map */
 static int16_t   maps_mode_seen;
 static boolean   maps_flags_seen;
 static uint32_t  maps_length_seen;
@@ -104,7 +97,7 @@ void *MST_$MAPS(int16_t mode, boolean flags, uid_t *uid, uint32_t offset,
     maps_flags_seen  = flags;
     maps_length_seen = length;
     maps_prot_seen   = prot;
-    maps_super_count_seen = ACL_$SUPER_COUNT[PROC1_$CURRENT];
+    maps_super_count_seen = ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT];
     *status = maps_status;
     return &mapped_image;
 }
@@ -218,21 +211,21 @@ static void reset_world(void)
 {
     int i;
 
-    memset(ACL_$ACL_CACHE, 0, sizeof(ACL_$ACL_CACHE));
-    memset(&ACL_$IMAGE_BUF, 0, sizeof(ACL_$IMAGE_BUF));
-    memset(ACL_$CACHE_DIR, 0, sizeof(ACL_$CACHE_DIR));
-    memset(ACL_$CACHE_LRU_LINKS, 0, sizeof(ACL_$CACHE_LRU_LINKS));
-    memset(ACL_$CACHE_HASH_LINKS, 0, sizeof(ACL_$CACHE_HASH_LINKS));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$DATA.acl_cache, 0, sizeof(ACL_$DATA.acl_cache));
+    memset(&ACL_$UNWIRED_DATA.image_buf, 0, sizeof(ACL_$UNWIRED_DATA.image_buf));
+    memset(ACL_$UNWIRED_DATA.cache_dir, 0, sizeof(ACL_$UNWIRED_DATA.cache_dir));
+    memset(ACL_$UNWIRED_DATA.cache_lru_links, 0, sizeof(ACL_$UNWIRED_DATA.cache_lru_links));
+    memset(ACL_$UNWIRED_DATA.cache_hash_links, 0, sizeof(ACL_$UNWIRED_DATA.cache_hash_links));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     memset(&mapped_image, 0, sizeof(mapped_image));
     memset(&convert_image_src, 0, sizeof(convert_image_src));
     memset(&prot, 0, sizeof(prot));
 
     for (i = 0; i < ACL_CACHE_HASH_BUCKETS; i++) {
-        ACL_$CACHE_HASH_BUCKETS_TAB[i] = ACL_CACHE_NO_SLOT;
+        ACL_$UNWIRED_DATA.cache_hash_buckets[i] = ACL_CACHE_NO_SLOT;
     }
-    ACL_$CACHE_FREE_HEAD = ACL_CACHE_NO_SLOT;
-    ACL_$CACHE_LRU_HEAD  = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_free_head = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_lru_head  = ACL_CACHE_NO_SLOT;
 
     crash_taken       = 0;
     crash_status      = 0;
@@ -255,7 +248,7 @@ static void reset_world(void)
     convert_image_subsys   = UID_$NIL;
 
     /* One free slot, number 4. */
-    acl_$cache_list_insert(&ACL_$CACHE_FREE_HEAD, ACL_$CACHE_HASH_LINKS, 4);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_free_head, ACL_$UNWIRED_DATA.cache_hash_links, 4);
 
     acl_uid.high = 0x11223344u;     /* high word 0x1122 - not a default ACL */
     acl_uid.low  = 0x55667788u;
@@ -295,7 +288,7 @@ TEST(default_acl_uid_short_circuits_the_whole_load)
     ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT, (uint16_t)r);
     ASSERT_EQ(0xFF, (uint8_t)cached_flag);          /* `st (A0)` */
     ASSERT_EQ(0, maps_calls);                       /* nothing was mapped */
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);             /* no slot was taken */
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);             /* no slot was taken */
     ASSERT_EQ(1, mock_def_acldata_calls);
     ASSERT_EQ(0x0D, prot.world_rights);
     /* rights 0x0003 | 0x1E0 (directory), masked with 0x3FFF, bit 25 set. */
@@ -353,13 +346,13 @@ TEST(the_free_list_head_is_handed_out_first)
     int16_t   s;
 
     reset_world();
-    acl_$cache_list_insert(&ACL_$CACHE_FREE_HEAD, ACL_$CACHE_HASH_LINKS, 9);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_free_head, ACL_$UNWIRED_DATA.cache_hash_links, 9);
 
     s = acl_$alloc_cache_slot(&st);
 
     ASSERT_EQ(9, s);
     ASSERT_EQ(status_$ok, st);
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
 }
 
 TEST(an_empty_free_list_evicts_the_lru_tail)
@@ -368,24 +361,24 @@ TEST(an_empty_free_list_evicts_the_lru_tail)
     int16_t   s;
 
     reset_world();
-    ACL_$CACHE_FREE_HEAD = ACL_CACHE_NO_SLOT;
-    memset(ACL_$CACHE_HASH_LINKS, 0, sizeof(ACL_$CACHE_HASH_LINKS));
+    ACL_$UNWIRED_DATA.cache_free_head = ACL_CACHE_NO_SLOT;
+    memset(ACL_$UNWIRED_DATA.cache_hash_links, 0, sizeof(ACL_$UNWIRED_DATA.cache_hash_links));
 
     /* Slot 6 was used first, so it is the LRU list's tail. */
-    acl_$cache_list_insert(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, 6);
-    acl_$cache_list_insert(&ACL_$CACHE_LRU_HEAD, ACL_$CACHE_LRU_LINKS, 7);
-    ACL_$CACHE_DIR[6].hash_bucket = 12;
-    ACL_$CACHE_HASH_BUCKETS_TAB[12] = ACL_CACHE_NO_SLOT;
-    acl_$cache_list_insert(&ACL_$CACHE_HASH_BUCKETS_TAB[12],
-                           ACL_$CACHE_HASH_LINKS, 6);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, 6);
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_lru_head, ACL_$UNWIRED_DATA.cache_lru_links, 7);
+    ACL_$UNWIRED_DATA.cache_dir[6].hash_bucket = 12;
+    ACL_$UNWIRED_DATA.cache_hash_buckets[12] = ACL_CACHE_NO_SLOT;
+    acl_$cache_list_insert(&ACL_$UNWIRED_DATA.cache_hash_buckets[12],
+                           ACL_$UNWIRED_DATA.cache_hash_links, 6);
 
     s = acl_$alloc_cache_slot(&st);
 
     ASSERT_EQ(6, s);
-    ASSERT_EQ(7, ACL_$CACHE_LRU_HEAD);
+    ASSERT_EQ(7, ACL_$UNWIRED_DATA.cache_lru_head);
     /* It came off its hash bucket too. */
     ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT,
-              (uint16_t)ACL_$CACHE_HASH_BUCKETS_TAB[12]);
+              (uint16_t)ACL_$UNWIRED_DATA.cache_hash_buckets[12]);
 }
 
 TEST(both_lists_empty_crashes_the_system)
@@ -393,8 +386,8 @@ TEST(both_lists_empty_crashes_the_system)
     status_$t st = 0;
 
     reset_world();
-    ACL_$CACHE_FREE_HEAD = ACL_CACHE_NO_SLOT;
-    ACL_$CACHE_LRU_HEAD  = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_free_head = ACL_CACHE_NO_SLOT;
+    ACL_$UNWIRED_DATA.cache_lru_head  = ACL_CACHE_NO_SLOT;
 
     if (setjmp(crash_jmp) == 0) {
         (void)acl_$alloc_cache_slot(&st);
@@ -415,7 +408,7 @@ TEST(the_map_runs_inside_a_super_count_bracket)
     (void)run();
 
     ASSERT_EQ(1, maps_super_count_seen);
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[PROC1_$CURRENT]);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]);
 }
 
 TEST(map_arguments_match_the_pushes)
@@ -453,11 +446,11 @@ TEST(an_empty_converted_image_frees_the_slot_and_nils_the_uid)
     ASSERT_EQ(1, convert_image_calls);
     ASSERT_EQ(0xFF, (uint8_t)cached_flag);
     /* The slot went straight back on the free list ... */
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
     /* ... and was never registered in the directory or a bucket. */
-    ASSERT_EQ(0, ACL_$CACHE_DIR[4].acl_uid.high);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.cache_dir[4].acl_uid.high);
     ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT,
-              (uint16_t)ACL_$CACHE_HASH_BUCKETS_TAB[5]);
+              (uint16_t)ACL_$UNWIRED_DATA.cache_hash_buckets[5]);
     /* 0x00E45E04: the caller's UID is replaced with UID_$NIL. */
     ASSERT_EQ(0, acl_uid.high);
     ASSERT_EQ(0, acl_uid.low);
@@ -472,7 +465,7 @@ TEST(a_dir_acl_subsys_uid_also_counts_as_empty)
     convert_image_subsys = ACL_$DIR_ACL;
 
     ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT, (uint16_t)run());
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
 }
 
 TEST(a_non_empty_converted_image_is_installed)
@@ -483,12 +476,12 @@ TEST(a_non_empty_converted_image_is_installed)
 
     ASSERT_EQ(4, run());
     ASSERT_EQ(0xFF, (uint8_t)cached_flag);
-    /* ACL_$IMAGE_BUF, not the mapped image, is what landed in the slot. */
-    ASSERT_EQ(5, ACL_$ACL_CACHE[4].version);
-    ASSERT_EQ(0xA5, ACL_$ACL_CACHE[4].entries[0]);
+    /* ACL_$UNWIRED_DATA.image_buf, not the mapped image, is what landed in the slot. */
+    ASSERT_EQ(5, ACL_$DATA.acl_cache[4].version);
+    ASSERT_EQ(0xA5, ACL_$DATA.acl_cache[4].entries[0]);
     /* cached_flag is negative, so the rights words were captured. */
-    ASSERT_EQ(0x33, ACL_$CACHE_DIR[4].world_rights);
-    ASSERT_EQ(0x44, ACL_$CACHE_DIR[4].subsys_rights);
+    ASSERT_EQ(0x33, ACL_$UNWIRED_DATA.cache_dir[4].world_rights);
+    ASSERT_EQ(0x44, ACL_$UNWIRED_DATA.cache_dir[4].subsys_rights);
 }
 
 /* ------------------------------------------------------------------ */
@@ -506,11 +499,11 @@ TEST(map_object_not_found_becomes_an_acl_status_and_relinks)
 
     ASSERT_EQ(4, r);                                /* the slot is returned ... */
     ASSERT_EQ(status_$acl_object_not_found, status);/* ... but so is a status */
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);             /* back on the free list */
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);             /* back on the free list */
     ASSERT_EQ(0, unmap_calls);
     ASSERT_EQ(0, cleanup_calls);
     /* The bracket still balanced. */
-    ASSERT_EQ(0, ACL_$SUPER_COUNT[PROC1_$CURRENT]);
+    ASSERT_EQ(0, ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]);
 }
 
 TEST(any_other_map_failure_sets_the_fatal_bit_and_relinks)
@@ -520,7 +513,7 @@ TEST(any_other_map_failure_sets_the_fatal_bit_and_relinks)
 
     ASSERT_EQ(4, run());
     ASSERT_EQ(0x80040003u, (uint32_t)status);                 /* `bset.b #0x7,(A0)` */
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
 }
 
 TEST(a_map_status_in_the_high_half_alone_is_not_a_failure)
@@ -548,9 +541,9 @@ TEST(a_fault_during_the_copy_unmaps_pops_and_relinks)
     ASSERT_EQ(1, unmap_calls);
     ASSERT_EQ(1, pop_signal_calls);
     ASSERT_EQ(0, rls_cleanup_calls);
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
     /* Nothing was copied. */
-    ASSERT_EQ(0, ACL_$ACL_CACHE[4].version);
+    ASSERT_EQ(0, ACL_$DATA.acl_cache[4].version);
 }
 
 TEST(an_unmap_failure_after_the_copy_relinks_too)
@@ -560,9 +553,9 @@ TEST(an_unmap_failure_after_the_copy_relinks_too)
 
     ASSERT_EQ(4, run());
     ASSERT_EQ(0x80040007u, (uint32_t)status);
-    ASSERT_EQ(4, ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_free_head);
     /* The copy did happen before the unmap. */
-    ASSERT_EQ(5, ACL_$ACL_CACHE[4].version);
+    ASSERT_EQ(5, ACL_$DATA.acl_cache[4].version);
 }
 
 /* ------------------------------------------------------------------ */
@@ -585,32 +578,32 @@ TEST(a_version_5_image_is_copied_and_registered)
     ASSERT_EQ(1, rls_cleanup_calls);
     ASSERT_EQ(1, unmap_calls);
     /* The whole 0x400 bytes came across. */
-    ASSERT_EQ(5, ACL_$ACL_CACHE[4].version);
-    ASSERT_EQ(0x77, ((uint8_t *)&ACL_$ACL_CACHE[4])[ACL_CACHE_SLOT_SIZE - 1]);
+    ASSERT_EQ(5, ACL_$DATA.acl_cache[4].version);
+    ASSERT_EQ(0x77, ((uint8_t *)&ACL_$DATA.acl_cache[4])[ACL_CACHE_SLOT_SIZE - 1]);
     /* Directory entry. */
-    ASSERT_EQ(0x11223344u, ACL_$CACHE_DIR[4].acl_uid.high);
-    ASSERT_EQ(0x55667788u, ACL_$CACHE_DIR[4].acl_uid.low);
-    ASSERT_EQ(0x00, (uint8_t)ACL_$CACHE_DIR[4].cached_flag);
-    ASSERT_EQ(17, ACL_$CACHE_DIR[4].hash_bucket);
+    ASSERT_EQ(0x11223344u, ACL_$UNWIRED_DATA.cache_dir[4].acl_uid.high);
+    ASSERT_EQ(0x55667788u, ACL_$UNWIRED_DATA.cache_dir[4].acl_uid.low);
+    ASSERT_EQ(0x00, (uint8_t)ACL_$UNWIRED_DATA.cache_dir[4].cached_flag);
+    ASSERT_EQ(17, ACL_$UNWIRED_DATA.cache_dir[4].hash_bucket);
     ASSERT_EQ(ACL_CACHE_HASH_MOD, mock_hash_modulus_seen);
     /* Linked into bucket 17. */
-    ASSERT_EQ(4, ACL_$CACHE_HASH_BUCKETS_TAB[17]);
+    ASSERT_EQ(4, ACL_$UNWIRED_DATA.cache_hash_buckets[17]);
     /* Taken off the free list. */
-    ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT, (uint16_t)ACL_$CACHE_FREE_HEAD);
+    ASSERT_EQ((uint16_t)ACL_CACHE_NO_SLOT, (uint16_t)ACL_$UNWIRED_DATA.cache_free_head);
 }
 
 TEST(a_zero_cached_flag_leaves_the_rights_words_alone)
 {
     reset_world();
-    ACL_$CACHE_DIR[4].world_rights  = 0xEEEE;
-    ACL_$CACHE_DIR[4].subsys_rights = 0xDDDD;
+    ACL_$UNWIRED_DATA.cache_dir[4].world_rights  = 0xEEEE;
+    ACL_$UNWIRED_DATA.cache_dir[4].subsys_rights = 0xDDDD;
     prot.world_rights  = 0x01;
     prot.subsys_rights = 0x02;
 
     ASSERT_EQ(4, run());
     /* cached_flag is 0, so the `bpl` at 0x00E45E34 skips both stores. */
-    ASSERT_EQ(0xEEEE, ACL_$CACHE_DIR[4].world_rights);
-    ASSERT_EQ(0xDDDD, ACL_$CACHE_DIR[4].subsys_rights);
+    ASSERT_EQ(0xEEEE, ACL_$UNWIRED_DATA.cache_dir[4].world_rights);
+    ASSERT_EQ(0xDDDD, ACL_$UNWIRED_DATA.cache_dir[4].subsys_rights);
 }
 
 /* ------------------------------------------------------------------ */

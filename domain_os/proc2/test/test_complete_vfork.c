@@ -9,7 +9,7 @@
  *   - `move.l D3,(-0x7c,A3)` at 0x00E736C8 stores user_data at entry+0x68
  *     (cr_rec), while the creation record pointer is read from entry+0x6C
  *     (cr_rec_2) at 0x00E737E0;
- *   - PROC2_$UID[new asid] = entry uid, PROC2_$UID[old asid] = parent uid
+ *   - PROC2_$UNWIRED_DATA.uid[new asid] = entry uid, PROC2_$UNWIRED_DATA.uid[old asid] = parent uid
  *     (0x00E736E2..0x00E73712);
  *   - the user FIM address copy and the conditional quit-inhibit clear
  *     (0x00E73724..0x00E7374E);
@@ -30,19 +30,11 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
 
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 uid_t UID_$NIL = { 0, 0 };
 uint16_t PROC1_$CURRENT;
 #include "fim/fim.h"
@@ -75,10 +67,10 @@ static int32_t last_startup_ctx[2];
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
-    memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$WIRED_DATA.ec, 0, sizeof(PROC2_$WIRED_DATA.ec));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
     memset(FIM_$DATA.user_fim_addr, 0, sizeof(FIM_$DATA.user_fim_addr));
     memset(FIM_$WIRED_DATA.quit_inh, 0, sizeof(FIM_$WIRED_DATA.quit_inh));
     memset(mock_cr_arena, 0, sizeof(mock_cr_arena));
@@ -150,7 +142,7 @@ static proc2_info_t *child(void)  { return P2_INFO_ENTRY(CHILD_IDX); }
 
 static void setup_table(void)
 {
-    mock_pid_to_index[5] = CHILD_IDX;
+    PROC2_$DATA.pid_to_index[5] = CHILD_IDX;
     child()->self_index = CHILD_IDX;
     child()->parent_pgroup_idx = PARENT_IDX;
     child()->flags = 0x0800 | 0x0100;
@@ -210,10 +202,10 @@ TEST(success_path_entry_layout)
     ASSERT_EQ(child()->pad_18[0], 0);
 
     /* 0x00E736E2..0x00E73712: the two UID-table slots */
-    ASSERT_EQ(PROC2_$UID[NEW_ASID].high, 0x0C0C0C0Cu);
-    ASSERT_EQ(PROC2_$UID[NEW_ASID].low, 0x0D0D0D0Du);
-    ASSERT_EQ(PROC2_$UID[OLD_ASID].high, 0x0A0A0A0Au);
-    ASSERT_EQ(PROC2_$UID[OLD_ASID].low, 0x0B0B0B0Bu);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.uid[NEW_ASID].high, 0x0C0C0C0Cu);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.uid[NEW_ASID].low, 0x0D0D0D0Du);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.uid[OLD_ASID].high, 0x0A0A0A0Au);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.uid[OLD_ASID].low, 0x0B0B0B0Bu);
 
     /* 0x00E73716..0x00E7374E */
     ASSERT_EQ(n_fp_init, 1); ASSERT_EQ(last_fp_init_asid, NEW_ASID);

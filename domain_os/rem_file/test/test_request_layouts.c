@@ -62,7 +62,7 @@ static int current_failed = 0;
  * Globals the code under test references
  * ============================================================================ */
 
-int16_t  ACL_$SUPER_COUNT[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 uint16_t PROC1_$CURRENT;
 
 /* ============================================================================
@@ -158,7 +158,7 @@ static void reset(void)
     send_calls = 0;
     memset(seen_request, 0, sizeof(seen_request));
     seen_request_len = 0;
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     PROC1_$CURRENT = 3;
 }
 
@@ -202,7 +202,7 @@ TEST(purify_field_offsets)
     status_$t st = 0;
 
     reset();
-    ACL_$SUPER_COUNT[3] = 1;          /* PROC1_$CURRENT = 3 */
+    ACL_$UNWIRED_DATA.super_count[3] = 1;          /* PROC1_$CURRENT = 3 */
     REM_FILE_$PURIFY(&vol, &fil, &flags, 0x0102, &st);
 
     ASSERT_EQ(REM_FILE_REQ_MAGIC, seen_request[0x02]);   /* 0x00E6226C */
@@ -223,7 +223,7 @@ TEST(purify_admin_flag_is_false_without_super_count)
     status_$t st = 0;
 
     reset();
-    ACL_$SUPER_COUNT[3] = 0;
+    ACL_$UNWIRED_DATA.super_count[3] = 0;
     REM_FILE_$PURIFY(&vol, &fil, &flags, 0, &st);
     ASSERT_EQ(0x00, seen_request[0x12]);
 }

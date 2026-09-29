@@ -383,7 +383,7 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
  *   00e42206  movea.l #0xea551c,A2
  *   00e4220c  lsl.w #0x3,D0w               ; idx * 8
  *   00e4220e  lea (0x0,A2,D0w*0x1),A2
- *   00e42212  move.w (0x3f34,A2),(0x2,A1)  ; PGROUP_TABLE[idx].upgid
+ *   00e42212  move.w (0x3f34,A2),(0x2,A1)  ; PROC2_$DATA.pgroup[idx].upgid
  *   00e42218  clr.l (0x4,A1)               ; uid.low = 0
  *
  * The result is a synthetic UID: high longword = the UPGID, low = 0.
@@ -395,7 +395,7 @@ static void proc2_$entry_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
     if (idx == 0) {
         *uid_ret = UID_$NIL;
     } else {
-        uid_ret->high = PGROUP_ENTRY(idx)->upgid;
+        uid_ret->high = PROC2_$DATA.pgroup[idx].upgid;
         uid_ret->low = 0;
     }
 }
@@ -408,7 +408,7 @@ static void proc2_$entry_pgroup_uid(proc2_info_t *entry, uid_t *uid_ret)
  *   00e421be  clr.w (A1)
  *   00e421c2  move.w (0x10,A0),D0w
  *   00e421cc  lsl.w #0x3,D0w
- *   00e421d2  move.w (0x3f34,A2),(A1)      ; PGROUP_TABLE[idx].upgid
+ *   00e421d2  move.w (0x3f34,A2),(A1)      ; PROC2_$DATA.pgroup[idx].upgid
  */
 static void proc2_$entry_pgroup_upgid(proc2_info_t *entry, uint16_t *info_ret)
 {
@@ -417,6 +417,6 @@ static void proc2_$entry_pgroup_upgid(proc2_info_t *entry, uint16_t *info_ret)
     if (idx == 0) {
         *info_ret = 0;
     } else {
-        *info_ret = PGROUP_ENTRY(idx)->upgid;
+        *info_ret = PROC2_$DATA.pgroup[idx].upgid;
     }
 }

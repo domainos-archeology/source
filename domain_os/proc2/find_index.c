@@ -1,7 +1,7 @@
 /*
  * PROC2_$FIND_INDEX - Find process table index by UID
  *
- * Walks the allocated list (head P2_INFO_ALLOC_PTR, link entry+0x12)
+ * Walks the allocated list (head PROC2_$UNWIRED_DATA.info_alloc_ptr, link entry+0x12)
  * comparing the eight UID bytes.  Returns the index in D0 (no result
  * slot: callers do `pea status; move.l uid,-(SP); bsr; addq #8`).
  *
@@ -11,10 +11,10 @@
  *              status_$proc2_uid_not_found
  *
  * Returns: the matching index; when nothing matches, whatever index value
- * ended the walk (0 -- the last next_index, or P2_INFO_ALLOC_PTR itself).
+ * ended the walk (0 -- the last next_index, or PROC2_$UNWIRED_DATA.info_alloc_ptr itself).
  *
  * Original address: 0x00e4068e (116 bytes)
- * A5 = 0xE7BE84; (0x1E0,A5) = 0xE7C064 P2_INFO_ALLOC_PTR.
+ * A5 = 0xE7BE84; (0x1E0,A5) = 0xE7C064 PROC2_$UNWIRED_DATA.info_alloc_ptr.
  * A1 = 0xEA551C + idx*0xE4 = entry + 0xE4:
  *   (-0xE4,A1) = +0x00 uid   (-0xBA,A1) = +0x2A flags   (-0xD2,A1) = +0x12 next_index
  */
@@ -31,7 +31,7 @@ int16_t PROC2_$FIND_INDEX(uid_t *proc_uid, status_$t *status_ret)
     key = *proc_uid;
 
     /* 0x00E406AC..0x00E406B0 */
-    index = (int16_t)P2_INFO_ALLOC_PTR;
+    index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
     if (index != 0) {
         do {
             entry = P2_INFO_ENTRY(index);

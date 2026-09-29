@@ -18,7 +18,7 @@ void PROC2_$GET_TTY_DATA(uid_t *tty_uid, uint16_t *tty_flags)
     proc2_info_t *entry;
 
     /* Get my proc2 index from PID mapping table */
-    my_index = P2_PID_TO_INDEX(PROC1_$CURRENT);
+    my_index = PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
 
     entry = P2_INFO_ENTRY(my_index);
 

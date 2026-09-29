@@ -32,14 +32,14 @@ void ACL_$GET_PROJ_LIST(uid_t *proj_acls, int16_t *max_count, int16_t *count_ret
     /* Copy valid project UIDs to output buffer */
     for (i = 0; i < max; i++) {
         /* Check for empty slot (UID_$NIL) - end of list */
-        if (ACL_$PROJ_UIDS[pid][i].high == UID_$NIL.high &&
-            ACL_$PROJ_UIDS[pid][i].low == UID_$NIL.low) {
+        if (ACL_$DATA.proj_uids[pid][i].high == UID_$NIL.high &&
+            ACL_$DATA.proj_uids[pid][i].low == UID_$NIL.low) {
             break;
         }
 
         /* Copy the UID */
-        proj_acls[count].high = ACL_$PROJ_UIDS[pid][i].high;
-        proj_acls[count].low = ACL_$PROJ_UIDS[pid][i].low;
+        proj_acls[count].high = ACL_$DATA.proj_uids[pid][i].high;
+        proj_acls[count].low = ACL_$DATA.proj_uids[pid][i].low;
         count++;
     }
 

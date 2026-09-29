@@ -4,7 +4,7 @@
  * Called by PROC2_$CREATE (0x00E727FA) and PROC2_$FORK (0x00E72CFA) once the
  * new entry has been taken off the free list and its ASID assigned.  It:
  *
- *   1. generates the process UID and publishes it in PROC2_$UID[asid];
+ *   1. generates the process UID and publishes it in PROC2_$UNWIRED_DATA.uid[asid];
  *   2. resets the FIM per-PID quit state;
  *   3. allocates a UPID that collides with no live process's UPID, no live
  *      process's session id and no live process's process group;
@@ -43,11 +43,11 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
 
     /*
      * 0x00E732FA-0x00E7330C: publish the new UID in the per-ASID table.
-     * D0 = entry->asid << 3 indexes 0xE7BE84 + 0x10 = PROC2_$UID (0xE7BE94),
+     * D0 = entry->asid << 3 indexes 0xE7BE84 + 0x10 = PROC2_$UNWIRED_DATA.uid (0xE7BE94),
      * and the two longwords are copied high then low.
      */
-    PROC2_$UID[entry->asid].high = entry->uid.high;
-    PROC2_$UID[entry->asid].low = entry->uid.low;
+    PROC2_$UNWIRED_DATA.uid[entry->asid].high = entry->uid.high;
+    PROC2_$UNWIRED_DATA.uid[entry->asid].low = entry->uid.low;
 
     /* 0x00E73310: the argument is &entry->asid (entry+0x96), not the value */
     FIM_$INIT_ASID((int16_t *)&entry->asid);
@@ -67,13 +67,13 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
      */
     for (;;) {
         /* 0x00E73330 */
-        upid = PROC2_$NEXT_UPID;
+        upid = PROC2_$UNWIRED_DATA.next_upid;
 
         /* 0x00E73334-0x00E73344 */
-        if (PROC2_$NEXT_UPID == P2_UPID_WRAP_AT) {
-            PROC2_$NEXT_UPID = P2_UPID_WRAP_TO;
+        if (PROC2_$UNWIRED_DATA.next_upid == P2_UPID_WRAP_AT) {
+            PROC2_$UNWIRED_DATA.next_upid = P2_UPID_WRAP_TO;
         } else {
-            PROC2_$NEXT_UPID = PROC2_$NEXT_UPID + 1;
+            PROC2_$UNWIRED_DATA.next_upid = PROC2_$UNWIRED_DATA.next_upid + 1;
         }
 
         /* 0x00E7334A: clr.b D3b */
@@ -83,7 +83,7 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
         pgroup_idx = PGROUP_FIND_BY_UPGID(upid);
 
         /* 0x00E73356-0x00E7335A: walk the allocated list */
-        scan = (int16_t)P2_INFO_ALLOC_PTR;
+        scan = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
         while (scan != 0) {
             proc2_info_t *e = P2_INFO_ENTRY(scan);
 
@@ -133,9 +133,9 @@ void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *entry)
 
     /*
      * 0x00E733A0-0x00E733BA: the creator is the current process,
-     * P2_INFO_ENTRY(P2_PID_TO_INDEX[PROC1_$CURRENT]).
+     * P2_INFO_ENTRY(PROC2_$DATA.pid_to_index[PROC1_$CURRENT]).
      */
-    creator = P2_INFO_ENTRY(P2_PID_TO_INDEX(PROC1_$CURRENT));
+    creator = P2_INFO_ENTRY(PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E733BE */
     entry->pgroup_table_idx = 0;

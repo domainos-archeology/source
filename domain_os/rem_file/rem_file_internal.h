@@ -179,7 +179,7 @@ _Static_assert(__builtin_offsetof(rem_file_$response_t, data) == 0x08, "rem_file
  * External data references
  * (NETWORK_$DISKLESS, NETWORK_$REALLY_DISKLESS, NETWORK_$MOTHER_NODE and
  * NODE_$ME come from network/network.h; NETLOG_$OK_TO_LOG_SERVER from
- * netlog/netlog.h; UID_$NIL from uid/uid.h; ACL_$SUPER_COUNT from acl/acl.h.)
+ * netlog/netlog.h; UID_$NIL from uid/uid.h; ACL_$UNWIRED_DATA.super_count from acl/acl.h.)
  */
 
 /*
@@ -480,9 +480,9 @@ void REM_FILE_$RN_DO_OP(void *addr_info, void *op_buffer, int16_t fixed_len,
 
 /*
  * Helper macro to check if current process has admin privileges
- * (tst.w (-0x2,A0,D1w*2) with A0 = 0xe7dacc, i.e. ACL_$SUPER_COUNT[PROC1_$CURRENT])
+ * (tst.w (-0x2,A0,D1w*2) with A0 = 0xe7dacc, i.e. ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT])
  */
 #define REM_FILE_PROCESS_HAS_ADMIN() \
-    (ACL_$SUPER_COUNT[PROC1_$CURRENT] > 0)
+    (ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] > 0)
 
 #endif /* REM_FILE_INTERNAL_H */

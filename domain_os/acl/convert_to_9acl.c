@@ -25,21 +25,21 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
     int8_t flag_buf[4];
 
     /* Enter superuser mode temporarily */
-    ACL_$SUPER_COUNT[pid]++;
+    ACL_$UNWIRED_DATA.super_count[pid]++;
 
     /* Acquire exclusion lock */
-    ML_$EXCLUSION_START(&ACL_$EXCLUSION_LOCK);
+    ML_$EXCLUSION_START(&ACL_$WIRED_DATA.exclusion_lock);
 
     /* Set locksmith owner and override flag */
-    ACL_$LOCKSMITH_OWNER_PID = PROC1_$CURRENT;
-    ACL_$LOCKSMITH_OVERRIDE = -1;  /* 0xFF */
+    ACL_$UNWIRED_DATA.locksmith_owner_pid = PROC1_$CURRENT;
+    ACL_$UNWIRED_DATA.locksmith_override = -1;  /* 0xFF */
 
     /* Acquire lock #10 */
     ML_$LOCK(10);
 
     /* Get image of source UID into workspace */
     acl_$image_internal(source_uid, 0x400, -1,  /* 0xFF */
-                        ACL_$WORKSPACE, len_buf, data_buf, flag_buf, status_ret);
+                        ACL_$UNWIRED_DATA.workspace, len_buf, data_buf, flag_buf, status_ret);
 
     /* Release lock #10 */
     ML_$UNLOCK(10);
@@ -59,7 +59,7 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
              * so both eight-byte UIDs of the image get the same value - at
              * +0x02 and +0x1A, not at +0x00 and +0x18.  (source-9j7d)
              */
-            acl_$image_t *image = (acl_$image_t *)ACL_$WORKSPACE;
+            acl_$image_t *image = (acl_$image_t *)ACL_$UNWIRED_DATA.workspace;
             const uid_t *def_prot = (const uid_t *)default_prot;
 
             image->acl_uid = *def_prot;
@@ -79,17 +79,17 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
             result_uid->low = UID_$NIL.low;
 
             /* Create primitive ACL */
-            ACL_$PRIM_CREATE(ACL_$WORKSPACE, len_buf, dir_uid, type,
+            ACL_$PRIM_CREATE(ACL_$UNWIRED_DATA.workspace, len_buf, dir_uid, type,
                             result_uid, status_ret);
         }
     }
 
     /* Clear locksmith override */
-    ACL_$LOCKSMITH_OVERRIDE = 0;
+    ACL_$UNWIRED_DATA.locksmith_override = 0;
 
     /* Release exclusion lock */
-    ML_$EXCLUSION_STOP(&ACL_$EXCLUSION_LOCK);
+    ML_$EXCLUSION_STOP(&ACL_$WIRED_DATA.exclusion_lock);
 
     /* Exit superuser mode */
-    ACL_$SUPER_COUNT[pid]--;
+    ACL_$UNWIRED_DATA.super_count[pid]--;
 }

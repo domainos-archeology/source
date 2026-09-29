@@ -26,7 +26,7 @@ void PROC2_$SET_CLEANUP(uint16_t bit_num)
     /* 0x00E41584: tst.w (0x00e2060a).l / beq exit */
     if (PROC1_$AS_ID != 0) {
         /* 0x00E4158C-0x00E415B0 */
-        entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+        entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
         mask = (uint32_t)1 << (bit_num & 0x1F);              /* bset.l D0,D2 */
         entry->cleanup_flags |= (uint16_t)mask;              /* 0x00E415B4: or.w */
     }

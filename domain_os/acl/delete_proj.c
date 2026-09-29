@@ -28,30 +28,30 @@ void ACL_$DELETE_PROJ(uid_t *proj_acl, status_$t *status_ret)
     /* Search for the project in the list */
     for (i = 0; i < ACL_MAX_PROJECTS; i++) {
         /* Check for empty slot (UID_$NIL) - end of list */
-        if (ACL_$PROJ_UIDS[pid][i].high == UID_$NIL.high &&
-            ACL_$PROJ_UIDS[pid][i].low == UID_$NIL.low) {
+        if (ACL_$DATA.proj_uids[pid][i].high == UID_$NIL.high &&
+            ACL_$DATA.proj_uids[pid][i].low == UID_$NIL.low) {
             /* Reached end of list, project not found */
             return;
         }
 
         /* Check if this is the project to delete */
-        if (ACL_$PROJ_UIDS[pid][i].high == proj_acl->high &&
-            ACL_$PROJ_UIDS[pid][i].low == proj_acl->low) {
+        if (ACL_$DATA.proj_uids[pid][i].high == proj_acl->high &&
+            ACL_$DATA.proj_uids[pid][i].low == proj_acl->low) {
             /* Found it - compact the list by shifting subsequent entries */
             for (j = i; j < ACL_MAX_PROJECTS - 1; j++) {
-                ACL_$PROJ_UIDS[pid][j].high = ACL_$PROJ_UIDS[pid][j + 1].high;
-                ACL_$PROJ_UIDS[pid][j].low = ACL_$PROJ_UIDS[pid][j + 1].low;
+                ACL_$DATA.proj_uids[pid][j].high = ACL_$DATA.proj_uids[pid][j + 1].high;
+                ACL_$DATA.proj_uids[pid][j].low = ACL_$DATA.proj_uids[pid][j + 1].low;
 
                 /* Stop if we just copied a NIL entry */
-                if (ACL_$PROJ_UIDS[pid][j].high == UID_$NIL.high &&
-                    ACL_$PROJ_UIDS[pid][j].low == UID_$NIL.low) {
+                if (ACL_$DATA.proj_uids[pid][j].high == UID_$NIL.high &&
+                    ACL_$DATA.proj_uids[pid][j].low == UID_$NIL.low) {
                     break;
                 }
             }
 
             /* Clear the last slot (or the slot after the last copied entry) */
-            ACL_$PROJ_UIDS[pid][ACL_MAX_PROJECTS - 1].high = UID_$NIL.high;
-            ACL_$PROJ_UIDS[pid][ACL_MAX_PROJECTS - 1].low = UID_$NIL.low;
+            ACL_$DATA.proj_uids[pid][ACL_MAX_PROJECTS - 1].high = UID_$NIL.high;
+            ACL_$DATA.proj_uids[pid][ACL_MAX_PROJECTS - 1].low = UID_$NIL.low;
             return;
         }
     }

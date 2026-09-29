@@ -2,7 +2,7 @@
  * PROC2_$GET_CR_REC - Get creation record UIDs from an EC2 handle
  *
  * Resolves the caller's EC2 handle to its level-1 eventcount, derives the
- * process table index from that eventcount's position in PROC2_$EC, and
+ * process table index from that eventcount's position in PROC2_$WIRED_DATA.ec, and
  * returns the entry's parent UID and process UID when the entry is bound
  * (flags 0x0100) or a zombie (0x2000).
  *
@@ -35,10 +35,10 @@ void PROC2_$GET_CR_REC(uint32_t *ec_handle, uid_t *parent_uid, uid_t *proc_uid,
     handle = *ec_handle;
     ec1 = EC2_$GET_EC1_ADDR((ec2_$eventcount_t *)&handle, &status);
 
-    /* (A0 - PROC2_$EC) / sizeof(proc2_ec_entry_t) + 1; the stride is 0x18
+    /* (A0 - PROC2_$WIRED_DATA.ec) / sizeof(proc2_ec_entry_t) + 1; the stride is 0x18
      * on the target (asserted in proc2_internal.h).  Computed before the
      * status test exactly as the image does. */
-    proc_idx = (int16_t)(((uintptr_t)ec1 - (uintptr_t)PROC2_$EC) /
+    proc_idx = (int16_t)(((uintptr_t)ec1 - (uintptr_t)PROC2_$WIRED_DATA.ec) /
                          sizeof(proc2_ec_entry_t)) + 1;
 
     if (status == status_$ok) {

@@ -14,11 +14,10 @@
  * Each process has a proc2_info_t structure (228 bytes) that tracks
  * higher-level state beyond what the PCB (proc1_t) contains.
  *
- * Memory layout (m68k):
- *   - Process info table: 0xEA551C (base for index 1)
- *   - Table entry size: 0xE4 (228) bytes
- *   - Max processes: 70 (indices 1-70; see P2_INFO_TABLE_SIZE)
- *   - Allocation pointer: P2_INFO_ALLOC_PTR at 0xE7BE84 + 0x1E0
+ * Data (module data blocks, see PROC2_$UNWIRED_DATA and PROC2_$DATA below):
+ *   - PROC2 A5 block 0xE7BE84: UIDs, the per-ASID UID table, list heads
+ *   - PROC2_$DATA 0xEA551C: process entries 1..70 (0xE4 bytes each),
+ *     the pid-to-index table and the process-group table
  */
 
 #ifndef PROC2_H
@@ -490,35 +489,174 @@ _Static_assert(__builtin_offsetof(pgroup_entry_t, session_id) == 0x06, "pgroup_e
  */
 #define P2_INFO_TABLE_SIZE 70
 
-/* Base address for index calculations (table_base - entry_size) */
-extern proc2_info_t *P2_INFO_TABLE;
-
-/* Allocation pointer (index of first allocated entry) */
-extern uint16_t P2_INFO_ALLOC_PTR;
-
-/* Free list head (index of first free entry) */
-extern uint16_t P2_FREE_LIST_HEAD;
-
-/* Mapping table: PROC1 PID -> PROC2 index (at 0xEA551C + 0x3EB6) */
-extern uint16_t *PROC2_$PID_TO_INDEX;
-
-/* Process group table (8-byte entries at 0xEA551C + 0x3F30) */
-extern pgroup_entry_t *PGROUP_TABLE;
+/*
+ * ============================================================================
+ * PROC2_$UNWIRED_DATA - the PROC2 module data block (map "D E7BE84 PROC2
+ * size = 1E8")
+ * ============================================================================
+ *
+ * Module data block PROC2_$UNWIRED_DATA: Claude Opus 5.5 (source-l2yd).
+ *
+ * Every Pascal PROC2 routine loads A5 with `lea (0xe7be84).l,A5' (e.g.
+ * PROC2_$DELIVER_PENDING 0x00E3F526); PROC2_$INIT (boot segment, A5 =
+ * 0xE35034) and callers outside PROC2 use the literal base `movea.l
+ * #0xe7be84,An' (0x00E303EA) or the map symbol PROC2_$UNWIRED_DATA.uid (`movea.l
+ * #0xe7be94,A1', DXM_$ADD_SIGNAL_CALLBACK 0x00E721A8).  A MODULE_DATA block
+ * linked in the SAU2 map's order after SVC_CATCHER's tables and before EC2;
+ * the address is the ordering key, not the link address.
+ *
+ *   A5 off  image      field
+ *   0x000   0xE7BE84   proc_dir_uid     UID of /node_data/proc_dir
+ *                                       (PROC2_$INIT)
+ *   0x008   0xE7BE8C   system_uid       UID_$GEN at 0x00E303F4
+ *   0x010   0xE7BE94   uid[0..57]       map PROC2_$UNWIRED_DATA.uid, per-ASID
+ *   0x1E0   0xE7C064   info_alloc_ptr   map PROC2_$UNWIRED_DATA.info_alloc_ptr, `(0x1e0,A5)'
+ *   0x1E2   0xE7C066   free_list_head   `(0x1e2,A5)' (PROC2_$INIT 0x00E3048E)
+ *   0x1E4   0xE7C068   boot_flags       `move.w (0x1e4,A5),(A0)'
+ *                                       (PROC2_$GET_BOOT_FLAGS)
+ *   0x1E6   0xE7C06A   next_upid        `(0x1e6,A2)' 0x00E73330..0x00E73344
+ *
+ * uid[asid]: A5 + 0x10 + asid*8, `lsl.w #0x3,D0w' / `move.l
+ * (A0)+,(0x10,A1,D0w*0x1)' with A1 = 0xE7BE84 (PROC2_$SET_VALID
+ * 0x00E73300..0x00E73308); element 0 is used (PROC2_$INIT 0x00E30442
+ * stores the system UID there), so the table is [0..57] from its map
+ * symbol with no bias; uid[57] ends at info_alloc_ptr.
+ *
+ * Pointer-free, alignment-independent (uid_t and words), so every assert
+ * is unconditional.  Image contents (`gsk read 0xE7BE84 488'): zero except
+ * next_upid = 0x0041, the value the wrap at 0x00E7333C resets it to.
+ */
+#define PROC2_$UNWIRED_DATA_SIZE 0x1E8      /* map: PROC2 size = 1E8 */
 
 /*
- * Per-ASID process UID table (8 bytes per entry, indexed by ASID).
- * PROC2_$INIT fills entries 0 and 2..57 with proc2_system_uid and
- * generates a separate UID for entry 1.  The table runs from 0xE7BE94
- * up to P2_INFO_ALLOC_PTR (0xE7C064).
- *
- * Original address: 0xE7BE94 (Ghidra label PROC2_$UID)
+ * The per-ASID UID table: [0..57], one slot per address space
+ * (MST's 58 ASIDs).  PROC2_$INIT fills 0 and 2..57 with system_uid
+ * (0x00E30438..0x00E30462, `moveq #0x37' / dbf = 56 slots from 2) and
+ * generates slot 1 (0x00E30406 `pea (0x18,A0)').
  */
 #define PROC2_UID_TABLE_SIZE 58
-extern uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 
-#define P2_INFO_ENTRY(idx) (&P2_INFO_TABLE[(idx) - 1])
-#define P2_PID_TO_INDEX(pid) (PROC2_$PID_TO_INDEX[(pid)])
-#define PGROUP_ENTRY(idx) (&PGROUP_TABLE[(idx)])
+typedef struct proc2_$unwired_data_t {
+  uid_t    proc_dir_uid;                  /* +0x000 */
+  uid_t    system_uid;                    /* +0x008 */
+  uid_t    uid[PROC2_UID_TABLE_SIZE];     /* +0x010 map PROC2_$UNWIRED_DATA.uid, [asid] */
+  uint16_t info_alloc_ptr;                /* +0x1E0 map PROC2_$UNWIRED_DATA.info_alloc_ptr:
+                                           *        head of the allocated
+                                           *        list (a table index) */
+  uint16_t free_list_head;                /* +0x1E2 head of the free list */
+  int16_t  boot_flags;                    /* +0x1E4 */
+  uint16_t next_upid;                     /* +0x1E6 rolling UPID allocator */
+} proc2_$unwired_data_t;
+
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, proc_dir_uid) == 0x000, "proc_dir_uid (0x0,A5)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, system_uid) == 0x008, "system_uid (0x8,A0) 0x00E303F4");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, uid) == 0x010, "PROC2_$UNWIRED_DATA.uid = uid[0] (0x10,A1,asid*8)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, uid[1]) == 0x018, "uid stride 8 (lsl.w #0x3)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, uid[PROC2_UID_TABLE_SIZE]) == 0x1E0,
+               "uid[57] ends at PROC2_$UNWIRED_DATA.info_alloc_ptr");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, info_alloc_ptr) == 0x1E0, "PROC2_$UNWIRED_DATA.info_alloc_ptr (0x1e0,A5)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, free_list_head) == 0x1E2, "free_list_head (0x1e2,A5)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, boot_flags) == 0x1E4, "boot_flags (0x1e4,A5)");
+_Static_assert(__builtin_offsetof(proc2_$unwired_data_t, next_upid) == 0x1E6, "next_upid (0x1e6,A2)");
+_Static_assert(sizeof(proc2_$unwired_data_t) == PROC2_$UNWIRED_DATA_SIZE, "PROC2: map size 0x1E8");
+
+MODULE_DATA_DECLARE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+
+/*
+ * ============================================================================
+ * PROC2_$DATA - the per-process tables (map "D67 EA551C PROC2_$DATA
+ * loaded at 1B3836, size = 4168")
+ * ============================================================================
+ *
+ * Module data block PROC2_$DATA: Claude Opus 5.5 (source-l2yd).
+ *
+ * Reached only through its literal base, `movea.l #0xea551c,An' (e.g.
+ * PROC2_$DELIVER_PENDING 0x00E3F532), with every table displaced from it.
+ * A MODULE_DATA block linked in the SAU2 map's order after XPD_$DATA and
+ * before OS_DATA_END; the address is the ordering key, not the link address.
+ *
+ *   off     image      field
+ *   0x0000  0xEA551C   info[1..70]      the 0xE4-byte process entries
+ *   0x3E58  0xEA9374   (0x5E bytes, never addressed)
+ *   0x3EB6  0xEA93D2   pid_to_index[0..64]
+ *   0x3F30  0xEA944C   pgroup[0..70]    pgroup[70] ends the block at 0x4168
+ *
+ * info[idx]:  Pascal [1..70].  The code forms A = 0xEA551C + idx*0xE4 and
+ *             reaches the entry at (-0xE4+off,A) (e.g. `lea (-0xe4,A1),A4',
+ *             PROC2_$SUSPEND 0x00E412BA), so entry idx is at
+ *             0xEA551C + (idx-1)*0xE4.  Element 0 would be 0xEA5438, the
+ *             last 0xE4 bytes of the preceding XPD_$DATA segment, outside
+ *             this block; the table is therefore declared from element 1
+ *             and P2_INFO_ENTRY(idx) applies the bias once (as
+ *             PMAP_SEGMAP_ROW / PKT_MISSING_ENTRY do).  Entry 70 ends at
+ *             +0x3E58 (0x00E304D8 `clr.w 0xEA92A2' = entry(70)+0x12).
+ *             PROC2_$DETACH_FROM_PARENT writes entry(0)->pad_14 when a
+ *             zombie is last on the allocated list (see detach_from_parent.c):
+ *             in the image that store lands in XPD_$DATA (source-c6cy).
+ * pid_to_index[pid]: A = 0xEA551C + pid*2, `move.w (0x3eb6,A1),...'
+ *             (0x00E3F53A..0x00E3F53E), so element 0 is at +0x3EB6.
+ *             PROC2_$INIT clears pids 2..64 (0x00E30466..0x00E30476, first
+ *             store 0xEA93D6) and sets pid 1 (0x00E304EA, 0xEA93D4).
+ * pgroup[idx]: A = 0xEA551C + idx*8, `clr.w (0x3f30,A0)' (PROC2_$INIT
+ *             0x00E30484, first store 0xEA9454 = pgroup[1]) and
+ *             `move.w (0x3f34,A1),D2w' (PROC2_$PGUID_TO_UPGID 0x00E4231A),
+ *             element 0 at +0x3F30.  Pascal [1..70] whose bias slot
+ *             overlays pid_to_index[61..64], so the two tables are union
+ *             arms and every user indexes with the table index.
+ *
+ * Pointer-free.  proc2_info_t is 0xE4 bytes on the target only (its
+ * creation_time_high longword sits at the odd-word offset 0x56), so the
+ * offsets past info[] are target-only asserts; the union arms' relative
+ * placement is asserted everywhere.  Image contents: none - the segment is
+ * loaded at file offset 0x1B3836, past the end of the SR10.2 SAU2 file
+ * (0xE00000..0xE9534E), so it starts zero-filled.
+ */
+#define PROC2_$DATA_SIZE 0x4168             /* map: PROC2_$DATA size = 4168 */
+
+typedef struct proc2_$data_t {
+  proc2_info_t info[P2_INFO_TABLE_SIZE];  /* +0x0000 entries 1..70 */
+  uint8_t      _3e58[0x5E];               /* +0x3E58 never addressed */
+  union {                                 /* +0x3EB6 */
+    /* +0x3EB6: [0..64], indexed with the PROC1 pid */
+    uint16_t pid_to_index[PROC1_MAX_PROCESSES];
+    struct {
+      uint8_t _pgroup_bias[0x7A];
+      /* +0x3F30: [0..70]; [0] overlays pid_to_index[61..64] */
+      pgroup_entry_t pgroup[PGROUP_TABLE_SIZE];
+    };
+  };
+} proc2_$data_t;
+
+_Static_assert(__builtin_offsetof(proc2_$data_t, info) == 0x0000, "info[1] at 0xEA551C");
+#if defined(ARCH_M68K)
+/* Target only: proc2_info_t is 0xE4 bytes only with 2-byte alignment. */
+_Static_assert(__builtin_offsetof(proc2_$data_t, info[1]) == 0x00E4, "info stride 0xE4");
+_Static_assert(__builtin_offsetof(proc2_$data_t, _3e58) == 0x3E58, "info[70] ends at 0x3E58");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pid_to_index) == 0x3EB6, "pid_to_index[0] (0x3eb6,A1)");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pgroup) == 0x3F30, "pgroup[0] (0x3f30,A0)");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pgroup[1]) == 0x3F38, "pgroup[1] = 0xEA9454");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pgroup[PGROUP_TABLE_SIZE]) == PROC2_$DATA_SIZE,
+               "pgroup[70] ends the block");
+_Static_assert(sizeof(proc2_$data_t) == PROC2_$DATA_SIZE, "PROC2_$DATA: map size 0x4168");
+#endif
+_Static_assert(__builtin_offsetof(proc2_$data_t, pid_to_index[1]) - __builtin_offsetof(proc2_$data_t, pid_to_index) == 2,
+               "pid_to_index stride 2 (add.w D0w,D0w)");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pgroup[1]) - __builtin_offsetof(proc2_$data_t, pgroup) == 8,
+               "pgroup stride 8");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pgroup) - __builtin_offsetof(proc2_$data_t, pid_to_index) == 0x7A,
+               "pgroup[0] overlays pid_to_index[61]");
+_Static_assert(__builtin_offsetof(proc2_$data_t, pid_to_index[PROC1_MAX_PROCESSES]) -
+                   __builtin_offsetof(proc2_$data_t, pgroup) == 8,
+               "pid_to_index[64] ends where pgroup[1] begins");
+
+MODULE_DATA_DECLARE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
+
+/*
+ * P2_INFO_ENTRY(idx) - process entry idx (Pascal [1..70]).  The one bias:
+ * element 0 lies outside PROC2_$DATA (see above), so the table is declared
+ * from entry 1 and this accessor subtracts it once.
+ */
+#define P2_INFO_ENTRY(idx) (&PROC2_$DATA.info[(idx) - 1])
 
 /*
  * External functions
@@ -1209,24 +1347,19 @@ void PROC2_$GET_UPIDS(uid_t *proc_uid, uint16_t *upid, uint16_t *uppid,
 void PROC2_$GET_MY_UPIDS(uint16_t *upid, uint16_t *uppid, uint16_t *upgid);
 
 /*
- * PROC2_$DATA - the PROC2 per-process data block.  The SAU2 map has
- * `D67 EA551C PROC2_$DATA loaded at 1B3836, size = 4168`; the proc2 sources
- * reach it through the absolute base 0xEA551C (entry 1 of the 0xE4-byte
- * proc2_info_t table).
- */
-#define PROC2_$DATA_ADDR 0x00EA551CUL
-
-/*
- * PTR_PROC2_$DATA - literal pointer cell holding PROC2_$DATA's base.
+ * PTR_PROC2_$DATA - literal longword cell holding PROC2_$DATA's address.
  *
  * It sits in the tail of the XPD code segment (`I E32304 XPD size = 90`)
  * beside PTR_XPD_$DATA, and XPD_$INIT pushes the ADDRESS of both to
- * MST_$WIRE_AREA (xpd/init.c) so the wired range runs from XPD_$DATA
+ * MST_$WIRE_AREA (xpd/init.c), which reads each as a longword VA (`move.l
+ * (A1),D1', 0x00E44BA4), so the wired range runs from XPD_$DATA
  * (0x00EA5034) to PROC2_$DATA (0x00EA551C).  Image bytes at 0x00E3238C:
- * 00 ea 55 1c.
+ * 00 ea 55 1c, the image address of PROC2_$DATA.  A stored-VA cell
+ * (ARCH_PTR_TO_VA_STATIC, proc2/proc2_data.c): the block's link address on
+ * the target, the image's value on a host.
  *
  * Original address: 0x00E3238C
  */
-extern void *PTR_PROC2_$DATA;
+extern uint32_t PTR_PROC2_$DATA;
 
 #endif /* PROC2_H */

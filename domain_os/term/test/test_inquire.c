@@ -40,7 +40,7 @@ static int current_failed;
 #define ASSERT_PTR_EQ(e, a) ASSERT_EQ((uintptr_t)(e), (uintptr_t)(a))
 
 term_data_t TERM_$DATA;
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
 uid_t UID_$NIL = { 0x11111111, 0x22222222 };
 const uint16_t term_$const_word_2 = 2;
 
@@ -158,7 +158,7 @@ void KBD_$PUT(uint16_t *line_ptr, uint16_t *type_ptr, void *str, uint16_t *lengt
 static void reset(void)
 {
     memset(&TERM_$DATA, 0, sizeof(TERM_$DATA));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
     memset(&mock_params, 0, sizeof(mock_params));
     real_line_value = 1;
     real_line_status = status_$ok;
@@ -427,11 +427,11 @@ TEST(p2_cleanup_clears_matching_owners)
     uid_t *o3 = (uid_t *)TERM_$DATA_AT(0x1A4 + 3 * 0x4DC);
 
     reset();
-    PROC2_$UID[4].high = 0xDEAD; PROC2_$UID[4].low = 0xBEEF;
-    *o0 = PROC2_$UID[4];
+    PROC2_$UNWIRED_DATA.uid[4].high = 0xDEAD; PROC2_$UNWIRED_DATA.uid[4].low = 0xBEEF;
+    *o0 = PROC2_$UNWIRED_DATA.uid[4];
     o1->high = 0xDEAD; o1->low = 0x0001;            /* low differs */
-    *o2 = PROC2_$UID[4];
-    *o3 = PROC2_$UID[4];                            /* a fourth: not walked */
+    *o2 = PROC2_$UNWIRED_DATA.uid[4];
+    *o3 = PROC2_$UNWIRED_DATA.uid[4];                            /* a fourth: not walked */
 
     TERM_$P2_CLEANUP(&as_id);
 

@@ -18,8 +18,8 @@ void ACL_$GET_RE_SIDS(void *original_sids, void *current_sids, status_$t *status
     int16_t pid = PROC1_$CURRENT;
     uint32_t *orig_out = (uint32_t *)original_sids;
     uint32_t *curr_out = (uint32_t *)current_sids;
-    uint32_t *orig_src = (uint32_t *)&ACL_$ORIGINAL_SIDS[pid];
-    uint32_t *curr_src = (uint32_t *)&ACL_$CURRENT_SIDS[pid];
+    uint32_t *orig_src = (uint32_t *)&ACL_$DATA.original_sids[pid];
+    uint32_t *curr_src = (uint32_t *)&ACL_$DATA.current_sids[pid];
     int i;
 
     /* Copy 9 uint32_t values (36 bytes) for original SIDs */

@@ -49,7 +49,7 @@ term_data_t TERM_$DATA;
 const uint16_t term_$const_word_2 = 2;     /* the 0x00E667C4 cell, from term_data.c */
 const uint16_t term_$const_word_1 = 1;     /* 0x00E66896, from term/read.c */
 const uint16_t term_$const_word_0 = 0;     /* 0x00E66898, from term/read.c */
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
 uint16_t PROC1_$AS_ID;
 
 /* ============================================================================
@@ -373,7 +373,7 @@ TEST(enable_func_then_own_pgroup)
         ASSERT_EQ(CALL_ENABLE_FUNC, call_log[0]);
         ASSERT_EQ(arms[i].num, func_num_log[0]);
         ASSERT_EQ(CALL_SET_PGROUP, call_log[1]);
-        ASSERT_EQ((unsigned long)&PROC2_$UID[5], (unsigned long)pgroup_log);
+        ASSERT_EQ((unsigned long)&PROC2_$UNWIRED_DATA.uid[5], (unsigned long)pgroup_log);
         ASSERT_EQ(CALL_STATUS_CONVERT, call_log[2]);
     }
 }
@@ -536,7 +536,7 @@ TEST(enable_pgroup_sets_bit_and_pgroup)
     run(15);
     ASSERT_EQ(3, call_count);
     ASSERT_EQ(CALL_SET_PGROUP, call_log[0]);
-    ASSERT_EQ((unsigned long)&PROC2_$UID[3], (unsigned long)pgroup_log);
+    ASSERT_EQ((unsigned long)&PROC2_$UNWIRED_DATA.uid[3], (unsigned long)pgroup_log);
     ASSERT_EQ(CALL_SET_PARAM, call_log[1]);
     ASSERT_EQ(0x4, param_log.flags2 & 0x4);
     ASSERT_EQ(0x800, mask_log);

@@ -93,7 +93,7 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     }
 
     /* Enter superuser mode temporarily */
-    ACL_$SUPER_COUNT[pid]++;
+    ACL_$UNWIRED_DATA.super_count[pid]++;
 
     /* Calculate expected buffer size: 0x34 + num_entries * 0x20 */
     num_entries = *(int16_t *)((uint8_t *)acl_data + 0x0E);
@@ -186,5 +186,5 @@ cleanup_error:
 
 cleanup:
     /* Exit superuser mode */
-    ACL_$SUPER_COUNT[pid]--;
+    ACL_$UNWIRED_DATA.super_count[pid]--;
 }

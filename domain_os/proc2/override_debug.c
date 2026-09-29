@@ -53,7 +53,7 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
          * Unlike PROC2_$DEBUG, which pushes the raw table index, this entry
          * point pushes the caller entry's own +0x1C field as the target:
          *
-         *   00e41776  move.w (0x3eb6,A1),D0w      ; P2_PID_TO_INDEX[pid]
+         *   00e41776  move.w (0x3eb6,A1),D0w      ; PROC2_$DATA.pid_to_index[pid]
          *   00e4177a  mulu.w #0xe4,D0
          *   00e4177e  lea (0x0,A0,D0w),A2         ; caller entry + 0xE4
          *   00e41782  clr.w -(SP)                 ; flag = 0        (arg 3)
@@ -63,7 +63,7 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
          * +0x1C holds the entry's own 1-based table index (see
          * proc2/make_orphan.c), so the two entry points agree.
          */
-        int16_t current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+        int16_t current_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
         proc2_info_t *current_entry = P2_INFO_ENTRY(current_idx);
 
         target_idx = (int16_t)current_entry->self_index;
@@ -94,7 +94,7 @@ void PROC2_$OVERRIDE_DEBUG(uid_t *proc_uid, status_$t *status_ret)
         }
 
         /* 0x00E417C8: st -(SP) = TRUE; 0x00E417DC: caller's own index */
-        debugger_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+        debugger_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
         flag = (int8_t)0xFF;
     }
 

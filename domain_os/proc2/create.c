@@ -90,8 +90,8 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* 0x00E72730-0x00E7273A */
     TIME_$CLOCK(&creation_time);
 
-    /* 0x00E7273C-0x00E72746: D2 = P2_FREE_LIST_HEAD (0xE7BE84+0x1E2) */
-    new_idx = (int16_t)P2_FREE_LIST_HEAD;
+    /* 0x00E7273C-0x00E72746: D2 = PROC2_$UNWIRED_DATA.free_list_head (0xE7BE84+0x1E2) */
+    new_idx = (int16_t)PROC2_$UNWIRED_DATA.free_list_head;
     if (new_idx == 0) {
         /* 0x00E72748-0x00E7275E: exits at 0x00E72BC4, past the status store */
         *status_ret = status_$proc2_table_full;
@@ -103,16 +103,16 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     new_entry = P2_INFO_ENTRY(new_idx);
 
     /* 0x00E72772-0x00E7278C: A2 = the caller's entry (mulu) */
-    current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    current_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     current_entry = P2_INFO_ENTRY(current_idx);
 
     /*
      * 0x00E72790-0x00E7279C: pop the free list, push onto the allocated
-     * list (P2_INFO_ALLOC_PTR at 0xE7BE84+0x1E0).
+     * list (PROC2_$UNWIRED_DATA.info_alloc_ptr at 0xE7BE84+0x1E0).
      */
-    P2_FREE_LIST_HEAD = new_entry->next_index;
-    new_entry->next_index = P2_INFO_ALLOC_PTR;
-    P2_INFO_ALLOC_PTR = (uint16_t)new_idx;
+    PROC2_$UNWIRED_DATA.free_list_head = new_entry->next_index;
+    new_entry->next_index = PROC2_$UNWIRED_DATA.info_alloc_ptr;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = (uint16_t)new_idx;
 
     /*
      * 0x00E727A0-0x00E727AC: the old allocated-list head's back link
@@ -223,8 +223,8 @@ void PROC2_$CREATE(uid_t *parent_uid, uint32_t *code_desc, uint32_t *map_param,
     /* 0x00E728B6: bset.b #0x0,(-0xba,A3) -- HIGH byte bit 0 = 0x0100 */
     new_entry->flags |= PROC2_FLAG_BOUND;
 
-    /* 0x00E728BC-0x00E728C8: PROC2_$PID_TO_INDEX[pid] = new index */
-    PROC2_$PID_TO_INDEX[new_pid] = (uint16_t)new_idx;
+    /* 0x00E728BC-0x00E728C8: PROC2_$DATA.pid_to_index[pid] = new index */
+    PROC2_$DATA.pid_to_index[new_pid] = (uint16_t)new_idx;
 
     /*
      * 0x00E728CC-0x00E728D6: four longwords from entry+0x70 cleared:
@@ -403,11 +403,11 @@ cleanup_asid:
     MST_$FREE_ASID(new_entry->asid, &temp_status);
 
     /*
-     * 0x00E72AFA-0x00E72B0E: PROC2_$UID[entry->asid] = proc2_system_uid
+     * 0x00E72AFA-0x00E72B0E: PROC2_$UNWIRED_DATA.uid[entry->asid] = PROC2_$UNWIRED_DATA.system_uid
      * (A0 = 0xE7BE84, source (0x8,A0) = 0xE7BE8C, slot (0x10,A0,asid*8)).
      */
-    PROC2_$UID[new_entry->asid].high = proc2_system_uid.high;
-    PROC2_$UID[new_entry->asid].low = proc2_system_uid.low;
+    PROC2_$UNWIRED_DATA.uid[new_entry->asid].high = PROC2_$UNWIRED_DATA.system_uid.high;
+    PROC2_$UNWIRED_DATA.uid[new_entry->asid].low = PROC2_$UNWIRED_DATA.system_uid.low;
 
     /* 0x00E72B12-0x00E72B22: entry+0x9C (cleanup_flags) */
     if (new_entry->cleanup_flags != 0) {
@@ -420,11 +420,11 @@ cleanup_entry:
 
     /*
      * 0x00E72B38-0x00E72B5E: unlink from the allocated list.
-     *   +0x14 == 0  -> P2_INFO_ALLOC_PTR = +0x12
+     *   +0x14 == 0  -> PROC2_$UNWIRED_DATA.info_alloc_ptr = +0x12
      *   else        -> P2[+0x14]->next_index = +0x12
      */
     if (new_entry->pad_14 == 0) {
-        P2_INFO_ALLOC_PTR = new_entry->next_index;
+        PROC2_$UNWIRED_DATA.info_alloc_ptr = new_entry->next_index;
     } else {
         proc2_info_t *prev = P2_INFO_ENTRY((int16_t)new_entry->pad_14);
         prev->next_index = new_entry->next_index;
@@ -437,8 +437,8 @@ cleanup_entry:
     P2_INFO_ENTRY(new_entry->next_index)->pad_14 = new_entry->pad_14;
 
     /* 0x00E72B7C-0x00E72B88: push back onto the free list */
-    new_entry->next_index = P2_FREE_LIST_HEAD;
-    P2_FREE_LIST_HEAD = (uint16_t)new_idx;
+    new_entry->next_index = PROC2_$UNWIRED_DATA.free_list_head;
+    PROC2_$UNWIRED_DATA.free_list_head = (uint16_t)new_idx;
 
     /* 0x00E72B8C-0x00E72B96: entry+0x08 (parent_uid) = UID_$NIL */
     new_entry->parent_uid.high = UID_$NIL.high;
@@ -447,9 +447,9 @@ cleanup_entry:
     /* 0x00E72B9A: bclr.b #0x0,(-0xba,A2) -- HIGH byte bit 0 = 0x0100 */
     new_entry->flags &= (uint16_t)~PROC2_FLAG_BOUND;
 
-    /* 0x00E72BA0-0x00E72BAC: entry+0x00 (uid) = proc2_system_uid (0xE7BE8C) */
-    new_entry->uid.high = proc2_system_uid.high;
-    new_entry->uid.low = proc2_system_uid.low;
+    /* 0x00E72BA0-0x00E72BAC: entry+0x00 (uid) = PROC2_$UNWIRED_DATA.system_uid (0xE7BE8C) */
+    new_entry->uid.high = PROC2_$UNWIRED_DATA.system_uid.high;
+    new_entry->uid.low = PROC2_$UNWIRED_DATA.system_uid.low;
 
     /* 0x00E72BB0-0x00E72BB6 */
     ML_$UNLOCK(PROC2_LOCK_ID);

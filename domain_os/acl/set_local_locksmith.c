@@ -20,7 +20,7 @@
 void ACL_$SET_LOCAL_LOCKSMITH(int16_t *locksmith_value, status_$t *status_ret)
 {
     int16_t pid = PROC1_$CURRENT;
-    acl_sid_block_t *curr_sids = &ACL_$CURRENT_SIDS[pid];
+    acl_sid_block_t *curr_sids = &ACL_$DATA.current_sids[pid];
     int16_t asid_index = pid - 1;
     int16_t byte_index;
     uint8_t bit_mask;
@@ -54,8 +54,8 @@ granted:
     /* Set the suser bit for this ASID */
     byte_index = asid_index >> 3;
     bit_mask = 0x80 >> (asid_index & 7);
-    ACL_$ASID_SUSER_BITMAP[byte_index] |= bit_mask;
+    ACL_$DATA.asid_suser_bitmap[byte_index] |= bit_mask;
 
     /* Set the local locksmith value */
-    ACL_$LOCAL_LOCKSMITH = *locksmith_value;
+    ACL_$UNWIRED_DATA.local_locksmith = *locksmith_value;
 }

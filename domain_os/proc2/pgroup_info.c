@@ -48,7 +48,7 @@ void PROC2_$PGROUP_INFO(uint16_t *pgroup_id, uint16_t *session_id_ret,
     pgroup_idx = PGROUP_FIND_BY_UPGID(upgid);
     if (pgroup_idx == 0) {
         /* 0x00E41E08-0x00E41E30: first allocated entry whose upid matches */
-        index = (int16_t)P2_INFO_ALLOC_PTR;
+        index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
         while (index != 0) {
             entry = P2_INFO_ENTRY(index);
             if (upgid == entry->upid) {                      /* 0x00E41E20 */
@@ -64,7 +64,7 @@ void PROC2_$PGROUP_INFO(uint16_t *pgroup_id, uint16_t *session_id_ret,
         status = status_$proc2_uid_not_found;                /* 0x00E41E56 */
     } else {
         /* 0x00E41E36-0x00E41E50 */
-        pgroup = PGROUP_ENTRY(pgroup_idx);
+        pgroup = &PROC2_$DATA.pgroup[pgroup_idx];
         session_id = pgroup->session_id;                     /* (0x3F36) */
         is_leader = (pgroup->leader_count == 0) ? 0xFF : 0;  /* seq on (0x3F32) */
         status = status_$ok;

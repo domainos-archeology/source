@@ -48,13 +48,13 @@ void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
          *   00e41660  move.w (0x00e20608).l,D0w   ; PROC1_$CURRENT
          *   00e4166c  add.w D0w,D0w
          *   00e4166e  subq.l #0x2,SP              ; result slot
-         *   00e41674  move.w (0x3eb6,A1),D2w      ; P2_PID_TO_INDEX[pid]
+         *   00e41674  move.w (0x3eb6,A1),D2w      ; PROC2_$DATA.pid_to_index[pid]
          *   00e41678  clr.w -(SP)                 ; flag = 0        (arg 3)
          *   00e41684  move.w (-0xc6,A1),-(SP)     ; entry+0x1E      (arg 2)
          *   00e41688  move.w D2w,-(SP)            ; caller's index  (arg 1)
          *   00e4168a  bra.b 0x00e416f4            ; -> DEBUG_SETUP_INTERNAL
          */
-        int16_t current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+        int16_t current_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
         proc2_info_t *current_entry = P2_INFO_ENTRY(current_idx);
 
         target_idx = current_idx;
@@ -97,7 +97,7 @@ void PROC2_$DEBUG(uid_t *proc_uid, status_$t *status_ret)
          *   move.w (0x3eb6,A0),-(SP)    ; caller's index  (arg 2)
          *   move.w D3w,-(SP)            ; target index    (arg 1)
          */
-        debugger_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+        debugger_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
         flag = (int8_t)0xFF;
     }
 

@@ -8,7 +8,7 @@
  *
  * Original address: 0x00e3f75a (132 bytes)
  * A5 = 0xE7BE84 (PROC2 module data), not otherwise used.
- * A1 = 0xEA551C + idx*0xE4 = entry + 0xE4 (idx = PROC2_$PID_TO_INDEX[PROC1_$CURRENT]):
+ * A1 = 0xEA551C + idx*0xE4 = entry + 0xE4 (idx = PROC2_$DATA.pid_to_index[PROC1_$CURRENT]):
  *   0x00E3F796  (A2)+ = (-0x70,A1) = +0x74 sig_blocked_1  -> mask+0x00
  *   0x00E3F798  (A2)+ = +0x78 sig_blocked_2               -> mask+0x04
  *   0x00E3F79C  (-0x74,A1) = +0x70 sig_pending            -> mask+0x08
@@ -27,7 +27,7 @@ void PROC2_$GET_SIG_MASK(proc2_sig_mask_t *mask_ret)
     int16_t idx;
     proc2_info_t *entry;
 
-    idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     entry = P2_INFO_ENTRY(idx);
 
     mask_ret->blocked_1 = entry->sig_blocked_1;

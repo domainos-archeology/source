@@ -11,7 +11,7 @@
 
 void ACL_$DOWN(void)
 {
-    if (ACL_$SUBSYS_LEVEL[PROC1_$CURRENT] > 0) {
-        ACL_$SUBSYS_LEVEL[PROC1_$CURRENT]--;
+    if (ACL_$DATA.subsys_level[PROC1_$CURRENT] > 0) {
+        ACL_$DATA.subsys_level[PROC1_$CURRENT]--;
     }
 }

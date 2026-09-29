@@ -19,14 +19,9 @@
 #include "proc2/proc2_internal.h"
 
 #define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR, P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84);
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 uint16_t PROC1_$CURRENT;
 uid_t UID_$NIL = { 0xAAAA5555u, 0x12345678u };
 #include "fim/fim.h"
@@ -75,17 +70,17 @@ static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static proc2_wait_result_t res;
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
     memset(&res, 0xEE, sizeof(res));
     memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec)); memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
     n_lock = n_unlock = n_waitn = n_clear = n_cleanup = n_find = n_rls = n_pop = 0;
     mock_waitn_result = 0; mock_find_by_upgid = 4; mock_cleanup_status = status_$cleanup_handler_set;
-    PROC1_$CURRENT = 5; mock_pid_to_index[5] = 2;
+    PROC1_$CURRENT = 5; PROC2_$DATA.pid_to_index[5] = 2;
     E(2)->self_index = 2; E(2)->asid = 3; E(2)->pad_18[0] = 7;
     /* child 3 of 2, upid 100, group 4 */
     E(2)->first_child_idx = 3; E(3)->pad_18[1] = 7; E(3)->upid = 100; E(3)->pgroup_table_idx = 4;
     E(3)->self_index = 3; E(3)->parent_pgroup_idx = 2;
-    P2_INFO_ALLOC_PTR = 2; E(2)->next_index = 3; E(3)->pad_14 = 2; E(3)->next_index = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 2; E(2)->next_index = 3; E(3)->pad_14 = 2; E(3)->next_index = 0;
     for (int i = 1; i <= MOCK_ENTRIES; i++) { E(i)->uid.high = 0x100 + i; E(i)->uid.low = i; }
 }
 
@@ -118,11 +113,11 @@ TEST(wait_wnohang_and_selector_mismatch)
 TEST(wait_blocks_then_reaps)
 {
     uint16_t opt = 0; int16_t pid = -1; status_$t st;
-    P2_FREE_LIST_HEAD = 6; E(3)->tty_uid.high = 0x77; E(3)->zombie_pad[2] = 0xC0;
+    PROC2_$UNWIRED_DATA.free_list_head = 6; E(3)->tty_uid.high = 0x77; E(3)->zombie_pad[2] = 0xC0;
     ASSERT_EQ(PROC2_$WAIT(&opt, &pid, &res, &st), 100);
     ASSERT_EQ(st, status_$ok); ASSERT_EQ(n_waitn, 1); ASSERT_EQ(n_lock, 2); ASSERT_EQ(n_unlock, 2);
     ASSERT_EQ(E(2)->first_child_idx, 0);                   /* unlinked from the parent */
-    ASSERT_EQ(E(2)->next_index, 0); ASSERT_EQ(P2_FREE_LIST_HEAD, 3); ASSERT_EQ(E(3)->next_index, 6);
+    ASSERT_EQ(E(2)->next_index, 0); ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, 3); ASSERT_EQ(E(3)->next_index, 6);
     ASSERT_EQ(E(3)->flags & PROC2_FLAG_ZOMBIE, 0); ASSERT_EQ(n_cleanup, 1); ASSERT_EQ(last_cleanup_mode, 1);
     ASSERT_EQ(res.flag_65, (int8_t)0xFF); ASSERT_EQ(res.flag_66, (int8_t)0xFF);
     ASSERT_EQ(memcmp(res.entry_60, &E(3)->tty_uid, 8), 0);   /* bytes of +0x60.. */

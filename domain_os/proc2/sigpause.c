@@ -37,7 +37,7 @@ void PROC2_$SIGPAUSE(uint32_t *new_mask, uint32_t *result)
 
     /* 0x00E3FA1E-0x00E3FA46 */
     mask_val = *new_mask;
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E3FA36/0x00E3FA4A-0x00E3FA54 */
     ML_$LOCK(PROC2_LOCK_ID);

@@ -56,7 +56,7 @@ static int current_failed = 0;
  * ============================================================================ */
 
 uint16_t PROC1_$CURRENT;
-int16_t  ACL_$SUPER_COUNT[8];
+MODULE_DATA_DEFINE(acl_$unwired_data_t, ACL_$UNWIRED_DATA, 0x00E7CF54);
 
 static rem_file_$neighbors_req_t  snd_request;
 static int16_t   snd_request_len;
@@ -111,7 +111,7 @@ static status_$t st;
 static void reset(void)
 {
     memset(&snd_request, 0, sizeof(snd_request));
-    memset(ACL_$SUPER_COUNT, 0, sizeof(ACL_$SUPER_COUNT));
+    memset(ACL_$UNWIRED_DATA.super_count, 0, sizeof(ACL_$UNWIRED_DATA.super_count));
     PROC1_$CURRENT = 2;
     snd_status_out = status_$ok;
     snd_reply_byte = 0;
@@ -150,7 +150,7 @@ TEST(request_layout_and_length)
 TEST(admin_flag_follows_acl_super_count)
 {
     reset();
-    ACL_$SUPER_COUNT[PROC1_$CURRENT] = 1;
+    ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT] = 1;
     (void)call();
     ASSERT_EQ(0xFF, (uint8_t)snd_request.admin_flag);
 }

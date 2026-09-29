@@ -5,7 +5,7 @@
  *
  *   00e41b5c  lea (0xe7be84).l,A5
  *   00e41b62  movea.l (0x8,A6),A0        ; flags_ret
- *   00e41b66  move.w (0x1e4,A5),(A0)     ; proc2_boot_flags (0xE7C068)
+ *   00e41b66  move.w (0x1e4,A5),(A0)     ; PROC2_$UNWIRED_DATA.boot_flags (0xE7C068)
  *
  * Only reference: the SVC table entry at 0x00E7B43E.
  *
@@ -16,5 +16,5 @@
 
 void PROC2_$GET_BOOT_FLAGS(int16_t *flags_ret)
 {
-    *flags_ret = proc2_boot_flags;      /* 0x00E41B66 */
+    *flags_ret = PROC2_$UNWIRED_DATA.boot_flags;      /* 0x00E41B66 */
 }

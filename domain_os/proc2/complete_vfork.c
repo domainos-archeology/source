@@ -83,7 +83,7 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     ML_$LOCK(PROC2_LOCK_ID);
 
     /* 0x00E73676-0x00E73692 */
-    current_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    current_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     current_entry = P2_INFO_ENTRY(current_idx);
 
     /* 0x00E73696-0x00E7369E: btst.l #0xb on the flags word = 0x0800 */
@@ -119,19 +119,19 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     current_entry->pad_18[0] = 0;
 
     /*
-     * 0x00E736E2-0x00E736F6: PROC2_$UID[new asid] = entry->uid
+     * 0x00E736E2-0x00E736F6: PROC2_$UNWIRED_DATA.uid[new asid] = entry->uid
      * (A4 = 0xE7BE84, slot at (0x10,A4,asid*8) = 0xE7BE94 + asid*8).
      */
-    PROC2_$UID[current_entry->asid].high = current_entry->uid.high;
-    PROC2_$UID[current_entry->asid].low = current_entry->uid.low;
+    PROC2_$UNWIRED_DATA.uid[current_entry->asid].high = current_entry->uid.high;
+    PROC2_$UNWIRED_DATA.uid[current_entry->asid].low = current_entry->uid.low;
 
     /*
-     * 0x00E736FA-0x00E73712: PROC2_$UID[old asid] = parent->uid, the
+     * 0x00E736FA-0x00E73712: PROC2_$UNWIRED_DATA.uid[old asid] = parent->uid, the
      * parent being P2[entry+0x1E] (mulu.w, then -0xE4 to reach its base).
      */
     parent_entry = P2_INFO_ENTRY((int16_t)current_entry->parent_pgroup_idx);
-    PROC2_$UID[old_asid].high = parent_entry->uid.high;
-    PROC2_$UID[old_asid].low = parent_entry->uid.low;
+    PROC2_$UNWIRED_DATA.uid[old_asid].high = parent_entry->uid.high;
+    PROC2_$UNWIRED_DATA.uid[old_asid].low = parent_entry->uid.low;
 
     /* 0x00E73716-0x00E73722: FIM_$FP_INIT(entry->asid) with a result slot */
     FIM_$FP_INIT((int16_t)current_entry->asid);
@@ -179,7 +179,7 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
     }
 
     /*
-     * 0x00E737A6-0x00E737C2: EC_$ADVANCE(&PROC2_$EC[entry+0x1C - 1].fork_ec)
+     * 0x00E737A6-0x00E737C2: EC_$ADVANCE(&PROC2_$WIRED_DATA.ec[entry+0x1C - 1].fork_ec)
      * (D1 = idx*8, D2 = D1*2, D1 += D2 -> idx*24; pea (-0x18,A1,D1)).
      */
     EC_$ADVANCE(PROC_FORK_EC(current_entry->self_index));

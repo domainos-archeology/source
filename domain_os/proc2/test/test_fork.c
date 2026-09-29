@@ -33,28 +33,19 @@
 /* Mock storage                                                        */
 /* ------------------------------------------------------------------ */
 
-#define MOCK_ENTRIES 8
 
 /* slot 0 is the out-of-band "index 0" entry the table is biased against */
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE_INIT(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84, {
+    .system_uid = { 0x11112222u, 0x33334444u },
+});
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 static proc2_ec_entry_t mock_ecs[PROC2_EC_ENTRIES];
 
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
 
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
-uid_t proc2_system_uid = { 0x11112222u, 0x33334444u };
-uid_t proc2_proc_dir_uid;
-int16_t proc2_boot_flags;
 status_$t PROC2_Internal_Error = 0x00190013;
 
 uid_t UID_$NIL = { 0, 0 };
@@ -98,17 +89,17 @@ static uid_t *last_va_uid_out[2];
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     memset(mock_ecs, 0, sizeof(mock_ecs));
-    memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
+    memset(PROC2_$WIRED_DATA.ec, 0, sizeof(PROC2_$WIRED_DATA.ec));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
     memset(FIM_$DATA.user_fim_addr, 0, sizeof(FIM_$DATA.user_fim_addr));
     memset(FIM_$WIRED_DATA.quit_inh, 0, sizeof(FIM_$WIRED_DATA.quit_inh));
 
-    P2_INFO_ALLOC_PTR = 0;
-    P2_FREE_LIST_HEAD = 0;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0;
+    PROC2_$UNWIRED_DATA.free_list_head = 0;
     PROC1_$CURRENT = 5;
     PROC1_$AS_ID = 3;
 
@@ -357,12 +348,12 @@ static void setup_table(void)
     reset_mocks();
 
     PROC1_$CURRENT = 5;
-    mock_pid_to_index[5] = PARENT_IDX;
+    PROC2_$DATA.pid_to_index[5] = PARENT_IDX;
 
-    P2_FREE_LIST_HEAD = CHILD_IDX;
+    PROC2_$UNWIRED_DATA.free_list_head = CHILD_IDX;
     child()->next_index = 0;          /* only entry on the free list */
 
-    P2_INFO_ALLOC_PTR = PARENT_IDX;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = PARENT_IDX;
     parent()->next_index = 0;
     parent()->pad_14 = 0;
 
@@ -455,7 +446,7 @@ static void test_table_full(void)
     status_$t st = 0;
 
     setup_table();
-    P2_FREE_LIST_HEAD = 0;
+    PROC2_$UNWIRED_DATA.free_list_head = 0;
 
     run_fork(1, &uid, &upid, &ec, &st);
 
@@ -484,8 +475,8 @@ static void test_normal_fork_table_and_flags(void)
     run_fork(1 /* non-zero => not a vfork */, &uid, &upid, &ec, &st);
 
     /* free list emptied, child pushed onto the allocated list */
-    assert(P2_FREE_LIST_HEAD == 0);
-    assert(P2_INFO_ALLOC_PTR == CHILD_IDX);
+    assert(PROC2_$UNWIRED_DATA.free_list_head == 0);
+    assert(PROC2_$UNWIRED_DATA.info_alloc_ptr == CHILD_IDX);
     assert(child()->next_index == PARENT_IDX);
     assert(parent()->pad_14 == CHILD_IDX);   /* back-link, 0x00E72C74 */
     assert(child()->pad_14 == 0);
@@ -505,7 +496,7 @@ static void test_normal_fork_table_and_flags(void)
     assert(child()->asid_alt == 0);          /* 0x00E72CF2 */
     assert(child()->asid == 7);              /* MST_$ALLOC_ASID result */
     assert(child()->level1_pid == 9);
-    assert(mock_pid_to_index[9] == CHILD_IDX);
+    assert(PROC2_$DATA.pid_to_index[9] == CHILD_IDX);
 
     printf("test_normal_fork_table_and_flags: PASSED\n");
 }
@@ -683,12 +674,12 @@ static void test_eventcount_index(void)
     child()->self_index = 3;
     /* poison the entry the buggy code would have used (entry+0x24) */
     child()->first_debug_target_idx = 6;
-    PROC2_$EC[6 - 1].fork_ec.value = 0x5555;
+    PROC_FORK_EC(6)->value = 0x5555;
 
     run_fork(1, &uid, &upid, &ec, &st);
 
-    assert(PROC2_$EC[3 - 1].fork_ec.value == -1);
-    assert(PROC2_$EC[6 - 1].fork_ec.value == 0x5555);  /* untouched */
+    assert(PROC_FORK_EC(3)->value == -1);
+    assert(PROC_FORK_EC(6)->value == 0x5555);  /* untouched */
 
     printf("test_eventcount_index: PASSED\n");
 }
@@ -740,13 +731,13 @@ static void test_bind_failure_cleanup(void)
     assert(parent()->first_child_idx == 6);
 
     /* the entry is back on the free list with the system UID */
-    assert(P2_FREE_LIST_HEAD == CHILD_IDX);
-    assert(P2_INFO_ALLOC_PTR == PARENT_IDX);
+    assert(PROC2_$UNWIRED_DATA.free_list_head == CHILD_IDX);
+    assert(PROC2_$UNWIRED_DATA.info_alloc_ptr == PARENT_IDX);
     assert((child()->flags & PROC2_FLAG_BOUND) == 0);
-    assert(child()->uid.high == proc2_system_uid.high);
-    assert(child()->uid.low == proc2_system_uid.low);
+    assert(child()->uid.high == PROC2_$UNWIRED_DATA.system_uid.high);
+    assert(child()->uid.low == PROC2_$UNWIRED_DATA.system_uid.low);
     assert(child()->parent_uid.high == 0 && child()->parent_uid.low == 0);
-    assert(PROC2_$UID[child()->asid].high == proc2_system_uid.high);
+    assert(PROC2_$UNWIRED_DATA.uid[child()->asid].high == PROC2_$UNWIRED_DATA.system_uid.high);
 
     printf("test_bind_failure_cleanup: PASSED\n");
 }
@@ -861,13 +852,13 @@ static void test_alloc_asid_failure_goes_to_entry_teardown(void)
     mock_alloc_asid_status = 0x00040006; /* status_$no_asid_available */
     mock_alloc_asid_result = 0;
 
-    free_head_before = P2_FREE_LIST_HEAD;
+    free_head_before = PROC2_$UNWIRED_DATA.free_list_head;
     assert(free_head_before == CHILD_IDX);
 
     run_fork(1, &uid, &upid, &ec, &st);
 
     /* The entry was taken off the free list and handed straight back. */
-    assert(P2_FREE_LIST_HEAD == CHILD_IDX);
+    assert(PROC2_$UNWIRED_DATA.free_list_head == CHILD_IDX);
 
     /* cleanup_entry ran ... */
     assert(n_pgroup_cleanup == 1);

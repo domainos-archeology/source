@@ -24,7 +24,7 @@
  *   00e422e2  move.w (0x2,A2),D2w           ; zero: synthetic -> low word of high
  *   00e422e8  PROC2_$FIND_INDEX(uid, &status(-0x8)); tst.l status / bne exit
  *   00e4230a  move.w (-0xd4,A1),D0w         ; entry+0x10 pgroup index; beq exit
- *   00e4231a  move.w (0x3f34,A1),D2w        ; PGROUP_TABLE[idx].upgid
+ *   00e4231a  move.w (0x3f34,A1),D2w        ; PROC2_$DATA.pgroup[idx].upgid
  *   00e4231e  move.w D2w,D0w                ; return
  */
 static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_t *uid)
@@ -42,7 +42,7 @@ static uint16_t PROC2_$UID_TO_UPGID_INTERNAL(uid_t *uid)
         if (status == status_$ok) {                          /* 0x00E422F4: tst.l */
             pgroup_idx = P2_INFO_ENTRY(index)->pgroup_table_idx;   /* 0x00E4230A */
             if (pgroup_idx != 0) {
-                upgid = PGROUP_ENTRY(pgroup_idx)->upgid;     /* 0x00E4231A */
+                upgid = PROC2_$DATA.pgroup[pgroup_idx].upgid;     /* 0x00E4231A */
             }
         }
     }

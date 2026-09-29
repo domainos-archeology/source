@@ -29,7 +29,7 @@ uint32_t PROC2_$SIGBLOCK(uint32_t *mask_ptr, uint32_t *result)
 
     /* 0x00E3F64C-0x00E3F674 */
     new_bits = *mask_ptr;
-    entry = P2_INFO_ENTRY((int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT));
+    entry = P2_INFO_ENTRY((int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT]);
 
     /* 0x00E3F664/0x00E3F678-0x00E3F682 */
     ML_$LOCK(PROC2_LOCK_ID);

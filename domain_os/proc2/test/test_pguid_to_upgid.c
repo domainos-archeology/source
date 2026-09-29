@@ -15,13 +15,7 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 int __host_intr_disable_count = 0;
 
 static int n_lock, n_unlock, n_resume, n_signal;
@@ -50,8 +44,8 @@ static int tests_run, tests_failed;
 static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pgroups, 0, sizeof(mock_pgroups));
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pgroup, 0, sizeof(PROC2_$DATA.pgroup));
     n_lock = n_unlock = n_resume = n_signal = 0;
     mock_find_index = 3; mock_find_status = status_$ok; mock_resume_status = status_$ok;
 }
@@ -66,7 +60,7 @@ TEST(pguid_synthetic_uid)
 TEST(pguid_real_uid_paths)
 {
     uid_t u = { 0x11001234u, 1 }; uint16_t r = 9; status_$t st;
-    E(3)->pgroup_table_idx = 4; mock_pgroups[4].upgid = 400;
+    E(3)->pgroup_table_idx = 4; PROC2_$DATA.pgroup[4].upgid = 400;
     PROC2_$PGUID_TO_UPGID(&u, &r, &st);
     ASSERT_EQ(r, 400);
     E(3)->pgroup_table_idx = 0;

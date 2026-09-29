@@ -55,7 +55,7 @@ void PROC2_$LIST(uid_t *uid_list, uint16_t *max_count, uint16_t *count)
 
         /* 0x00E40354-0x00E4035E: D0 = alloc ptr, A1 = &uid_list[1]; beq
          * tests the move.w (addq.l to An sets no flags) */
-        index = (int16_t)P2_INFO_ALLOC_PTR;
+        index = (int16_t)PROC2_$UNWIRED_DATA.info_alloc_ptr;
         out = &uid_list[1];
         while (index != 0) {
             entry = P2_INFO_ENTRY(index);                    /* 0x00E40360-0x00E4036C */

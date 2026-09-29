@@ -27,7 +27,7 @@
  *   00e3f35a  add.w D0w,D0w
  *   00e3f35c  move.w (A2),D3w          ; *signal
  *   00e3f362  subq.w #0x1,D3w
- *   00e3f364  move.w (0x3eb6,A1),D0w   ; cur_idx = P2_PID_TO_INDEX[pid]
+ *   00e3f364  move.w (0x3eb6,A1),D0w   ; cur_idx = PROC2_$DATA.pid_to_index[pid]
  *   00e3f36c  clr.l D3
  *   00e3f372  bset.l D1,D3             ; sig_mask = 1 << ((*signal - 1) & 31)
  *   00e3f378  muls.w #0xe4,D1
@@ -53,7 +53,7 @@
  *   00e3f3e4  bra.w 0x00e3f4d0
  *   00e3f3e8  move.w (-0xd4,A4),D1w    ; entry->pgroup_table_idx (+0x10)
  *   00e3f3f2  lsl.w #0x3,D1w
- *   00e3f3f8  tst.w (0x3f32,A1)        ; PGROUP_ENTRY(pg)->leader_count
+ *   00e3f3f8  tst.w (0x3f32,A1)        ; PROC2_$DATA.pgroup[pg].leader_count
  *   00e3f3fc  beq.b 0x00e3f40a
  *   00e3f3fe  tst.w (-0xba,A4) / bmi.b 0x00e3f40a       ; flags bit 15
  *   00e3f404  tst.w (-0xd4,A4) / bne.b 0x00e3f434
@@ -70,9 +70,9 @@
  *   00e3f444  move.l #0x9010017,(-0x20,A6)
  *   00e3f44c  tst.w (-0xba,A4) / bmi.b 0x00e3f4a2
  *   00e3f452  move.w (-0xc6,A4),D1w    ; entry->parent_pgroup_idx (+0x1E)
- *   00e3f456  movea.l #0xe2b978,A1     ; PROC2_$EC
+ *   00e3f456  movea.l #0xe2b978,A1     ; PROC2_$WIRED_DATA.ec
  *   00e3f45c  lsl.w #0x3,D1w / add.w / add.w            ; *24
- *   00e3f464  pea (-0xc,A1,D1w)        ; &PROC2_$EC[idx-1].cr_rec_ec
+ *   00e3f464  pea (-0xc,A1,D1w)        ; &PROC2_$WIRED_DATA.ec[idx-1].cr_rec_ec
  *   00e3f468  jsr 0x00e206ee.l         ; EC_$ADVANCE
  *   00e3f470  move.w (-0xc6,A4),D0w
  *   00e3f47a  mulu.w #0xe4,D0
@@ -141,7 +141,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
     sig_mask = 1u << ((uint16_t)(*signal - 1) & 0x1F);
 
     /* 0x00E3F364 */
-    cur_idx = (int16_t)P2_PID_TO_INDEX(PROC1_$CURRENT);
+    cur_idx = (int16_t)PROC2_$DATA.pid_to_index[PROC1_$CURRENT];
     entry = P2_INFO_ENTRY(cur_idx);
 
     /* 0x00E3F384 */
@@ -180,7 +180,7 @@ void PROC2_$ACKNOWLEDGE(uint32_t *new_blocked, int16_t *signal,
 
             /* 0x00E3F3E8-0x00E3F408 */
             send_kill =
-                (PGROUP_ENTRY(entry->pgroup_table_idx)->leader_count == 0) ||
+                (PROC2_$DATA.pgroup[entry->pgroup_table_idx].leader_count == 0) ||
                 ((int16_t)entry->flags < 0) ||
                 (entry->pgroup_table_idx == 0);
 

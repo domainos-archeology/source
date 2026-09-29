@@ -1,8 +1,8 @@
 /*
  * ACL_$SET_RE_ALL_SIDS - set the requestor SID blocks of the calling process
  *
- * Replaces ACL_$ORIGINAL_SIDS[pid] and ACL_$CURRENT_SIDS[pid] (and, when the
- * original block actually changes, ACL_$SAVED_SIDS[pid]) plus the two 12-byte
+ * Replaces ACL_$DATA.original_sids[pid] and ACL_$DATA.current_sids[pid] (and, when the
+ * original block actually changes, ACL_$DATA.saved_sids[pid]) plus the two 12-byte
  * project-list cells.  A process that is not a super-user may only move a SID
  * between values it already holds; every such check jumps to the audit tail,
  * never straight out of the routine.
@@ -12,17 +12,17 @@
  * Frame (link.w A6,-0xac):
  *   A6-0xAC  long  saved 0xE97294 + pid*0x0C base (D6)
  *   A6-0x96  word  audit event flag: 1 = attempt, 0 = success
- *   A6-0x90  36 B  ACL_$ORIGINAL_SIDS[pid] on entry
- *   A6-0x6C  36 B  ACL_$CURRENT_SIDS[pid] on entry
- *   A6-0x48  36 B  ACL_$ORIGINAL_SIDS[pid] on exit
- *   A6-0x24  36 B  ACL_$CURRENT_SIDS[pid] on exit
+ *   A6-0x90  36 B  ACL_$DATA.original_sids[pid] on entry
+ *   A6-0x6C  36 B  ACL_$DATA.current_sids[pid] on entry
+ *   A6-0x48  36 B  ACL_$DATA.original_sids[pid] on exit
+ *   A6-0x24  36 B  ACL_$DATA.current_sids[pid] on exit
  * The last four are the 0x90-byte audit record; see acl_$set_re_sids_audit_t.
  *
  * Parameters (A6+0x08 .. A6+0x18):
- *   new_original_sids - 36-byte SID block for ACL_$ORIGINAL_SIDS[pid]
- *   new_current_sids  - 36-byte SID block for ACL_$CURRENT_SIDS[pid]
- *   new_saved_proj    - 12-byte cell for ACL_$SAVED_PROJ[pid]
- *   new_current_proj  - 12-byte cell for ACL_$PROJ_LISTS[pid]
+ *   new_original_sids - 36-byte SID block for ACL_$DATA.original_sids[pid]
+ *   new_current_sids  - 36-byte SID block for ACL_$DATA.current_sids[pid]
+ *   new_saved_proj    - 12-byte cell for ACL_$DATA.saved_proj[pid]
+ *   new_current_proj  - 12-byte cell for ACL_$DATA.proj_lists[pid]
  *   status_ret        - status, 0x00230001 on refusal
  *
  * The image leaves junk in D0 on every path (the `moveq #0x1,D0` that precedes
@@ -67,8 +67,8 @@ void ACL_$SET_RE_ALL_SIDS(void *new_original_sids, void *new_current_sids,
     audit_flag = 0;
     if (AUDIT_$ENABLED < 0) {
         audit_flag = 1;                                     /* 0x00E481D8 */
-        aud.old_original = ACL_$ORIGINAL_SIDS[PROC1_$CURRENT];  /* 0x00E481F8 */
-        aud.old_current  = ACL_$CURRENT_SIDS[PROC1_$CURRENT];   /* 0x00E48206 */
+        aud.old_original = ACL_$DATA.original_sids[PROC1_$CURRENT];  /* 0x00E481F8 */
+        aud.old_current  = ACL_$DATA.current_sids[PROC1_$CURRENT];   /* 0x00E48206 */
     }
 
     /*
@@ -76,11 +76,11 @@ void ACL_$SET_RE_ALL_SIDS(void *new_original_sids, void *new_current_sids,
      * A2/D4 = 0xE97294 + pid*0x24, D5 the same value, D6 and A6-0xAC =
      * 0xE97294 + pid*0x0C.
      */
-    orig  = &ACL_$ORIGINAL_SIDS[PROC1_$CURRENT];   /* base - 0x6E84 */
-    curr  = &ACL_$CURRENT_SIDS[PROC1_$CURRENT];    /* base - 0x6584 */
-    saved = &ACL_$SAVED_SIDS[PROC1_$CURRENT];      /* base - 0x5C84 */
-    sproj = &ACL_$SAVED_PROJ[PROC1_$CURRENT];      /* base - 0x536C */
-    cproj = &ACL_$PROJ_LISTS[PROC1_$CURRENT];      /* base - 0x506C */
+    orig  = &ACL_$DATA.original_sids[PROC1_$CURRENT];   /* base - 0x6E84 */
+    curr  = &ACL_$DATA.current_sids[PROC1_$CURRENT];    /* base - 0x6584 */
+    saved = &ACL_$DATA.saved_sids[PROC1_$CURRENT];      /* base - 0x5C84 */
+    sproj = &ACL_$DATA.saved_proj[PROC1_$CURRENT];      /* base - 0x536C */
+    cproj = &ACL_$DATA.proj_lists[PROC1_$CURRENT];      /* base - 0x506C */
 
     /*
      * 0x00E48252-0x00E48262: acl_$check_suser_pid returns a Domain boolean in
@@ -137,21 +137,21 @@ void ACL_$SET_RE_ALL_SIDS(void *new_original_sids, void *new_current_sids,
     /*
      * 0x00E483FE-0x00E4845B: a genuine change of the ORIGINAL group SID
      * (one that the new CURRENT group SID does not already carry) has to be
-     * mirrored in the project-UID row.  ACL_$SUPER_COUNT[pid] is bumped so
+     * mirrored in the project-UID row.  ACL_$UNWIRED_DATA.super_count[pid] is bumped so
      * that ACL_$DELETE_PROJ/ACL_$ADD_PROJ see a super-user.
      */
     if (!acl_$uid_eq(&new_orig->group_sid, &orig->group_sid) &&
         !acl_$uid_eq(&new_orig->group_sid, &new_curr->group_sid)) {
-        ACL_$SUPER_COUNT[PROC1_$CURRENT]++;                          /* 0x00E48424 */
+        ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]++;                          /* 0x00E48424 */
         ACL_$DELETE_PROJ(&orig->group_sid, status_ret);              /* 0x00E4843A */
         ACL_$ADD_PROJ((uid_t *)&new_orig->group_sid, status_ret);    /* 0x00E48446 */
-        ACL_$SUPER_COUNT[PROC1_$CURRENT]--;                          /* 0x00E4844C */
+        ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;                          /* 0x00E4844C */
     }
 
     /*
      * 0x00E4845C-0x00E4847B: `cmpm.l` + `dbne` over nine longwords.  If the
      * ORIGINAL block is about to change at all, the NEW original block (not
-     * the old one) is stamped into ACL_$SAVED_SIDS[pid] first.
+     * the old one) is stamped into ACL_$DATA.saved_sids[pid] first.
      */
     if (!acl_$sid_block_eq(orig, new_orig)) {
         *saved = *new_orig;                                          /* 0x00E4846C */

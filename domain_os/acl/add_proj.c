@@ -29,18 +29,18 @@ void ACL_$ADD_PROJ(uid_t *proj_acl, status_$t *status_ret)
     /* Search for existing entry or empty slot */
     for (i = 0; i < ACL_MAX_PROJECTS; i++) {
         /* Check if this project is already in the list */
-        if (ACL_$PROJ_UIDS[pid][i].high == proj_acl->high &&
-            ACL_$PROJ_UIDS[pid][i].low == proj_acl->low) {
+        if (ACL_$DATA.proj_uids[pid][i].high == proj_acl->high &&
+            ACL_$DATA.proj_uids[pid][i].low == proj_acl->low) {
             /* Already exists, return success */
             return;
         }
 
         /* Check for empty slot (UID_$NIL) */
-        if (ACL_$PROJ_UIDS[pid][i].high == UID_$NIL.high &&
-            ACL_$PROJ_UIDS[pid][i].low == UID_$NIL.low) {
+        if (ACL_$DATA.proj_uids[pid][i].high == UID_$NIL.high &&
+            ACL_$DATA.proj_uids[pid][i].low == UID_$NIL.low) {
             /* Found empty slot, add the project */
-            ACL_$PROJ_UIDS[pid][i].high = proj_acl->high;
-            ACL_$PROJ_UIDS[pid][i].low = proj_acl->low;
+            ACL_$DATA.proj_uids[pid][i].high = proj_acl->high;
+            ACL_$DATA.proj_uids[pid][i].low = proj_acl->low;
             return;
         }
     }

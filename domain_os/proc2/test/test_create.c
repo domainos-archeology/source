@@ -26,20 +26,13 @@
 #include "base/base.h"
 #include "proc2/proc2_internal.h"
 
-#define MOCK_ENTRIES 8
 
-static proc2_info_t mock_entries[MOCK_ENTRIES + 1];
-static uint16_t mock_pid_to_index[64];
-static pgroup_entry_t mock_pgroups[PGROUP_TABLE_SIZE];
+MODULE_DATA_DEFINE(proc2_$wired_data_t, PROC2_$WIRED_DATA, 0x00E2B978);
+MODULE_DATA_DEFINE_INIT(proc2_$unwired_data_t, PROC2_$UNWIRED_DATA, 0x00E7BE84, {
+    .system_uid = { 0x11112222u, 0x33334444u },
+});
+MODULE_DATA_DEFINE(proc2_$data_t, PROC2_$DATA, 0x00EA551C);
 
-proc2_info_t *P2_INFO_TABLE = &mock_entries[1];
-uint16_t P2_INFO_ALLOC_PTR;
-uint16_t P2_FREE_LIST_HEAD;
-uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
-pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
-proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
-uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
-uid_t proc2_system_uid = { 0x11112222u, 0x33334444u };
 uid_t UID_$NIL = { 0, 0 };
 uint16_t PROC1_$CURRENT;
 uint32_t FIM_$INITIAL_STACK_SIZE = 0x100;
@@ -68,11 +61,11 @@ static uint16_t last_pri_min, last_pri_max;
 
 static void reset_mocks(void)
 {
-    memset(mock_entries, 0, sizeof(mock_entries));
-    memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
-    memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
-    memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
-    P2_INFO_ALLOC_PTR = 0; P2_FREE_LIST_HEAD = 0;
+    memset(PROC2_$DATA.info, 0, sizeof(PROC2_$DATA.info));
+    memset(PROC2_$DATA.pid_to_index, 0, sizeof(PROC2_$DATA.pid_to_index));
+    memset(PROC2_$WIRED_DATA.ec, 0, sizeof(PROC2_$WIRED_DATA.ec));
+    memset(PROC2_$UNWIRED_DATA.uid, 0, sizeof(PROC2_$UNWIRED_DATA.uid));
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = 0; PROC2_$UNWIRED_DATA.free_list_head = 0;
     PROC1_$CURRENT = 5;
     mock_alloc_asid_result = 7; mock_alloc_asid_status = status_$ok;
     mock_map_status = mock_alloc_stack_status = mock_bind_status = status_$ok;
@@ -159,12 +152,12 @@ static proc2_info_t *child(void)  { return P2_INFO_ENTRY(CHILD_IDX); }
 
 static void setup_table(void)
 {
-    mock_pid_to_index[5] = PARENT_IDX;
-    P2_FREE_LIST_HEAD = CHILD_IDX;
+    PROC2_$DATA.pid_to_index[5] = PARENT_IDX;
+    PROC2_$UNWIRED_DATA.free_list_head = CHILD_IDX;
     child()->next_index = 0;
     child()->self_index = CHILD_IDX;
     child()->flags = 0x8000;
-    P2_INFO_ALLOC_PTR = PARENT_IDX;
+    PROC2_$UNWIRED_DATA.info_alloc_ptr = PARENT_IDX;
     parent()->self_index = PARENT_IDX;
     parent()->first_child_idx = 6;
     parent()->pad_18[0] = 0x1234;
@@ -186,7 +179,7 @@ static void run_create(uint8_t flags_byte)
 
 TEST(table_full)
 {
-    P2_FREE_LIST_HEAD = 0;
+    PROC2_$UNWIRED_DATA.free_list_head = 0;
     run_create(0);
     ASSERT_EQ(st_out, status_$proc2_table_full);
     ASSERT_EQ(n_lock, 1); ASSERT_EQ(n_unlock, 1);
@@ -200,8 +193,8 @@ TEST(success_path_layout)
     run_create(0);
     ASSERT_EQ(st_out, status_$ok);
     /* list surgery */
-    ASSERT_EQ(P2_FREE_LIST_HEAD, 0);
-    ASSERT_EQ(P2_INFO_ALLOC_PTR, CHILD_IDX);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, 0);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.info_alloc_ptr, CHILD_IDX);
     ASSERT_EQ(child()->next_index, PARENT_IDX);
     ASSERT_EQ(parent()->pad_14, CHILD_IDX);
     ASSERT_EQ(child()->pad_14, 0);
@@ -225,7 +218,7 @@ TEST(success_path_layout)
         ASSERT_EQ(ctx->self_ptr == &ctx->user_data, 1);
     }
     ASSERT_EQ(child()->level1_pid, 9);
-    ASSERT_EQ(mock_pid_to_index[9], CHILD_IDX);
+    ASSERT_EQ(PROC2_$DATA.pid_to_index[9], CHILD_IDX);
     /* flags: andi.b #0x7f clears 0x8000, then BOUND set, andi 0xE3FB */
     ASSERT_EQ(child()->flags, 0x0100);
     ASSERT_EQ(child()->pad_18[1], 0x1234);
@@ -254,7 +247,7 @@ TEST(success_path_layout)
 TEST(init_process_uses_fixed_priorities)
 {
     setup_table();
-    PROC1_$CURRENT = 1; mock_pid_to_index[1] = PARENT_IDX;
+    PROC1_$CURRENT = 1; PROC2_$DATA.pid_to_index[1] = PARENT_IDX;
     run_create(0);
     ASSERT_EQ(n_set_priority, 1);
     ASSERT_EQ(last_pri_min, 3); ASSERT_EQ(last_pri_max, 0xE);
@@ -295,8 +288,8 @@ TEST(alloc_asid_failure_sets_bit31_and_skips_teardown)
      * its final value is indeterminate and deliberately not asserted. */
     ASSERT_EQ(n_free_asid, 0); ASSERT_EQ(n_unbind, 0); ASSERT_EQ(n_free_stack, 0);
     ASSERT_EQ(n_pgroup_cleanup, 1);
-    ASSERT_EQ(P2_FREE_LIST_HEAD, CHILD_IDX);
-    ASSERT_EQ(P2_INFO_ALLOC_PTR, PARENT_IDX);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.free_list_head, CHILD_IDX);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.info_alloc_ptr, PARENT_IDX);
     ASSERT_EQ(child()->uid.high, 0x11112222u);
     ASSERT_EQ(n_unlock, 1);
 }
@@ -310,7 +303,7 @@ TEST(bind_failure_frees_stack_not_unbind)
     ASSERT_EQ(n_free_stack, 1);
     ASSERT_EQ(n_free_asid, 1);
     ASSERT_EQ((uint32_t)st_out, 0x80120003u);
-    ASSERT_EQ(PROC2_$UID[7].high, 0x11112222u);
+    ASSERT_EQ(PROC2_$UNWIRED_DATA.uid[7].high, 0x11112222u);
     ASSERT_EQ(n_lock, 1);            /* tst_lock says held: no re-lock */
 }
 
