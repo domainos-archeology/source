@@ -193,3 +193,45 @@ EC_$WAIT/WAITN as assembly, source-w78q mmu_$installi's register ABI,
 source-8yhy, source-u4mr, source-2eua, source-w0xm, source-fsw6,
 source-ilw0, source-cu7q, source-lryi, source-og4f, source-lu78,
 source-t3cp) alongside the research and convention items listed above.
+
+## Addendum, 2026-09-29: per-process data design implemented
+
+The seven steps of docs/design-per-process-data.md (bead source-0i3)
+landed in 15 local commits between 3db3e5b and the FIM re-transcription
+that follows the last block step, each implemented by an Opus 5.5 agent
+and reviewed and fixed in place by a separate Fable 5.1 agent before
+commit.  Two decisions by the owner changed the design as it went:
+nothing is pinned at an image address, code and data are ordered like
+the SAU2 link map (tools/gen_layout_ld.py generates the ordered section
+list and `make check` verifies the order); and PROM addresses are shared
+m68k defines while hardware register addresses live in the per-SAU
+header arch/m68k/sau2/hw.h.
+
+Result on HEAD: 49 module data blocks placed in map order, every
+absolute-address macro and every m68k-conditional data declaration gone
+(tools/check_guards.py, exemption table empty), all 66 hand-written
+assembly objects (102 sections) identical to the image modulo relocation
+fields with every relocated operand verified against the image operand
+(tools/asm_compare.py against the checked-in reference bytes), 0 build
+diagnostics, 133 unresolved link symbols (the untranslated functions),
+502 host tests passing.
+
+Beyond the design itself the work exposed and fixed: the name lock
+tables are Pascal [1..64] not 58-entry tables; the ACL hash table had
+64 buckets where the image has 61 and overran a used cell; several data
+blocks carried wrong initial values (pmap scan parameters, msg dpage
+lock, fim frame sizes); the old "byte-identical" claims for the hand
+assembly were false for 32 of 73 sections, including four real
+transcription errors and a fim.s that diverged in 18 of 23 routines;
+six hand-assembly files embedded absolute image addresses for data that
+map-order placement had moved; NETWORK_\$DO_REQUEST read one socket slot
+too far; OS_\$INIT stored the null procedure's first code bytes instead
+of its address; the PEB flag bytes were unsigned where the image tests
+the sign.
+
+Still open under the design: P3/P4 follow-ups (NAME_\$DATA at 0xE80264
+as a block, the PARITY block, ordering of the PROC1_ASM and NET_IO cells,
+MMAP_\$WS_OWNER's bias, a few wire-range cells that name untranslated
+code, mmu_\$installi's register ABI, PROC1_\$CLR_LOCK's shared tail).
+Next phase: the 133 untranslated functions, largest first, with the
+same emit-then-review pattern.
