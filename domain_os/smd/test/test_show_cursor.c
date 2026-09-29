@@ -90,10 +90,10 @@ _Static_assert(offsetof(smd_globals_t, event_queue) == 0x72C, "eq");
 _Static_assert(offsetof(smd_globals_t, cursor_pending_flag) == 0x1744, "cpf");
 _Static_assert(offsetof(smd_globals_t, request_queue_tail) == 0x17F0, "rq_t");
 _Static_assert(offsetof(smd_globals_t, request_queue_head) == 0x17F2, "rq_h");
-_Static_assert(offsetof(smd_globals_t, request_queue) == 0x17F4, "rq");
+_Static_assert(offsetof(smd_globals_t, request_queue[1]) == 0x17F4, "rq");
 _Static_assert(offsetof(smd_globals_t, cursor_pos_sentinel) == 0x1D94, "sent");
 _Static_assert(offsetof(smd_globals_t, default_unit) == 0x1D98, "def_unit");
-_Static_assert(offsetof(smd_globals_t, response_pending) == 0x1D9A, "resp");
+_Static_assert(offsetof(smd_globals_t, response_pending[1]) == 0x1D9A, "resp");
 _Static_assert(offsetof(smd_globals_t, previous_unit) == 0x1D9C, "prev_unit");
 _Static_assert(offsetof(smd_globals_t, unit_change_count) == 0x1D9E, "ucc");
 _Static_assert(offsetof(smd_globals_t, last_idm_button) == 0x1DA0, "idm");
@@ -119,12 +119,9 @@ _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-/* Big enough that smd_$unit_rec(1) (base + 0x10C - 0xF4) plus a whole
- * record stays inside the object on a 64-bit host too. */
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;   /* unit 1's record and the lock */
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 smd_time_com_t SMD_TIME_$COM;
-ml_$exclusion_t smd_$trk_rect_mutex;
 uint16_t PROC1_$AS_ID;
 
 static smd_display_hw_t test_hw;
@@ -162,13 +159,13 @@ int8_t smd_$validate_unit(uint16_t unit)
 
 void ML_$EXCLUSION_START(ml_$exclusion_t *excl)
 {
-    CHECK(excl == &smd_$trk_rect_mutex);
+    CHECK(excl == &SMD_$WIRED_DATA.trk_rect_mutex);
     excl_start_calls++;
 }
 
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
 {
-    CHECK(excl == &smd_$trk_rect_mutex);
+    CHECK(excl == &SMD_$WIRED_DATA.trk_rect_mutex);
     excl_stop_calls++;
 }
 
@@ -227,7 +224,7 @@ static smd_display_unit_t *test_rec(void) { return smd_$unit_rec(TEST_UNIT); }
 static void setup(int16_t max_x, int16_t max_y)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(&test_hw, 0, sizeof(test_hw));
     memset(&SMD_TIME_$COM, 0, sizeof(SMD_TIME_$COM));
     memset(test_patterns, 0, sizeof(test_patterns));

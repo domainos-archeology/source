@@ -10,7 +10,7 @@
 #include "smd/smd_internal.h"
 #include "ml/ml.h"
 
-/* Exclusion lock for tracking rectangle operations: smd_$trk_rect_mutex
+/* Exclusion lock for tracking rectangle operations: SMD_$WIRED_DATA.trk_rect_mutex
  * (declared in smd/smd_internal.h) */
 
 /*
@@ -69,7 +69,7 @@ int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects, u
     uint16_t dest_index;
 
     /* Begin exclusion - protect tracking rect data */
-    ML_$EXCLUSION_START(&smd_$trk_rect_mutex);
+    ML_$EXCLUSION_START(&SMD_$WIRED_DATA.trk_rect_mutex);
 
     /* Check if there's room for the new rectangles */
     if (clear_flag < 0) {
@@ -105,7 +105,7 @@ int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects, u
     }
 
     /* End exclusion */
-    ML_$EXCLUSION_STOP(&smd_$trk_rect_mutex);
+    ML_$EXCLUSION_STOP(&SMD_$WIRED_DATA.trk_rect_mutex);
 
     /* Update cursor display */
     SHOW_CURSOR(&SMD_GLOBALS.cursor_pos_sentinel,

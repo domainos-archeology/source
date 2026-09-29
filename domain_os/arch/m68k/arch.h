@@ -14,6 +14,14 @@
 /* Interrupt control (DISABLE_INTERRUPTS, ENABLE_INTERRUPTS, etc.) */
 #include "arch/m68k/intr.h"
 
+/* Hardware register and device memory addresses of the SAU being built
+ * (only the SAU2 today). */
+#if defined(SAU2)
+#include "arch/m68k/sau2/hw.h"
+#else
+#error "arch/m68k: no hardware address header for this SAU"
+#endif
+
 /*
  * M68K memory model:
  *   - Big-endian byte order

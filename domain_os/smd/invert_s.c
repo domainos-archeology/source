@@ -53,7 +53,7 @@
  *   00e6ddec    addq.w #0x4,SP
  *   00e6ddee    pea (-0x60,A2)             ; &SMD_DISPLAY_INFO[unit-1]
  *   00e6ddf2    move.w D2w,D1w             ; D1 = unit
- *   00e6ddf4    movea.l #0xe2e3fc,A0       ; A0 = SMD_DISPLAY_UNITS base
+ *   00e6ddf4    movea.l #0xe2e3fc,A0       ; A0 = &SMD_$WIRED_DATA
  *   00e6ddfa    muls.w #0x10c,D1           ; D1 = unit * 0x10C
  *   00e6ddfe    lea (0x0,A0,D1*0x1),A1     ; A1 = biased unit record
  *   00e6de02    move.l (0x14,A1),-(SP)     ; rec->display_base (record +0x108)

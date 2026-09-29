@@ -54,12 +54,12 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
     font_table = smd_$unit_rec((int16_t)unit)->font_table;
 
     /* 0x00e6dd66 */
-    if (font_table[slot - 1].font_ptr == NULL) {
+    if (font_table[slot - 1].font_va == 0) {
         *status_ret = status_$display_font_not_loaded;
         return;
     }
 
-    font = (smd_font_v1_t *)font_table[slot - 1].font_ptr;
+    font = (smd_font_v1_t *)ARCH_VA_TO_PTR(font_table[slot - 1].font_va);
 
     /*
      * 0x00e6dd78-0x00e6dd94: version 3 keeps its HDM size at +0x42, every
@@ -86,7 +86,7 @@ void SMD_$UNLOAD_FONT(uint16_t *slot_ptr, status_$t *status_ret)
     SMD_$FREE_HDM(hdm_size, &font_table[slot - 1].hdm_pos, status_ret);
 
     /* 0x00e6dd98 */
-    font_table[slot - 1].font_ptr = NULL;
+    font_table[slot - 1].font_va = 0;
 
     /*
      * NOTE: the original does not clear the status here - SMD_$FREE_HDM's

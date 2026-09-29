@@ -85,7 +85,7 @@ uint16_t SMD_$LOAD_FONT(void **font_ptr, status_$t *status_ret)
      * entry for slot s is at font_table + s*8 - 8.
      */
     slot = 1;
-    while (slot <= SMD_MAX_FONTS_PER_UNIT && font_table[slot - 1].font_ptr != NULL) {
+    while (slot <= SMD_MAX_FONTS_PER_UNIT && font_table[slot - 1].font_va != 0) {
         slot++;
     }
 
@@ -116,7 +116,7 @@ uint16_t SMD_$LOAD_FONT(void **font_ptr, status_$t *status_ret)
     }
 
     /* 0x00e6dce0 */
-    font_table[slot - 1].font_ptr = *font_ptr;
+    font_table[slot - 1].font_va = ARCH_PTR_TO_VA(*font_ptr);
 
     /* 0x00e6dce6 pea (-0x3be,PC) -> 0x00e6dce8 - 0x3be = 0x00e6d92a */
     SMD_$ACQ_DISPLAY(&SMD_ONE_LOCK_DATA);

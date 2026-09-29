@@ -61,7 +61,7 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 uint16_t SMD_ACQ_LOCK_DATA = 0;
@@ -115,7 +115,7 @@ static smd_display_unit_t *rec(void) { return smd_$unit_rec(TEST_UNIT); }
 static void setup(void)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(&test_hw, 0, sizeof(test_hw));
     memset(test_ctrl_regs, 0, sizeof(test_ctrl_regs));
     memset(captured_words, 0, sizeof(captured_words));

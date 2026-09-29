@@ -64,16 +64,15 @@ static int current_failed = 0;
 _Static_assert(offsetof(smd_hdm_list_t, blocks) == 0x02, "hdm blocks at +2");
 _Static_assert(offsetof(smd_hdm_pos_t, y) == 0x00, "hdm pos row first");
 _Static_assert(offsetof(smd_hdm_pos_t, x) == 0x02, "hdm pos column second");
-/* sizeof(smd_font_entry_t) is 8 only where a pointer is 4 bytes; the header
- * asserts that under ARCH_M68K.  The tests below index the table through the
- * struct, so the host's larger stride is harmless. */
+/* smd_font_entry_t holds the font as a 32-bit VA, so its 8-byte stride is
+ * the same on the host (asserted in the header). */
 
 /* ------------------------------------------------------------------ */
 /* Mocked globals                                                      */
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
@@ -102,7 +101,7 @@ static smd_display_unit_t *rec(void) { return smd_$unit_rec(TEST_UNIT); }
 static void setup(uint16_t display_type)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(&test_hw, 0, sizeof(test_hw));
     memset(&test_list, 0, sizeof(test_list));
     memset(test_fonts, 0, sizeof(test_fonts));
@@ -369,7 +368,6 @@ static void test_alloc_then_free_round_trips(void)
 static void test_reset_clears_the_clip_window_and_fonts(void)
 {
     int i;
-    static void *dummy;
 
     setup(SMD_DISP_TYPE_MONO_PORTRAIT);
     test_hw.min_x = 0;
@@ -382,7 +380,7 @@ static void test_reset_clears_the_clip_window_and_fonts(void)
     test_hw.clip_y2 = 44;
     test_hw.tracking_enabled = 0;
     for (i = 0; i < SMD_MAX_FONTS_PER_UNIT; i++) {
-        test_fonts[i].font_ptr = &dummy;
+        test_fonts[i].font_va = 0x00123400u + (uint32_t)i;   /* any loaded font's VA */
         test_fonts[i].hdm_pos.y = (uint16_t)(i + 1);
     }
     rec()->owner_asid = 0;
@@ -395,7 +393,7 @@ static void test_reset_clears_the_clip_window_and_fonts(void)
     CHECK_EQ(0, test_hw.clip_y1);
     CHECK_EQ(0x3FF, test_hw.clip_y2);
     for (i = 0; i < SMD_MAX_FONTS_PER_UNIT; i++) {
-        CHECK_EQ(0, (long)(intptr_t)test_fonts[i].font_ptr);
+        CHECK_EQ(0, (long)test_fonts[i].font_va);
         /* the hdm position half of the entry is deliberately left alone */
         CHECK_EQ(i + 1, test_fonts[i].hdm_pos.y);
     }

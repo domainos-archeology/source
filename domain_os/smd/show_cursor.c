@@ -168,7 +168,7 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
      * 00e6e2e2 movea.l A5,A1 / move.w D1w,D0w / addq.l #8,A1
      *          (A1 = &SMD_GLOBALS + 8, so (0xe0,A1) is tracking_rects[0].x1)
      */
-    ML_$EXCLUSION_START(&smd_$trk_rect_mutex);
+    ML_$EXCLUSION_START(&SMD_$WIRED_DATA.trk_rect_mutex);
 
     rect_count = (int16_t)(SMD_GLOBALS.tracking_rect_count - 1);
     if (rect_count >= 0) {
@@ -196,7 +196,7 @@ void SHOW_CURSOR(const uint32_t *pos, const int16_t *cursor_num,
     }
 
     /* 00e6e312 pea (0xe2e520).l / jsr ML_$EXCLUSION_STOP */
-    ML_$EXCLUSION_STOP(&smd_$trk_rect_mutex);
+    ML_$EXCLUSION_STOP(&SMD_$WIRED_DATA.trk_rect_mutex);
 
     /* 00e6e320 move.w D6w,(0x36,A2) / move.l (-0x8,A6),(0x32,A2) */
     prev_hw->cursor_number = local_cursor_num;

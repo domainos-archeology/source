@@ -75,7 +75,7 @@ _Static_assert(SMD_DISP_TYPE_MONO_LANDSCAPE == 2, "landscape is type 2");
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
@@ -96,7 +96,7 @@ static smd_display_hw_t test_hw;
 static void setup(uint16_t display_type, int16_t max_x, int16_t max_y)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(SMD_DISPLAY_INFO, 0, sizeof(SMD_DISPLAY_INFO));
     memset(&test_hw, 0, sizeof(test_hw));
 

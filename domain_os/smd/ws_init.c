@@ -41,7 +41,7 @@
  *   00e6de98    movea.l (A2),A3                ; A3 = rec->font_table (+0xF4)
  *   00e6de9a    lea (0x0,A3,D2w*0x1),A1
  *   00e6de9e    move.l (-0x8,A1),(A0)          ; ctx->font_ptr =
- *                                              ;   font_table[font_index-1].font_ptr
+ *                                              ;   font_table[font_index-1].font_va
  *   00e6dea2    bne.b 0x00e6deae
  *   00e6dea4    move.l #0x130002,(0x10,A0)     ; ctx->status = font_not_loaded
  *   00e6deac    bra.b 0x00e6deca
@@ -103,7 +103,7 @@ void SMD_$WS_INIT(smd_ws_ctx_t *ctx)
     entry = &rec->font_table[ctx->font_index - 1];
 
     /* 0x00e6de9e */
-    ctx->font_ptr = entry->font_ptr;
+    ctx->font_ptr = ARCH_VA_TO_PTR(entry->font_va);
 
     if (ctx->font_ptr == NULL) {
         /* 0x00e6dea4 */

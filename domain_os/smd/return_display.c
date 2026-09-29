@@ -125,6 +125,6 @@ void SMD_$RETURN_DISPLAY(int16_t *unit, status_$t *status_ret)
         *(uint8_t *)((uint8_t *)hw + 0x4c) |= 0x40;
 
         /* Advance borrow event count to wake owner */
-        EC_$ADVANCE(&SMD_BORROW_EC);
+        EC_$ADVANCE(&SMD_$WIRED_DATA.ec_2);
     }
 }

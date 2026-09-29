@@ -40,7 +40,7 @@
  *   00e6def2    move.l #0x130004,(0x10,A0) ; ctx->status = invalid_use
  *   00e6defa    bra.b 0x00e6df22
  *   00e6defc    move.w D0w,D1w             ; D1 = unit number
- *   00e6defe    movea.l #0xe2e3fc,A1       ; A1 = SMD_DISPLAY_UNITS base
+ *   00e6defe    movea.l #0xe2e3fc,A1       ; A1 = &SMD_$WIRED_DATA
  *   00e6df04    muls.w #0x10c,D1           ; D1 = unit * 0x10C
  *   00e6df08    move.l (0x14,A1,D1*0x1),(0x4,A0) ; ctx->display_base (rec+0x108)
  *   00e6df0e    move.l (0x8,A1,D1*0x1),(0x8,A0)  ; ctx->ctrl_regs   (rec+0x0FC)

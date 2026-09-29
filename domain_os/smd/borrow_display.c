@@ -113,7 +113,7 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
         hw->field_4c |= 0x8000u;
 
         /* 0x00E6F61E `pea (0xe2e408).l` / jsr EC_$ADVANCE */
-        EC_$ADVANCE(&SMD_BORROW_EC);
+        EC_$ADVANCE(&SMD_$WIRED_DATA.ec_2);
 
         /*
          * 0x00E6F62C-0x00E6F644: EC_$WAIT with both 3-element arrays passed
@@ -133,10 +133,10 @@ void SMD_$BORROW_DISPLAY(int16_t *unit, int8_t *options, status_$t *status_ret)
         /*
          * 0x00E6F648-0x00E6F654: `lea (0x0,A5,D0w*0x1),A1` /
          * `tst.b (0x1d99,A1)` -> &SMD_GLOBALS + 0x1D99 + unit, i.e.
-         * response_pending[unit - 1].  `bmi` continues, so a NON-negative
+         * response_pending[unit] (declared at its 0x1D99 bias slot).  `bmi` continues, so a NON-negative
          * byte means the screen manager did not grant the borrow.
          */
-        if (SMD_GLOBALS.response_pending[unit_num - 1] >= 0) {
+        if (SMD_GLOBALS.response_pending[unit_num] >= 0) {
             /* 0x00E6F656: status first, then unlock */
             *status_ret = status_$display_borrow_request_denied_by_screen_manager;
             ML_$UNLOCK(SMD_RESPOND_LOCK);                    /* 0x00E6F65E */

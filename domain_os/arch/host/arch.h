@@ -136,6 +136,13 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
     T name = __VA_ARGS__
 
 /*
+ * SAU hardware addresses (arch/m68k/sau2/hw.h: SAU2_DISPLAY_CTRL_REGS,
+ * SAU2_DISPLAY_MEM_BASE, ...) are deliberately NOT defined on the host: there
+ * is no device behind them, so code that uses one does not build into a host
+ * test, and a test supplies its own register cell or arena instead.
+ */
+
+/*
  * A5 Global Data Pointer - NOT AVAILABLE on host
  *
  * Code that uses __A5_BASE() must be guarded with #if defined(ARCH_M68K)

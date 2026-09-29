@@ -22,7 +22,7 @@
 
 /* Status code for invalid buffer size */
 
-/* Request queue event counts SMD_REQUEST_EC_WAIT / SMD_REQUEST_EC_SIGNAL are
+/* Request queue event counts SMD_$WIRED_DATA.ec_1 / SMD_$WIRED_DATA.ec_2 are
  * declared in smd/smd_internal.h */
 
 /*
@@ -73,7 +73,7 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
      * the top of every attempt, before taking the lock.
      */
     for (;;) {
-        ec_value = SMD_REQUEST_EC_WAIT.value;
+        ec_value = SMD_$WIRED_DATA.ec_1.value;
         ML_$LOCK(SMD_REQUEST_LOCK);
 
         queue_head = SMD_GLOBALS.request_queue_head;
@@ -102,23 +102,23 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
         }
 
         /*
-         * Queue full: drop the lock and block on SMD_EC_1.
+         * Queue full: drop the lock and block on SMD_$WIRED_DATA.ec_1.
          * 00e6f284-00e6f29a: EC_$WAIT with two 3-element arrays by value,
          * only slot 0 in use.
          */
         ML_$UNLOCK(SMD_REQUEST_LOCK);
         (void)EC_$WAIT(
-            (ec_$wait_ecs_t){ { &SMD_REQUEST_EC_WAIT, NULL, NULL } },
+            (ec_$wait_ecs_t){ { &SMD_$WIRED_DATA.ec_1, NULL, NULL } },
             (ec_$wait_vals_t){ { ec_value + 1, 0, 0 } });
     }
 
     /*
      * 00e6f2a0 move.w (0x17f2,A5),D1w / lsl.w #2 / lsl.w #3 / add
      *          lea (0,A5,D1w*1),A0 ... (0x17d0,A0)
-     * i.e. the entry lives at SMD_GLOBALS + 0x17D0 + head*36, and the array
-     * itself starts at 0x17F4, so this is request_queue[head - 1].
+     * i.e. the entry lives at SMD_GLOBALS + 0x17D0 + head*36: the Pascal
+     * [1..40] table declared at its 0x17D0 bias slot, indexed with head.
      */
-    entry = &SMD_GLOBALS.request_queue[SMD_GLOBALS.request_queue_head - 1];
+    entry = &SMD_GLOBALS.request_queue[SMD_GLOBALS.request_queue_head];
 
     /* 00e6f2b0 move.w (0x00e20608).l,(0x17d0,A0) */
     entry->request_type = PROC1_$CURRENT;
@@ -150,7 +150,7 @@ void SMD_$SIGNAL(uint16_t *unit_ptr, uint16_t *params, uint16_t *param_count,
     ML_$UNLOCK(SMD_REQUEST_LOCK);
 
     /* 00e6f30c pea (0xe2e408).l / jsr EC_$ADVANCE */
-    EC_$ADVANCE(&SMD_REQUEST_EC_SIGNAL);
+    EC_$ADVANCE(&SMD_$WIRED_DATA.ec_2);
 
     *status_ret = status_$ok;
 }

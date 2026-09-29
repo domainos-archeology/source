@@ -4,11 +4,16 @@
  * Internal data structures and functions for the SMD subsystem.
  * SMD manages display hardware, cursors, fonts, and screen operations.
  *
- * Memory layout (m68k):
- *   - SMD globals:        0x00E82B8C
- *   - Display unit array: 0x00E2E3FC (each unit is 0x10C bytes)
- *   - Display info table: 0x00E27376 (each entry is 0x60 bytes)
- *   - Event counts:       0x00E2E3FC, 0x00E2E408
+ * Module data (docs/design-per-process-data.md; the addresses are the SAU2
+ * image's, used as ordering keys, not link addresses):
+ *   - SMD_GLOBALS      0x00E82B8C, map "D E82B8C SMD size = 1DA8"
+ *   - SMD_$WIRED_DATA  0x00E2E3FC, map "D35 E2E3FC SMD_$WIRED_DATA size = 13C"
+ *                      (the two eventcounts, unit 1's record, the
+ *                      tracking-rectangle lock)
+ * Code-segment cells (reached PC-relative from smd/sau2/, anchored in
+ * tools/gen_layout_ld.py, not module blocks):
+ *   - SMD_DISPLAY_INFO 0x00E27376 (map SMD_$DISPLAY_COM, one 0x60-byte entry)
+ *   - SMD_TIME_$COM    0x00E273D6
  */
 
 #ifndef SMD_INTERNAL_H
@@ -37,8 +42,13 @@
  */
 #define SMD_HW_REG_PTR volatile uint16_t *
 
-/* Maximum number of display units */
-#define SMD_MAX_DISPLAY_UNITS 4
+/*
+ * Number of display unit records.  SMD_$WIRED_DATA holds exactly one: its
+ * 0x13C bytes are the two eventcounts (0x18), one 0x10C-byte record and the
+ * 0x12-byte tracking-rectangle lock, with 6 unreferenced bytes left over, and
+ * smd_$validate_unit accepts only unit 1 (0x00E6D70A "cmpi.w #0x1,D0w").
+ */
+#define SMD_DISPLAY_UNIT_COUNT 1
 
 /* Display unit structure size */
 #define SMD_DISPLAY_UNIT_SIZE 0x10C /* 268 bytes */
@@ -51,8 +61,8 @@
  *
  * The image has exactly one: the table's single 0x60-byte entry ends at
  * 0x00E273D5 and SMD_TIME_$COM begins at 0x00E273D6.  This is deliberately
- * NOT SMD_MAX_DISPLAY_UNITS - the per-unit *record* block at 0x00E2E3FC is
- * sized for SMD_MAX_DISPLAY_UNITS, but the info/hardware table is not.
+ * a count of its own; it happens to equal SMD_DISPLAY_UNIT_COUNT (the unit
+ * records in SMD_$WIRED_DATA), and both are 1 because only unit 1 exists.
  */
 #define SMD_DISPLAY_INFO_COUNT 1
 
@@ -315,19 +325,24 @@ _Static_assert(sizeof(smd_hdm_block_t) == 0x04, "smd_hdm_block_t size");
  * list + 2.  SMD_$FREE_HDM agrees ((-0x6,A2,D2w) and (-0x4,A2,D2w) with
  * D2 = index*4 at 0x00E6DB0C).
  */
+/*
+ * The one instance is SMD_GLOBALS.unit_hdm_list (+0x1788), reached through
+ * the unit record's hdm_list pointer.  The block array is a Pascal [1..25]
+ * whose element 1 is at list+2; element 0 would sit at list-2, before the
+ * record, so here the array is declared from element 1 and block k is
+ * blocks[k-1] inside SMD_$ALLOC_HDM / SMD_$FREE_HDM, as before.  25 is the
+ * bound SMD_$FREE_HDM enforces (0x00E6DBB8 "cmpi.w #0x19,(A2)"), and 25
+ * blocks end at list+0x66, two bytes short of the request queue header at
+ * SMD_GLOBALS+0x17F0.
+ */
 typedef struct smd_hdm_list_t {
-  uint16_t count;            /* 0x00: Number of free blocks */
-  smd_hdm_block_t blocks[1]; /* 0x02: Variable-length array of blocks */
+  uint16_t count;                               /* 0x00: Number of free blocks */
+  smd_hdm_block_t blocks[SMD_HDM_MAX_ENTRIES];  /* 0x02: Pascal [1..25] */
 } smd_hdm_list_t;
 
-/* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(smd_hdm_list_t, count) == 0x00, "smd_hdm_list_t.count");
-#endif
-
-#if defined(ARCH_M68K)
+_Static_assert(offsetof(smd_hdm_list_t, count) == 0x00, "smd_hdm_list_t.count");
 _Static_assert(offsetof(smd_hdm_list_t, blocks) == 0x02, "hdm list blocks");
-#endif
+_Static_assert(sizeof(smd_hdm_list_t) == 0x66, "smd_hdm_list_t: count + 25 blocks");
 
 /*
  * ============================================================================
@@ -339,7 +354,11 @@ _Static_assert(offsetof(smd_hdm_list_t, blocks) == 0x02, "hdm list blocks");
 #define SMD_MAX_FONTS_PER_UNIT 8
 
 typedef struct smd_font_entry_t {
-  void *font_ptr;        /* 0x00: Pointer to original font data */
+  /* 0x00: the caller's font, as the 32-bit VA SMD_$LOAD_FONT stores
+   * (0x00E6DCE2 "move.l (A0),(-0x8,A2)"); 0 = slot free.  A VA rather than a
+   * host pointer so the table keeps its 8-byte stride inside SMD_GLOBALS on
+   * every build (ARCH_VA_TO_PTR / ARCH_PTR_TO_VA at the use sites). */
+  uint32_t font_va;
   /* 0x04: where the font's bitmap lives in hidden display memory.
    * SMD_$LOAD_FONT hands its address straight to SMD_$ALLOC_HDM
    * (0x00E6DCCC "pea (-0x4,A2)") and then to SMD_$COPY_FONT_TO_HDM
@@ -347,14 +366,9 @@ typedef struct smd_font_entry_t {
   smd_hdm_pos_t hdm_pos;
 } smd_font_entry_t;
 
-/* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(smd_font_entry_t, font_ptr) == 0x00, "smd_font_entry_t.font_ptr");
-#endif
-
-#if defined(ARCH_M68K)
-_Static_assert(sizeof(smd_font_entry_t) == 8, "smd_font_entry_t size");
-#endif
+_Static_assert(offsetof(smd_font_entry_t, font_va) == 0x00, "smd_font_entry_t.font_va");
+_Static_assert(offsetof(smd_font_entry_t, hdm_pos) == 0x04, "smd_font_entry_t.hdm_pos");
+_Static_assert(sizeof(smd_font_entry_t) == 8, "smd_font_entry_t size (lsl.l #3)");
 
 /*
  * ============================================================================
@@ -559,9 +573,9 @@ _Static_assert(__builtin_offsetof(smd_glyph_metrics_t, bitmap_row) == 0x06, "smd
  * The record therefore *starts* at (A3 - 0xF4) and is 0x10C bytes long, so
  * the record for unit N does *not* begin at 0x00E2E3FC + N*0x10C.  For the
  * only unit that exists (unit 1) the record lives at
- * 0x00E2E414 .. 0x00E2E51F, immediately after the two standalone eventcounts
- * SMD_EC_1 (0x00E2E3FC) and SMD_EC_2 (0x00E2E408) and immediately before
- * smd_$trk_rect_mutex.
+ * 0x00E2E414 .. 0x00E2E51F, immediately after the two eventcounts
+ * SMD_$WIRED_DATA.ec_1 (0x00E2E3FC) and .ec_2 (0x00E2E408) and immediately
+ * before .trk_rect_mutex (see smd_$wired_data_t).
  *
  * Field evidence (all offsets below are from the record base, i.e. A3-0xF4):
  *   0x00  SMD_$INIT 0x00E34DC2 movea.l (-0xf4,A3),A4       -> hw pointer
@@ -598,26 +612,30 @@ typedef struct smd_display_unit_t {
   /* 0x10 (A3-0xE4): per-ASID mapped display addresses, 1-based on the ASID
    * (the compiler indexes them as (-0xE8,A3) + asid*4). */
   uint32_t mapped_addresses[57];
-  /* 0xF4 (A3+0x00): the unit's font table, 8 entries of 8 bytes living at
-   * &SMD_GLOBALS + 0x1748.  Indexed 1-based: SMD_$LOAD_FONT reaches entry i
+  /* 0xF4 (A3+0x00): the unit's font table, 8 entries of 8 bytes; the image
+   * value is &SMD_GLOBALS.unit_fonts[1] (SMD_GLOBALS + 0x1748), i.e. the
+   * pointer names element 1, so slot i is font_table[i - 1] through it -
+   * the "- 8" the code itself applies.  SMD_$LOAD_FONT reaches entry i
    * at (font_table + i*8) - 8 (0x00E6DCC4 lsl.l #3 / 0x00E6DCE2 move.l
    * (A0),(-0x8,A2)), SMD_$UNLOAD_FONT likewise at 0x00E6DD5A/0x00E6DD66, and
    * smd_$reset_unit_display clears all 8 font pointers (0x00E6D76E). */
   smd_font_entry_t *font_table;
-  /* 0xF8 (A3+0x04): the unit's hidden-display-memory free list, living at
-   * &SMD_GLOBALS + 0x1788.  SMD_$ALLOC_HDM (0x00E6D974) and SMD_$FREE_HDM
+  /* 0xF8 (A3+0x04): the unit's hidden-display-memory free list,
+   * &SMD_GLOBALS.unit_hdm_list (SMD_GLOBALS + 0x1788).  SMD_$ALLOC_HDM (0x00E6D974) and SMD_$FREE_HDM
    * (0x00E6DA80) both read it as "movea.l (0x4,A0),A2", and
    * smd_$reset_unit_display seeds it with a single block
    * (0x00E6D77C-0x00E6D79A). */
   smd_hdm_list_t *hdm_list;
-  /* 0xFC (A3+0x08): display controller register base (0x00FF9800). */
+  /* 0xFC (A3+0x08): display controller register base (SAU2:
+   * SAU2_DISPLAY_CTRL_REGS, arch/m68k/sau2/hw.h). */
   SMD_HW_REG_PTR ctrl_regs;
   /* 0x100 (A3+0x0C): the UID of the display object.  SMD_$MAP_DISPLAY_U
    * (0x00E6F940 "pea (0xc,A3)") and SMD_$UNMAP_DISPLAY_U (0x00E6F9E4) pass
    * its address as MST_$MAP's / MST_$UNMAP's uid argument.  SMD_$INIT seeds
    * it from smd_$unit_init_params (0x00E173D4 = 00 00 04 00 00 00 00 00). */
   uid_t display_uid;
-  uint32_t display_base;         /* 0x108 (A3+0x14) = 0x00FC0000 */
+  uint32_t display_base;         /* 0x108 (A3+0x14): display memory VA
+                                  * (SAU2: SAU2_DISPLAY_MEM_BASE) */
 } smd_display_unit_t;
 
 /* Remaining documented offsets (bead source-pewa). */
@@ -934,47 +952,94 @@ typedef struct smd_globals_t {
   boolean field_173d;
   boolean field_173e;
   boolean field_173f;
-  uint8_t pad_1740[4];         /* 0x1740-0x1743: Unknown */
-  boolean cursor_pending_flag; /* 0x1744: cursor redraw pending
-                                *         (SHOW_CURSOR 0x00E6E3D4/0x00E6E41A/
-                                *          0x00E6E440) */
-  uint8_t pad_1745[0x17F0 - 0x1745]; /* 0x1745-0x17EF: Unknown.  Holds the two
-                                      * buffers whose addresses SMD_$INIT case 0
-                                      * stores in the unit record (+0x1748 and
-                                      * +0x1788). */
-  int16_t request_queue_tail;  /* 0x17F0: read index  (0x00E6F248) */
-  int16_t request_queue_head;  /* 0x17F2: write index (0x00E6F244) */
   /*
-   * 0x17F4: request queue.  The original addresses an entry as
-   *   A5 + 0x17D0 + index*36   with index in 1..40 (SMD_$SIGNAL 0x00E6F2A0,
-   *   SMD_$DM_COND_EVENT_WAIT 0x00E6F0BA),
-   * so entry `index` is request_queue[index - 1] here.
+   * 0x1740-0x1D93: the objects around the two 1-based tables whose bias
+   * slots (element 0) overlay their neighbours, so - as in name/name.h - this
+   * stretch is a union of one arm per object (docs/design-per-process-data.md,
+   * section 3: each table declared at its bias slot, indexed with the Pascal
+   * index the code computes):
+   *     unit_fonts[0]    = pad_1740 / cursor_pending_flag / pad_1745
+   *     request_queue[0] = the last 0x1E bytes of unit_hdm_list, pad_17ee,
+   *                        request_queue_tail and request_queue_head
+   * No code reaches an element 0: font slots are 1..8 (SMD_$LOAD_FONT's
+   * search loop) and queue indices 1..40 (they wrap back to 1, 0x00E6F2F2).
    */
-  smd_request_entry_t request_queue[SMD_REQUEST_QUEUE_SIZE]; /* 40 * 36 = 0x5A0 */
+  union {
+    struct {
+      uint8_t pad_1740[4];         /* 0x1740-0x1743: Unknown */
+      boolean cursor_pending_flag; /* 0x1744: cursor redraw pending
+                                    *         (SHOW_CURSOR 0x00E6E3D4/0x00E6E41A/
+                                    *          0x00E6E440) */
+      uint8_t pad_1745[3];         /* 0x1745-0x1747: Unknown */
+      uint8_t _unit_fonts_1_8[0x40]; /* 0x1748-0x1787: unit_fonts[1..8] */
+      /* 0x1788: unit 1's hidden-display-memory free list; SMD_$INIT stores
+       * its address in the unit record (0x00E34D7A "lea (0x1788,A1),A2" /
+       * 0x00E34D7E "move.l A2,(0x110,A0)"). */
+      smd_hdm_list_t unit_hdm_list;
+      uint8_t pad_17ee[2];         /* 0x17EE-0x17EF: Unknown */
+      /* 0x17F0: the map's SMD_REQUEST_QUEUE starts here, with the two ring
+       * indices (1..40; both 1 in the image). */
+      int16_t request_queue_tail;  /* 0x17F0: read index  (0x00E6F248) */
+      int16_t request_queue_head;  /* 0x17F2: write index (0x00E6F244) */
+    };
+    /*
+     * 0x1740, Pascal [1..8] at 0x1748: unit 1's font table.  SMD_$INIT
+     * stores &unit_fonts[1] in the unit record (0x00E34D6A
+     * "lea (0x1748,A1),A2" / 0x00E34D6E "move.l A2,(0x10c,A0)"), and the
+     * users reach slot i through that pointer as (font_table + i*8) - 8
+     * (SMD_$LOAD_FONT 0x00E6DCC4 "lsl.l #3" / 0x00E6DCE2 "(-0x8,A2)").
+     */
+    smd_font_entry_t unit_fonts[1 + SMD_MAX_FONTS_PER_UNIT];
+    struct {
+      uint8_t _request_queue_bias[0x17D0 - 0x1740];
+      /*
+       * 0x17D0, Pascal [1..40] at 0x17F4: the request ring.  Entry k is at
+       *   A5 + 0x17D0 + k*36   (SMD_$SIGNAL 0x00E6F2DC
+       * "move.w (-0x4,A1),(0x17d0,A2)", SMD_$DM_COND_EVENT_WAIT 0x00E6F0BA),
+       * and k runs 1..40 (0x00E6F2EA "cmpi.w #0x28,(0x17f2,A5)").
+       */
+      smd_request_entry_t request_queue[1 + SMD_REQUEST_QUEUE_SIZE];
+    };
+  };
   /* ends at 0x1D94 */
   uint32_t cursor_pos_sentinel; /* 0x1D94: "use the display's own position"
-                                 * sentinel.  SHOW_CURSOR (0x00E6E24A) compares
+                                 * sentinel, 0xFFFFFFFF in the image.
+                                 * SHOW_CURSOR (0x00E6E24A) compares
                                  * its pos argument against it; every internal
                                  * caller passes its address as that argument
                                  * (e.g. 0x00E6E49A, 0x00E6E586, 0x00E6EB32). */
   /*
-   * 0x1D98: the default/current display unit.  This is the *same word* the
-   * disassembly also shows as the absolute address 0x00E84924: SMD_GLOBALS is
-   * at 0x00E82B8C and 0x00E82B8C + 0x1D98 = 0x00E84924, and Ghidra's xrefs to
-   * 0x00E84924 are exactly the "(0x1d98,A5)" instructions (0x00E6E1F0,
-   * 0x00E6E0E8, 0x00E6E7BC, 0x00E6E7CA, 0x00E6FC4A, ...).  Bead source-nuan
-   * assumed they were two globals; they are one, so the separate
-   * SMD_DEFAULT_DISPLAY_UNIT object is gone and every caller uses this field.
-   * Signed: SMD_$INQ_KBD_CURSOR 0x00E6E0F6 does "move.w (0x1d98,A5),D0w" then
-   * "ext.l D0".
+   * 0x1D98-0x1D9B: default_unit and the per-unit response bytes, whose
+   * Pascal [1..2] table has its bias slot in default_unit's low byte.
    */
-  int16_t default_unit;
-  /* 0x1D9A: per-unit "response pending" bytes.  SMD_$SEND_RESPONSE addresses
-   * them as (0x1D99,A5 + unit) with unit 1-based (0x00E6F4FC), so unit N is
-   * response_pending[N - 1]. */
-  int8_t response_pending[2];
+  union {
+    struct {
+      /*
+       * 0x1D98: the default/current display unit (1 in the image).  The
+       * disassembly also shows this word as the absolute address 0x00E84924
+       * (= 0x00E82B8C + 0x1D98): Ghidra's xrefs to 0x00E84924 are exactly the
+       * "(0x1d98,A5)" instructions (0x00E6E1F0, 0x00E6E0E8, 0x00E6E7BC,
+       * 0x00E6E7CA, 0x00E6FC4A, ...), so it is one object (bead source-nuan).
+       * Signed: SMD_$INQ_KBD_CURSOR 0x00E6E0F6 does "move.w (0x1d98,A5),D0w"
+       * then "ext.l D0".
+       */
+      int16_t default_unit;
+    };
+    struct {
+      uint8_t _response_pending_bias;
+      /*
+       * 0x1D99, Pascal [1..2] at 0x1D9A (the map's SMD_RESPONSE_VAL): the
+       * per-unit "borrow request answered" Domain booleans, indexed with
+       * the 1-based unit number: SMD_$SEND_RESPONSE 0x00E6F4FC
+       * "move.b (A3),(0x1d99,A1)" and SMD_$BORROW_DISPLAY 0x00E6F650
+       * "tst.b (0x1d99,A1)" with A1 = A5 + unit.
+       */
+      int8_t response_pending[1 + 2];
+    };
+  };
   int16_t previous_unit;       /* 0x1D9C: unit the cursor was last shown on
-                                *         (SHOW_CURSOR 0x00E6E200/0x00E6E444) */
+                                *         (SHOW_CURSOR 0x00E6E200/0x00E6E444);
+                                *         -1 in the image */
   uint16_t unit_change_count;  /* 0x1D9E: SMD_$SET_UNIT_CURSOR_POS 0x00E6E7C6 */
   /*
    * 0x1DA0..0x1DA7 is the per-unit blink-routine pointer table, indexed by
@@ -1005,16 +1070,13 @@ typedef struct smd_globals_t {
   };
 } smd_globals_t;
 
-/* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(smd_globals_t, display_map_length) == 0x00, "smd_globals_t.display_map_length");
-_Static_assert(__builtin_offsetof(smd_globals_t, pad_e1) == 0xE1, "smd_globals_t.pad_e1");
-_Static_assert(__builtin_offsetof(smd_globals_t, pad_172c) == 0x172C, "smd_globals_t.pad_172c");
-_Static_assert(__builtin_offsetof(smd_globals_t, pad_1740) == 0x1740, "smd_globals_t.pad_1740");
-_Static_assert(__builtin_offsetof(smd_globals_t, pad_1da3) == 0x1DA3, "smd_globals_t.pad_1da3");
-#endif
-
-#if defined(ARCH_M68K)
+/*
+ * Every element is pointer-free (the font table holds VAs), so the whole
+ * record is asserted unconditionally: the map's segment size, each field's
+ * A5 displacement, the strides, and element 1 of each 1-based table.
+ */
+#define SMD_GLOBALS_SIZE 0x1DA8   /* map: "D E82B8C SMD size = 1DA8" */
+_Static_assert(offsetof(smd_globals_t, display_map_length) == 0x00, "g display_map_length");
 _Static_assert(offsetof(smd_globals_t, asid_to_unit) == 0x48, "g asid_to_unit");
 _Static_assert(offsetof(smd_globals_t, kbd_cursor_track_rect) == 0xC0, "g kbd");
 _Static_assert(offsetof(smd_globals_t, blank_time) == 0xC8, "g blank_time");
@@ -1027,6 +1089,7 @@ _Static_assert(offsetof(smd_globals_t, blank_enabled) == 0xDC, "g blank_en");
 _Static_assert(offsetof(smd_globals_t, blank_pending) == 0xDD, "g blank_pend");
 _Static_assert(offsetof(smd_globals_t, tp_reporting) == 0xDE, "g tp_rep");
 _Static_assert(offsetof(smd_globals_t, tracking_enabled) == 0xE0, "g trk_en");
+_Static_assert(offsetof(smd_globals_t, pad_e1) == 0xE1, "g pad_e1");
 _Static_assert(offsetof(smd_globals_t, tp_cursor_timeout) == 0xE2, "g tp_to");
 _Static_assert(offsetof(smd_globals_t, tracking_cursor_num) == 0xE4, "g trk_csr");
 _Static_assert(offsetof(smd_globals_t, tracking_rect_count) == 0xE6, "g trk_cnt");
@@ -1035,22 +1098,41 @@ _Static_assert(sizeof(smd_track_rect_t) == 8, "smd_track_rect_t size");
 _Static_assert(offsetof(smd_globals_t, event_queue_head) == 0x728, "g eq_head");
 _Static_assert(offsetof(smd_globals_t, event_queue_tail) == 0x72A, "g eq_tail");
 _Static_assert(offsetof(smd_globals_t, event_queue) == 0x72C, "g eq");
+_Static_assert(offsetof(smd_globals_t, pad_172c) == 0x172C, "g pad_172c");
 _Static_assert(offsetof(smd_globals_t, field_173d) == 0x173D, "g 173d");
+_Static_assert(offsetof(smd_globals_t, pad_1740) == 0x1740, "g pad_1740");
 _Static_assert(offsetof(smd_globals_t, cursor_pending_flag) == 0x1744, "g cpf");
-_Static_assert(offsetof(smd_globals_t, request_queue_tail) == 0x17F0, "g rq_tail");
+_Static_assert(offsetof(smd_globals_t, unit_fonts) == 0x1740, "g unit_fonts bias slot");
+_Static_assert(offsetof(smd_globals_t, unit_fonts[1]) == 0x1748,
+               "g unit_fonts[1] (0x00E34D6A lea (0x1748,A1))");
+_Static_assert(offsetof(smd_globals_t, unit_fonts[SMD_MAX_FONTS_PER_UNIT]) == 0x1780,
+               "g unit_fonts[8] ends at the HDM list");
+_Static_assert(sizeof(((smd_globals_t *)0)->unit_fonts[0]) == 8, "g unit_fonts stride (lsl.l #3)");
+_Static_assert(offsetof(smd_globals_t, unit_hdm_list) == 0x1788,
+               "g unit_hdm_list (0x00E34D7A lea (0x1788,A1))");
+_Static_assert(offsetof(smd_globals_t, pad_17ee) == 0x17EE, "g pad_17ee");
+_Static_assert(offsetof(smd_globals_t, request_queue_tail) == 0x17F0, "g rq_tail (SMD_REQUEST_QUEUE)");
 _Static_assert(offsetof(smd_globals_t, request_queue_head) == 0x17F2, "g rq_head");
-_Static_assert(offsetof(smd_globals_t, request_queue) == 0x17F4, "g rq");
-_Static_assert(sizeof(smd_request_entry_t) == 36, "smd_request_entry_t size");
+_Static_assert(offsetof(smd_globals_t, request_queue) == 0x17D0, "g request_queue bias slot");
+_Static_assert(offsetof(smd_globals_t, request_queue[1]) == 0x17F4, "g request_queue[1]");
+_Static_assert(sizeof(smd_request_entry_t) == 36, "smd_request_entry_t size (stride 36)");
+_Static_assert(offsetof(smd_globals_t, request_queue[SMD_REQUEST_QUEUE_SIZE + 1]) == 0x1D94,
+               "g request_queue[40] ends at the sentinel");
 _Static_assert(offsetof(smd_globals_t, cursor_pos_sentinel) == 0x1D94, "g sent");
 _Static_assert(offsetof(smd_globals_t, default_unit) == 0x1D98, "g def_unit");
-_Static_assert(offsetof(smd_globals_t, response_pending) == 0x1D9A, "g resp");
+_Static_assert(offsetof(smd_globals_t, response_pending) == 0x1D99, "g resp bias slot");
+_Static_assert(offsetof(smd_globals_t, response_pending[1]) == 0x1D9A,
+               "g response_pending[1] (SMD_RESPONSE_VAL)");
 _Static_assert(offsetof(smd_globals_t, previous_unit) == 0x1D9C, "g prev_unit");
 _Static_assert(offsetof(smd_globals_t, unit_change_count) == 0x1D9E, "g ucc");
 _Static_assert(offsetof(smd_globals_t, last_idm_button) == 0x1DA0, "g idm");
 _Static_assert(offsetof(smd_globals_t, power_off_reported) == 0x1DA2, "g poff");
+_Static_assert(offsetof(smd_globals_t, pad_1da3) == 0x1DA3, "g pad_1da3");
 _Static_assert(offsetof(smd_globals_t, blink_func) == 0x1DA0, "g blink_func");
-_Static_assert(sizeof(smd_globals_t) == 0x1DA8, "smd_globals_t size");
-#endif
+_Static_assert(sizeof(smd_globals_t) == SMD_GLOBALS_SIZE, "smd_globals_t: map size 0x1DA8");
+
+/* SMD's module data block ("D E82B8C SMD"), defined in smd/smd_data.c. */
+MODULE_DATA_DECLARE(smd_globals_t, SMD_GLOBALS, 0x00E82B8C);
 
 /*
  * ============================================================================
@@ -1139,12 +1221,9 @@ typedef struct smd_time_com_t {
 } smd_time_com_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_time_com_t, pad_01) == 0x01, "smd_time_com_t.pad_01");
 _Static_assert(__builtin_offsetof(smd_time_com_t, pad_03) == 0x03, "smd_time_com_t.pad_03");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_time_com_t, blink_enable) == 0x00,
                "smd_time_com_t.blink_enable at 0x00 (00e6ff72 tst.b (A2))");
 _Static_assert(__builtin_offsetof(smd_time_com_t, cursor_painted) == 0x02,
@@ -1153,7 +1232,6 @@ _Static_assert(__builtin_offsetof(smd_time_com_t, blink_defer) == 0x04,
                "smd_time_com_t.blink_defer at 0x04 (00e6ff76 tst.w (0x4,A2))");
 _Static_assert(sizeof(smd_time_com_t) == 6,
                "SMD_TIME_$COM is 0x00E273D6..0x00E273DB (MNK_$KTT_PTRS follows)");
-#endif
 
 /*
  * ============================================================================
@@ -1161,23 +1239,79 @@ _Static_assert(sizeof(smd_time_com_t) == 6,
  * ============================================================================
  */
 
-/* SMD globals at 0x00E82B8C */
-extern smd_globals_t SMD_GLOBALS;
-
-/* Display unit array at 0x00E2E3FC */
 /*
- * The 0x00E2E3FC region.  It is *not* an array of unit records: the first
- * 0x18 bytes are the two standalone eventcounts SMD_EC_1 (0x00E2E3FC) and
- * SMD_EC_2 (0x00E2E408), and the per-unit records follow at 0x00E2E414.  It
- * is declared as one byte block so that smd_$unit_rec()'s arithmetic is
- * literally the arithmetic the binary performs, and so that the block covers
- * exactly units 1..SMD_MAX_DISPLAY_UNITS:
- *   record(SMD_MAX_DISPLAY_UNITS) ends at
- *   (SMD_MAX_DISPLAY_UNITS + 1) * 0x10C - 0xF4
- *   = SMD_MAX_DISPLAY_UNITS * 0x10C + 0x18.
+ * ============================================================================
+ * SMD_$WIRED_DATA - the wired data block, 0x00E2E3FC..0x00E2E537
+ * ============================================================================
+ * SAU2 map: "D35 E2E3FC SMD_$WIRED_DATA loaded at 12FBFC, size = 13C", with
+ * no symbol inside.  All 0x13C bytes are zero in the image.  Its layout is
+ * a Pascal record:
+ *
+ *   +0x000  ec_1             SMD_$INIT 0x00E34D34 "move.l #0xe2e3fc,-(SP)"
+ *   +0x00C  ec_2             SMD_$INIT 0x00E34D42 "pea (0xe2e408).l"
+ *   +0x018  unit[1..1]       the display unit records, 0x10C each
+ *   +0x124  trk_rect_mutex   SMD_$INIT 0x00E34E9A "pea (0xe2e520).l"
+ *   +0x136  6 bytes nothing references (no xrefs to 0x00E2E532..0x00E2E537)
+ *
+ * The unit table is a Pascal [1..1] at +0x18: every user forms
+ *     A3 = 0x00E2E3FC + unit * 0x10C
+ * (movea.l #0xe2e3fc,A0 / muls.w #0x10c,D0 / lea (0,A0,D0*1),A3) and reaches
+ * the record's fields at -0xF4..+0x17, i.e. at A3 - 0xF4 = +0x18 + (unit-1)
+ * * 0x10C.  Element 0 would start 0xF4 bytes BEFORE the block (inside
+ * REM_FILE_$DATA, map "D33 E2E380"), so, unlike name/'s tables, the bias
+ * cannot be declared as a slot inside the block: unit[] is declared from
+ * element 1 and smd_$unit_rec() below is the one place that applies the -1.
+ *
+ * The eventcounts and the lock hold host pointers (ec_$eventcount_t,
+ * ml_$exclusion_t), as does the unit record, so the offsets past ec_1 and
+ * the size are asserted on the target only.
  */
-extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
-                                 0x18];
+typedef struct smd_$wired_data_t {
+  /*
+   * +0x00 (0x00E2E3FC): "request queue has room".  SMD_$SIGNAL reads its
+   * value and waits on it when the ring is full (0x00E6F226 "movea.l
+   * #0xe2e3fc,A3", 0x00E6F234); SMD_$DM_COND_EVENT_WAIT advances it after
+   * taking an entry (0x00E6F118 "move.l #0xe2e3fc,-(SP)").
+   */
+  ec_$eventcount_t ec_1;
+  /*
+   * +0x0C (0x00E2E408): "request posted / borrow state changed".  Advanced
+   * by SMD_$SIGNAL (0x00E6F30C), SMD_$BORROW_DISPLAY (0x00E6F61E) and
+   * SMD_$RETURN_DISPLAY (0x00E6F7BE); SMD_$GET_EC key 2 hands it out
+   * (0x00E6FE02).
+   */
+  ec_$eventcount_t ec_2;
+  /* +0x18 (0x00E2E414): Pascal [1..1]; unit N is unit[N - 1] - use
+   * smd_$unit_rec(). */
+  smd_display_unit_t unit[SMD_DISPLAY_UNIT_COUNT];
+  /*
+   * +0x124 (0x00E2E520): exclusion lock over the tracking-rectangle list and
+   * cursor state.  The map names nothing here, so the field keeps its
+   * descriptive tree name.  Users (`gsk xrefs to 0xE2E520`): SMD_$INIT
+   * 0x00E34E9A (ML_$EXCLUSION_INIT), SHOW_CURSOR 0x00E6E2CC/0x00E6E312,
+   * smd_$add_trk_rects_internal 0x00E6E506/0x00E6E570, SMD_$CLR_TRK_RECT
+   * 0x00E6E6F0/0x00E6E724, SMD_$DEL_TRK_RECT 0x00E6E652/0x00E6E736,
+   * SMD_$DM_COND_EVENT_WAIT 0x00E6F022.
+   */
+  ml_$exclusion_t trk_rect_mutex;
+  uint8_t pad_136[6];            /* +0x136..+0x13B: never referenced */
+} smd_$wired_data_t;
+
+#define SMD_$WIRED_DATA_SIZE 0x13C  /* map: "D35 E2E3FC SMD_$WIRED_DATA size = 13C" */
+_Static_assert(offsetof(smd_$wired_data_t, ec_1) == 0x00, "wired ec_1 (0x00E2E3FC)");
+#if defined(ARCH_M68K)
+/* Pointer-bearing elements: target-only (design section 3). */
+_Static_assert(offsetof(smd_$wired_data_t, ec_2) == 0x0C, "wired ec_2 (0x00E2E408)");
+_Static_assert(offsetof(smd_$wired_data_t, unit) == 0x18,
+               "wired unit[1] (A3 - 0xF4 with A3 = 0xE2E3FC + 0x10C)");
+_Static_assert(sizeof(((smd_$wired_data_t *)0)->unit[0]) == 0x10C, "wired unit stride (muls.w #0x10c)");
+_Static_assert(offsetof(smd_$wired_data_t, trk_rect_mutex) == 0x124, "wired trk_rect_mutex (0x00E2E520)");
+_Static_assert(sizeof(ml_$exclusion_t) == 0x12, "ml_$exclusion_t size");
+_Static_assert(offsetof(smd_$wired_data_t, pad_136) == 0x136, "wired pad_136");
+_Static_assert(sizeof(smd_$wired_data_t) == SMD_$WIRED_DATA_SIZE, "SMD_$WIRED_DATA: map size 0x13C");
+#endif
+
+MODULE_DATA_DECLARE(smd_$wired_data_t, SMD_$WIRED_DATA, 0x00E2E3FC);
 
 /*
  * Display info / hardware record table at 0x00E27376, one 0x60-byte entry per
@@ -1233,17 +1367,6 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
 
 extern smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 
-/*
- * The two standalone eventcounts at 0x00E2E3FC and 0x00E2E408 (bead
- * source-ufwn).  They are not separate objects: they occupy the first 0x18
- * bytes of the 0x00E2E3FC block declared above, which is why unit 1's record
- * only starts at 0x00E2E414.  SMD_$INIT initialises them by absolute address
- * (0x00E34D34 "move.l #0xe2e3fc,-(SP)" and 0x00E34D42 "pea (0xe2e408).l"),
- * so they must alias the block rather than sit somewhere else.
- */
-#define SMD_EC_1 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x00])
-#define SMD_EC_2 (*(ec_$eventcount_t *)&SMD_DISPLAY_UNITS[0x0C])
-
 /* SMD_TIME module common block at 0x00E273D6 */
 extern smd_time_com_t SMD_TIME_$COM;
 
@@ -1290,16 +1413,12 @@ typedef struct smd_cursor_pattern_t {
 } smd_cursor_pattern_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_cursor_pattern_t, width) == 0x00, "smd_cursor_pattern_t.width");
 _Static_assert(__builtin_offsetof(smd_cursor_pattern_t, height) == 0x02, "smd_cursor_pattern_t.height");
 _Static_assert(__builtin_offsetof(smd_cursor_pattern_t, hot_x) == 0x04, "smd_cursor_pattern_t.hot_x");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_cursor_pattern_t, hot_y_adj) == 0x06, "pat hot_y");
 _Static_assert(offsetof(smd_cursor_pattern_t, bitmap) == 0x08, "pat bitmap");
-#endif
 
 /*
  * The four built-in cursor patterns, 0x00E272C6 (map: SMD_$CURSOR_TABLE),
@@ -1362,13 +1481,8 @@ extern const boolean SMD_FALSE_DATA;
  * (SMD_$LOAD_FONT 0x00E6DCE6 "pea (-0x3be,PC)"). */
 extern int16_t SMD_ONE_LOCK_DATA;
 
-/* Exclusion lock protecting the tracking-rectangle list and cursor state.
- * Address: 0x00E2E520 (ml_$exclusion_t, 0x12 bytes).  Initialised by
- * SMD_$INIT via ML_$EXCLUSION_INIT.  It sits immediately after
- * SMD_DISPLAY_UNITS inside the map segment "D35 E2E3FC SMD_$WIRED_DATA
- * loaded at 12FBFC, size = 13C": 0x00E2E3FC + 0x124 = 0x00E2E520, and the
- * segment ends at 0x00E2E538. */
-extern ml_$exclusion_t smd_$trk_rect_mutex;
+/* The tracking-rectangle exclusion lock (0x00E2E520) is
+ * SMD_$WIRED_DATA.trk_rect_mutex. */
 
 /* SMD_$DISP1_INT - display-1 BLT/scroll interrupt handler.
  * Original address: 0x00E26F20, emitted as smd/sau2/disp1_int.s.
@@ -1621,12 +1735,11 @@ typedef struct smd_util_ctx_t {
 } smd_util_ctx_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_util_ctx_t, reserved) == 0x00, "smd_util_ctx_t.reserved");
-#endif
-
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_util_ctx_t, display_base) == 0x04, "ctx base");
+
+/* The fields from ctrl_regs on hold pointers: target-only. */
+#if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_util_ctx_t, ctrl_regs) == 0x08, "ctx regs");
 _Static_assert(offsetof(smd_util_ctx_t, hw) == 0x0C, "ctx hw");
 _Static_assert(offsetof(smd_util_ctx_t, status) == 0x10, "ctx status");
@@ -1874,10 +1987,13 @@ int8_t smd_$add_trk_rects_internal(int8_t clear_flag, smd_track_rect_t *rects,
  * `unit_num` is signed because the original uses a *signed* multiply
  * (muls.w #0x10c, e.g. 0x00E6E218 in SMD_$SHOW_CURSOR).
  */
+/*
+ * The table is Pascal [1..1] at SMD_$WIRED_DATA+0x18 and its bias slot would
+ * lie outside the block (see smd_$wired_data_t), so the -1 is applied here,
+ * once, and nowhere else.
+ */
 static inline smd_display_unit_t *smd_$unit_rec(int16_t unit_num) {
-  return (smd_display_unit_t *)(SMD_DISPLAY_UNITS +
-                                (int32_t)unit_num * SMD_DISPLAY_UNIT_SIZE -
-                                0xF4);
+  return &SMD_$WIRED_DATA.unit[unit_num - 1];
 }
 
 /*
@@ -1901,25 +2017,10 @@ static inline uint16_t smd_get_current_unit(void) {
 }
 
 /*
- * ============================================================================
- * Display Borrow/Return Auxiliary Data
- * ============================================================================
- * These fields are stored in the display unit array at specific offsets
- * relative to the base address. For unit N (1-based), offsets are computed
- * from (base + N * 0x10C):
- *
- *   -0xF4: hw pointer (smd_display_hw_t *)
- *   -0xF0: owner_asid (ASID of the display owner, 0 if not owned)
- *   -0xEE: borrowed_asid (ASID of borrower, 0 if not borrowed)
- *
- * Base address: 0x00E2E3FC
- * Auxiliary base: 0x00E2E308 (base - 0xF4)
+ * The borrow/return "auxiliary" fields (hw at -0xF4, owner_asid at -0xF0,
+ * borrowed_asid at -0xEE from 0x00E2E3FC + unit*0x10C) are the display unit
+ * record's own fields; smd_$unit_rec() is the only accessor.
  */
-#define SMD_UNIT_AUX_BASE 0x00E2E308
-
-/* The "auxiliary" block *is* the display unit record; see
- * smd_display_unit_t above, which describes all 0x10C bytes of it, and
- * smd_$unit_rec(), which is the only accessor. */
 
 /* Lock ID for respond/borrow operations */
 #define smd_$respond_lock 7
@@ -1929,20 +2030,11 @@ static inline uint16_t smd_get_current_unit(void) {
 #define SMD_RESPOND_LOCK smd_$respond_lock
 
 /*
- * The borrow-signalling eventcount is SMD_EC_2 itself: SMD_$BORROW_DISPLAY
- * advances it by absolute address (0x00E6F61E "pea (0xe2e408).l"), and
- * SMD_$INIT initialises 0x00E2E408 as one of its two eventcounts
- * (0x00E34D42).  It is an alias, not a second object.
- */
-#define SMD_BORROW_EC SMD_EC_2
-
-/*
- * The per-unit borrow-response bytes are SMD_GLOBALS.response_pending: both
- * writer and reader address them as (0x1d99,A5) indexed by the 1-based unit
- * number (SMD_$SEND_RESPONSE 0x00E6F4F8/0x00E6F4FC and SMD_$BORROW_DISPLAY
- * 0x00E6F64C/0x00E6F650), i.e. SMD_GLOBALS + 0x1D99 + unit, which is
- * response_pending[unit - 1].  The old SMD_BORROW_RESPONSE extern claimed a
- * separate table at 0x00E84924 - that address is SMD_GLOBALS.default_unit.
+ * The borrow-signalling eventcount is SMD_$WIRED_DATA.ec_2: SMD_$BORROW_DISPLAY
+ * advances it by absolute address (0x00E6F61E "pea (0xe2e408).l").
+ *
+ * The per-unit borrow-response bytes are SMD_GLOBALS.response_pending,
+ * indexed with the 1-based unit number (see smd_globals_t).
  */
 
 /*
@@ -1969,8 +2061,12 @@ static inline uint16_t smd_get_current_unit(void) {
  */
 void smd_$init_display_state(int8_t options, status_$t *status_ret);
 
-/* Request queue event counts */
-extern ec_$eventcount_t SMD_REQUEST_EC_WAIT;   /* At 0x00E2E3FC - wait for space */
-extern ec_$eventcount_t SMD_REQUEST_EC_SIGNAL; /* At 0x00E2E408 - signal new request */
+/*
+ * The request ring's two eventcounts are SMD_$WIRED_DATA.ec_1 ("room",
+ * 0x00E2E3FC) and .ec_2 ("posted", 0x00E2E408).  They used to be two more
+ * objects, SMD_REQUEST_EC_WAIT / SMD_REQUEST_EC_SIGNAL, separate from the
+ * SMD_EC_1 / SMD_EC_2 views that SMD_$INIT initialised - one address, two
+ * objects.
+ */
 
 #endif /* SMD_INTERNAL_H */

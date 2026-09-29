@@ -28,7 +28,7 @@
  *   00e6d768    moveq #0x8,D2
  *   00e6d76a    movea.l A0,A0
  *   00e6d76c    movea.l (A0),A2             ; A2 = rec->font_table (rec+0xF4)
- *   00e6d76e    clr.l (-0x8,A2,D2*0x1)      ; font_table[i].font_ptr = NULL
+ *   00e6d76e    clr.l (-0x8,A2,D2*0x1)      ; font_table[i].font_va = 0
  *   00e6d772    addq.l #0x8,D2
  *   00e6d774    dbf D0w,0x00e6d76c
  *   00e6d778    movea.l (0x4,A0),A2         ; A2 = rec->hdm_list (rec+0xF8)
@@ -117,7 +117,7 @@ void smd_$reset_unit_display(int16_t unit, boolean full)
      * is reloaded from the record on each iteration.
      */
     for (i = 0; i < SMD_MAX_FONTS_PER_UNIT; i++) {
-        rec->font_table[i].font_ptr = NULL;
+        rec->font_table[i].font_va = 0;
     }
 
     /* 0x00e6d778-0x00e6d79a: reseed the HDM free list with one block. */

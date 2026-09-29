@@ -63,9 +63,9 @@ static int current_failed = 0;
 /* ---- mocked globals -------------------------------------------------- */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 uint16_t PROC1_$AS_ID;
-/* SMD_EC_2 is a macro alias into SMD_DISPLAY_UNITS[0x0C]; nothing to define. */
+/* The borrow eventcount is SMD_$WIRED_DATA.ec_2; nothing else to define. */
 
 /* ---- mocked callees --------------------------------------------------- */
 
@@ -162,7 +162,7 @@ static smd_display_hw_t test_hw;
 static void setup(void)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(&test_hw, 0, sizeof(test_hw));
 
     PROC1_$AS_ID = TEST_ASID;
@@ -268,7 +268,7 @@ static void test_already_borrowed(void)
 }
 
 /*
- * 0x00E6F60E-0x00E6F644: the owned path advances SMD_EC_2 and then waits on
+ * 0x00E6F60E-0x00E6F644: the owned path advances SMD_$WIRED_DATA.ec_2 and then waits on
  * EC_$WAIT with the cursor eventcount in slot 0 and count+1 as its value.
  */
 static void test_owned_display_waits_on_ec_wait(void)
@@ -280,7 +280,7 @@ static void test_owned_display_waits_on_ec_wait(void)
     setup();
     smd_$unit_rec(TEST_UNIT)->owner_asid = 2;
     test_hw.cursor_ec.count = 0x1234;
-    SMD_GLOBALS.response_pending[TEST_UNIT - 1] = (int8_t)0xFF;  /* granted */
+    SMD_GLOBALS.response_pending[TEST_UNIT] = (int8_t)0xFF;  /* granted */
 
     SMD_$BORROW_DISPLAY(&unit, &options, &status);
 
@@ -306,7 +306,7 @@ static void test_denied_when_response_byte_is_non_negative(void)
 
     setup();
     smd_$unit_rec(TEST_UNIT)->owner_asid = 2;
-    SMD_GLOBALS.response_pending[TEST_UNIT - 1] = 0;
+    SMD_GLOBALS.response_pending[TEST_UNIT] = 0;
 
     SMD_$BORROW_DISPLAY(&unit, &options, &status);
 

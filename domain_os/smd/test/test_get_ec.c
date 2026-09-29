@@ -17,7 +17,7 @@
  *               "bcc", so 4 and above fall through to the error
  *   0x00E6FDF4  key 0 -> DTTE (A4 = 0x00E2DC90)
  *   0x00E6FDFA  key 1 -> hw + 0x10, i.e. hw->op_ec
- *   0x00E6FE02  key 2 -> 0x00E2E408, i.e. SMD_EC_2
+ *   0x00E6FE02  key 2 -> 0x00E2E408, i.e. SMD_$WIRED_DATA.ec_2
  *   0x00E6FE0C  key 3 -> 0x00E1DC00, i.e. OS_$SHUTDOWN_EC
  *   0x00E6FE12  EC2_$REGISTER_EC1(ec1, status_ret)
  *   0x00E6FE1C  its result is stored through the second argument
@@ -69,7 +69,7 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 uint16_t PROC1_$AS_ID;
 
@@ -115,7 +115,7 @@ void *EC2_$REGISTER_EC1(ec_$eventcount_t *ec1, status_$t *status_ret)
 static void setup(uint16_t unit_for_asid)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
     memset(SMD_DISPLAY_INFO, 0, sizeof(SMD_DISPLAY_INFO));
     memset(&test_hw, 0, sizeof(test_hw));
     memset(&TERM_$DATA, 0, sizeof(TERM_$DATA));
@@ -184,8 +184,8 @@ static void test_key_1_is_hw_op_ec(void)
      * checked here because ec_$eventcount_t holds host-width pointers. */
 }
 
-/* 0x00E6FE02 "pea (0xe2e408).l" - SMD_EC_2, which aliases the display-unit
- * block's second 12 bytes (bead source-ufwn). */
+/* 0x00E6FE02 "pea (0xe2e408).l" - SMD_$WIRED_DATA.ec_2, the wired block's
+ * second eventcount (bead source-ufwn). */
 static void test_key_2_is_smd_ec_2(void)
 {
     uint16_t key = 2;
@@ -196,9 +196,11 @@ static void test_key_2_is_smd_ec_2(void)
     SMD_$GET_EC(&key, &ec2, &status);
 
     CHECK_EQ(1, register_calls);
-    CHECK_EQ((long)(intptr_t)&SMD_EC_2, (long)(intptr_t)last_ec1);
-    /* 0x00E2E408 - 0x00E2E3FC = 0x0C */
-    CHECK_EQ(0x0C, (long)((char *)&SMD_EC_2 - (char *)SMD_DISPLAY_UNITS));
+    CHECK_EQ((long)(intptr_t)&SMD_$WIRED_DATA.ec_2, (long)(intptr_t)last_ec1);
+    /* 0x00E2E408 - 0x00E2E3FC = 0x0C on the target: ec_2 directly follows
+     * ec_1 (host eventcounts are wider, so compare against the type). */
+    CHECK_EQ((long)sizeof(ec_$eventcount_t),
+             (long)((char *)&SMD_$WIRED_DATA.ec_2 - (char *)&SMD_$WIRED_DATA));
 }
 
 /* 0x00E6FE0C "move.l #0xe1dc00,-(SP)" */
@@ -261,8 +263,10 @@ static void test_register_status_is_passed_through(void)
 /*
  * The hw pointer is loaded at 0x00E6FDD4, before the key is looked at, so a
  * key that does not use it still requires the unit record to be well formed.
- * This test just pins that the routine reads the record for the *bound* unit
- * rather than for a fixed unit 1.
+ * This test pins that the routine reads it from the bound unit's record
+ * (SMD_$WIRED_DATA.unit[0] for unit 1) rather than from a fixed hardware
+ * record.  Unit 1 is the only record the image has (SMD_$WIRED_DATA is
+ * 0x13C bytes), so a second unit cannot be used here.
  */
 static void test_hw_comes_from_the_bound_unit(void)
 {
@@ -271,9 +275,9 @@ static void test_hw_comes_from_the_bound_unit(void)
     status_$t status = 0x1234;
     static smd_display_hw_t other_hw;
 
-    setup(2);
+    setup(1);
     memset(&other_hw, 0, sizeof(other_hw));
-    smd_$unit_rec(2)->hw = &other_hw;
+    SMD_$WIRED_DATA.unit[0].hw = &other_hw;
 
     SMD_$GET_EC(&key, &ec2, &status);
 

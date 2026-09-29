@@ -52,17 +52,13 @@ typedef struct smd_disp_info_result_t {
 } smd_disp_info_result_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(smd_disp_info_result_t, display_type) == 0x00, "smd_disp_info_result_t.display_type");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_disp_info_result_t, mem_width) == 0x02, "di mem_w");
 _Static_assert(offsetof(smd_disp_info_result_t, mem_height) == 0x04, "di mem_h");
 _Static_assert(offsetof(smd_disp_info_result_t, width) == 0x06, "di width");
 _Static_assert(offsetof(smd_disp_info_result_t, height) == 0x08, "di height");
 _Static_assert(sizeof(smd_disp_info_result_t) == 10, "smd_disp_info_result_t");
-#endif
 
 /*
  * ============================================================================
@@ -86,11 +82,9 @@ typedef struct smd_hdm_pos_t {
     uint16_t    x;                  /* 0x02: column (pixels) */
 } smd_hdm_pos_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(smd_hdm_pos_t, y) == 0x00, "hdm pos y");
 _Static_assert(offsetof(smd_hdm_pos_t, x) == 0x02, "hdm pos x");
 _Static_assert(sizeof(smd_hdm_pos_t) == 4, "smd_hdm_pos_t size");
-#endif
 
 /*
  * ============================================================================
@@ -183,9 +177,7 @@ typedef uint32_t smd_cursor_pos_t;
 #define SMD_POS_MAKE(x, y)                                                     \
   ((uint32_t)((((uint32_t)(uint16_t)(y)) << 16) | (uint32_t)(uint16_t)(x)))
 
-#if defined(ARCH_M68K)
 _Static_assert(sizeof(smd_cursor_pos_t) == 4, "smd_cursor_pos_t size");
-#endif
 
 /*
  * ============================================================================

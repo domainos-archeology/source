@@ -84,9 +84,7 @@ _Static_assert(status_$display_invalid_use_of_driver_procedure == 0x00130004,
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-/* Big enough that smd_$unit_rec(1) (base + 0x10C - 0xF4) plus a whole
- * record stays inside the object on a 64-bit host too. */
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;   /* unit 1's record */
 uint16_t PROC1_$AS_ID;
 uint16_t SMD_ACQ_LOCK_DATA = 0;
 const boolean SMD_TRUE_DATA = (boolean)0xFF;
@@ -141,7 +139,7 @@ static uint16_t test_ctrl_reg;
 static void setup(uint16_t unit)
 {
     memset(&SMD_GLOBALS, 0, sizeof(SMD_GLOBALS));
-    memset(SMD_DISPLAY_UNITS, 0, sizeof(SMD_DISPLAY_UNITS));
+    memset(&SMD_$WIRED_DATA, 0, sizeof(SMD_$WIRED_DATA));
 
     PROC1_$AS_ID = TEST_ASID;
     SMD_GLOBALS.asid_to_unit[TEST_ASID] = unit;

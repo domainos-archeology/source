@@ -9,7 +9,7 @@
  * The function returns different event counts based on a key value:
  *   0 = DTTE (Display Transfer Table Event)
  *   1 = Display operation event count (from hardware info + 0x10)
- *   2 = SMD_EC_2 (0x00E2E408)
+ *   2 = SMD_$WIRED_DATA.ec_2 (0x00E2E408)
  *   3 = OS_$SHUTDOWN_EC (0x00E1DC00)
  *   default = invalid event count key error
  *
@@ -78,7 +78,7 @@ void SMD_$GET_EC(uint16_t *key, void **ec2_ret, status_$t *status_ret)
 
     case SMD_EC_KEY_SMD_EC2:
         /* SMD secondary event count */
-        ec1 = &SMD_EC_2;
+        ec1 = &SMD_$WIRED_DATA.ec_2;
         break;
 
     case SMD_EC_KEY_SHUTDOWN:

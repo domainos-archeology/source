@@ -92,7 +92,7 @@ _Static_assert(0x00E27376 + SMD_DISPLAY_INFO_SIZE * SMD_DISPLAY_INFO_COUNT
 /* ------------------------------------------------------------------ */
 
 smd_globals_t SMD_GLOBALS;
-uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE + 0x18];
+smd_$wired_data_t SMD_$WIRED_DATA;
 smd_display_info_t SMD_DISPLAY_INFO[SMD_DISPLAY_INFO_COUNT];
 smd_time_com_t SMD_TIME_$COM;
 uint32_t TIME_$CLOCKH;

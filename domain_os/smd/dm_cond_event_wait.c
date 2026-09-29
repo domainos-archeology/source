@@ -77,7 +77,7 @@
  *   00e6f0ca    lea (0x0,A5,D1*0x1),A0
  *   00e6f0ce    move.w (0x17d0,A0),(A1)         ; *param2 = entry->request_type
  *                                               ; entry = globals+0x17D0+tail*36
- *                                               ;       = request_queue[tail-1]
+ *                                               ;       = request_queue[tail] (declared at 0x17D0)
  *   00e6f0d2    movea.l (0x10,A6),A3            ; A3 = param3
  *   00e6f0d6    move.w (0x17d2,A0),(A3)         ; *param3 = entry->param_count
  *   00e6f0da    move.w (A3),D0w
@@ -99,7 +99,7 @@
  *   00e6f10c    move.w #0x8,-(SP)
  *   00e6f110    jsr 0x00e20b62.l                ; ML_$UNLOCK(8)
  *   00e6f116    addq.w #0x4,SP
- *   00e6f118    move.l #0xe2e3fc,-(SP)          ; &SMD_EC_1 by value
+ *   00e6f118    move.l #0xe2e3fc,-(SP)          ; &SMD_$WIRED_DATA.ec_1 by value
  *   00e6f11e    jsr 0x00e206ee.l                ; EC_$ADVANCE
  *   00e6f124    bra.b 0x00e6f188                ; return
  *   00e6f126    subq.l #0x2,SP
@@ -247,8 +247,9 @@ void SMD_$DM_COND_EVENT_WAIT(uint16_t *event_type, int16_t *param2,
         ML_$LOCK(SMD_REQUEST_LOCK);
 
         if (SMD_GLOBALS.request_queue_head != SMD_GLOBALS.request_queue_tail) {
-            /* 0x00e6f0ba-0x00e6f0ca: the entry index is 1-based. */
-            req_entry = &SMD_GLOBALS.request_queue[SMD_GLOBALS.request_queue_tail - 1];
+            /* 0x00e6f0ba-0x00e6f0ca: the entry index is 1-based
+             * (A5 + 0x17D0 + tail*36; request_queue is declared at 0x17D0). */
+            req_entry = &SMD_GLOBALS.request_queue[SMD_GLOBALS.request_queue_tail];
 
             *param2 = (int16_t)req_entry->request_type;
             *param3 = (int16_t)req_entry->param_count;
@@ -275,7 +276,7 @@ void SMD_$DM_COND_EVENT_WAIT(uint16_t *event_type, int16_t *param2,
             ML_$UNLOCK(SMD_REQUEST_LOCK);
 
             /* 0x00e6f118 */
-            EC_$ADVANCE(&SMD_EC_1);
+            EC_$ADVANCE(&SMD_$WIRED_DATA.ec_1);
             return;
         }
 

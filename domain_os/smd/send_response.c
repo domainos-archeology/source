@@ -26,7 +26,7 @@
  *   00e6f4f2    movea.l (0x8,A6),A3           ; A3 = response
  *   00e6f4f6    move.w D0w,D1w
  *   00e6f4f8    lea (0x0,A5,D1*0x1),A1        ; A1 = SMD_GLOBALS + unit
- *   00e6f4fc    move.b (A3),(0x1d99,A1)       ; response_pending[unit-1]
+ *   00e6f4fc    move.b (A3),(0x1d99,A1)       ; response_pending[unit] (declared at 0x1D99)
  *   00e6f500    pea (-0x20,A2)                ; &entry[unit-1].cursor_ec
  *   00e6f504    jsr 0x00e206ee.l              ; EC_$ADVANCE
  *   00e6f50a    movem.l (-0x1c,A6),{  D2 A2 A3 A5}
@@ -66,8 +66,9 @@ void SMD_$SEND_RESPONSE(int8_t *response)
 
     info = smd_$unit_info((int16_t)unit);
 
-    /* 0x00E6F4FC: SMD_GLOBALS + 0x1D99 + unit */
-    SMD_GLOBALS.response_pending[unit - 1] = *response;
+    /* 0x00E6F4FC: SMD_GLOBALS + 0x1D99 + unit (response_pending is
+     * declared at its 0x1D99 bias slot) */
+    SMD_GLOBALS.response_pending[unit] = *response;
 
     /* 0x00E6F500 / 0x00E6F504 */
     EC_$ADVANCE(&info->cursor_ec);

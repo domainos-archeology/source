@@ -40,9 +40,7 @@ typedef struct smd_hw_blt_t {
     uint16_t    x_start;        /* 0x0E: params[8] */
 } smd_hw_blt_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(sizeof(smd_hw_blt_t) == 0x10, "smd_hw_blt_t size");
-#endif
 
 /* Lock data for async (0x00E6D92C = SMD_ACQ_LOCK_DATA, value 0) vs sync
  * (0x00E6DFF8 = SMD_SYNC_LOCK_DATA, value 1) BLT; declared in smd_internal.h */

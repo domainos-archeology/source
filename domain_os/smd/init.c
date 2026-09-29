@@ -6,7 +6,7 @@
  * Original address: 0x00E34D2C, size 308 bytes.
  *
  * Structure of the original:
- *   0x00E34D34  EC_$INIT on the two standalone eventcounts SMD_EC_1/SMD_EC_2
+ *   0x00E34D34  EC_$INIT on SMD_$WIRED_DATA's two eventcounts, ec_1 / ec_2
  *   0x00E34D50  clr.w D0 / cmpi.w #4,D0 / bcc / jump table at 0x00E34D62
  *               D0 is *always* 0, so case 0 (0x00E34D6A) always runs and then
  *               falls into the per-unit loop; cases 1..3 all point straight at
@@ -27,20 +27,6 @@
 static const uint16_t smd_probe_type = 1;
 
 /*
- * Values the case-0 prologue plants in the unit record.  The two buffer
- * pointers are formed as `lea (0x1748,A1)` / `lea (0x1788,A1)` with
- * A1 = &SMD_GLOBALS (0x00E34D6A, 0x00E34D7A).
- */
-#define SMD_UNIT1_BUF_A_OFFSET 0x1748
-#define SMD_UNIT1_BUF_B_OFFSET 0x1788
-
-/* SAU2 display controller register base (0x00E34D8A move.l #0xff9800,...). */
-#define SMD_SAU2_CTRL_REGS ((SMD_HW_REG_PTR)0x00FF9800u)
-
-/* SAU2 display memory base (0x00E34D82 move.l #0xfc0000,...). */
-#define SMD_SAU2_DISPLAY_BASE 0x00FC0000u
-
-/*
  * SMD_$INIT - Initialise the SMD subsystem.
  */
 void SMD_$INIT(void)
@@ -55,8 +41,8 @@ void SMD_$INIT(void)
     int16_t i;                 /* D0 in the inner dbf loop */
 
     /* 0x00E34D34 / 0x00E34D42 */
-    EC_$INIT(&SMD_EC_1);
-    EC_$INIT(&SMD_EC_2);
+    EC_$INIT(&SMD_$WIRED_DATA.ec_1);
+    EC_$INIT(&SMD_$WIRED_DATA.ec_2);
 
     /*
      * Case-0 prologue (0x00E34D6A-0x00E34DB0).  A0 is 0x00E2E3FC and every
@@ -69,17 +55,16 @@ void SMD_$INIT(void)
      */
     rec = smd_$unit_rec(1);
 
-    /* 0x00E34D6E move.l A2,(0x10c,A0) with A2 = lea (0x1748,A1): the unit's
-     * 8-entry font table (see smd_$reset_unit_display, 0x00E6D76C). */
-    rec->font_table =
-        (smd_font_entry_t *)((uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_A_OFFSET);
-    /* 0x00E34D7E move.l A2,(0x110,A0) with A2 = lea (0x1788,A1) */
-    rec->hdm_list =
-        (smd_hdm_list_t *)((uint8_t *)&SMD_GLOBALS + SMD_UNIT1_BUF_B_OFFSET);
+    /* 0x00E34D6A lea (0x1748,A1),A2 / 0x00E34D6E move.l A2,(0x10c,A0), with
+     * A1 = &SMD_GLOBALS: element 1 of the unit's 8-entry font table (see
+     * smd_$reset_unit_display, 0x00E6D76C). */
+    rec->font_table = &SMD_GLOBALS.unit_fonts[1];
+    /* 0x00E34D7A lea (0x1788,A1),A2 / 0x00E34D7E move.l A2,(0x110,A0) */
+    rec->hdm_list = &SMD_GLOBALS.unit_hdm_list;
     /* 0x00E34D82 move.l #0xfc0000,(0x120,A0) */
-    rec->display_base = SMD_SAU2_DISPLAY_BASE;
+    rec->display_base = SAU2_DISPLAY_MEM_BASE;
     /* 0x00E34D8A move.l #0xff9800,(0x114,A0) */
-    rec->ctrl_regs = SMD_SAU2_CTRL_REGS;
+    rec->ctrl_regs = SAU2_DISPLAY_CTRL_REGS;
     /*
      * 0x00E34D96 move.l #0xe27376,(0x18,A0)
      * The per-display hardware record and the display info entry are the same
@@ -198,5 +183,5 @@ void SMD_$INIT(void)
     SMD_GLOBALS.blank_timeout = 0xD69; /* 3433 */
 
     /* 0x00E34E9A pea (0xe2e520).l / jsr ML_$EXCLUSION_INIT */
-    ML_$EXCLUSION_INIT(&smd_$trk_rect_mutex);
+    ML_$EXCLUSION_INIT(&SMD_$WIRED_DATA.trk_rect_mutex);
 }
