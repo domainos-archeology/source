@@ -16,7 +16,7 @@
  * `and.w #imm,%d0' is the immediate-SOURCE form (c07c), spelled as .short.
  */
 
-        .text
+        .section ".text.MMU_$SET_PROT","ax",@progbits
         .even
 
         .equ    PFT_BASE,       0x00FFB800

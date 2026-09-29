@@ -39,7 +39,7 @@
  * translated (see CLAUDE.md).
  * ==================================================================== */
 
-        .text
+        .section ".text.VFMT_$WRITEN","ax",@progbits
         .even
 
         .globl  VFMT_$WRITEN

@@ -16,9 +16,10 @@
  * longword boundary and shifts the rest of the run off the image's gaps.  A
  * section created with `.section' starts at 2**0 and `.balign 2' raises it to
  * exactly the m68k requirement, so the four ec/sau2 objects link contiguously.
- * sau2.ld names these sections explicitly (source-0ke7).
+ * build/sau2/layout.ld (tools/gen_layout_ld.py) places each section by its
+ * symbol's position in the SAU2 map (source-0ke7).
  */
-        .section .text.ec_advance_all,"ax",@progbits
+        .section ".text.EC_$ADVANCE_ALL","ax",@progbits
         .balign 2
 
     .globl  EC_$ADVANCE_ALL

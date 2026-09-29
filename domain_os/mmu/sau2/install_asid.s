@@ -19,7 +19,7 @@
  *   0xE24226  bra.w CACHE_$CLEAR      -> jmp CACHE_$CLEAR           (+2)
  */
 
-        .text
+        .section ".text.MMU_$INSTALL_ASID","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

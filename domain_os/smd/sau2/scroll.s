@@ -89,7 +89,7 @@
  * link time.
  */
 
-        .text
+        .section ".text.SMD_$START_SCROLL","ax",@progbits
         .globl  SMD_$START_SCROLL
         .globl  SMD_$CONTINUE_SCROLL
 
@@ -119,6 +119,8 @@ Lstart_scroll_body:
         movea.l (%sp)+,%a5              /* 00e15c98                          */
         rts                             /* 00e15c9a                          */
 
+        .section ".text.SMD_$CONTINUE_SCROLL","ax",@progbits
+        .balign 2
 SMD_$CONTINUE_SCROLL:
         lea     (SMD_$DISP1_INT:w,%pc),%a0      /* 00e272b2                  */
         jmp     (Lcontinue_scroll_body).l       /* 00e272b6                  */

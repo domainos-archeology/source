@@ -22,7 +22,7 @@
  *   0xE23DBC  move.w (-0x92,PC),CSR   -> move.w MMU_$PID_PRIV,CSR   (+2)
  */
 
-        .text
+        .section ".text.MMU_$REMOVE_LIST","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

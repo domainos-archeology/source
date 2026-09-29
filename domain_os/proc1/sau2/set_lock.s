@@ -29,7 +29,7 @@
  * Original address: 0x00e20ae4
  */
 
-        .text
+        .section ".text.PROC1_$SET_LOCK","ax",@progbits
         .even
 
 /*

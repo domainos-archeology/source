@@ -14,7 +14,7 @@
  * PMAPE_FLAG_REFERENCED bit that MMAP_$WS_SCAN and mmap_$trim_wsl test.
  */
 
-        .text
+        .section ".text.MMU_$CLR_USED","ax",@progbits
         .even
 
         .equ    PFT_BASE, 0x00FFB800

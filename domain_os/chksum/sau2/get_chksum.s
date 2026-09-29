@@ -23,7 +23,7 @@
  * The only caller is disk_$chksum_page (0x00E0A2CC).
  */
 
-        .text
+        .section ".text.CHKSUM_$GET_CHKSUM","ax",@progbits
         .even
 
 /* 256 dbf iterations, two words per iteration. */

@@ -21,7 +21,7 @@
  * c0bc), spelled as .short.
  */
 
-        .text
+        .section ".text.MMU_$PTOV","ax",@progbits
         .even
 
         .equ    M68020,         0x00E23D2E

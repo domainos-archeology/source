@@ -50,7 +50,7 @@
  * rather than translated (see CLAUDE.md).
  */
 
-        .text
+        .section ".text.io_$probe","ax",@progbits
         .even
 
         /* Patch cell read by FIM_$BUS_ERR: when non-zero the bus-error

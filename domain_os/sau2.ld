@@ -34,181 +34,49 @@ SECTIONS {
 
     .text _rfc_load_addr : AT(0x0C) {
         /*
-         * SVC_CATCHER (image 0xE7B044, size 0xE40, ending at 0xE7BE84 where
-         * the PROC2 segment starts - SAU2 map domain_os.10.2.map).  In the
-         * image this is ONE segment: the eight TRAP dispatchers followed
-         * immediately by their nine dispatch tables, and every dispatcher
-         * reaches its table with `lea (TABLE:w,%pc)' - an R_68K_PC16
-         * displacement of only 0x290..0xC08 bytes.  The default
-         * `*(.text .text.*)' gather scatters the tables into .data, ~0x11000
-         * bytes away, and all 11 of those relocations overflow (source-a5t8).
-         * Reproduce the image's adjacency: dispatchers first, in image order
-         * (trap0 0xE7B044, trap1 0xE7B05C, trap2 0xE7B094, trap3 0xE7B0D8,
-         * trap4 0xE7B120, trap5 0xE7B17C, trap7 0xE7B1D8, trap8 0xE7B240),
-         * then .text.svc_tables (svc/svc_tables.c), which holds all nine
-         * tables and is 0xBA4 bytes long - exactly the image's
-         * 0xE7B2DE..0xE7BE82.  (GCC emits the objects within that section in
-         * reverse definition order, so the tables are adjacent to the
-         * dispatchers but not in image order among themselves; only the
-         * proximity matters for the R_68K_PC16 displacements.)
+         * Link order (source-0i3; the owner's decision of 2026-09-28): the
+         * code and the Pascal module data blocks are laid out in the order
+         * of the SAU2 link map (domain_os.10.2.map), not at the image's
+         * addresses.  A block that follows its module's code in the image
+         * follows it here, and modules come in the image's sequence;
+         * absolute addresses and sizes differ from the image.
          *
-         * NOTE: ld assigns each input section to the FIRST output-section
-         * statement that matches it, so these explicit statements must stay
-         * ahead of the `*(.text .text.*)' gather below.
+         * layout.ld is build/sau2/layout.ld, written before every link by
+         * tools/gen_layout_ld.py (make passes -L build/sau2 so INCLUDE
+         * finds it; it is not checked in, so it cannot drift from the
+         * sources).  It lists one input-section statement per C function
+         * (`.text.<symbol>', -ffunction-sections), per hand-written routine
+         * (`.section ".text.<symbol>"' in the <subsystem>/sau2 assembly
+         * files) and per MODULE_DATA
+         * block (`.moddata.<name>', ordered by its declared original
+         * address), in map order, and ends with the `*(.text .text.*)'
+         * catch-all for code the map does not name.  `make check' links a
+         * scratch ELF and proves the order.
+         *
+         * The map order also gives the adjacencies that 16-bit and 8-bit
+         * PC-relative references inside the image's hand-written segments
+         * need, which this script used to spell out object by object:
+         *   SVC_CATCHER 0xE7B044: the eight trap dispatchers, then the nine
+         *     dispatch tables (.text.svc_tables, anchored at 0xE7B2DE)
+         *     reached with `lea (TABLE:w,%pc)' (source-a5t8);
+         *   PROC1_ASM 0xE1EAC8: PROC1_$TSVV / PROC1_$CURRENT, EC_$WAIT ..
+         *     ADVANCE / ADVANCE_INT, the PROC1 routines; `bsr.w' / `bsr.b'
+         *     and `move.w (d,PC)' between them (source-uwxz, source-mc3k,
+         *     source-0ke7);
+         *   SIO_INT 0xE2DF80: SIO2681_$PTRS, then the two 2681 stubs
+         *     (source-uwxz);
+         *   SMD_WIRED 0xE26F20: SMD_$DISP1_INT, the cursor/scroll/BLT
+         *     thunks, SMD_$DISPLAY_COM (C name SMD_DISPLAY_INFO, anchored)
+         *     and SMD_TIME_$COM (source-uwxz, source-xlo9).
+         * ld assigns each input section to the first statement that matches
+         * it, so the ordered list precedes the catch-all.
          */
-        *svc/sau2/trap0.o(.text)
-        *svc/sau2/trap1.o(.text)
-        *svc/sau2/trap2.o(.text)
-        *svc/sau2/trap3.o(.text)
-        *svc/sau2/trap4.o(.text)
-        *svc/sau2/trap5.o(.text)
-        *svc/sau2/trap7.o(.text)
-        *svc/sau2/trap8.o(.text)
-        *(.text.svc_tables)
-
-        /*
-         * PROC1_ASM (image 0xE1EAC8, size 0x24A4 - SAU2 map domain_os.10.2.map)
-         *
-         * One image segment holds the EC and PROC1 assembly routines together
-         * with a handful of data cells, and five of the cross-references
-         * inside it are 16-bit PC-relative:
-         *
-         *   0xE206F8 bsr.w PROC1_$DISPATCH_INT  (ec/sau2/advance.s,   +0x326)
-         *   0xE2070E bsr.w PROC1_$DISPATCH_INT  (ec/sau2/advance_all.s, +0x310)
-         *   0xE208FA bsr.w ADVANCE_INT          (proc1/sau2/int_handler.s,
-         *                                        twice, -0x1D0 and -0x236)
-         *   0xE20AD8 move.w (-0x4d2,PC),-(SP)   (proc1/sau2/init_stack.s ->
-         *                                        PROC1_$CURRENT at 0xE20608)
-         *
-         * The default gather puts ec/ and proc1/ far apart (and PROC1_$CURRENT
-         * in .bss ~0x11000 away), so all five overflow (source-uwxz).  Emit the
-         * segment's contents together, in image order: the data cell first
-         * (0xE20608), then ec (EC_$WAIT 0xE20610 ... ADVANCE 0xE20728), then
-         * proc1 (PROC1_$REMOVE_READY 0xE206D2 ... 0xE20F6C).  Whole subsystems
-         * are listed rather than the five referencing objects alone, because
-         * pulling single objects out would in turn strand their intra-ec and
-         * intra-proc1 bsr.w/bra.w partners (e.g. ec/sau2/advance_all.s ->
-         * ADVANCE_ALL_INT at 0xE207C6, proc1/sau2/clr_lock.s ->
-         * PROC1_$DISPATCH_INT2).
-         *
-         * PROC1_$CURRENT is a code-segment cell here, not a Pascal A5 module
-         * block, so it uses the source-a5t8 `.text.<name>' technique and is
-         * deliberately not part of source-0i3's `.moddata.<name>' scheme.
-         *
-         * Within that run the branches to ADVANCE_INT (0xE2072C) are the
-         * image's 2-byte `bsr.b' (0xE206F6 61 34, 0xE20722 61 08), an
-         * R_68K_PC8 displacement with only +/-127 bytes of reach, so the
-         * objects holding EC_$ADVANCE / EC_$ADVANCE_WITHOUT_DISPATCH and
-         * ADVANCE_INT have to be adjacent.  The plain whole-subsystem ec
-         * gather takes objects in Makefile order - every ec C object first,
-         * then the ec/sau2 assembly objects - which puts ADVANCE_INT ~0xDD0
-         * bytes ahead of the branches and overflows both (source-mc3k).
-         * So the head of the run is spelled out object by object, in the
-         * order the SAU2 map gives for PROC1_ASM; the two whole-subsystem
-         * gathers below pick up whatever is left.
-         *
-         * The four ec entries are named by SECTION rather than by object file
-         * (`.text.ec_advance' ... `.text.ec_advance_int', declared in the
-         * matching ec/sau2/*.s).  gas pins the pre-created .text section's
-         * alignment at 2**2 with no directive to lower it, so gathering these
-         * as `foo.o(.text)' padded advance_all.o - 0x16 bytes in the image,
-         * ending 2-mod-4 - out to 0x18 and pushed everything after it two
-         * bytes off the image's gaps.  Sections made with `.section' start at
-         * 2**0 and the files' `.balign 2' raises them to the m68k minimum, so
-         * the run is contiguous: 0xE206EE, +0x14 0xE20702, +0x16 0xE20718,
-         * +0x10 0xE20728 (ADVANCE), +4 0xE2072C (ADVANCE_INT), +0x9A 0xE207C6
-         * (ADVANCE_ALL_INT), +0xE 0xE207D4 = PROC1_$REORDER_READY.
-         *
-         * ADVANCE, ADVANCE_INT and ADVANCE_ALL_INT are one 0xAC-byte map
-         * object (`ADVANCE' at 0xE20728) and one source file,
-         * ec/sau2/advance_int.s - ADVANCE_ALL_INT branches into the middle of
-         * ADVANCE_INT, so they cannot be split (source-0ke7).
-         */
-        *(.text.proc1_asm_data)                     /* PROC1_$CURRENT       0xE20608 */
-        */ec/wait.o(.text)                          /* EC_$WAIT             0xE20610 */
-        */ec/waitn.o(.text)                         /* EC_$WAITN            0xE2063E */
-        *(.text.proc1_remove_ready)                 /* PROC1_$REMOVE_READY  0xE206D2 */
-        *(.text.ec_advance)                         /* EC_$ADVANCE          0xE206EE */
-        *(.text.ec_advance_all)                     /* EC_$ADVANCE_ALL      0xE20702 */
-        *(.text.ec_advance_wo_dispatch)             /* EC_$ADVANCE_WO_DISP  0xE20718 */
-        *(.text.ec_advance_int)                     /* ADVANCE              0xE20728 */
-                                                    /* ADVANCE_INT          0xE2072C */
-                                                    /* ADVANCE_ALL_INT      0xE207C6 */
-        */ec/*.o(.text)
-        */proc1/*.o(.text)
-
-        /*
-         * SIO_INT (image 0xE2DF80, size 0x8C).  SIO2681_$PTRS is the first
-         * thing in the segment and the two 2681 stubs follow it at 0xE2DFA0
-         * and 0xE2DFB0, each reaching an entry with `lea (-0x2a,PC),A0'
-         * (0xE2DFA8 -> 0xE2DF80, 0xE2DFB8 -> 0xE2DF90).  Table first, then the
-         * stubs - image order (source-uwxz).
-         */
-        *(.text.sio2681_ptrs)
-        */sio2681/sau2/int_rte.o(.text)
-
-        /*
-         * SMD_WIRED (image 0xE26F20, size 0x5E0).  SMD_$DISP1_INT opens the
-         * segment and its constant/common tables close it; the routine reaches
-         * SMD_$DISPLAY_COM (= SMD_DISPLAY_INFO, 0xE27376) with
-         * `lea (0x446,PC),A1' at 0xE26F2E.  Code first, then the table - image
-         * order (source-uwxz).
-         *
-         * SMD_$XOR_CURSOR/$OR_CURSOR, $START_SCROLL/$CONTINUE_SCROLL and
-         * $START_BLT all reach SMD_$DISP1_INT with their own
-         * `lea (SMD_$DISP1_INT:w,PC),A0', so the whole run of SMD_WIRED
-         * routines has to travel with it; they are listed in image order.
-         */
-        */smd/sau2/disp1_int.o(.text)       /* SMD_$DISP1_INT      0xE26F20 */
-        */smd/sau2/cursor_thunks.o(.text)   /* SMD_$XOR_CURSOR     0xE2720E */
-        */smd/sau2/blink_cursor_1.o(.text)  /* SMD_$BLINK_CURSOR_1 0xE2722C */
-                                            /* SMD_$BLINK_CURSOR   0xE27280 */
-        */smd/interrupt_init.o(.text)       /* SMD_$INTERRUPT_INIT 0xE27284 */
-        */smd/sau2/scroll.o(.text)          /* SMD_$START_SCROLL   0xE272A8 */
-        */smd/sau2/start_blt.o(.text)       /* SMD_$START_BLT      0xE272BC */
-        *(.text.smd_display_info)           /* SMD_$DISPLAY_COM    0xE27376 */
-        /*
-         * SMD_TIME_$COM (0xE273D6, 6 bytes) closes the segment, immediately
-         * after SMD_$DISPLAY_COM's single 0x60-byte entry, and
-         * smd/sau2/blink_cursor_1.s reaches its `cursor_painted' byte the way
-         * the image does, with `lea (SMD_TIME_$COM+2:w,PC),A1' at 0xE27248 -
-         * an R_68K_PC16 displacement of only +0x18E.  Its definition carries
-         * SMD_TIME_$COM_SECTION (smd/smd_internal.h) so it is gathered here
-         * instead of landing in .bss, where that relocation overflowed
-         * (source-xlo9).
-         */
-        *(.text.smd_time_com)               /* SMD_TIME_$COM       0xE273D6 */
-
-        *(.text .text.*)
+        INCLUDE layout.ld
     }
 
     .rodata : AT(LOADADDR(.text) + SIZEOF(.text)) {
         *(.rodata .rodata.*)
     }
-
-    /*
-     * Pascal module data blocks (source-0i3, docs/design-per-process-data.md
-     * section 3).  Each MODULE_DATA_DEFINE site (arch/m68k/arch.h) is one
-     * input section `.moddata.<name>', and this generated fragment gives it
-     * one output section at the block's original address, so the C object
-     * and any remaining absolute reference name the same memory.
-     *
-     * The fragment is build/sau2/moddata.ld, written by
-     * tools/gen_moddata_ld.py from the macro sites before every link (make
-     * passes -L build/sau2 so INCLUDE finds it); it is not checked in, so it
-     * cannot drift from the sources.  Its sections use the same file-offset
-     * rule as everything else here, VMA - _rfc_load_addr + 0x0C, and its
-     * ASSERTs fail the link if a block lands inside .text/.rodata.
-     *
-     * The RFC image therefore stops being one dense run: the gap between
-     * .rodata and the lowest block is zero fill in the file (binary output
-     * pads between load addresses).  Whether the RFC loader wants that or a
-     * sparse form is bead source-702z.
-     *
-     * The fragment ends by moving the location counter to the end of the
-     * highest block, so .data and .bss are laid out above every block.
-     */
-    INCLUDE moddata.ld
 
     .data : AT(ADDR(.data) - _rfc_load_addr + 0x0C) {
         _data_start = .;

@@ -195,9 +195,10 @@ _Static_assert(sizeof(sio2681_ptrs_entry_t) == 0x10, "sio2681_ptrs_entry_t must 
  * `41 fa ff d6  lea (-0x2a,PC),A0' at 0xE2DFA8 (0xE2DFAA - 0x2A = 0xE2DF80)
  * and the same at 0xE2DFB8 for entry 2.  Emitted as ordinary `.bss' the table
  * lands tens of kilobytes from sio2681/sau2/int_rte.o and both R_68K_PC16
- * relocations overflow (source-uwxz), so give it a section of its own that
- * sau2.ld emits directly ahead of int_rte.o - the same technique the SVC
- * dispatch tables use (source-a5t8).  This is a code-segment cell, not an A5
+ * relocations overflow (source-uwxz), so give it a section of its own, which
+ * the generated build/sau2/layout.ld (tools/gen_layout_ld.py) links at its
+ * map position, directly ahead of the int_rte.s stubs - the same technique
+ * the SVC dispatch tables use (source-a5t8).  This is a code-segment cell, not an A5
  * module block, so it is outside the `.moddata.<name>` scheme of
  * docs/design-per-process-data.md (source-0i3).
  */

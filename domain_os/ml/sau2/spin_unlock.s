@@ -12,7 +12,7 @@
  * Original address: 0x00E20BBE
  */
 
-        .text
+        .section ".text.ML_$SPIN_UNLOCK","ax",@progbits
         .globl  ML_$SPIN_UNLOCK
 
 ML_$SPIN_UNLOCK:

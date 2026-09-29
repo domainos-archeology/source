@@ -19,8 +19,9 @@
  * gates below so the portable C bodies (proc1/remove_from_ready_list.c and
  * friends, built only for other targets) and this file present one API.
  *
- * The first block has its own section so sau2.ld can keep it at its image
- * slot between EC_$WAITN and EC_$ADVANCE (see the PROC1_ASM run there).
+ * Each block has its own section, named after its map symbol, so the
+ * generated layout (tools/gen_layout_ld.py) keeps it at its image slot: the
+ * first between EC_$WAITN and EC_$ADVANCE, the second after ADVANCE.
  *
  * The only deviations from the image bytes are the two PC-relative data
  * references (`movea.l (d,PC)' / `cmpa.l (d,PC)' to PROC1_$READY_PCB,
@@ -35,7 +36,7 @@
 /* 0x00E206D2: PROC1_$REMOVE_READY / proc1_$remove_from_ready_list_int    */
 /* ------------------------------------------------------------------ */
 
-        .section .text.proc1_remove_ready,"ax",@progbits
+        .section ".text.PROC1_$REMOVE_READY","ax",@progbits
         .balign 2
 
         .globl  PROC1_$REMOVE_READY
@@ -59,8 +60,8 @@ proc1_$remove_from_ready_list_int:
 /* 0x00E207D4: PROC1_$REORDER_READY / proc1_$reorder_if_needed_int         */
 /* ------------------------------------------------------------------ */
 
-        .text
-        .even
+        .section ".text.PROC1_$REORDER_READY","ax",@progbits
+        .balign 2
 
         .globl  PROC1_$REORDER_READY
         .globl  proc1_$reorder_if_needed

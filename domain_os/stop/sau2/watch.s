@@ -42,7 +42,7 @@
 |   0x1C cpu_time  0x20 elapsed_time  0x24 cpu_events  0x28 elapsed_events
 |   0x2C entry_cput  0x30 entry_clock  0x34 entry_traps  0x38 entry_gtraps
 
-        .text
+        .section ".text.STOP_$WATCH_UII","ax",@progbits
 
 | Cells of STOP_$DATA.  Block offset = A5 displacement - 0x3D8; the offsets
 | are _Static_assert'ed against the struct in stop/stop_internal.h.

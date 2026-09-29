@@ -9,7 +9,7 @@
  *   PROC1_$INT_EXIT:    0x00e208fe
  */
 
-        .text
+        .section ".text.PROC1_$INT_ADVANCE","ax",@progbits
         .even
 
 /*

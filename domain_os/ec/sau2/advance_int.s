@@ -36,18 +36,19 @@
  *      0x04  prev_waiter
  *      0x0c  pcb
  *
- * Section note: the four ec/sau2 objects use their own `.text.ec_*' sections
+ * Section note: the four ec/sau2 objects use their own `.text.<symbol>' sections
  * rather than plain `.text'.  gas fixes the pre-created .text section's
  * alignment at 2**2 and offers no directive to lower it, which pads
  * advance_all.o (0x16 bytes, ending 2-mod-4) out to 0x18 and shifts everything
  * after it off the image's gaps.  A section created by `.section' starts at
  * 2**0 and `.balign 2' raises it to exactly the m68k requirement, so the run
- * links contiguously.  sau2.ld names these sections explicitly.
+ * links contiguously.  build/sau2/layout.ld (tools/gen_layout_ld.py) places
+ * each section by its symbol's position in the SAU2 map.
  *
  * Original address: 0x00e20728
  */
 
-        .section .text.ec_advance_int,"ax",@progbits
+        .section ".text.ADVANCE","ax",@progbits
         .balign 2
 
 /*

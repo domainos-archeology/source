@@ -48,7 +48,7 @@
  * with 68881/68882, replace with full implementations.
  */
 
-        .text
+        .section ".text.FIM_$CRASH","ax",@progbits
         .even
 
 /* ====================================================================

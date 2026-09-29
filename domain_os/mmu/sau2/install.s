@@ -47,7 +47,7 @@
  * mmu/internal.c re-emission.
  */
 
-        .text
+        .section ".text.MMU_$INSTALL","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

@@ -32,7 +32,7 @@
  *   0xE24038  move.w (-0x30e,PC),CSR  -> move.w MMU_$PID_PRIV,CSR   (+2)
  */
 
-        .text
+        .section ".text.MMU_$INSTALL_LIST","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

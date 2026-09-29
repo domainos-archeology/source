@@ -28,7 +28,7 @@
  *   00e242e0    rts
  */
 
-    .text
+        .section ".text.CACHE_$CLEAR","ax",@progbits
     .globl  CACHE_$CLEAR
     .globl  _CACHE_$CLEAR
     .type   CACHE_$CLEAR, @function

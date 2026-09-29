@@ -14,7 +14,7 @@
  * Original address: 0x00E20BB6
  */
 
-        .text
+        .section ".text.ML_$SPIN_LOCK","ax",@progbits
         .globl  ML_$SPIN_LOCK
 
 ML_$SPIN_LOCK:

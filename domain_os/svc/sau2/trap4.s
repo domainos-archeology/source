@@ -25,7 +25,7 @@
 
         .include "svc/sau2/svc_macros.inc"
 
-        .text
+        .section ".text.SVC_$TRAP4","ax",@progbits
         .even
 
 |----------------------------------------------------------------------

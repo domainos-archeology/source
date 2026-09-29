@@ -23,7 +23,7 @@
  *   00e15d1c    rts
  */
 
-        .text
+        .section ".text.SMD_$BIT_SET","ax",@progbits
         .globl  SMD_$BIT_SET
 
 SMD_$BIT_SET:

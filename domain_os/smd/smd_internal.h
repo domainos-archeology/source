@@ -1198,8 +1198,11 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
  * `43 fa 04 46  lea (0x446,PC),A1' at 0xE26F2E (0xE26F30 + 0x446 = 0xE27376).
  * Emitted as ordinary `.bss' it lands tens of kilobytes from
  * smd/sau2/disp1_int.o and the R_68K_PC16 relocation overflows (source-uwxz),
- * so give it a section of its own that sau2.ld emits directly after
- * disp1_int.o - the same technique the SVC dispatch tables use (source-a5t8).
+ * so give it a section of its own, which the generated build/sau2/layout.ld
+ * links at SMD_$DISPLAY_COM's map position after the SMD_WIRED routines (its
+ * ANCHORS table in tools/gen_layout_ld.py keys it at 0xE27376, since the map
+ * name differs) - the same technique the SVC dispatch tables use
+ * (source-a5t8).
  * This is a code-segment cell, not an A5 module block, so it is outside the
  * `.moddata.<name>` scheme of docs/design-per-process-data.md (source-0i3).
  */
@@ -1218,8 +1221,9 @@ extern uint8_t SMD_DISPLAY_UNITS[SMD_MAX_DISPLAY_UNITS * SMD_DISPLAY_UNIT_SIZE +
  * image does, with `43 fa 01 8e  lea (0x18e,PC),A1' at 0xE27248 (0xE2724A +
  * 0x18E = 0xE273D8 = SMD_TIME_$COM + 2).  Left in ordinary `.bss' that
  * R_68K_PC16 relocation overflows exactly as SMD_DISPLAY_INFO's did
- * (source-xlo9), so it gets a section of its own that sau2.ld emits directly
- * after `.text.smd_display_info'.
+ * (source-xlo9), so it gets a section of its own, which the generated
+ * build/sau2/layout.ld links at its map position, directly after
+ * `.text.smd_display_info'.
  */
 #if defined(ARCH_M68K)
 #define SMD_TIME_$COM_SECTION  __attribute__((section(".text.smd_time_com")))

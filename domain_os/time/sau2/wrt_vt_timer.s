@@ -16,7 +16,7 @@
  *   4e 75                 rts
  */
 
-        .section .text.time_wrt_vt_timer,"ax",@progbits
+        .section ".text.TIME_$WRT_VT_TIMER","ax",@progbits
         .balign 2
 
     .globl  TIME_$WRT_VT_TIMER

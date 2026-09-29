@@ -42,7 +42,7 @@
  * to the sio6509 driver and is not transcribed here.
  */
 
-        .text
+        .section ".text.SIO2681_$INT1_RTE","ax",@progbits
         .globl  SIO2681_$INT1_RTE
         .globl  SIO2681_$INT2_RTE
 

@@ -47,7 +47,7 @@
  * Immediate-source `and'/`add' forms are spelled as .short.
  */
 
-        .text
+        .section ".text.MMU_$REMOVE_VIRTUAL","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

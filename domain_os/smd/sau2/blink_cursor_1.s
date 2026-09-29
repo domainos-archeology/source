@@ -72,7 +72,7 @@
  *   PC-relative operands, and the ":w" suffix pins each to the brief form.
  */
 
-        .text
+        .section ".text.SMD_$BLINK_CURSOR_1","ax",@progbits
         .globl  SMD_$BLINK_CURSOR_1
         .globl  SMD_$BLINK_CURSOR
 

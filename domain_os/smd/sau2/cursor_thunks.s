@@ -75,7 +75,7 @@
  * two dispatch longwords (0x00E20AE4 / 0x00E20B92).
  */
 
-        .text
+        .section ".text.SMD_$XOR_CURSOR","ax",@progbits
         .globl  SMD_$XOR_CURSOR
         .globl  SMD_$OR_CURSOR
 
@@ -94,6 +94,8 @@ SMD_$XOR_CURSOR:
  * 00e27218  41 fa fd 06   lea (-0x2fa,PC),A0    ; A0 = 0x00E26F20
  * 00e2721c  4e f9 00 e1 5b 9a  jmp 0x00e15b9a.l
  */
+        .section ".text.SMD_$OR_CURSOR","ax",@progbits
+        .balign 2
 SMD_$OR_CURSOR:
         lea     (SMD_$DISP1_INT:w,%pc),%a0      /* 00e27218                  */
         jmp     (Lor_entry).l                   /* 00e2721c                  */

@@ -10,7 +10,7 @@
  * Handbook p. 7-25), result the Domain boolean in %d0.b.  Byte-identical.
  */
 
-        .text
+        .section ".text.MMU_$NORMAL_MODE","ax",@progbits
         .even
 
         .equ    MMU_STATUS_REG, 0x00FFB403

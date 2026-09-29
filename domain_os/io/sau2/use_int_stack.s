@@ -34,7 +34,7 @@
  *   0xe2e844: 4e d1                 jmp (A1)
  */
 
-        .text
+        .section ".text.IO_$USE_INT_STACK","ax",@progbits
         .even
 
 /*

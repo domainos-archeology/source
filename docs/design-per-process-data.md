@@ -71,8 +71,8 @@ longword array).
 ## 3. Proposed C representation
 
 One rule: **a module block is a single struct object, defined once, whose
-m68k placement is the original address, and every access goes through the
-object.** No absolute-address macros, no `__A5_BASE()` arithmetic, no
+m68k link position follows the SAU2 map's order (placement paragraph
+below), and every access goes through the object.** No absolute-address macros, no `__A5_BASE()` arithmetic, no
 per-file `#if ARCH_M68K` splits for data.
 
 ```c
@@ -93,7 +93,7 @@ MODULE_DATA_DEFINE(name_$data_t, NAME_$DATA, 0xE7FD24);
 `arch/arch.h` provides the family:
 
 ```c
-/* m68k: object placed by the linker at the original address */
+/* m68k: object in its own section, linked in the map's order */
 #define MODULE_DATA_DEFINE(T, name, addr) \
     T name __attribute__((section(".moddata." #name), aligned(2)))
 /* host: plain object */
@@ -102,12 +102,29 @@ MODULE_DATA_DEFINE(name_$data_t, NAME_$DATA, 0xE7FD24);
 #define MODULE_DATA_ADDR(name)             MODULE_DATA_ADDR_##name  /* 0xE7FD24, from the same macro */
 ```
 
-and `sau2.ld` gains one output section per module placed at its address
-(`.moddata.NAME_$DATA 0xE7FD24 : { *(.moddata.NAME_$DATA) }`), so on m68k
-`&NAME_$DATA == (void *)0xE7FD24` and any leftover absolute reference and
-the object coincide. The section list is generated from the
-`MODULE_DATA_DEFINE` sites (a small script, checked in) so the two cannot
-drift. Blocks that contain the module's *code* as well (STOP: A5 = entry
+and the block is linked in the order of the SAU2 link map, not at its
+address.
+
+*Placement, revised 2026-09-28 (the owner's decision).* Absolute addresses
+do not have to match the image; the relative placement does. The kernel is
+built with `-ffunction-sections`, every hand-written routine has its own
+`.section ".text.<symbol>"` where that keeps its bytes identical, and
+`tools/gen_layout_ld.py` writes `build/sau2/layout.ld`, which `sau2.ld`
+INCLUDEs inside its one `.text` output section: an input-section statement
+per C function, routine and block, in map order, then a catch-all for code
+the map does not name. A block's `addr` is its **ordering key** (and
+documentation), so a block that follows its module's code in the image
+follows it in our link, and modules come in the image's sequence. It is
+**not** the link address: code that needs the block's real address uses
+`&NAME_$DATA` / `ARCH_PTR_TO_VA(&NAME_$DATA)`, and a cell that ships a
+linked object's VA as image contents uses `ARCH_PTR_TO_VA_STATIC(obj,
+image_va)`. Consequently absolute-address references to a block no longer
+coincide with the object; they have to go (section 5). `make check` links a
+scratch ELF and proves the order (0 inversions), counting what the map
+places and what falls into the catch-all. The list is generated from the
+map, the objects and the `MODULE_DATA_DEFINE` sites, so it cannot drift.
+(Superseded: the first implementation, 3db3e5b, pinned each block at its
+original address with one output section per block.) Blocks that contain the module's *code* as well (STOP: A5 = entry
 point; the constant cells reached by `pea (d,PC)`) stay as they are: the
 constants are file-static `const` objects, the block holds only data.
 
@@ -154,7 +171,13 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
 
 1. **arch + Makefile + sau2.ld**: the `MODULE_DATA_*` macros, the section
    generator, one linker section. Prove it on `stop` (block already
-   documented field-by-field in `stop/stop_data.c`).
+   documented field-by-field in `stop/stop_data.c`). Amended 2026-09-28:
+   the generator orders instead of pins - `-ffunction-sections`, per-routine
+   sections in the hand-written assembly (byte-identical per file), and
+   `build/sau2/layout.ld` listing code and blocks in SAU2-map order;
+   `make check` verifies the order. `STOP_$DATA.wire_start` is the link-time
+   address of `STOP_$WATCH`; `wire_end` keeps the image literal until the
+   FILE_ block exists (source-h5ro).
 2. **name** (four lock arrays, A5 0xE7FD24) and **smd** (`smd_globals_t`
    at 0xE82B8C is already asserted end to end).
 3. **netlog, xns, pmap, route, rip, asknode, ring, sock, pkt, msg**: each
@@ -173,12 +196,22 @@ because the public header still exports the same names (now fields or
 
 ## 6. Risks
 
-- **Section placement vs. `.bss`**: placed sections must not overlap the
-  linker's own `.data/.bss`; the generator checks addresses against the
-  0xE00000+ text range and each other. RFC images become a set of sparse
-  ranges; `sau2.ld` already emits `AT()` file offsets, so add the sections
-  with `AT()` after `.text` and let the loader map them (verify the RFC
-  format supports non-contiguous VMA or fall back to padding).
+- **Placement by map order** (revised 2026-09-28, the owner's decision;
+  it replaces pinning at original addresses, whose risks were overlap with
+  the linker's `.data/.bss` and a sparse RFC image): blocks now sit inside
+  the one `.text` output region among the code, so the image stays dense
+  and nothing can overlap. The risks that remain: (a) a hand-written file
+  whose routines interleave with other code in the image and cannot be
+  split without changing its bytes holds some map symbols out of order
+  (today `fim/sau2/fim.s`, placed with its largest run at `FIM_$UII`; the
+  check lists the 16 symbols it holds and excludes them); (b) code the map
+  does not name (renamed or local helpers, a few assembly files) lands in
+  the catch-all at the end of `.text`, so a 16-bit PC-relative reference
+  into it can overflow - the link reports that as a truncated relocation;
+  (c) any remaining absolute-address macro for a block now names different
+  memory from the object, so those macros must be converted before, not
+  after, their blocks are defined; (d) image cells holding VAs of linked
+  objects must use `ARCH_PTR_TO_VA_STATIC`, not the image literal.
 - **Image contents in static initialisers**: blocks that ship pre-set
   values (`FP_$EXCLUSION` self-links, `RIP_$DATA` entries, ring
   `open_version`) need `.data` not `.bss`; the macro takes an initialiser.

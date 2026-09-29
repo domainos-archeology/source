@@ -52,7 +52,7 @@
  * and set the flags identically.
  */
 
-        .text
+        .section ".text.SMD_$LOCK_DISPLAY","ax",@progbits
         .globl  SMD_$LOCK_DISPLAY
 
 SMD_$LOCK_DISPLAY:

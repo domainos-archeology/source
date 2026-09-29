@@ -29,7 +29,7 @@
  * `sub.l #imm,%d2' is the immediate-SOURCE form (94bc), spelled as .short.
  */
 
-        .text
+        .section ".text.MMU_$REMOVE_ASID","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C

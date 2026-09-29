@@ -263,6 +263,8 @@ static void test_image_contents(void)
     CHECK_EQ((uintptr_t)STOP_$NULL_PROC,
              (uintptr_t)STOP_$DATA.calib_patch.entry_addr);
     CHECK_EQ(0, (uintptr_t)STOP_$DATA.calib_patch.exit_addr);
+    /* ARCH_PTR_TO_VA_STATIC keeps the image's value on the host; on the
+     * target the cell is STOP_$WATCH's link address */
     CHECK_EQ(0x00E81814u, STOP_$DATA.wire_start);
     CHECK_EQ(0x00E82128u, STOP_$DATA.wire_end);
     CHECK_EQ(4, STOP_$DATA.wire_count);

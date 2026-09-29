@@ -20,7 +20,7 @@
  *   00e242e2    rts                 ; Return immediately (no-op)
  */
 
-    .text
+        .section ".text.CACHE_$FLUSH_VIRTUAL","ax",@progbits
     .globl  CACHE_$FLUSH_VIRTUAL
     .type   CACHE_$FLUSH_VIRTUAL, @function
 

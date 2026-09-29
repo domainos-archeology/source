@@ -35,7 +35,7 @@
  *   (0x2,A0)  read once to acknowledge the interrupt, result discarded
  */
 
-        .text
+        .section ".text.SMD_$DISP1_INT","ax",@progbits
         .globl  SMD_$DISP1_INT
         .globl  SMD_Invalid_Direction_From_SM_Err
         .globl  SMD_Invalid_BLT_In_Use_Err

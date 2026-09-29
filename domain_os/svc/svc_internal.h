@@ -53,8 +53,10 @@
  * dispatcher reaches its table with a 16-bit PC-relative displacement.  If
  * the tables are emitted as ordinary `.data' the linker puts them tens of
  * kilobytes away from svc/sau2/*.o and all 11 R_68K_PC16 relocations
- * overflow, so give them a section of their own that sau2.ld emits directly
- * after the dispatcher code (source-a5t8).
+ * overflow, so give them a section of their own, which the generated
+ * build/sau2/layout.ld links directly after the dispatcher code (its ANCHORS
+ * table in tools/gen_layout_ld.py keys it at the image's 0xE7B2DE, since the
+ * map does not name the tables) (source-a5t8).
  */
 #if defined(ARCH_M68K)
 #define SVC_TABLE_SECTION   __attribute__((section(".text.svc_tables")))

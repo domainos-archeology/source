@@ -16,9 +16,10 @@
  * longword boundary and shifts the rest of the run off the image's gaps.  A
  * section created with `.section' starts at 2**0 and `.balign 2' raises it to
  * exactly the m68k requirement, so the four ec/sau2 objects link contiguously.
- * sau2.ld names these sections explicitly (source-0ke7).
+ * build/sau2/layout.ld (tools/gen_layout_ld.py) places each section by its
+ * symbol's position in the SAU2 map (source-0ke7).
  */
-        .section .text.ec_advance_wo_dispatch,"ax",@progbits
+        .section ".text.EC_$ADVANCE_WITHOUT_DISPATCH","ax",@progbits
         .balign 2
 
     .globl  EC_$ADVANCE_WITHOUT_DISPATCH
@@ -32,7 +33,7 @@ _EC_$ADVANCE_WITHOUT_DISPATCH:
     /*
      * Image: 0xE20722  61 08  bsr.b ADVANCE_INT  (0xE20724 + 0x08 = 0xE2072C)
      *
-     * ec/sau2/advance_int.o follows this object directly (sau2.ld, SAU2 map
+     * ec/sau2/advance_int.o follows this object directly (layout.ld, SAU2 map
      * PROC1_ASM order), and ADVANCE occupies the first four of those eight
      * bytes, so the R_68K_PC8 displacement is in range and gas keeps the
      * image's two-byte encoding: the object holds `61 00' plus the fixup and

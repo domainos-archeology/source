@@ -9,7 +9,11 @@ WARNING_FLAGS := -Werror
 SAU2_FLAGS := -DARCH_M68K -DCPU_M68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
 
 # we assume local #include's will have fully qualified paths
-CFLAGS := -std=c23 -I. -O2 $(SAU2_FLAGS) $(WARNING_FLAGS)
+# -ffunction-sections / -fdata-sections: every C function is its own input
+# section `.text.<symbol>' (and every datum `.rodata/.data/.bss.<symbol>'), so
+# the generated layout.ld can put the code in the SAU2 link map's order
+# (tools/gen_layout_ld.py).
+CFLAGS := -std=c23 -I. -O2 $(SAU2_FLAGS) $(WARNING_FLAGS) -ffunction-sections -fdata-sections
 
 CC := m68k-elf-gcc
 
@@ -22,10 +26,12 @@ ARFLAGS := rcs
 BUILD_DIR := build/$(TARGET_SAU)
 DIST_DIR := dist/$(TARGET_SAU)
 
-# Module data linker fragment (see the moddata rules below)
-MODDATA_GEN := tools/gen_moddata_ld.py
-MODDATA_LD := $(BUILD_DIR)/moddata.ld
-MODDATA_CHECK_ELF := $(BUILD_DIR)/moddata-check.elf
+# Link-order fragment (see the layout rules below).  SAU2_MAP is the link map
+# of the exact SR10.2 SAU2 image in Ghidra; it lives outside this repository.
+SAU2_MAP ?= $(HOME)/src/domainos-archeology/sau2-maps/domain_os.10.2.map
+LAYOUT_GEN := tools/gen_layout_ld.py
+LAYOUT_LD := $(BUILD_DIR)/layout.ld
+LAYOUT_CHECK_ELF := $(BUILD_DIR)/layout-check.elf
 
 # Host-side unit tests.  Each <subsystem>/test/test_<function>.c is a
 # self-contained program (it #includes the .c under test directly) built
@@ -41,7 +47,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test check check-moddata
+.PHONY: all clean domain_os test test-build clean-test check check-layout
 
 all:: domain_os
 
@@ -75,36 +81,42 @@ $(svc_ASM_OBJS): svc/$(TARGET_SAU)/svc_macros.inc
 # Main target
 domain_os: $(DIST_DIR)/domain_os
 
-$(DIST_DIR)/domain_os: $(ALL_SUBSYSTEM_OBJS) sau2.ld $(MODDATA_LD)
+$(DIST_DIR)/domain_os: $(ALL_SUBSYSTEM_OBJS) sau2.ld $(LAYOUT_LD)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
 	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) -o $@ $(ALL_SUBSYSTEM_OBJS)
 
-# Module data blocks (source-0i3).  sau2.ld INCLUDEs moddata.ld, one output
-# section per MODULE_DATA_DEFINE site at the block's original address.
-# tools/gen_moddata_ld.py writes it from the macro sites (addresses) and the
-# compiled objects (sizes), and refuses odd addresses, overlapping blocks and
-# blocks outside the kernel range; the fragment's ld ASSERTs catch a block
-# inside the linked .text/.rodata.  It is regenerated before every link.
-$(MODDATA_LD): $(ALL_SUBSYSTEM_OBJS) $(MODDATA_GEN)
+# Link order (source-0i3; the owner's decision of 2026-09-28).  Code and
+# module data blocks are linked in the order of the SAU2 link map, not at
+# fixed addresses.  sau2.ld INCLUDEs layout.ld inside its `.text' output
+# section: one input-section statement per C function (-ffunction-sections),
+# hand-written routine and MODULE_DATA block, in map order, then the
+# catch-all.  tools/gen_layout_ld.py writes it from the map, the compiled
+# objects' symbol tables and the MODULE_DATA_DEFINE sites (whose addresses
+# are now ordering keys), and refuses odd or non-literal block addresses and
+# duplicate block names.  It is regenerated before every link.
+$(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(SAU2_MAP)
 	@mkdir -p $(dir $@)
 	@echo "[GEN] $@"
-	@python3 $(MODDATA_GEN) --build-dir $(BUILD_DIR) -o $@ $(ALL_SUBSYSTEM_OBJS)
+	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) -o $@ $(ALL_SUBSYSTEM_OBJS)
 
 # `make check': static checks plus a scratch link.  The real link still has
 # hundreds of unresolved symbols, so the check links an ELF with
 # --unresolved-symbols=ignore-all and then verifies with m68k-elf-nm that
-# every block symbol sits at its declared address.
-check: check-moddata
+# every placed map symbol and block appears in map order, reporting the
+# first inversion, the number placed and what fell into the catch-all.  (The
+# ELF has one RWX segment because the module data blocks now sit among the
+# code in `.text'; the RFC image is flat binary, so that is expected.)
+check: check-layout
 
-check-moddata: $(MODDATA_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
-	@echo "[CHECK] module data: static checks"
-	@python3 $(MODDATA_GEN) --build-dir $(BUILD_DIR) --check-only $(ALL_SUBSYSTEM_OBJS)
-	@echo "[CHECK] module data: scratch link $(MODDATA_CHECK_ELF)"
-	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --oformat elf32-m68k \
-	    --unresolved-symbols=ignore-all -o $(MODDATA_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
-	@echo "[CHECK] module data: placement"
-	@python3 $(MODDATA_GEN) --check-elf $(MODDATA_CHECK_ELF)
+check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
+	@echo "[CHECK] layout: static checks"
+	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) --check-only $(ALL_SUBSYSTEM_OBJS)
+	@echo "[CHECK] layout: scratch link $(LAYOUT_CHECK_ELF)"
+	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --oformat elf32-m68k --no-warn-rwx-segments \
+	    --unresolved-symbols=ignore-all -o $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
+	@echo "[CHECK] layout: map order"
+	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) --check-elf $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c

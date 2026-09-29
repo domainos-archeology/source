@@ -50,6 +50,16 @@
 #define ARCH_PTR_TO_VA(p)  ((uint32_t)(uintptr_t)(p))
 
 /*
+ * ARCH_PTR_TO_VA_STATIC(p, image_va) - ARCH_PTR_TO_VA for a static
+ * initialiser: a uint32_t cell that holds the VA of a linked object as image
+ * contents (STOP_$DATA.wire_start = STOP_$WATCH).  On the target it is the
+ * link-time address of `p' - the kernel is no longer linked at the image's
+ * addresses, only in its order (tools/gen_layout_ld.py) - and `image_va',
+ * the value the image carries, is documentation.
+ */
+#define ARCH_PTR_TO_VA_STATIC(p, image_va) ARCH_PTR_TO_VA(p)
+
+/*
  * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries
  *
  * The SAU2 68020 runs with VBR = 0, so the exception vector table is the
@@ -65,34 +75,40 @@
 #define ARCH_AUTOVECTOR(level) ARCH_VECTOR(24u + (level))
 
 /*
- * MODULE_DATA_* - Pascal module data blocks at their original addresses
+ * MODULE_DATA_* - Pascal module data blocks, linked in the image's order
  *
  * Domain Pascal compiles each module's globals into one block addressed
  * (off,A5).  A block is modelled as a single C object of a struct type whose
  * fields sit at the A5 displacements (docs/design-per-process-data.md,
- * section 3).  On the target the object must BE the original memory, so
- * MODULE_DATA_DEFINE puts it in its own input section `.moddata.<name>' and
- * the linker fragment that tools/gen_moddata_ld.py writes from these very
- * macro sites (build/sau2/moddata.ld, INCLUDEd by sau2.ld) gives that
- * section one output section at `addr'.  `make check-moddata' links a
- * scratch ELF and proves with m68k-elf-nm that `name' landed at `addr'.
+ * section 3).  MODULE_DATA_DEFINE puts it in its own input section
+ * `.moddata.<name>', and the link-order fragment that tools/gen_layout_ld.py
+ * writes (build/sau2/layout.ld, INCLUDEd by sau2.ld) lists that section
+ * among the code at the position its original address has in the SAU2 link
+ * map - after its module's code when the image has it there.  `make check'
+ * links a scratch ELF and proves the order.
+ *
+ * The address given to these macros is the block's ORIGINAL address in the
+ * image: documentation and the generator's ordering key.  It is NOT the
+ * link address (the owner's decision of 2026-09-28: the relative placement
+ * must match the image, the absolute addresses need not).  Anything that
+ * needs where the block really is takes `&name' / ARCH_PTR_TO_VA(&name).
  *
  *   MODULE_DATA_DEFINE(T, name, addr)          zero-filled block
  *   MODULE_DATA_DEFINE_INIT(T, name, addr, {...})
  *                                              block with the image's
  *                                              initial contents
  *   MODULE_DATA_DECLARE(T, name, addr)         the extern, for a header
- *   MODULE_DATA_ADDR(name)                     the block's address as a
- *                                              32-bit target VA constant
+ *   MODULE_DATA_ADDR(name)                     the block's original image
+ *                                              address as a 32-bit constant
  *                                              (both in arch/arch.h)
  *
  * `addr' must be a literal (the generator reads it from the source text),
  * even (68000-family word alignment; the generator and the _Static_assert
  * below both refuse an odd one) and equal to the address in the block's
  * MODULE_DATA_DECLARE, which must be in scope.  The section is progbits
- * even for a zero-filled block, so the RFC image carries the block at its
- * file offset like any other loaded byte.  `used' keeps an unreferenced
- * block alive so its placement is still checked.
+ * even for a zero-filled block, so the RFC image carries the block like any
+ * other loaded byte.  `used' keeps an unreferenced block alive so its
+ * position is still checked.
  */
 #define MODULE_DATA_ATTRS_(name) \
     __attribute__((section(".moddata." #name), aligned(2), used))

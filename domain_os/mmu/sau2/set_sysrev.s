@@ -14,7 +14,7 @@
  * byte-identical.
  */
 
-        .text
+        .section ".text.MMU_$SYSTEM_REV","ax",@progbits
         .even
 
         .equ    DN330_MMU_HARDWARE_REV, 0x00FFB409

@@ -12,7 +12,7 @@
  * than translated.
  */
 
-        .text
+        .section ".text.MMU_$CACHE_INHIBIT_VA","ax",@progbits
         .even
 
         .globl  MMU_$CACHE_INHIBIT_VA

@@ -31,7 +31,7 @@
  * Original address: 0x00e20b92
  */
 
-        .text
+        .section ".text.PROC1_$CLR_LOCK","ax",@progbits
         .even
 
 /*

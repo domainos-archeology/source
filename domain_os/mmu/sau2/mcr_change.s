@@ -23,7 +23,7 @@
  * `and.b #1,%d0' is the immediate-SOURCE form (c03c), spelled as .short.
  */
 
-        .text
+        .section ".text.MMU_$MCR_CHANGE","ax",@progbits
         .even
 
         .equ    M68020,         0x00E23D2E

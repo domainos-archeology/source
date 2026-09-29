@@ -76,7 +76,7 @@
  * picks ANDI (0x0280), so that instruction is emitted with .short.
  */
 
-        .text
+        .section ".text.PEB_$STATUS_REG","ax",@progbits
         .even
 
 /* Hardware and code addresses the original encodes absolutely. */
@@ -96,6 +96,8 @@ PEB_$STATUS_REG:
         .long   0                       /* 0x00e24468: latched 0x70f4 value */
 
         .globl  PEB_$INT
+        .section ".text.PEB_$INT","ax",@progbits
+        .balign 2
 PEB_$INT:
         btst.b  #2,(PEB_CTL_BYTE).l     /* 0x00e2446c: is the PEB asserting? */
         bne.b   .Lours                  /* 0x00e24474 */

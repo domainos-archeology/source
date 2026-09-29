@@ -41,7 +41,7 @@
  * they are spelled as .short.
  */
 
-        .text
+        .section ".text.mmu_$installi","ax",@progbits
         .even
 
         .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30

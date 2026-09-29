@@ -31,7 +31,7 @@
  * file.
  */
 
-        .text
+        .section ".text.MMU_$INIT","ax",@progbits
         .even
 
         .equ    M68020, 0x00E23D2E

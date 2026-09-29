@@ -87,6 +87,13 @@ static inline uint32_t ARCH_PTR_TO_VA_FN(const void *p)
 #define ARCH_PTR_TO_VA(p)  ARCH_PTR_TO_VA_FN((const void *)(p))
 
 /*
+ * ARCH_PTR_TO_VA_STATIC(p, image_va) - see arch/m68k/arch.h.  A host
+ * pointer is not a 32-bit constant a static initialiser can hold, so the
+ * cell keeps the image's value; tests compare it against that.
+ */
+#define ARCH_PTR_TO_VA_STATIC(p, image_va) ((uint32_t)(image_va))
+
+/*
  * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries
  *
  * See arch/m68k/arch.h.  There is no vector table on the host, so the entries
@@ -108,7 +115,9 @@ extern void *arch_$vector_table[ARCH_VECTOR_COUNT];
  *
  * On the host a block is an ordinary object wherever the compiler puts it,
  * zero-initialised unless the defining _data.c supplies the image's
- * contents; the original address lives only in the declaration's constant.
+ * contents; the original image address lives only in the declaration's
+ * constant (as on the target, where it orders the block but does not place
+ * it).
  * The evenness check and the check against the declaration are the same as
  * the target's, so a bad address fails on either build.
  */

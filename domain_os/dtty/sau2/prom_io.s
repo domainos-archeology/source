@@ -8,7 +8,7 @@
 |   DTTY_$PUTC:        0x00E2E018
 |   DTTY_$CLEAR_SCREEN: 0x00E2E048
 
-        .text
+        .section ".text.DTTY_$PUTC","ax",@progbits
         .even
 
 | PROM entry point addresses (low memory)
@@ -50,6 +50,8 @@ DTTY_$PUTC:
 | Original address: 0x00E2E048
 |------------------------------------------------------------------------------
         .globl  DTTY_$CLEAR_SCREEN
+        .section ".text.DTTY_$CLEAR_SCREEN","ax",@progbits
+        .balign 2
 DTTY_$CLEAR_SCREEN:
         movem.l %d2-%d7/%a2-%a4,-(%sp)  | Save registers
         moveq   #3,%d0                   | Function code 3 = full screen clear

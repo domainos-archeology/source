@@ -15,7 +15,7 @@
 | Address: 0x00e24c60
 | Size: 22 bytes
 
-        .text
+        .section ".text.NULLPROC","ax",@progbits
         .globl  NULLPROC
 
 NULLPROC:

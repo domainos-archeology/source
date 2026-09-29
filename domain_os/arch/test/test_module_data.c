@@ -17,8 +17,12 @@
  *     another block's VA as image contents, like STOP_$DATA.wire_end) and as
  *     a case label.
  *
- * (This directory is skipped by tools/gen_moddata_ld.py: test programs are
- * never linked into the kernel, so the blocks below place nothing.)
+ *   - ARCH_PTR_TO_VA_STATIC, the static-initialiser form for a cell that
+ *     holds a linked object's VA (STOP_$DATA.wire_start = STOP_$WATCH),
+ *     keeps the image's value on the host.
+ *
+ * (This directory is skipped by tools/gen_layout_ld.py: test programs are
+ * never linked into the kernel, so the blocks below order nothing.)
  */
 
 #include <stdio.h>
@@ -100,6 +104,12 @@ static int classify_addr(uint32_t va)
         return 0;
     }
 }
+
+/* A cell holding a routine's VA as image contents, the way
+ * STOP_$DATA.wire_start holds STOP_$WATCH's (stop/stop_data.c) */
+static void demo_routine(void) { }
+static uint32_t demo_wire_start = ARCH_PTR_TO_VA_STATIC(demo_routine,
+                                                        0x00E81814);
 
 /* ------------------------------------------------------------------ */
 /* Harness                                                             */
@@ -191,6 +201,13 @@ static void test_block_is_an_ordinary_object(void)
     ASSERT_EQ(0xFFFF, ZERO_$DATA.words[1]);
 }
 
+static void test_ptr_to_va_static(void)
+{
+    /* on the host the cell keeps the image's value */
+    ASSERT_EQ(0x00E81814u, demo_wire_start);
+    ASSERT_EQ(4, sizeof(ARCH_PTR_TO_VA_STATIC(demo_routine, 0x00E81814)));
+}
+
 int main(void)
 {
     printf("MODULE_DATA_* host macros\n");
@@ -199,6 +216,7 @@ int main(void)
     RUN_TEST(test_initialised_block);
     RUN_TEST(test_zero_block);
     RUN_TEST(test_block_is_an_ordinary_object);
+    RUN_TEST(test_ptr_to_va_static);
     printf("%d tests, %d failed\n", tests_run, tests_failed);
     return tests_failed ? 1 : 0;
 }

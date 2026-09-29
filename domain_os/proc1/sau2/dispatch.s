@@ -26,7 +26,7 @@
  *   PROC1_$DISPATCH_INT3: 0x00e20a34
  */
 
-        .text
+        .section ".text.PROC1_$DISPATCH","ax",@progbits
         .even
 
 /*

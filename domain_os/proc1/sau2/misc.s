@@ -6,7 +6,7 @@
  *   PROC1_$GET_INFO_INT: 0x00e20f12
  */
 
-        .text
+        .section ".text.PROC1_$GET_USP","ax",@progbits
         .even
 
 /*
@@ -50,6 +50,8 @@ _PROC1_$GET_USP:
  */
         .globl  PROC1_$GET_INFO_INT
         .globl  _PROC1_$GET_INFO_INT
+        .section ".text.PROC1_$GET_INFO_INT","ax",@progbits
+        .balign 2
 PROC1_$GET_INFO_INT:
 _PROC1_$GET_INFO_INT:
         bsr.w   PROC1_$BEGIN_ATOMIC_OP  /* Begin atomic operation */

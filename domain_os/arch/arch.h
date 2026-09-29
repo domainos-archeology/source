@@ -34,8 +34,10 @@
  *     and, shared by every architecture (defined below):
  *       MODULE_DATA_DECLARE(T, name, addr)           - declare it (headers)
  *       MODULE_DATA_ADDR(name)                       - its original
- *                                                      address, a uint32_t
- *                                                      constant expression
+ *                                                      image address, a
+ *                                                      uint32_t constant
+ *                                                      expression (NOT the
+ *                                                      link address)
  *
  * To add a new architecture, create arch/<arch>/arch.h and add
  * a new #elif block here.
@@ -61,10 +63,12 @@
  * integer constant expression on every build: usable in _Static_assert
  * (block end against the link map's segment size), in static initialisers
  * of cells that hold another block's VA as image contents, and in case
- * labels.  On the target the object really is at that address (the linker
- * fragment tools/gen_moddata_ld.py writes places it there and `make
- * check-moddata' proves it); on the host it is wherever the compiler put it
- * and only the constant is the original address.
+ * labels.  It is the block's address in the IMAGE, not where the linker
+ * puts it: since the owner's decision of 2026-09-28 the kernel is linked in
+ * the SAU2 map's order, not at its addresses, and the address is the key
+ * tools/gen_layout_ld.py orders the block by (`make check' proves the
+ * order).  On every build the object's real address is `&name' /
+ * ARCH_PTR_TO_VA(&name); MODULE_DATA_ADDR only documents the image.
  *
  * The definition repeats the literal (the generator reads it from the
  * defining .c) and _Static_asserts it against the declaration, so the two

@@ -40,7 +40,7 @@
  * address in the image.
  */
 
-        .text
+        .section ".text.FP_$GET_FP","ax",@progbits
         .even
 
         .extern PROC1_$AS_ID            /* 0x00E2060A */

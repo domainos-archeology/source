@@ -44,7 +44,7 @@
  * spelled as .short because gas would pick andi (0240).
  */
 
-        .text
+        .section ".text.mmu_$remove_internal","ax",@progbits
         .even
 
         .equ    PFT_BASE,       0x00FFB800

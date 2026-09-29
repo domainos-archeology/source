@@ -11,7 +11,7 @@
  * bit 2 tested, result the Domain boolean in %d0.b.  Byte-identical.
  */
 
-        .text
+        .section ".text.MMU_$POWER_OFF","ax",@progbits
         .even
 
         .equ    MMU_POWER_REG,  0x00FFB402

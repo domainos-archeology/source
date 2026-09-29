@@ -5,9 +5,11 @@
  *
  * STOP_$DATA is the module's data block itself, 0x00E81BEC .. 0x00E82128
  * (A5+0x3D8 .. A5+0x914, the tail of the SAU2 map's STOP_WATCH segment,
- * size 0x914 from 0x00E81814).  MODULE_DATA_DEFINE_INIT places it at that
- * address on the target (sau2.ld's generated moddata.ld); the layout and
- * every A5 displacement are asserted in stop/stop_internal.h.
+ * size 0x914 from 0x00E81814).  MODULE_DATA_DEFINE_INIT gives it its own
+ * section, which the generated build/sau2/layout.ld links right after the
+ * module's code, where the map has it (0x00E81BEC is the ordering key, not
+ * the link address); the layout and every A5 displacement are asserted in
+ * stop/stop_internal.h.
  *
  * Everything except calib_patch, wire_start, wire_end and wire_count is zero
  * in the image; the stopwatch calibrates itself on the first call.
@@ -26,9 +28,20 @@ MODULE_DATA_DEFINE_INIT(stop_$data_t, STOP_$DATA, 0x00E81BEC, {
         /* .entry_addr = */ (uint16_t *)STOP_$NULL_PROC, /* 0x00E8193E */
         /* .exit_addr  = */ NULL,
     },
-    /* +0x130 (A5+0x508), 0x00E81D1C: 0x00E81814 = STOP_$WATCH */
-    .wire_start = 0x00E81814,
-    /* +0x134 (A5+0x50C), 0x00E81D20: 0x00E82128 = OS_DATA_SHUTWIRED */
+    /*
+     * +0x130 (A5+0x508), 0x00E81D1C: 0x00E81814 in the image = STOP_$WATCH,
+     * the start of the module.  A link-time value: wherever STOP_$WATCH is
+     * linked (the image's value on the host).
+     */
+    .wire_start = ARCH_PTR_TO_VA_STATIC(STOP_$WATCH, 0x00E81814),
+    /*
+     * +0x134 (A5+0x50C), 0x00E81D20: 0x00E82128 = OS_DATA_SHUTWIRED, the
+     * start of the FILE_ segment right after this block.  That object does
+     * not exist in the tree yet, so the image's literal stays, although in
+     * our link it no longer bounds the module.
+     * TODO(source-h5ro): make it a link-time value once OS_DATA_SHUTWIRED /
+     * the FILE_ block is linked after STOP_$DATA.
+     */
     .wire_end = 0x00E82128,
     /* +0x13A (A5+0x512), 0x00E81D26 */
     .wire_count = 4,

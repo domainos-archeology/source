@@ -9,7 +9,7 @@
  * Original address: 0x00E20AA4 (40 bytes)
  */
 
-        .text
+        .section ".text.INIT_STACK","ax",@progbits
         .even
 
 /*

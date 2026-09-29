@@ -63,7 +63,7 @@
  * not defined, so the two never collide at link time.
  */
 
-        .text
+        .section ".text.SMD_$START_BLT","ax",@progbits
         .globl  SMD_$START_BLT
 
 SMD_$START_BLT:

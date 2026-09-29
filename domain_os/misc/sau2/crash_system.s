@@ -21,7 +21,7 @@
  *   0x00E1E82A  REMAP_DISPLAY
  */
 
-    .text
+        .section ".text.CRASH_SYSTEM","ax",@progbits
 
 /* -------------------------------------------------------------------------
  * CRASH_SYSTEM - 0x00E1E700, 182 bytes

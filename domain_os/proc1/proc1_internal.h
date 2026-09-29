@@ -21,8 +21,9 @@
  * 16-bit PC-relative operand - `3f 3a fb 2e  move.w (-0x4d2,PC),-(SP)' at
  * 0xE20AD8 (0xE20ADA - 0x4D2 = 0xE20608) - so the cell has to stay within
  * 32KB of proc1/sau2/init_stack.o or the R_68K_PC16 relocation overflows
- * (source-uwxz).  Give it a section of its own that sau2.ld emits just ahead
- * of the ec/proc1 code, exactly as svc/svc_internal.h does for the SVC
+ * (source-uwxz).  Give it a section of its own, which the generated
+ * build/sau2/layout.ld (tools/gen_layout_ld.py) links at its map position,
+ * ahead of the ec/proc1 code, as svc/svc_internal.h does for the SVC
  * dispatch tables (source-a5t8).
  *
  * This is a code-segment cell, NOT an A5 module block, so it is deliberately

@@ -28,7 +28,7 @@
  * Original address: 0x00E2B850
  */
 
-        .text
+        .section ".text.XNS_IDP_$CHECKSUM","ax",@progbits
         .even
 
         .globl  XNS_IDP_$CHECKSUM
@@ -55,6 +55,8 @@ _XNS_IDP_$CHECKSUM:
 3:
         rts                             /* 00E2B870 */
 
+        .section ".text.XNS_IDP_$HOP_AND_SUM","ax",@progbits
+        .balign 2
 XNS_IDP_$HOP_AND_SUM:
 _XNS_IDP_$HOP_AND_SUM:
         move.w  6(%sp), %d1             /* 00E2B872  hop_offset */

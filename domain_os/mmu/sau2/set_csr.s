@@ -14,7 +14,7 @@
  *   0xE241F4  lea (-0x4ca,PC),%a0     -> lea MMU_$PID_PRIV,%a0      (+2)
  */
 
-        .text
+        .section ".text.MMU_$SET_CSR","ax",@progbits
         .even
 
         .equ    MMU_$PID_PRIV,  0x00E23D2C
