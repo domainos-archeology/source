@@ -18,7 +18,7 @@
  *   -0x38  abs_clock
  *   -0x40  current_clock
  *   -0x48  local_delay
- *   -0x4c  quit_value    FIM_$QUIT_VALUE[as] + 1
+ *   -0x4c  quit_value    FIM_$WIRED_DATA.quit_value[as] + 1
  *   -0x50  local_status
  *   -0x54  dtype         the by-reference copy of *delay_type
  *
@@ -93,18 +93,18 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
      * 0xE165A6..0xE165EE: wait for either our own eventcount to reach 1 or
      * the address space's quit eventcount to advance past its current value.
      *
-     *   ecs  = { &ec, &FIM_$QUIT_EC[as], NULL }
-     *   vals = { 1,   FIM_$QUIT_VALUE[as] + 1, 0 }
+     *   ecs  = { &ec, &FIM_$WIRED_DATA.quit_ec[as], NULL }
+     *   vals = { 1,   FIM_$WIRED_DATA.quit_value[as] + 1, 0 }
      *
      * Both arrays are pushed by value (24 bytes); EC_$WAIT returns the
      * 0-based index of the eventcount that was satisfied.
      */
     as_id = PROC1_$AS_ID;
-    quit_value = (int32_t)FIM_$QUIT_VALUE[as_id] + 1;
+    quit_value = (int32_t)FIM_$WIRED_DATA.quit_value[as_id] + 1;
 
     as_id = PROC1_$AS_ID;   /* 0xE165CC re-reads it for the ecs array */
     which = EC_$WAIT(
-        (ec_$wait_ecs_t){ { &ec, &FIM_$QUIT_EC[as_id], NULL } },
+        (ec_$wait_ecs_t){ { &ec, &FIM_$WIRED_DATA.quit_ec[as_id], NULL } },
         (ec_$wait_vals_t){ { 1, quit_value, 0 } });
 
     /* 0xE165F2: index 0 is our timer; anything else is the quit eventcount */
@@ -115,7 +115,7 @@ void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 
         /* 0xE16610: consume the quit by latching the eventcount's value */
         as_id = PROC1_$AS_ID;
-        FIM_$QUIT_VALUE[as_id] = (uint32_t)FIM_$QUIT_EC[as_id].value;
+        FIM_$WIRED_DATA.quit_value[as_id] = (uint32_t)FIM_$WIRED_DATA.quit_ec[as_id].value;
     }
 
     /*

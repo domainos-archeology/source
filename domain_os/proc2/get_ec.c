@@ -2,7 +2,7 @@
  * PROC2_$GET_EC - Get an EC2 handle for a process's signal-delivery eventcount
  *
  * Only key 0 is accepted.  Under the PROC2 lock the UID is looked up and
- * FIM_$DELIV_EC[entry->asid] is registered with EC2; the registration
+ * FIM_$WIRED_DATA.deliv_ec[entry->asid] is registered with EC2; the registration
  * result (0 when the lookup failed) and the lookup status are returned.
  *
  * Parameters:
@@ -40,7 +40,7 @@ void PROC2_$GET_EC(uid_t *proc_uid, int16_t *key, void **ec_ret,
     if (status == status_$ok) {
         /* (-0x4e,A0,D0) = entry+0x96 asid; pea FIM_$DELIV_EC + asid*12 */
         registered = EC2_$REGISTER_EC1(
-            &FIM_$DELIV_EC[P2_INFO_ENTRY(proc_idx)->asid], &status);
+            &FIM_$WIRED_DATA.deliv_ec[P2_INFO_ENTRY(proc_idx)->asid], &status);
     } else {
         registered = NULL;
     }

@@ -59,9 +59,9 @@ static uint32_t       test_pft[TEST_N_FRAMES];
 segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 uint32_t       *mmu_pft_base    = test_pft;
-uint32_t  PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uint16_t  PROC1_$CURRENT;
-uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
 uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt;
 uint16_t  ast_grow_ahead_cnt;
 ec_$eventcount_t ast_pmap_in_trans_ec;
@@ -120,8 +120,8 @@ static void reset_state(void)
     memset(test_segmap, 0, sizeof(test_segmap));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
-    memset(PROC_STATS_BASE, 0, sizeof(PROC_STATS_BASE));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     memset(&test_aote, 0, sizeof(test_aote));
     memset(&test_aste, 0, sizeof(test_aste));
     test_aste.aote = &test_aote; test_aste.seg_index = 1; test_aste.segment = 2;
@@ -137,7 +137,7 @@ TEST(access_checks)
 {
     uint32_t ppns[32]; status_$t status = 0;
 
-    test_aote.access_flags = (int8_t)0x80; PROC1_$TYPE[3] = 8;
+    test_aote.access_flags = (int8_t)0x80; PROC1_$DATA.type[3] = 8;
     ASSERT_EQ(0, AST_$TOUCH(&test_aste, 0, 0, 1, ppns, &status, 0));
     ASSERT_EQ(status_$ast_only_local_access_allowed, status);
     ASSERT_EQ(0, test_aote.flags);
@@ -276,7 +276,7 @@ TEST(empty_local_then_disk_read)
     r = AST_$TOUCH(&test_aste, 0, 3, 8, ppns, &status, 0);
     ASSERT_EQ(2, r); ASSERT_EQ((uintptr_t)&m[3], (uintptr_t)rap_entry);
     ASSERT_EQ(3, rap_page); ASSERT_EQ(2, rap_count);
-    ASSERT_EQ(2, PROC_STATS_BASE[3 * 4 + 0]); ASSERT_EQ(0, PROC_STATS_BASE[3 * 4 + 1]);
+    ASSERT_EQ(2, PROC1_$DATA.stats[3].stat[0]); ASSERT_EQ(0, PROC1_$DATA.stats[3].stat[1]);
     ASSERT_EQ(AOTE_FLAG_BUSY | AOTE_FLAG_TOUCHED, test_aote.flags);
     ASSERT_EQ(SEGMAP_VALID | SEGMAP_WIRED | 0x600, m[3]);
     ASSERT_EQ(0x11, test_mmapes[0x600].disk_addr);
@@ -288,7 +288,7 @@ TEST(empty_local_then_disk_read)
     r = AST_$TOUCH(&test_aste, 0, 3, 3, ppns, &status, 0x08);
     ASSERT_EQ(1, r); ASSERT_EQ(3, rap_count);
     ASSERT_EQ(1, ctb_calls); ASSERT_EQ((uintptr_t)&m[4], (uintptr_t)ctb_entry); ASSERT_EQ(2, ctb_count);
-    ASSERT_EQ(1, PROC_STATS_BASE[3 * 4 + 1]);
+    ASSERT_EQ(1, PROC1_$DATA.stats[3].stat[1]);
     ASSERT_EQ(MMAPE_FLAG1_IMPURE, test_mmapes[0x600].flags1);
 }
 

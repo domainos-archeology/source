@@ -50,7 +50,7 @@ void *DIR_$ALLOC_HANDLE(void)
          * 0x00E4B892-0x00E4B8A6: a naming-server helper never waits for a
          * handle.
          */
-        if (PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {
+        if (PROC1_$DATA.type[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {
             goto done;
         }
 

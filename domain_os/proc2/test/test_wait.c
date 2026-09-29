@@ -29,8 +29,8 @@ pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 uint16_t PROC1_$CURRENT;
 uid_t UID_$NIL = { 0xAAAA5555u, 0x12345678u };
-ec_$eventcount_t FIM_$QUIT_EC[8];
-uint32_t FIM_$QUIT_VALUE[8];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 int __host_intr_disable_count = 0;
 
 static int n_lock, n_unlock, n_waitn, n_clear, n_cleanup, n_find, n_rls, n_pop;
@@ -77,7 +77,7 @@ static void reset(void)
 {
     memset(mock_entries, 0, sizeof(mock_entries));
     memset(&res, 0xEE, sizeof(res));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC)); memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec)); memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
     n_lock = n_unlock = n_waitn = n_clear = n_cleanup = n_find = n_rls = n_pop = 0;
     mock_waitn_result = 0; mock_find_by_upgid = 4; mock_cleanup_status = status_$cleanup_handler_set;
     PROC1_$CURRENT = 5; mock_pid_to_index[5] = 2;
@@ -132,9 +132,9 @@ TEST(wait_blocks_then_reaps)
 TEST(wait_quit_wakeup)
 {
     uint16_t opt = 0; int16_t pid = -1; status_$t st;
-    mock_waitn_result = 2; FIM_$QUIT_EC[3].value = 9;
+    mock_waitn_result = 2; FIM_$WIRED_DATA.quit_ec[3].value = 9;
     ASSERT_EQ(PROC2_$WAIT(&opt, &pid, &res, &st), -1);
-    ASSERT_EQ(st, status_$ec2_async_fault_while_waiting); ASSERT_EQ(FIM_$QUIT_VALUE[3], 9);
+    ASSERT_EQ(st, status_$ec2_async_fault_while_waiting); ASSERT_EQ(FIM_$WIRED_DATA.quit_value[3], 9);
     ASSERT_EQ(res.exit_status, 0xEEEEEEEEu);               /* record not copied */
 }
 

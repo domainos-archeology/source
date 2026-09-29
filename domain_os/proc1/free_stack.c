@@ -30,10 +30,10 @@ void PROC1_$FREE_STACK(void *stack)
     uint32_t *link;
 
     /* 0x00E1512A: unsigned compare, bls = branch if stack <= high water */
-    if (va > ARCH_PTR_TO_VA(STACK_HIGH_WATER)) {
+    if (va > PROC1_$DATA.stack_high_water) {
         /* 0x00E15130..0x00E1513C */
         link = (uint32_t *)ARCH_VA_TO_PTR(va - 4);
-        *link = ARCH_PTR_TO_VA(STACK_FREE_LIST);
-        STACK_FREE_LIST = link;
+        *link = PROC1_$DATA.stack_free_list;
+        PROC1_$DATA.stack_free_list = va - 4;
     }
 }

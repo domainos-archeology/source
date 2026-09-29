@@ -30,11 +30,8 @@ static proc1_t pcb_table[PROC1_MAX_PROCESSES];
 proc1_t *PCBS[PROC1_MAX_PROCESSES];
 proc1_t *PROC1_$CURRENT_PCB;
 uint16_t PROC1_$READY_COUNT;
-int32_t PROC1_$LOADAV[PROC1_LOADAV_COUNT];
-proc1_ts_slot_t PROC1_$TS_ELEM[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
-void *OS_STACK_BASE[PROC1_MAX_PROCESSES];
 ec_$eventcount_t PROC1_$SUSPEND_EC;
 int16_t PROC1_$TSVV[PROC1_TSVV_COUNT] = {
     -1, -1, -1, -1, -1, -1, -1, 0x7D00, 0x7D00, 0x7D00, 0x7D00,
@@ -156,12 +153,12 @@ static void reset(void)
 {
     unsigned i;
     memset(pcb_table, 0, sizeof(pcb_table));
-    for (i = 0; i < PROC1_MAX_PROCESSES; i++) { PCBS[i] = &pcb_table[i]; pcb_table[i].mypid = (uint16_t)i; OS_STACK_BASE[i] = NULL; }
+    for (i = 0; i < PROC1_MAX_PROCESSES; i++) { PCBS[i] = &pcb_table[i]; pcb_table[i].mypid = (uint16_t)i; PROC1_$DATA.os_stack_base[i] = 0; }
     PROC1_$CURRENT_PCB = &pcb_table[3];
     PROC1_$READY_COUNT = 0;
-    memset(PROC1_$LOADAV, 0, sizeof(PROC1_$LOADAV));
-    memset(PROC1_$TS_ELEM, 0, sizeof(PROC1_$TS_ELEM));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.loadav, 0, sizeof(PROC1_$DATA.loadav));
+    memset(PROC1_$DATA.ts_elem, 0, sizeof(PROC1_$DATA.ts_elem));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     memset(&PROC1_$SUSPEND_EC, 0, sizeof(PROC1_$SUSPEND_EC));
     __host_intr_disable_count = 0;
     n_mul = 0; mul_result = 0;
@@ -183,22 +180,22 @@ static void test_loadav_from_zero(void)
     PROC1_$READY_COUNT = 3;
     PROC1_$LOADAV_CALLBACK();
     ASSERT_EQ(n_mul, 3);
-    ASSERT_EQ(PROC1_$LOADAV[0], 3 * 0x1478);
-    ASSERT_EQ(PROC1_$LOADAV[1], 3 * 0x043B);
-    ASSERT_EQ(PROC1_$LOADAV[2], 3 * 0x016B);
+    ASSERT_EQ(PROC1_$DATA.loadav[0], 3 * 0x1478);
+    ASSERT_EQ(PROC1_$DATA.loadav[1], 3 * 0x043B);
+    ASSERT_EQ(PROC1_$DATA.loadav[2], 3 * 0x016B);
 }
 
 /* the decay: (avg div 256) * decay div 256, with the last constants */
 static void test_loadav_decay(void)
 {
     PROC1_$READY_COUNT = 0;
-    PROC1_$LOADAV[0] = 0x00100000;
-    PROC1_$LOADAV[1] = 0x00100000;
-    PROC1_$LOADAV[2] = 0x00100000;
+    PROC1_$DATA.loadav[0] = 0x00100000;
+    PROC1_$DATA.loadav[1] = 0x00100000;
+    PROC1_$DATA.loadav[2] = 0x00100000;
     PROC1_$LOADAV_CALLBACK();
-    ASSERT_EQ(PROC1_$LOADAV[0], (0x1000L * 0xEB88L) >> 8);
-    ASSERT_EQ(PROC1_$LOADAV[1], (0x1000L * 0xFBC5L) >> 8);
-    ASSERT_EQ(PROC1_$LOADAV[2], (0x1000L * 0xFE95L) >> 8);
+    ASSERT_EQ(PROC1_$DATA.loadav[0], (0x1000L * 0xEB88L) >> 8);
+    ASSERT_EQ(PROC1_$DATA.loadav[1], (0x1000L * 0xFBC5L) >> 8);
+    ASSERT_EQ(PROC1_$DATA.loadav[2], (0x1000L * 0xFE95L) >> 8);
     ASSERT_EQ(mul_b, 0xFE95);
 }
 
@@ -210,23 +207,23 @@ static void test_loadav_decay(void)
 static void test_loadav_product_wraps(void)
 {
     PROC1_$READY_COUNT = 0;
-    PROC1_$LOADAV[0] = 0x01000000;
+    PROC1_$DATA.loadav[0] = 0x01000000;
     PROC1_$LOADAV_CALLBACK();
-    ASSERT_EQ((uint32_t)PROC1_$LOADAV[0], 0xFFEB8800u);
+    ASSERT_EQ((uint32_t)PROC1_$DATA.loadav[0], 0xFFEB8800u);
 }
 
 /* `bpl / addi.l #0xff / asr.l #8': negatives round toward zero */
 static void test_loadav_negative_rounding(void)
 {
     PROC1_$READY_COUNT = 0;
-    PROC1_$LOADAV[0] = -1;              /* -1 div 256 = 0, not -1 */
-    PROC1_$LOADAV[1] = -256;            /* exactly -1 */
-    PROC1_$LOADAV[2] = -257;            /* -1 (toward zero) */
+    PROC1_$DATA.loadav[0] = -1;              /* -1 div 256 = 0, not -1 */
+    PROC1_$DATA.loadav[1] = -256;            /* exactly -1 */
+    PROC1_$DATA.loadav[2] = -257;            /* -1 (toward zero) */
     mul_result = 0;
     PROC1_$LOADAV_CALLBACK();
-    ASSERT_EQ(PROC1_$LOADAV[0], 0);
-    ASSERT_EQ((int32_t)PROC1_$LOADAV[1], (int32_t)(((-1L) * 0xFBC5L + 0xFF) >> 8));
-    ASSERT_EQ((int32_t)PROC1_$LOADAV[2], (int32_t)(((-1L) * 0xFE95L + 0xFF) >> 8));
+    ASSERT_EQ(PROC1_$DATA.loadav[0], 0);
+    ASSERT_EQ((int32_t)PROC1_$DATA.loadav[1], (int32_t)(((-1L) * 0xFBC5L + 0xFF) >> 8));
+    ASSERT_EQ((int32_t)PROC1_$DATA.loadav[2], (int32_t)(((-1L) * 0xFE95L + 0xFF) >> 8));
 }
 
 /* ---- SET_TS --------------------------------------------------------- */
@@ -243,7 +240,7 @@ static void test_set_ts(void)
     ASSERT_EQ(re_when.low, 0x7D00);
     ASSERT_EQ(re_flags, 0);
     ASSERT_PTR_EQ(re_base, &p->cpu_total);
-    ASSERT_PTR_EQ(re_elem, &PROC1_$TS_ELEM[9].elem);
+    ASSERT_PTR_EQ(re_elem, &PROC1_$DATA.ts_elem[9].elem);
 }
 
 /* a negative timeslice is stored as its unsigned word */
@@ -455,7 +452,7 @@ static void test_set_priority_bad_pid_crashes(void)
 static void test_set_type(void)
 {
     PROC1_$SET_TYPE(0x40, 7);
-    ASSERT_EQ(PROC1_$TYPE[0x40], 7);
+    ASSERT_EQ(PROC1_$DATA.type[0x40], 7);
     ASSERT_EQ(n_crash, 0);
     PROC1_$SET_TYPE(0x41, 9);
     ASSERT_EQ(n_crash, 1);
@@ -550,8 +547,8 @@ static void test_unbind_self(void)
     status_$t st = 0x7777;
     proc1_t *p = &pcb_table[3];
     p->pri_max = PROC1_FLAG_BOUND;
-    OS_STACK_BASE[3] = (void *)&st;
-    PROC1_$TYPE[3] = 5;
+    PROC1_$DATA.os_stack_base[3] = 0x00D40000;   /* a stack top VA */
+    PROC1_$DATA.type[3] = 5;
     PROC1_$UNBIND(3, &st);
     ASSERT_EQ(n_purge, 1); ASSERT_EQ(purge_pid, 3); ASSERT_EQ(purge_flags, 0);
     ASSERT_EQ(n_try, 1);
@@ -559,8 +556,8 @@ static void test_unbind_self(void)
     ASSERT_EQ(n_flush, 1); ASSERT_PTR_EQ(flush_q, &TIME_$VTQ[2]);
     ASSERT_EQ(ipl_at_flush, 1);
     ASSERT_EQ(p->pri_max & PROC1_FLAG_BOUND, 0);
-    ASSERT_EQ(n_free, 1); ASSERT_PTR_EQ(freed, &st);
-    ASSERT_EQ(PROC1_$TYPE[3], 0);
+    ASSERT_EQ(n_free, 1); ASSERT_PTR_EQ(freed, ARCH_VA_TO_PTR(0x00D40000));
+    ASSERT_EQ(PROC1_$DATA.type[3], 0);
     ASSERT_EQ(n_dispatch, 1); ASSERT_EQ(ipl_at_dispatch, 1);
     ASSERT_EQ(n_suspend + n_wait, 0);
     ASSERT_EQ(st, 0x7777);                       /* status never written */

@@ -167,7 +167,7 @@ void dir_$do_op_delete(uid_t *dir_uid, void *name, uint16_t name_len,
     /* 0x00E512E0-0x00E51302: a type-9 process gets silence, everyone else
      * gets "name not found". */
     if (found >= 0) {
-        if (PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+        if (PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
             goto release_and_out;
         }
         *status_ret = status_$naming_name_not_found;
@@ -242,7 +242,7 @@ have_attrs:                                             /* 0x00E513AE */
 
     /* 0x00E513CA-0x00E513EA: an OS-only object is off limits to type-9
      * processes. */
-    if (cattr.access_flags < 0 && PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+    if (cattr.access_flags < 0 && PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
         *status_ret = status_$ast_only_local_access_allowed;
         goto release_and_out;
     }

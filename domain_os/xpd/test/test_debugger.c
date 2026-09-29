@@ -46,8 +46,8 @@ uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
 uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 uid_t UID_$NIL = { 0, 0 };
-status_$t FIM_$TRACE_STS[64];
-int8_t FIM_$QUIT_INH[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 int8_t peb_$installed_flag;
 int8_t m68881_$save_flag;
 

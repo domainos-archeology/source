@@ -79,8 +79,8 @@ uint32_t NETWORK_$ALLOWED_SERVICE;
 uint32_t ASKNODE_$EMPTY_DATA;
 MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
-ec_$eventcount_t FIM_$QUIT_EC[8];
-uint32_t FIM_$QUIT_VALUE[8];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 name_$data_t NAME_$DATA;            /* NAME_$ROOT_UID lives in here */
 
 /* ==========================================================================
@@ -122,8 +122,8 @@ static void reset_mocks(void)
     memset(&mock_payload, 0, sizeof(mock_payload));
     memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
     memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
     memset(&NAME_$DATA, 0, sizeof(NAME_$DATA));
     memset(mock_script, 0, sizeof(mock_script));
 

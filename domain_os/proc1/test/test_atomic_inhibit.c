@@ -19,8 +19,7 @@ proc1_t *PCBS[PROC1_MAX_PROCESSES];
 proc1_t *PROC1_$CURRENT_PCB;
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$ATOMIC_OP_DEPTH;
-void *STACK_FREE_LIST, *STACK_HIGH_WATER, *STACK_LOW_WATER;
-void *OS_STACK_BASE[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 static int n_dispatch_int, ipl_at_dispatch_int, depth_at_dispatch_int;
 void PROC1_$DISPATCH_INT(void)
@@ -161,11 +160,11 @@ static void test_init_fresh_pcb(void)
 
     PROC1_$INIT();
 
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), 0x00D00000);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), 0x00D50000);
-    ASSERT_EQ((uintptr_t)STACK_FREE_LIST, 0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(OS_STACK_BASE[1]), 0x00EB2000);
-    ASSERT_EQ((uintptr_t)OS_STACK_BASE[2], 0);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, 0x00D00000);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, 0x00D50000);
+    ASSERT_EQ((uintptr_t)PROC1_$DATA.stack_free_list, 0);
+    ASSERT_EQ(PROC1_$DATA.os_stack_base[1], 0x00EB2000);
+    ASSERT_EQ(PROC1_$DATA.os_stack_base[2], 0);
     ASSERT_EQ(n_set_type, 1);
     ASSERT_EQ(st_pid, 2);
     ASSERT_EQ(st_type, 3);

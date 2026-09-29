@@ -58,7 +58,8 @@ static int current_failed = 0;
 
 uint32_t NODE_$ME = 0x00012345;
 uint16_t PROC1_$CURRENT = 4;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 int8_t   AUDIT_$ENABLED = 0;            /* >= 0: auditing off */
 /* 0x00E7FC66 is DIR_$OP_TAB[4].base_size and DIR_$OP_VERSION /
  * DIR_$OP_REPLY_SIZE are DIR_$OP_REC(half).reply_version / .reply_size, so
@@ -423,7 +424,7 @@ static void reset(uint8_t op_code)
     memset(req_buf, 0, sizeof(req_buf));
     memset(resp_buf, 0, sizeof(resp_buf));
     memset(DIR_$OP_TAB, 0, sizeof(DIR_$OP_TAB));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     reply_len = 0;
 
     req_buf[3] = op_code;
@@ -689,7 +690,7 @@ TEST(local_node_dispatches_and_fills_the_reply_header)
 TEST(a_server_process_does_not_fall_back_after_a_stale_object)
 {
     reset(TEST_OP_DELETE);
-    PROC1_$TYPE[PROC1_$CURRENT] = 9;    /* hint_count becomes 1, node = ME */
+    PROC1_$DATA.type[PROC1_$CURRENT] = 9;    /* hint_count becomes 1, node = ME */
     run();
     ASSERT_EQ(0, mock_rn_calls);
     ASSERT_EQ(1, mock_local_op_calls);

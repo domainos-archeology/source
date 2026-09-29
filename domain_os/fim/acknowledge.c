@@ -10,11 +10,11 @@
  * 0x00E0A96C  link.w A6,0x0 / move.l D2,-(SP)
  * 0x00E0A972  D2 = AS_ID * 12                         (lsl #2; D0 = D2*2; add)
  * 0x00E0A980  D0 = AS_ID * 4
- * 0x00E0A994  FIM_$QUIT_VALUE[as] = FIM_$QUIT_EC[as].value
+ * 0x00E0A994  FIM_$WIRED_DATA.quit_value[as] = FIM_$WIRED_DATA.quit_ec[as].value
  *             (`move.l (0,A0,D2),(0,A1,D0)' - the eventcount's first
  *             longword)
- * 0x00E0A99A  D0 = AS_ID; FIM_$QUIT_INH[as] = 0       (clr.b)
- * 0x00E0A9AA  EC_$ADVANCE(&FIM_$DELIV_EC[as])         (`pea (0,A1,D2)';
+ * 0x00E0A99A  D0 = AS_ID; FIM_$WIRED_DATA.quit_inh[as] = 0       (clr.b)
+ * 0x00E0A9AA  EC_$ADVANCE(&FIM_$WIRED_DATA.deliv_ec[as])         (`pea (0,A1,D2)';
  *             jsr 0x00E206EE; no cleanup: unlk)
  * 0x00E0A9BA  move.l (-0x4,A6),D2 / unlk / rts
  *
@@ -38,12 +38,12 @@ void FIM_$ACKNOWLEDGE(void)
 
     /* 0x00E0A972..0x00E0A994 */
     as_id = PROC1_$AS_ID;
-    FIM_$QUIT_VALUE[as_id] = (uint32_t)FIM_$QUIT_EC[as_id].value;
+    FIM_$WIRED_DATA.quit_value[as_id] = (uint32_t)FIM_$WIRED_DATA.quit_ec[as_id].value;
 
     /* 0x00E0A99A..0x00E0A9A6 */
     as_id = PROC1_$AS_ID;
-    FIM_$QUIT_INH[as_id] = 0;
+    FIM_$WIRED_DATA.quit_inh[as_id] = 0;
 
     /* 0x00E0A9AA..0x00E0A9B4 */
-    EC_$ADVANCE(&FIM_$DELIV_EC[as_id]);
+    EC_$ADVANCE(&FIM_$WIRED_DATA.deliv_ec[as_id]);
 }

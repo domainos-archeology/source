@@ -31,7 +31,7 @@
  *   00e59e0c  (-0x6c,A6) = SOCK_$DATA.socket_ptr[sock]
  *   00e59e22  jsr PKT_$NEXT_ID          ; D3 = the request id
  *   00e59e2e  move.l (A1),D2            ; the socket eventcount's value
- *   00e59e30  (-0x50,A6) = FIM_$QUIT_VALUE[AS_ID] + 1
+ *   00e59e30  (-0x50,A6) = FIM_$WIRED_DATA.quit_value[AS_ID] + 1
  *   00e59e48..00e59e8a  MSG_$$SEND(port -1, ..., src_sock = the temp socket,
  *                                  src_node = NODE_$ME, src_node_or = -1,
  *                                  request_id = D3)
@@ -39,7 +39,7 @@
  *   00e59e9c  (-0x54,A6) = TIME_$CLOCKH + sign-extended *timeout
  *   00e59eae  tst.l (A3) / bne -> close and return
  *   00e59ec0  loop: addq.l #0x1,D2 then EC_$WAIT on
- *                   { socket ec, &TIME_$CLOCKH, &FIM_$QUIT_EC[AS_ID] }
+ *                   { socket ec, &TIME_$CLOCKH, &FIM_$WIRED_DATA.quit_ec[AS_ID] }
  *   00e59ef8  0 -> receive, 1 -> timeout, 2 -> quit, anything else -> loop
  *   00e59f08..00e59f54  MSG_$$RCV_INTERNAL on the temp socket
  *   00e59f60  a receive error or a mismatched message type loops again
@@ -96,7 +96,7 @@ void MSG_$SARI(int16_t *timeout,
     sock_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;       /* 0xE59E0C */
     request_id = (uint16_t)PKT_$NEXT_ID();              /* 0xE59E22 */
     wait_val = (int32_t)sock_ec->value;                 /* 0xE59E2E */
-    quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;   /* 0xE59E30 */
+    quit_val = (int32_t)FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;   /* 0xE59E30 */
 
     /* 0xE59E48 */
     MSG_$$SEND(-1,
@@ -130,7 +130,7 @@ void MSG_$SARI(int16_t *timeout,
             wait_result = EC_$WAIT(
                 (ec_$wait_ecs_t){{ sock_ec,
                                    (ec_$eventcount_t *)&TIME_$CLOCKH,
-                                   &FIM_$QUIT_EC[PROC1_$AS_ID] }},
+                                   &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID] }},
                 (ec_$wait_vals_t){{ wait_val, deadline, quit_val }});
 
             if (wait_result == 1) {
@@ -142,8 +142,8 @@ void MSG_$SARI(int16_t *timeout,
             if (wait_result == 2) {
                 /* 0xE59F76 */
                 *status_ret = status_$fault_process_quit;
-                FIM_$QUIT_VALUE[PROC1_$AS_ID] =
-                    (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+                FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] =
+                    (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
                 break;
             }
 

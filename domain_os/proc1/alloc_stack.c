@@ -102,11 +102,11 @@ void *PROC1_$ALLOC_STACK(uint16_t size, status_$t *status_ret)
     /* 0x00E1504E: tst.b D3 / bpl */
     if (small_stack < 0) {
         /* 0x00E15052..0x00E15060: grow the low region upward */
-        d4 = ARCH_PTR_TO_VA(STACK_LOW_WATER) + (uint32_t)rounded + PROC1_STACK_PAGE;
+        d4 = PROC1_$DATA.stack_low_water + (uint32_t)rounded + PROC1_STACK_PAGE;
         result = d4;
 
         /* 0x00E15064: cmp.l (0xc3c,A5),D4 / bls -> map pages */
-        if (d4 <= ARCH_PTR_TO_VA(STACK_HIGH_WATER)) {
+        if (d4 <= PROC1_$DATA.stack_high_water) {
             goto map_pages;
         }
         /* 0x00E1506A */
@@ -114,25 +114,25 @@ void *PROC1_$ALLOC_STACK(uint16_t size, status_$t *status_ret)
     }
 
     /* 0x00E1506C..0x00E15076: a free 4KB stack can be reused as-is */
-    if (STACK_FREE_LIST != NULL && rounded == PROC1_STACK_LARGE) {
+    if (PROC1_$DATA.stack_free_list != 0 && rounded == PROC1_STACK_LARGE) {
         /* 0x00E15078..0x00E1508A */
-        d4 = ARCH_PTR_TO_VA(STACK_FREE_LIST) + 4;
+        d4 = PROC1_$DATA.stack_free_list + 4;
         result = d4;
-        link = (uint32_t *)STACK_FREE_LIST;
-        STACK_FREE_LIST = ARCH_VA_TO_PTR(*link);
+        link = (uint32_t *)ARCH_VA_TO_PTR(PROC1_$DATA.stack_free_list);
+        PROC1_$DATA.stack_free_list = *link;
         goto unlock;
     }
 
     /* 0x00E1508C..0x00E150A0: grow the high region downward */
-    d4 = ARCH_PTR_TO_VA(STACK_HIGH_WATER) - (uint32_t)rounded - PROC1_STACK_PAGE;
+    d4 = PROC1_$DATA.stack_high_water - (uint32_t)rounded - PROC1_STACK_PAGE;
 
     /* 0x00E150A2: cmp.l (0xc40,A5),D4 / bcs -> no space */
-    if (d4 < ARCH_PTR_TO_VA(STACK_LOW_WATER)) {
+    if (d4 < PROC1_$DATA.stack_low_water) {
         goto no_space;
     }
 
     /* 0x00E150A8 */
-    result = ARCH_PTR_TO_VA(STACK_HIGH_WATER);
+    result = PROC1_$DATA.stack_high_water;
 
 map_pages:
     /* 0x00E150AE: tst.w D2 / beq 0x00E150F0 */
@@ -155,10 +155,10 @@ map_pages:
     /* 0x00E150F0: tst.b D3 / bpl */
     if (small_stack < 0) {
         /* 0x00E150F4 */
-        STACK_LOW_WATER = ARCH_VA_TO_PTR(result);
+        PROC1_$DATA.stack_low_water = result;
     } else {
         /* 0x00E150FC */
-        STACK_HIGH_WATER = ARCH_VA_TO_PTR(d4);
+        PROC1_$DATA.stack_high_water = d4;
     }
     goto unlock;
 

@@ -67,7 +67,10 @@ static int current_failed = 0;
  * Globals the unit reads
  * ============================================================================ */
 
-uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 uint16_t  PROC1_$CURRENT;
 uint16_t  PROC1_$AS_ID;
 uint32_t  NETWORK_$ALLOWED_SERVICE;      /* NETWORK_$CAPABLE_FLAGS is bits 16..23 */
@@ -79,8 +82,6 @@ uint8_t   REM_FILE_$DATA[0x1E];
 uint32_t  REM_FILE_$BUSY_RETRY_COUNT;
 uint16_t  REM_FILE_$COMPLETION_TIME = 20;
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
-uint32_t  FIM_$QUIT_VALUE[64];
-ec_$eventcount_t FIM_$QUIT_EC[64];
 
 /* ============================================================================
  * Mocks
@@ -286,7 +287,7 @@ static status_$t st;
 
 static void reset(void)
 {
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     PROC1_$CURRENT = 3;
     PROC1_$AS_ID   = 2;
     NETWORK_$ALLOWED_SERVICE = 0x00010000u;     /* capability bit 0 set */
@@ -296,8 +297,8 @@ static void reset(void)
     TIME_$CLOCKH = 1000;
     REM_FILE_$BUSY_RETRY_COUNT = 0;
 
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
 
     mock_sock_ec.value = 7;
     memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
@@ -381,7 +382,7 @@ static void script_one_good_reply(uint16_t template_len, uint16_t data_len,
 TEST(type_9_process_is_refused)
 {
     reset();
-    PROC1_$TYPE[PROC1_$CURRENT] = 9;
+    PROC1_$DATA.type[PROC1_$CURRENT] = 9;
     call(0x40, NULL, 0);
 
     ASSERT_EQ(0x000F0001, st);          /* file_$object_not_found, 0x00E61002 */
@@ -516,12 +517,12 @@ TEST(quit_sets_0x120010_with_bit_31)
     wait_script[0] = 1;                 /* the timer fires */
     wait_script_len = 1;
     /* make the quit eventcount disagree with the snapshot */
-    FIM_$QUIT_VALUE[PROC1_$AS_ID] = 0;
-    FIM_$QUIT_EC[PROC1_$AS_ID].value = 9;
+    FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = 0;
+    FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value = 9;
     call(0x40, NULL, 0);
 
     ASSERT_EQ(0x80120010u, (uint32_t)st);
-    ASSERT_EQ(9, FIM_$QUIT_VALUE[PROC1_$AS_ID]);
+    ASSERT_EQ(9, FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID]);
     ASSERT_EQ(1, mock_close_calls);
 }
 

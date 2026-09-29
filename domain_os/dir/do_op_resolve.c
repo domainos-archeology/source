@@ -83,12 +83,12 @@ void dir_$do_op_resolve(uint32_t path_data, uint16_t path_len, void *result,
     /* 0x00E4D11A-0x00E4D12E: `cmpi.w #0x9,(-0x2,A1,D0w*1)` with
      * A1 = 0xE2612C and D0w = 2 * PROC1_$CURRENT, i.e. the word at
      * 0xE2612A + 2*PROC1_$CURRENT - the same cell every other PROC1_$TYPE
-     * site in the tree reaches as PROC1_$TYPE[PROC1_$CURRENT] off the
+     * site in the tree reaches as PROC1_$DATA.type[PROC1_$CURRENT] off the
      * 0xE2612A base proc1.h declares (dir/lock_obj.c 0x00E4AFBC,
      * dir/alloc_handle.c 0x00E4B898, dir/do_op.c 0x00E4C05E).
      * `seq` makes the Domain boolean. */
     is_type9_proc =
-        (((uint16_t *)PROC1_$TYPE)[(int16_t)PROC1_$CURRENT] == 9)
+        (PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9)
             ? (int8_t)-1 : 0;
 
     /* Main resolution loop */

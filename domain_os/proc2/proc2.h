@@ -264,7 +264,7 @@ typedef struct proc2_info_t {
    * (0x00E3ECC8 `move.l (0xc,A6),(-0x54,A3)`), PROC2_$GET_NEXT_PENDING_SIGNAL
    * (0x00E3EF50) and PROC2_$DELIVER_PENDING_INTERNAL (0x00E3ED4E) compare it
    * with status_$fault_process_BLAST, and DELIVER_PENDING_INTERNAL copies it
-   * into FIM_$TRACE_STS[asid] (0x00E3ED66) / DELIVER_FIM into the caller's
+   * into FIM_$WIRED_DATA.trace_sts[asid] (0x00E3ED66) / DELIVER_FIM into the caller's
    * status (0x00E3EE4C).
    */
   uint32_t sig_status;

@@ -46,6 +46,21 @@
  * Note: FP stub functions provide no-op implementations for the
  * SAU2/68010 build which has no FPU.  For builds targeting 68020+
  * with 68881/68882, replace with full implementations.
+ *
+ * KNOWN DEFECT (bead source-6psc): the `.equ' cells below still embed the
+ * IMAGE addresses of foreign data - PROC1_CURRENT 0x00E20608,
+ * PROC1_AS_ID 0x00E2060A, OS_STACK_BASE 0x00E25C18, FIM_QUIT_INH
+ * 0x00E2248A, TIME_CLOCKH 0x00E2B0D4 - and the instructions that use them
+ * (`move.w (PROC1_CURRENT).l,%d0', `lea (OS_STACK_BASE).l,%a0', ...)
+ * assemble to those absolute addresses.  Since map-order placement
+ * replaced pinning (docs/design-per-process-data.md), the linked objects
+ * PROC1_$CURRENT, PROC1_$AS_ID, PROC1_$DATA.os_stack_base,
+ * FIM_$WIRED_DATA.quit_inh and TIME_$CLOCKH no longer sit at those
+ * addresses, so these operands point at the wrong cells in our link.  The
+ * bytes are kept as the image has them until source-6psc converts all
+ * .s files to symbol references under a relocation-aware byte gate; the
+ * FIM_$TRACE_STS / FIM_$PENDING_TRACE_FAULTS `.set' aliases below are the
+ * pattern it will apply.
  */
 
         .section ".text.FIM_$CRASH","ax",@progbits
@@ -67,11 +82,13 @@
         /* FIM data (not yet emitted in this file) */
         .equ    FIM_QUIT_INH,       0x00E2248A  /* Quit inhibit array */
 
-        /* FIM data defined in fim/fim_data.c, reached by name.
+        /* FIM data in the FIM_$WIRED_DATA block (fim/fim.h, block image
+         * 0x00E21FE6), reached by name through these aliases.
          * FIM_$TRACE_BIT is the sibling of these two and IS emitted in this
          * file (0x00E21890, just after FIM_$SETUP_RETURN). */
-        .extern FIM_$TRACE_STS               /* 0x00E223A2: 4 bytes per AS */
-        .extern FIM_$PENDING_TRACE_FAULTS    /* 0x00E21FFE: longword count */
+        .extern FIM_$WIRED_DATA
+        .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC            /* 0x00E223A2: 4 bytes per AS */
+        .set    FIM_$PENDING_TRACE_FAULTS, FIM_$WIRED_DATA + 0x018 /* 0x00E21FFE: longword count */
 
         /* FIM code not yet in this file */
         .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler (Ghidra: FIM_$COMMON_FAULT) */

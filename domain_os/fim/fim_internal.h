@@ -26,9 +26,6 @@
  * ============================================================================
  */
 
-/* Base address for FIM data area */
-#define FIM_DATA_BASE           0x00E2126C
-
 /* Delivery frame magic number */
 #define FIM_DF_MAGIC            0xDFDF
 
@@ -43,20 +40,9 @@
 #define FIM_STATUS_ACCESS_VIOL  0x00920019  /* Access violation */
 #define FIM_STATUS_CLEANUP_SET  0x00240002  /* Cleanup handler set */
 
-/* Bus error handler address (cold boot) */
-#define BUS_ERROR_VEC     0x00000008  /* Vector 2: Bus Error */
-
-/* Frame size table offset from FIM_DATA_BASE */
-#define FIM_FRAME_SIZE_OFFSET   0x124
-
-/* Per-AS flag indicating we're in FIM */
-/* FIM_IN_FIM is at FIM_DATA_BASE + 0 */
-
-/* Per-AS user FIM handler address */
-/* FIM_$USER_FIM_ADDR is at FIM_DATA_BASE + 0x3C */
-
-/* OS stack base table */
-#define OS_STACK_BASE           0x00E25C18
+/* The FIM_ block (FIM_IN_FIM, FIM_$USER_FIM_ADDR, the frame size table) is
+ * FIM_$DATA in fim/fim.h; the bus error vector is ARCH_VECTOR(2) and the OS
+ * stack table is PROC1_$DATA.os_stack_base (proc1/proc1.h). */
 
 /* Threshold for recoverable fault address */
 #define FIM_RECOVERABLE_ADDR    0x00D00000
@@ -114,14 +100,14 @@ extern void *BUS_ERROR_VEC_PTR;
  * fim_get_frame_size - Get exception frame size for format code
  *
  * Parameters:
- *   format - Frame format code (0-11)
+ *   format - Frame format code (0-15)
  *
  * Returns:
  *   Size in bytes of the exception frame
  */
 static inline uint8_t fim_get_frame_size(uint8_t format)
 {
-    return FIM_FRAME_SIZE_TABLE[format];
+    return FIM_$DATA.frame_size[format];
 }
 
 /*

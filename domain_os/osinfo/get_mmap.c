@@ -222,12 +222,17 @@ void OSINFO_$GET_MMAP(void *flags_p, void *counters, void *info,
         }
         global_info->ws_list_count = (uint16_t)count;
         if (count != 0) {
-            /* 0x00E5C96C .. 0x00E5C99E: count entries of
-             * { MMAP_$WS_OWNER[i] (0xE23CA8), PROC1_$TYPE[i + 1] (A1 = 0xE2612E,
-             * `move.w (-0x2,A1)`; PROC1_$TYPE[0] is at 0xE2612A) } */
-            for (i = 0; i < count; i++) {
-                ws_list_ptr[i * 2] = MMAP_$WS_OWNER[i];
-                ws_list_ptr[i * 2 + 1] = PROC1_$TYPE[i + 1];   /* 0xE2612C = entry 1 */
+            /* 0x00E5C96C .. 0x00E5C99E: count entries of { MMAP_$WS_OWNER,
+             * process type } for the Pascal index k = 1..count, strength-
+             * reduced to two pointer walks: `move.w (-0x2,A2)' with A2 =
+             * 0xE23CAA (WS_OWNER element k at 0xE23CA8 + (k-1)*2) and
+             * `move.w (-0x2,A1)' with A1 = 0xE2612E (PROC1_$DATA.type[k],
+             * type[1] = map PROC1_$TYPE 0xE2612C). */
+            for (i = 1; i <= count; i++) {
+                /* TODO(source-bqdf): MMAP_$WS_OWNER is still a 0-based view;
+                 * its [1..64] bias belongs in the mmap block declaration. */
+                ws_list_ptr[(i - 1) * 2] = MMAP_$WS_OWNER[i - 1];
+                ws_list_ptr[(i - 1) * 2 + 1] = PROC1_$DATA.type[i];
             }
         }
     }

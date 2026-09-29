@@ -131,7 +131,7 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
 
     /* 0x00E60FE8-0x00E61008: a type-9 (server) process may not do remote
      * file operations. */
-    if (PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+    if (PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
         *status_ret = file_$object_not_found;            /* 0x00E61002 */
         goto function_exit;                              /* bra 0x00E61526 */
     }
@@ -182,7 +182,7 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
     sock_wait_val = sock_ec->value + 1;
 
     /* 0x00E610CA-0x00E610DC */
-    quit_saved = FIM_$QUIT_VALUE[PROC1_$AS_ID];
+    quit_saved = FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID];
 
     pkt_id = PKT_$NEXT_ID();                             /* 0x00E610DE */
     retry_count = 0;                                     /* 0x00E610E8 */
@@ -412,13 +412,13 @@ timer_fired:                                             /* 0x00E61482 */
     /* 0x00E61482-0x00E6149E: the wait also ends when the process is quit.
      * FIM_$QUIT_EC is a 12-byte-per-address-space array and the eventcount
      * value is its head longword. */
-    if (quit_saved != FIM_$QUIT_EC[PROC1_$AS_ID].value) {
+    if (quit_saved != FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value) {
         /* 0x00E614A0-0x00E614C8 */
         *status_ret = status_$fault_process_quit;        /* 0x00E614A4 */
         /* 0x00E614AA `bset.b #0x7,(A1)` sets bit 7 of the status's first
          * (most significant) byte, i.e. bit 31 of the longword. */
         *status_ret = (status_$t)((uint32_t)*status_ret | 0x80000000u);
-        FIM_$QUIT_VALUE[PROC1_$AS_ID] = FIM_$QUIT_EC[PROC1_$AS_ID].value;
+        FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
         goto close_socket;
     }
 

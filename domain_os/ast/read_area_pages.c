@@ -98,7 +98,7 @@ int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap,
 
     /* 0x00E02C28..0x00E02C42: PROC1_$STATS entry pid, longword +0x08
      * (A0 = 0xE25D20 is entry 1; -0x8 + pid*16) */
-    PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2] += (uint32_t)(int32_t)pages_read;
+    PROC1_$DATA.stats[PROC1_$CURRENT].stat[2] += (uint32_t)(int32_t)pages_read;
 
     /* 0x00E02C46 */
     return pages_read;

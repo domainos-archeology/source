@@ -176,7 +176,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
          */
         if ((int8_t)permission_flags[0] < 0) {
             /* Check if current process is a server (type 9) */
-            if (PROC1_$TYPE[(int16_t)PROC1_$CURRENT] == PROC1_TYPE_SERVER) {
+            if (PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == PROC1_TYPE_SERVER) {
                 locksmith_result = ACL_$GET_LOCAL_LOCKSMITH();
                 if (locksmith_result != 0) {
                     /* Not a locksmith - deny access */
@@ -200,7 +200,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
          *   00e5de80  tst.b  D2b
          *   00e5de82  bmi.b  0x00e5de9a        ; returned 0 -> CLEAR
          *   00e5de84  move.w PROC1_$CURRENT,D2w
-         *   00e5de92  cmpi.w #0x9,PROC1_$TYPE[D2]
+         *   00e5de92  cmpi.w #0x9,PROC1_$DATA.type[D2]
          *   00e5de98  beq.b  0x00e5de9c        ; type IS 9 -> leave it
          *   00e5de9a  clr.l  (A4)              ; CLEAR
          *
@@ -222,7 +222,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
 
             if (is_locksmith < 0) {
                 *status_ret = status_$ok;               /* 0x00E5DE9A */
-            } else if (PROC1_$TYPE[(int16_t)PROC1_$CURRENT]
+            } else if (PROC1_$DATA.type[(int16_t)PROC1_$CURRENT]
                            != PROC1_TYPE_SERVER) {
                 *status_ret = status_$ok;               /* 0x00E5DE9A */
             }

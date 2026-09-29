@@ -1,19 +1,25 @@
 /*
  * proc1_data.c - PROC1 Global Data Definitions
  *
- * This file defines the global variables used by the process management
- * subsystem. On the original M68K hardware, these were at fixed addresses.
- * For portability, we define them as regular variables here.
+ * Two kinds of data (see proc1/proc1.h):
  *
- * Original M68K addresses (SAU2):
- *   PROC1_$CURRENT_PCB:     0xE1EAC8
- *   PROC1_$READY_PCB:       PC-relative from dispatch code
- *   PROC1_$CURRENT:         0xE20608
- *   PROC1_$READY_COUNT:     0xE1EBD0
- *   PROC1_$ATOMIC_OP_DEPTH: 0xE2060E
- *   PROC1_$AS_ID:           0xE2060A
- *   PCBS:                   0xE1EACC (65 pointers)
- *   PROC1_$TYPE:            0xE2612A (65 uint16_t values)
+ *   PROC1_$DATA   the PROC1_ module data block, A5 = 0xE254E8 (map
+ *                 "D E254E8 PROC1_ size = CC4"): load averages, timeslice
+ *                 timer elements, OS stack bases, per-pid statistics, the
+ *                 stack allocator cells and the process type table.
+ *
+ *   PROC1_ASM     cells of the hand-written PROC1_ASM segment (0xE1EAC8..),
+ *                 exported by name and reached absolutely or PC-relative,
+ *                 never through A5; individual objects:
+ *                   PROC1_$CURRENT_PCB      0xE1EAC8
+ *                   PCBS                    0xE1EACC (65 pointers)
+ *                   PROC1_$READY_COUNT      0xE1EBD0
+ *                   PROC1_$READY_PCB        0xE1EC3A
+ *                   PROC1_$TSVV             0xE205D2
+ *                   PROC1_$SUSPEND_EC       0xE205F6
+ *                   PROC1_$CURRENT          0xE20608
+ *                   PROC1_$AS_ID            0xE2060A
+ *                   PROC1_$ATOMIC_OP_DEPTH  0xE2060E
  */
 
 #include "proc1/proc1_internal.h"
@@ -42,12 +48,10 @@ uint16_t PROC1_$ATOMIC_OP_DEPTH = 0;    /* Nesting depth of atomic operations */
 uint16_t PROC1_$AS_ID = 0;              /* Current address space ID */
 
 /*
- * Process Control Block (PCB) table
+ * Process Control Block (PCB) table, PCBS[0..64] indexed by pid
  *
- * Array of pointers to PCBs, indexed by PID.
- * Size determined by PROC1_MAX_PROCESSES from proc1_config.h.
- *
- * PID allocation:
+ * Element pid at 0xE1EACC + pid*4 (PROC1_$BIND 0x00E14D96..0x00E14D9C, see
+ * proc1/proc1.h).  PID allocation:
  *   0: Reserved/invalid
  *   1: System process
  *   2: Idle/init process
@@ -55,65 +59,32 @@ uint16_t PROC1_$AS_ID = 0;              /* Current address space ID */
  */
 proc1_t *PCBS[PROC1_MAX_PROCESSES] = { NULL };
 
-/*
- * Process type table
- *
- * Stores the type code for each process, indexed by PID.
- * Used by PROC1_$GET_TYPE and PROC1_$SET_TYPE.
- *
- * Known type values:
- *   0: Unbound/invalid
- *   3: Kernel daemon
- *   4-5, 10: Other system types (ws_param = 5)
- *   8: Special system type (ws_param = 6)
- *
- * Original address: 0xE2612A
- */
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES] = { 0 };
+/* Target only: the elements are pointers. */
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(PCBS[0]) == 4, "PCBS stride 4 (lsl.w #0x2)");
+_Static_assert(sizeof(PCBS) == 0xE1EBD0 - 0xE1EACC,
+               "PCBS[0..64] ends at PROC1_$READY_COUNT");
+#endif
 
 /*
- * ============================================================================
- * Stack Allocation Data
- * ============================================================================
- */
-
-/*
- * Stack allocation pointers
+ * PROC1_$DATA - the PROC1_ module data block (layout, biases and asserts in
+ * proc1/proc1.h).  Module data block PROC1_$DATA: Claude Opus 5.5
+ * (source-l2yd).  A MODULE_DATA block linked in the SAU2 map's order after
+ * PMAP_$DATA and before RING_$WIRED_DATA; the address is the ordering key,
+ * not the link address.
  *
- * Original addresses:
- *   STACK_FREE_LIST:  0xE26120 (base + 0xc38)
- *   STACK_HIGH_WATER: 0xE26124 (base + 0xc3c)
- *   STACK_LOW_WATER:  0xE26128 (base + 0xc40)
+ * Image contents: `gsk read 0xE254E8 3268' is zero throughout - the load
+ * averages, timer elements, stack cells and tables are all set at run time
+ * (PROC1_$INIT 0x00E2F958, PROC1_$INIT_LOADAV, PROC1_$INIT_TS_TIMER,
+ * PROC1_$BIND).
  */
-void *STACK_FREE_LIST = NULL;           /* Free list of 4KB stacks */
-void *STACK_HIGH_WATER = NULL;          /* High water mark (grows down) */
-void *STACK_LOW_WATER = NULL;           /* Low water mark (grows up) */
-
-/*
- * OS stack table - one stack per process
- * Original address: 0xE25C18 (base + 0x730)
- */
-void *OS_STACK_BASE[PROC1_MAX_PROCESSES] = { NULL };
-
-/*
- * Process statistics table - 16 bytes per process (4 uint32_t values)
- * Original address: 0xE25D10 (A5 + 0x828); PROC1_$BIND clears entry pid at
- * +pid*16 (0x00E14DCA..0x00E14DD6).  Map: PROC1_$STATS 0xE25D20 = entry 1.
- */
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4] = { 0 };
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /*
  * ============================================================================
  * Timer Data
  * ============================================================================
  */
-
-/*
- * Timeslice timer elements: A5 + 0x14 + pid*0x1C (0xE254FC for pid 0).
- * Only entries 1..64 are ever used; entry 0 overlaps PROC1_$LOADAV_ELEM in
- * the image (see the module map in proc1/proc1.h).  Zero in the image.
- */
-proc1_ts_slot_t PROC1_$TS_ELEM[PROC1_MAX_PROCESSES];
 
 /*
  * Timeslice values indexed by state
@@ -133,32 +104,23 @@ _Static_assert(sizeof(PROC1_$TSVV) == 0xE205F6 - 0xE205D2, "PROC1_$TSVV extent")
 
 /*
  * ============================================================================
- * Load Average Data
- * ============================================================================
- */
-
-/*
- * The three load averages at A5 + 0 (0xE254E8), 8.24 fixed point, cleared by
- * PROC1_$INIT_LOADAV (0x00E14CA0) and rewritten by PROC1_$LOADAV_CALLBACK.
- */
-int32_t PROC1_$LOADAV[PROC1_LOADAV_COUNT] = { 0, 0, 0 };
-
-/*
- * The load-average timer element at A5 + 0x10 (0xE254F8).
- */
-time_queue_elem_t PROC1_$LOADAV_ELEM;
-
-/*
- * ============================================================================
  * Event Count / Suspend Data
  * ============================================================================
  */
 
 /*
  * Suspend event count - signaled when a process is suspended
- * Original address: 0xE205F6
+ * Original address: 0xE205F6 (PROC1_ASM segment, between PROC1_$TSVV and
+ * DI_$Q_HEAD).  Image bytes (gsk read 0xE205F6 12): 00000000 00e205f6
+ * 00e205f6 - value 0 with both waiter links at itself, the empty-queue
+ * state, spelled as the eventcount's own address like the other pre-linked
+ * eventcounts in the tree (pmap/pmap_data.c, fim/fim_data.c).
  */
-ec_$eventcount_t PROC1_$SUSPEND_EC = { 0 };
+ec_$eventcount_t PROC1_$SUSPEND_EC = {
+    .value = 0,
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&PROC1_$SUSPEND_EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&PROC1_$SUSPEND_EC,
+};
 
 /*
  * ============================================================================

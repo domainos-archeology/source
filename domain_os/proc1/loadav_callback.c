@@ -3,7 +3,7 @@
  * Original address: 0x00e14bda (186 bytes)
  *
  * Re-emitted from the disassembly.  A5 = 0x00E254E8; (0,A5)/(4,A5)/(8,A5)
- * are PROC1_$LOADAV[0..2].  Fired every 5 s from TIME_$RTEQ through the
+ * are PROC1_$DATA.loadav[0..2].  Fired every 5 s from TIME_$RTEQ through the
  * repeating element PROC1_$INIT_LOADAV enters (the only reference to this
  * routine is the `move.l #0xe14bda' at 0x00E14CB0).
  *
@@ -61,23 +61,23 @@ void PROC1_$LOADAV_CALLBACK(void)
     ready = (int16_t)PROC1_$READY_COUNT;
 
     /* 0x00E14BEE..0x00E14C1E */
-    d0 = proc1_$loadav_div256(PROC1_$LOADAV[0]);
+    d0 = proc1_$loadav_div256(PROC1_$DATA.loadav[0]);
     d0 = (int32_t)M$MIS$LLL(d0, PROC1_LOADAV_DECAY_1MIN);
     d0 = proc1_$loadav_div256(d0);
     d2 = (int32_t)ready * PROC1_LOADAV_GAIN_1MIN;
-    PROC1_$LOADAV[0] = d0 + d2;
+    PROC1_$DATA.loadav[0] = d0 + d2;
 
     /* 0x00E14C20..0x00E14C52 */
-    d2 = proc1_$loadav_div256(PROC1_$LOADAV[1]);
+    d2 = proc1_$loadav_div256(PROC1_$DATA.loadav[1]);
     d0 = (int32_t)M$MIS$LLL(d2, PROC1_LOADAV_DECAY_5MIN);
     d0 = proc1_$loadav_div256(d0);
     d2 = (int32_t)ready * PROC1_LOADAV_GAIN_5MIN;
-    PROC1_$LOADAV[1] = d0 + d2;
+    PROC1_$DATA.loadav[1] = d0 + d2;
 
     /* 0x00E14C56..0x00E14C86 */
     d2 = (int32_t)ready * PROC1_LOADAV_GAIN_15MIN;
-    d0 = proc1_$loadav_div256(PROC1_$LOADAV[2]);
+    d0 = proc1_$loadav_div256(PROC1_$DATA.loadav[2]);
     d0 = (int32_t)M$MIS$LLL(d0, PROC1_LOADAV_DECAY_15MIN);
     d0 = proc1_$loadav_div256(d0);
-    PROC1_$LOADAV[2] = d2 + d0;
+    PROC1_$DATA.loadav[2] = d2 + d0;
 }

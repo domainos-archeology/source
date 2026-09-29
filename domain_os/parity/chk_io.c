@@ -33,7 +33,7 @@ uint32_t PARITY_$CHK_IO(uint32_t ppn1, uint32_t ppn2)
      * The DMA flag is stored at offset 0x11 in the error status word
      * (bit 3 = 0x08 of the low byte at offset 0x11).
      */
-    if ((PARITY_$ERR_STATUS & 0x08) == 0) {
+    if ((FIM_$WIRED_DATA.parity.err_status & 0x08) == 0) {
         /* No DMA parity error pending - return high word of ppn2 (usually 0) */
         result = ppn2 & 0xFFFF0000;
         goto done;
@@ -42,7 +42,7 @@ uint32_t PARITY_$CHK_IO(uint32_t ppn1, uint32_t ppn2)
     /*
      * Check if first PPN matches the error location.
      */
-    if (ppn1 == PARITY_$ERR_PPN) {
+    if (ppn1 == FIM_$WIRED_DATA.parity.err_ppn) {
         result = 1;
         goto clear_and_done;
     }
@@ -50,7 +50,7 @@ uint32_t PARITY_$CHK_IO(uint32_t ppn1, uint32_t ppn2)
     /*
      * Check if second PPN matches the error location.
      */
-    if (ppn2 == PARITY_$ERR_PPN) {
+    if (ppn2 == FIM_$WIRED_DATA.parity.err_ppn) {
         result = 2;
         goto clear_and_done;
     }
@@ -64,7 +64,7 @@ clear_and_done:
      * A match was found. Clear the parity error state so that
      * subsequent calls don't report the same error.
      */
-    PARITY_$ERR_PPN = 0;
+    FIM_$WIRED_DATA.parity.err_ppn = 0;
     PARITY_$DURING_DMA = 0;
 
 done:

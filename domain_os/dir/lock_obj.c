@@ -41,10 +41,10 @@ void DIR_$LOCK_OBJ(void *handle, int16_t mode, status_$t *status_ret)
     int32_t            timeout;             /* D4 */
 
     /*
-     * 0x00E4AFBC-0x00E4AFD0: PROC1_$TYPE[PROC1_$CURRENT] == 9 (the naming
+     * 0x00E4AFBC-0x00E4AFD0: PROC1_$DATA.type[PROC1_$CURRENT] == 9 (the naming
      * server helper), turned into a Domain boolean by `seq D3b`.
      */
-    is_server = (PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER)
+    is_server = (PROC1_$DATA.type[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER)
                 ? true : false;
 
     h->lock_entry = 0;      /* 0x00E4AFD2 `clr.l (0x34,A3)` */

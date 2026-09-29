@@ -58,8 +58,8 @@ MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 uint16_t PROC1_$AS_ID;
 uint32_t TIME_$CLOCKH;
 
-uint32_t FIM_$QUIT_VALUE[MSG_MAX_ASID];
-ec_$eventcount_t FIM_$QUIT_EC[MSG_MAX_ASID];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 
 /* Scripted EC_$WAIT: records what it was handed and returns ec_wait_result. */
 static int16_t ec_wait_result;
@@ -91,8 +91,8 @@ static void reset_state(void)
     memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
     memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&test_sock, 0, sizeof(test_sock));
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
 
     PROC1_$AS_ID = TEST_ASID;
     TIME_$CLOCKH = 0;
@@ -207,7 +207,7 @@ TEST(ec_wait_argument_build)
     reset_state();
     grant_ownership(TEST_SOCK, TEST_ASID);
     test_sock.ec.value = 100;
-    FIM_$QUIT_VALUE[TEST_ASID] = 7;
+    FIM_$WIRED_DATA.quit_value[TEST_ASID] = 7;
     TIME_$CLOCKH = 0x1000;
 
     MSG_$WAITI(&sock, &timeout, &status);
@@ -215,7 +215,7 @@ TEST(ec_wait_argument_build)
     ASSERT_EQ(1, ec_wait_calls);
     ASSERT_EQ((uintptr_t)&test_sock.ec, (uintptr_t)ec_wait_ecs.ec[0]);
     ASSERT_EQ((uintptr_t)&TIME_$CLOCKH, (uintptr_t)ec_wait_ecs.ec[1]);
-    ASSERT_EQ((uintptr_t)&FIM_$QUIT_EC[TEST_ASID], (uintptr_t)ec_wait_ecs.ec[2]);
+    ASSERT_EQ((uintptr_t)&FIM_$WIRED_DATA.quit_ec[TEST_ASID], (uintptr_t)ec_wait_ecs.ec[2]);
     ASSERT_EQ(101, ec_wait_vals.val[0]);
     ASSERT_EQ(0x1040, ec_wait_vals.val[1]);
     ASSERT_EQ(8, ec_wait_vals.val[2]);
@@ -266,8 +266,8 @@ TEST(ec_wait_result_dispatch)
     ASSERT_EQ(0x5A5A5A5A, status);
 }
 
-/* 0x00E59CA2 - 0x00E59CCA: the quit path copies FIM_$QUIT_EC[asid].value into
- * FIM_$QUIT_VALUE[asid] before reporting the quit fault. */
+/* 0x00E59CA2 - 0x00E59CCA: the quit path copies FIM_$WIRED_DATA.quit_ec[asid].value into
+ * FIM_$WIRED_DATA.quit_value[asid] before reporting the quit fault. */
 TEST(quit_path_latches_the_eventcount)
 {
     msg_$socket_t sock = TEST_SOCK;
@@ -276,14 +276,14 @@ TEST(quit_path_latches_the_eventcount)
 
     reset_state();
     grant_ownership(TEST_SOCK, TEST_ASID);
-    FIM_$QUIT_VALUE[TEST_ASID] = 4;
-    FIM_$QUIT_EC[TEST_ASID].value = 99;
+    FIM_$WIRED_DATA.quit_value[TEST_ASID] = 4;
+    FIM_$WIRED_DATA.quit_ec[TEST_ASID].value = 99;
     ec_wait_result = 2;
 
     MSG_$WAITI(&sock, &timeout, &status);
 
     ASSERT_EQ(status_$msg_quit_fault, status);
-    ASSERT_EQ(99, FIM_$QUIT_VALUE[TEST_ASID]);
+    ASSERT_EQ(99, FIM_$WIRED_DATA.quit_value[TEST_ASID]);
     /* The value pushed to EC_$WAIT was still the pre-quit one + 1. */
     ASSERT_EQ(5, ec_wait_vals.val[2]);
 }

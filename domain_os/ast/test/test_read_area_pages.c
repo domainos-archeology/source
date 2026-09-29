@@ -51,7 +51,8 @@ static void reset_state(void);
 #include "ast/read_area_pages.c"
 #include "ast/read_area_pages_network.c"
 
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uint16_t PROC1_$CURRENT;
 int8_t   NETLOG_$OK_TO_LOG;
 
@@ -131,7 +132,7 @@ void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid, uint16_t p3, uint16_t p4,
 
 static void reset_state(void)
 {
-    memset(PROC_STATS_BASE, 0, sizeof(PROC_STATS_BASE));
+    memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     PROC1_$CURRENT = 5;
     NETLOG_$OK_TO_LOG = 0;
     memset(&test_aote, 0, sizeof(test_aote));
@@ -175,7 +176,7 @@ TEST(disk_read_all_pages)
     ASSERT_EQ(2, rm_vol); ASSERT_EQ((uint16_t)-1, (uint16_t)rm_f1); ASSERT_EQ((uint16_t)-1, (uint16_t)rm_f2);
     ASSERT_EQ(1, rtnq_calls); ASSERT_EQ(3, rtnq_count);
     ASSERT_EQ(0, free_calls);
-    ASSERT_EQ(3, PROC_STATS_BASE[5 * 4 + 2]);
+    ASSERT_EQ(3, PROC1_$DATA.stats[5].stat[2]);
     ASSERT_EQ(1, unlock_calls); ASSERT_EQ(1, lock_calls);
 }
 
@@ -193,7 +194,7 @@ TEST(disk_short_read_frees_rest)
     ASSERT_EQ(0x80070001u, (uint32_t)status);
     ASSERT_EQ(2, free_calls);
     ASSERT_EQ(0x301, free_vpns[0]); ASSERT_EQ(0x302, free_vpns[1]);
-    ASSERT_EQ(1, PROC_STATS_BASE[5 * 4 + 2]);
+    ASSERT_EQ(1, PROC1_$DATA.stats[5].stat[2]);
 }
 
 TEST(network_read_with_reply_clocks)
@@ -234,7 +235,7 @@ TEST(network_read_with_reply_clocks)
     ASSERT_EQ(0x19800 + 0x400, test_aote.length);
     ASSERT_EQ(1, log_calls); ASSERT_EQ(9, log_kind); ASSERT_EQ(3, log_p3);
     ASSERT_EQ(4, log_p4); ASSERT_EQ(3, log_p7);
-    ASSERT_EQ(3, PROC_STATS_BASE[5 * 4 + 3]);
+    ASSERT_EQ(3, PROC1_$DATA.stats[5].stat[3]);
     ASSERT_EQ(1, unlock_calls); ASSERT_EQ(1, lock_calls);
 }
 
@@ -277,7 +278,7 @@ TEST(network_short_read_and_nothing_read)
     ASSERT_EQ(status_$ok, status);                     /* cleared once pages arrived */
     ASSERT_EQ(2, get_calls); ASSERT_EQ(2, free_calls);
     ASSERT_EQ(0x700, free_vpns[0]); ASSERT_EQ(0x701, free_vpns[1]);
-    ASSERT_EQ(1, PROC_STATS_BASE[5 * 4 + 3]);
+    ASSERT_EQ(1, PROC1_$DATA.stats[5].stat[3]);
 
     reset_state();
     ra_result = 0; ra_status = 0x000F0002;
@@ -286,7 +287,7 @@ TEST(network_short_read_and_nothing_read)
     ASSERT_EQ(0x000F0002, status);                     /* left as the callee set it */
     ASSERT_EQ(3, free_calls);
     ASSERT_EQ(1, lock_calls);
-    ASSERT_EQ(0, PROC_STATS_BASE[5 * 4 + 3]);
+    ASSERT_EQ(0, PROC1_$DATA.stats[5].stat[3]);
 }
 
 int main(void)

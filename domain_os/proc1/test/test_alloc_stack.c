@@ -24,9 +24,7 @@ int __host_intr_disable_count = 0;
 /* Module cells                                                        */
 /* ------------------------------------------------------------------ */
 
-void *STACK_FREE_LIST = NULL;       /* A5 + 0xC38 */
-void *STACK_HIGH_WATER = NULL;      /* A5 + 0xC3C */
-void *STACK_LOW_WATER = NULL;       /* A5 + 0xC40 */
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */
@@ -98,9 +96,9 @@ static int tests_run, tests_failed;
 static void reset(void)
 {
     ARCH_HOST_VA_BASE = 0;
-    STACK_FREE_LIST = NULL;
-    STACK_HIGH_WATER = ARCH_VA_TO_PTR(HIGH0);
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(LOW0);
+    PROC1_$DATA.stack_free_list = 0;
+    PROC1_$DATA.stack_high_water = HIGH0;
+    PROC1_$DATA.stack_low_water = LOW0;
     n_lock = n_unlock = 0;
     last_lock_id = last_unlock_id = -1;
     n_calloc = 0;
@@ -135,8 +133,8 @@ static void test_small_stack_rounds_and_maps(void)
     ASSERT_EQ(install_flags[0], 0x16);
     ASSERT_EQ(install_flags[2], 0x16);
     /* 0x00E150F4: the low-water mark becomes the new top */
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), LOW0 + 0x1000);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, LOW0 + 0x1000);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0);
     /* 0x00E15034 / 0x00E15104: lock id 0xB both ways */
     ASSERT_EQ(n_lock, 1);
     ASSERT_EQ(n_unlock, 1);
@@ -165,14 +163,14 @@ static void test_small_stack_no_room(void)
     status_$t st;
     void *top;
 
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(HIGH0 - 0x800);
+    PROC1_$DATA.stack_low_water = HIGH0 - 0x800;
     top = PROC1_$ALLOC_STACK(0x800, &st);
 
     ASSERT_EQ(st, status_$no_stack_space_is_available);
     ASSERT_EQ(ARCH_PTR_TO_VA(top), HIGH0 - 0x800 + 0x800 + 0x400);
     ASSERT_EQ(n_calloc, 0);
     ASSERT_EQ(n_install, 0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), HIGH0 - 0x800);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, HIGH0 - 0x800);
     ASSERT_EQ(n_unlock, 1);
 }
 
@@ -182,7 +180,7 @@ static void test_small_stack_exactly_fits(void)
     status_$t st;
     void *top;
 
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(HIGH0 - 0xC00);
+    PROC1_$DATA.stack_low_water = HIGH0 - 0xC00;
     top = PROC1_$ALLOC_STACK(0x800, &st);
 
     ASSERT_EQ(st, status_$ok);
@@ -203,22 +201,22 @@ static void test_large_stack_from_free_list(void)
     uint32_t *first;
 
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
-    STACK_HIGH_WATER = ARCH_VA_TO_PTR(HIGH0);
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(LOW0);
+    PROC1_$DATA.stack_high_water = HIGH0;
+    PROC1_$DATA.stack_low_water = LOW0;
 
     first = (uint32_t *)(arena + 0x100);
     *first = 0x200;                     /* link to the "next" free stack */
-    STACK_FREE_LIST = first;
+    PROC1_$DATA.stack_free_list = ARCH_PTR_TO_VA(first);
 
     top = PROC1_$ALLOC_STACK(0x1000, &st);
 
     ASSERT_EQ(st, status_$ok);
     ASSERT_EQ(ARCH_PTR_TO_VA(top), 0x104);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_FREE_LIST), 0x200);
+    ASSERT_EQ(PROC1_$DATA.stack_free_list, 0x200);
     ASSERT_EQ(n_calloc, 0);
     ASSERT_EQ(n_install, 0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), LOW0);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, LOW0);
     ASSERT_EQ(n_unlock, 1);
 }
 
@@ -230,15 +228,15 @@ static void test_large_stack_ignores_free_list_when_not_4k(void)
     void *top;
 
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
-    STACK_HIGH_WATER = ARCH_VA_TO_PTR(HIGH0);
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(LOW0);
-    STACK_FREE_LIST = arena + 0x100;
+    PROC1_$DATA.stack_high_water = HIGH0;
+    PROC1_$DATA.stack_low_water = LOW0;
+    PROC1_$DATA.stack_free_list = ARCH_PTR_TO_VA(arena + 0x100);
 
     top = PROC1_$ALLOC_STACK(0x2000, &st);
 
     ASSERT_EQ(st, status_$ok);
     ASSERT_EQ(ARCH_PTR_TO_VA(top), HIGH0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_FREE_LIST), 0x100);
+    ASSERT_EQ(PROC1_$DATA.stack_free_list, 0x100);
     ASSERT_EQ(n_install, 8);
 }
 
@@ -259,8 +257,8 @@ static void test_large_stack_grows_down(void)
     ASSERT_EQ(install_va[0], HIGH0 - 0x1000);
     ASSERT_EQ(install_va[3], HIGH0 - 0x400);
     /* 0x00E150FC */
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0 - 0x1000 - 0x400);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), LOW0);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0 - 0x1000 - 0x400);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, LOW0);
 }
 
 /* 0x00E150A2 / 0x00E150A6: crossing the low-water mark fails (bcs) */
@@ -268,12 +266,12 @@ static void test_large_stack_no_room(void)
 {
     status_$t st;
 
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(HIGH0 - 0x1000);
+    PROC1_$DATA.stack_low_water = HIGH0 - 0x1000;
     (void)PROC1_$ALLOC_STACK(0x1000, &st);
 
     ASSERT_EQ(st, status_$no_stack_space_is_available);
     ASSERT_EQ(n_calloc, 0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0);
     ASSERT_EQ(n_unlock, 1);
 }
 
@@ -282,11 +280,11 @@ static void test_large_stack_exactly_fits(void)
 {
     status_$t st;
 
-    STACK_LOW_WATER = ARCH_VA_TO_PTR(HIGH0 - 0x1400);
+    PROC1_$DATA.stack_low_water = HIGH0 - 0x1400;
     (void)PROC1_$ALLOC_STACK(0x1000, &st);
 
     ASSERT_EQ(st, status_$ok);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0 - 0x1400);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0 - 0x1400);
 }
 
 /*
@@ -307,8 +305,8 @@ static void test_calloc_failure_overwrites_status(void)
     ASSERT_EQ(ARCH_PTR_TO_VA(top), LOW0 + 0xC00 + 0x400);
     ASSERT_EQ(n_calloc, 2);
     ASSERT_EQ(n_install, 1);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), LOW0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_HIGH_WATER), HIGH0);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, LOW0);
+    ASSERT_EQ(PROC1_$DATA.stack_high_water, HIGH0);
     ASSERT_EQ(n_unlock, 1);
 }
 
@@ -321,7 +319,7 @@ static void test_zero_size(void)
     ASSERT_EQ(st, status_$ok);
     ASSERT_EQ(ARCH_PTR_TO_VA(top), LOW0 + 0x400);
     ASSERT_EQ(n_calloc, 0);
-    ASSERT_EQ(ARCH_PTR_TO_VA(STACK_LOW_WATER), LOW0 + 0x400);
+    ASSERT_EQ(PROC1_$DATA.stack_low_water, LOW0 + 0x400);
 }
 
 int main(void)

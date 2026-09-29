@@ -43,8 +43,7 @@ void dir_$do_op_drop_entry(uid_t *uid, uint16_t rights, void *name,
      * If entry not found and we're a server process, clear the error.
      * This handles retried operations where the entry was already removed. */
     if (*status_ret == status_$naming_name_not_found) {
-        if (*(int16_t *)((char *)PROC1_$TYPE +
-            (int16_t)(PROC1_$CURRENT * 2)) == 9) {
+        if ((int16_t)PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9) {
             *status_ret = status_$ok;
         }
     }

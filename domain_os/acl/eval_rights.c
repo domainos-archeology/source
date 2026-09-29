@@ -112,7 +112,7 @@ uint32_t acl_$eval_rights(acl_sid_block_t *sids, uid_t *proj_uids, uid_t *uid,
          */
         pid = PROC1_$CURRENT;                       /* 0x00E46546 */
         if (ACL_$LOCAL_LOCKSMITH != 0 &&
-            PROC1_$TYPE[pid] == 9 &&
+            PROC1_$DATA.type[pid] == 9 &&
             (ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
              ACL_PID_BITMAP_MASK(PROC1_$CURRENT)) == 0) {
 

@@ -109,8 +109,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
         if (found >= 0) {
             /* Old name not found */
             /* Idempotent handling: for server processes, check if new name exists */
-            if (*(int16_t *)((char *)PROC1_$TYPE +
-                (int16_t)(PROC1_$CURRENT * 2)) == 9) {
+            if ((int16_t)PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9) {
                 char found2;
                 found2 = dir_$find_entry((void *)(uintptr_t)local_handle,
                                          new_name, new_name_len, 8,
@@ -137,8 +136,7 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
             entry_uid.low = *(uint32_t *)(ep + 8);
 
             /* For server processes (type 9), check ACL read-only flag */
-            if (*(int16_t *)((char *)PROC1_$TYPE +
-                (int16_t)(PROC1_$CURRENT * 2)) == 9) {
+            if ((int16_t)PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9) {
                 /* Clear bit 6 of flags */
                 /* Check ACL attributes */
                 ACL_$GET_ACL_ATTRIBUTES(&entry_uid, 0x80, acl_buf, status_ret);

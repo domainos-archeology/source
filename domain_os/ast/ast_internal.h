@@ -348,7 +348,7 @@ extern void AST_$WAIT_FOR_AST_INTRANS(void);
 /* Process info for statistics - include proc1.h for PROC1_$CURRENT, etc. */
 #include "proc1/proc1.h"
 
-/* The per-process read statistics are PROC_STATS_BASE[pid*4 + 2] (disk)
- * and [pid*4 + 3] (network) in proc1/proc1.h. */
+/* The per-process read statistics are PROC1_$DATA.stats[pid].stat[2] (disk)
+ * and .stat[3] (network) in proc1/proc1.h. */
 
 #endif /* AST_INTERNAL_H */

@@ -110,7 +110,7 @@ void AST_$DEACTIVATE_SEGMENT(aste_t *aste, int8_t purge, int8_t keep,
          * A1 = 0xE2612C and D0 = current*2).  Types 8 and 9 are refused;
          * anything else falls through to the deactivation.
          */
-        uint16_t proc_type = PROC1_$TYPE[PROC1_$CURRENT];
+        uint16_t proc_type = PROC1_$DATA.type[PROC1_$CURRENT];
         if (proc_type == PROC1_TYPE_NO_DEACTIVATE_A ||
             proc_type == PROC1_TYPE_NO_DEACTIVATE_B) {
             goto not_deactivatable;

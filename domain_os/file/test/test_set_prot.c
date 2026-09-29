@@ -10,7 +10,7 @@
  *               `btst #4` tests BIT 24 of low.  The tree tested bit 8.
  *
  *  source-w7lk  0x00E5DE6A-0x00E5DE9A clears the 0x230010 status when
- *               ACL_$GET_LOCAL_LOCKSMITH() == 0 OR PROC1_$TYPE[cur] != 9 -
+ *               ACL_$GET_LOCAL_LOCKSMITH() == 0 OR PROC1_$DATA.type[cur] != 9 -
  *               the `beq 0x00E5DE9C` at 0x00E5DE98 SKIPS the clear when the
  *               type IS 9.  The tree had that disjunct inverted.  The same
  *               bead also retyped subsys_flag: 0x00E5DD1E reads it with
@@ -59,7 +59,8 @@ static int current_failed = 0;
  * ========================================================================== */
 
 uint16_t PROC1_$CURRENT = 3;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 int8_t   AUDIT_$ENABLED = 0;
 
 /* ==========================================================================
@@ -234,7 +235,7 @@ void FILE_$SET_PROT_INT(uid_t *file_uid, void *acl_data, uint16_t attr_type,
 
 static void reset(void)
 {
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     PROC1_$CURRENT = 3;
     AUDIT_$ENABLED = 0;
 
@@ -459,7 +460,7 @@ static status_$t run_prot_int(boolean subsys_flag, int16_t locksmith,
     mock_acl_check_status = SUBSYS_STATUS;
     mock_locksmith_result = locksmith;
     PROC1_$CURRENT = 3;
-    PROC1_$TYPE[3] = proc_type;
+    PROC1_$DATA.type[3] = proc_type;
 
     real_FILE_$SET_PROT_INT(&file_uid, acl_data, 0x10, 0, subsys_flag,
                             &status);
@@ -506,7 +507,7 @@ TEST(a_different_status_is_left_alone)
     reset();
     memset(acl_data, 0, sizeof(acl_data));
     mock_acl_check_status = 0x00230003;
-    PROC1_$TYPE[3] = 1;
+    PROC1_$DATA.type[3] = 1;
 
     real_FILE_$SET_PROT_INT(&file_uid, acl_data, 0x10, 0, -1, &status);
 
@@ -533,7 +534,7 @@ TEST(no_rights_flag_denies_on_type_nine)
     mock_acl_check_setid = -1;          /* the "no rights" byte */
     mock_acl_check_status = status_$ok;
     mock_locksmith_result = 1;
-    PROC1_$TYPE[3] = 9;
+    PROC1_$DATA.type[3] = 9;
 
     real_FILE_$SET_PROT_INT(&file_uid, acl_data, 0x10, 0, 0, &status);
     ASSERT_EQ(0x00230001, status);
@@ -544,7 +545,7 @@ TEST(no_rights_flag_denies_on_type_nine)
     mock_acl_check_setid = -1;
     mock_acl_check_status = status_$ok;
     mock_locksmith_result = 1;
-    PROC1_$TYPE[3] = 1;
+    PROC1_$DATA.type[3] = 1;
     status = 0;
     real_FILE_$SET_PROT_INT(&file_uid, acl_data, 0x10, 0, 0, &status);
     ASSERT_EQ(status_$ok, status);

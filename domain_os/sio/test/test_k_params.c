@@ -14,8 +14,8 @@ int __host_intr_disable_count = 0;
 #include "sio/sio_internal.h"
 
 uint16_t PROC1_$AS_ID;
-ec_$eventcount_t FIM_$QUIT_EC[4];
-uint32_t FIM_$QUIT_VALUE[4];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 
 static sio_desc_t desc;
 static status_$t gd_status;
@@ -73,7 +73,7 @@ static void reset(void)
     gd_status = 0; setp_calls = 0; setp_status = 0; inq_calls = 0; inq_status = 0; inq_flags1_set = 0;
     waitn_calls = 0; waitn_ret = 1; sb_calls = 0; w2_calls = 0; w2_ret = 0;
     PROC1_$AS_ID = 2;
-    memset(FIM_$QUIT_EC, 0, sizeof FIM_$QUIT_EC); memset(FIM_$QUIT_VALUE, 0, sizeof FIM_$QUIT_VALUE);
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof FIM_$WIRED_DATA.quit_ec); memset(FIM_$WIRED_DATA.quit_value, 0, sizeof FIM_$WIRED_DATA.quit_value);
 }
 
 /* ---- SIO_$K_SET_PARAM ----------------------------------------------------- */
@@ -185,16 +185,16 @@ TEST(signal_wait_quit_resyncs_quit_value)
 {
     int16_t line = 3; uint32_t signals = 0x04; status_$t st = -1;
     reset();
-    desc.ec.value = 10; FIM_$QUIT_VALUE[2] = 41; FIM_$QUIT_EC[2].value = 42;
+    desc.ec.value = 10; FIM_$WIRED_DATA.quit_value[2] = 41; FIM_$WIRED_DATA.quit_ec[2].value = 42;
     waitn_ret = 2;
     SIO_$K_SIGNAL_WAIT(&line, &signals, &st);
     ASSERT_EQ(1, waitn_calls);
     ASSERT_PTR_EQ(&desc.ec, waitn_ecs[0]);
-    ASSERT_PTR_EQ(&FIM_$QUIT_EC[2], waitn_ecs[1]);
+    ASSERT_PTR_EQ(&FIM_$WIRED_DATA.quit_ec[2], waitn_ecs[1]);
     ASSERT_EQ(11, waitn_vals[0]);
     ASSERT_EQ(42, waitn_vals[1]);
     ASSERT_EQ(0x36000a, st);
-    ASSERT_EQ(42, FIM_$QUIT_VALUE[2]);
+    ASSERT_EQ(42, FIM_$WIRED_DATA.quit_value[2]);
 }
 
 TEST(signal_wait_driver_error_returns)
@@ -212,7 +212,7 @@ TEST(timed_break_delay_and_drop)
 {
     int16_t line = 1; uint16_t ms = 1000; status_$t st = -1;
     reset();
-    FIM_$QUIT_VALUE[2] = 7;
+    FIM_$WIRED_DATA.quit_value[2] = 7;
     SIO_$K_TIMED_BREAK(&line, &ms, &st);
     ASSERT_EQ(2, sb_calls);
     ASSERT_EQ(0xFF, sb_enable[0]);
@@ -222,7 +222,7 @@ TEST(timed_break_delay_and_drop)
     /* 1000 * 250 = 250000 = 0x3D090: high 3, low 0xD090 */
     ASSERT_EQ(3, w2_delay.high);
     ASSERT_EQ(0xD090, w2_delay.low);
-    ASSERT_PTR_EQ(&FIM_$QUIT_EC[2], w2_ec);
+    ASSERT_PTR_EQ(&FIM_$WIRED_DATA.quit_ec[2], w2_ec);
     ASSERT_EQ(8, w2_count);
     ASSERT_EQ(0, st);
 }
@@ -231,11 +231,11 @@ TEST(timed_break_quit)
 {
     int16_t line = 1; uint16_t ms = 10; status_$t st = -1;
     reset();
-    FIM_$QUIT_VALUE[2] = 7; FIM_$QUIT_EC[2].value = 9;
+    FIM_$WIRED_DATA.quit_value[2] = 7; FIM_$WIRED_DATA.quit_ec[2].value = 9;
     w2_ret = -1;
     SIO_$K_TIMED_BREAK(&line, &ms, &st);
     ASSERT_EQ(0xB0006, st);
-    ASSERT_EQ(9, FIM_$QUIT_VALUE[2]);
+    ASSERT_EQ(9, FIM_$WIRED_DATA.quit_value[2]);
     ASSERT_EQ(2, sb_calls);                          /* break still dropped */
 }
 

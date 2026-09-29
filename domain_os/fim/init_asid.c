@@ -31,7 +31,7 @@
  *   00e0aa4e  movea.l  #0xe222ba,A1         ; A1 = FIM_$QUIT_VALUE
  *   00e0aa54  move.l   (0x0,A0,D0w*0x1),(0x0,A1,D1w*0x1)
  *   00e0aa5a  movea.l  #0xe2248a,A1         ; A1 = FIM_$QUIT_INH
- *   00e0aa60  st       (0x0,A1,D2w*0x1)     ; FIM_$QUIT_INH[as_id] = true (0xFF)
+ *   00e0aa60  st       (0x0,A1,D2w*0x1)     ; FIM_$WIRED_DATA.quit_inh[as_id] = true (0xFF)
  *   00e0aa64  move.l   (-0x14,A6),D2
  *   00e0aa68  unlk     A6
  *   00e0aa6a  rts
@@ -42,7 +42,7 @@
  * performs no bounds check; neither does this transcription.
  *
  * The counterpart is FIM_$FREE_ASID (0x00E0AA6C), which clears
- * FIM_$USER_FIM_ADDR[as_id] and re-asserts the same quit inhibit.
+ * FIM_$DATA.user_fim_addr[as_id] and re-asserts the same quit inhibit.
  * Note the asymmetry that both functions set FIM_$QUIT_INH: quits stay
  * inhibited for the AS until FIM_$INSTALL (0x00E0A9C2) puts the first user
  * fault handler in place, or FIM_$ACKNOWLEDGE (0x00E0A96C) clears it.
@@ -60,8 +60,8 @@ void FIM_$INIT_ASID(int16_t *as_id_p)
     FIM_$CLEAR_TRACE_FAULT(as_id);
 
     /* 0x00E0AA54: the head longword of the 12-byte eventcount is its value. */
-    FIM_$QUIT_VALUE[as_id] = (uint32_t)FIM_$QUIT_EC[as_id].value;
+    FIM_$WIRED_DATA.quit_value[as_id] = (uint32_t)FIM_$WIRED_DATA.quit_ec[as_id].value;
 
     /* 0x00E0AA60: "st" stores 0xFF -- Pascal true. */
-    FIM_$QUIT_INH[as_id] = -1;
+    FIM_$WIRED_DATA.quit_inh[as_id] = -1;
 }

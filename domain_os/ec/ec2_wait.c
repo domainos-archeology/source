@@ -283,8 +283,8 @@ int16_t EC2_$WAIT(ec2_$eventcount_t **ecs, int32_t *wait_vals,
          * eventcount (0xE22002, stride 12), waited for one past the
          * cached FIM_$QUIT_VALUE (0xE222BA, stride 4). */
         as_id       = PROC1_$AS_ID;
-        ec1s[1]     = &FIM_$QUIT_EC[as_id];
-        ec1_vals[1] = (int32_t)(FIM_$QUIT_VALUE[as_id] + 1);
+        ec1s[1]     = &FIM_$WIRED_DATA.quit_ec[as_id];
+        ec1_vals[1] = (int32_t)(FIM_$WIRED_DATA.quit_value[as_id] + 1);
 
         /* 0x00E42614-0x00E42626: EC_$WAITN(&ec1s, &ec1_vals, n_ec1). */
         waitn_result = EC_$WAITN(ec1s, ec1_vals, n_ec1);
@@ -293,7 +293,7 @@ int16_t EC2_$WAIT(ec2_$eventcount_t **ecs, int32_t *wait_vals,
          * eventcount (1-based entry 2) woke us: refresh the cached quit
          * value from the eventcount, report the async fault, result 0. */
         if (waitn_result == 2) {
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
             *status_ret = status_$ec2_async_fault_while_waiting;   /* 0x180003 */
             satisfied = 0;
         }

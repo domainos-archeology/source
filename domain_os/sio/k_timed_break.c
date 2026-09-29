@@ -28,14 +28,14 @@
  *   00e67f24    move.w (*duration_ptr),D0w ; mulu.w #0xfa,D0
  *   00e67f2e    move.l D0,(-0xa,A6)            ; delay = ms * 250 ticks of 4us
  *   00e67f32    pea (A3)                       ; arg5 status
- *   00e67f34    FIM_$QUIT_VALUE[asid] + 1 -> (-0x18,A6) ; pea (-0x18,A6)   ; arg4
- *   00e67f50    pea &FIM_$QUIT_EC[asid]        ; arg3
+ *   00e67f34    FIM_$WIRED_DATA.quit_value[asid] + 1 -> (-0x18,A6) ; pea (-0x18,A6)   ; arg4
+ *   00e67f50    pea &FIM_$WIRED_DATA.quit_ec[asid]        ; arg3
  *   00e67f68    pea (-0xc,A6)                  ; arg2 &delay
  *   00e67f6c    pea (0x4e,PC)                  ; arg1 &0x00E67FBC (word 0: relative)
  *   00e67f70    jsr 0x00e16654.l               ; TIME_$WAIT2
  *   00e67f7a    tst.b D0b ; bpl 0x00e67fa8     ; true = the quit ec fired
  *   00e67f7e    move.l #0xb0006,(A3)
- *   00e67f84    FIM_$QUIT_VALUE[asid] = FIM_$QUIT_EC[asid].value
+ *   00e67f84    FIM_$WIRED_DATA.quit_value[asid] = FIM_$WIRED_DATA.quit_ec[asid].value
  *   00e67fa8    subq.l #0x2,SP ; clr.w -(SP) ; pea (A2)
  *   00e67fae    bsr.w 0x00e67e86               ; sio_$set_break(desc, false)
  *   00e67fb2    movem.l (-0x28,A6),{D2 A2 A3 A5} ; unlk ; rts
@@ -78,13 +78,13 @@ void SIO_$K_TIMED_BREAK(int16_t *line_ptr, uint16_t *duration_ptr,
 
     /* 0x00E67F32-0x00E67F76 */
     as_id = (int16_t)PROC1_$AS_ID;
-    quit_wait_value = (uint32_t)FIM_$QUIT_VALUE[as_id] + 1;
+    quit_wait_value = (uint32_t)FIM_$WIRED_DATA.quit_value[as_id] + 1;
     if (TIME_$WAIT2((uint16_t *)&sio_$wait2_relative, &delay,
-                    &FIM_$QUIT_EC[as_id], &quit_wait_value, status_ret) < 0) {
+                    &FIM_$WIRED_DATA.quit_ec[as_id], &quit_wait_value, status_ret) < 0) {
         /* 0x00E67F7E-0x00E67FA2 */
         *status_ret = status_$async_fault_while_waiting_for_input;
         as_id = (int16_t)PROC1_$AS_ID;
-        FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id].value;
+        FIM_$WIRED_DATA.quit_value[as_id] = FIM_$WIRED_DATA.quit_ec[as_id].value;
     }
 
     /* 0x00E67FA8-0x00E67FAE */

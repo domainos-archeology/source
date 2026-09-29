@@ -59,8 +59,9 @@ status_$t PROC2_Internal_Error = 0x00190013;
 
 uid_t UID_$NIL = { 0, 0 };
 
-void *FIM_$USER_FIM_ADDR[64];
-int8_t FIM_$QUIT_INH[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$data_t, FIM_$DATA, 0x00E2126C);
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 uint32_t FIM_$INITIAL_STACK_SIZE = 0x100;
 
 int __host_intr_disable_count = 0;
@@ -103,8 +104,8 @@ static void reset_mocks(void)
     memset(mock_ecs, 0, sizeof(mock_ecs));
     memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
     memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
-    memset(FIM_$USER_FIM_ADDR, 0, sizeof(FIM_$USER_FIM_ADDR));
-    memset(FIM_$QUIT_INH, 0, sizeof(FIM_$QUIT_INH));
+    memset(FIM_$DATA.user_fim_addr, 0, sizeof(FIM_$DATA.user_fim_addr));
+    memset(FIM_$WIRED_DATA.quit_inh, 0, sizeof(FIM_$WIRED_DATA.quit_inh));
 
     P2_INFO_ALLOC_PTR = 0;
     P2_FREE_LIST_HEAD = 0;

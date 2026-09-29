@@ -42,8 +42,8 @@ static int tests_run = 0;
 #define ASSERT_PTR_EQ(e, a) ASSERT_EQ((uintptr_t)(e), (uintptr_t)(a))
 
 uint16_t PROC1_$AS_ID;
-uint32_t FIM_$QUIT_VALUE[58];
-ec_$eventcount_t FIM_$QUIT_EC[58];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 
 static int ec_init_calls;
 void EC_$INIT(ec_$eventcount_t *ec) { ec_init_calls++; memset(ec, 0, sizeof(*ec)); }
@@ -120,10 +120,10 @@ void CRASH_SYSTEM(const status_$t *status_p) { crash_calls++; crash_cell = statu
 static void reset(void)
 {
     PROC1_$AS_ID = 3;
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
-    FIM_$QUIT_VALUE[3] = 40;
-    FIM_$QUIT_EC[3].value = 41;
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
+    FIM_$WIRED_DATA.quit_value[3] = 40;
+    FIM_$WIRED_DATA.quit_ec[3].value = 41;
     ec_init_calls = advance_calls = wait_calls = cancel_calls = crash_calls = 0;
     advance_status_value = status_$ok;
     wait_result = 0;
@@ -150,14 +150,14 @@ TEST(wait_relative_timer_fires)
     ASSERT_EQ(250, advance_when.low);
     ASSERT_EQ(1, wait_calls);
     ASSERT_PTR_EQ(advance_ec, wait_ecs.ec[0]);
-    ASSERT_PTR_EQ(&FIM_$QUIT_EC[3], wait_ecs.ec[1]);
+    ASSERT_PTR_EQ(&FIM_$WIRED_DATA.quit_ec[3], wait_ecs.ec[1]);
     ASSERT_PTR_EQ(NULL, wait_ecs.ec[2]);
     ASSERT_EQ(1, wait_vals.val[0]);
     ASSERT_EQ(41, wait_vals.val[1]);                /* FIM_$QUIT_VALUE + 1 */
     ASSERT_EQ(0, wait_vals.val[2]);
     ASSERT_EQ(0, cancel_calls);
     ASSERT_EQ(0, crash_calls);
-    ASSERT_EQ(40, FIM_$QUIT_VALUE[3]);              /* untouched */
+    ASSERT_EQ(40, FIM_$WIRED_DATA.quit_value[3]);              /* untouched */
 }
 
 /* delay_type 1: the value is re-based from the raw clock onto the absolute one. */
@@ -206,7 +206,7 @@ TEST(wait_quit_cancels_and_latches)
     ASSERT_PTR_EQ(advance_elem, cancel_elem);
     ASSERT_EQ(status_$time_quit_while_waiting, status);
     ASSERT_EQ(0x000D0003, status);
-    ASSERT_EQ(41, FIM_$QUIT_VALUE[3]);              /* = FIM_$QUIT_EC[3].value */
+    ASSERT_EQ(41, FIM_$WIRED_DATA.quit_value[3]);              /* = FIM_$WIRED_DATA.quit_ec[3].value */
     ASSERT_EQ(0, crash_calls);
 }
 

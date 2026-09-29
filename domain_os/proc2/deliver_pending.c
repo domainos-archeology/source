@@ -21,8 +21,8 @@ void PROC2_$DELIVER_PENDING(void)
     /* 0x00E3F544 ML_$LOCK(4) */
     ML_$LOCK(PROC2_LOCK_ID);
 
-    /* 0x00E3F552..0x00E3F55E: clr.b FIM_$QUIT_INH[PROC1_$AS_ID] */
-    FIM_$QUIT_INH[PROC1_$AS_ID] = 0;
+    /* 0x00E3F552..0x00E3F55E: clr.b FIM_$WIRED_DATA.quit_inh[PROC1_$AS_ID] */
+    FIM_$WIRED_DATA.quit_inh[PROC1_$AS_ID] = 0;
 
     /* 0x00E3F562 */
     PROC2_$DELIVER_PENDING_INTERNAL(current_idx);

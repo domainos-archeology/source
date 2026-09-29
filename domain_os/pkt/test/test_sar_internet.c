@@ -58,8 +58,8 @@ static int tests_run = 0;
 uint32_t NODE_$ME = 0x00012345;
 uint32_t TIME_$CLOCKH = 1000;
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
-uint32_t FIM_$QUIT_VALUE[64];
-ec_$eventcount_t FIM_$QUIT_EC[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 uint16_t PROC1_$AS_ID = 3;
 
 static ec_$eventcount_t sock_eventcount;
@@ -256,8 +256,8 @@ static void reset(void)
     memset(data_buf, 0, sizeof(data_buf));
     memset(&app_rec_template, 0, sizeof(app_rec_template));
     memset(va_arena, 0, sizeof(va_arena));
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
 
     sock_eventcount.value = 7;
     SOCK_$DATA.socket_ptr[1] = (sock_$sock_t *)&sock_eventcount;   /* slot for socket 1 */
@@ -460,12 +460,12 @@ TEST(quit_arm_snapshots_the_quit_eventcount)
 {
     reset();
     info.retry_limit = 4;
-    FIM_$QUIT_EC[PROC1_$AS_ID].value = 0x55;
+    FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value = 0x55;
     wait_script[0] = 2;
     wait_script_len = 1;
     call();
 
-    ASSERT_EQ(0x55, FIM_$QUIT_VALUE[PROC1_$AS_ID]);
+    ASSERT_EQ(0x55, FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID]);
     ASSERT_EQ(0x120010, st);
     ASSERT_EQ(0, note_visible_calls);
     ASSERT_EQ(1, sock_close_calls);

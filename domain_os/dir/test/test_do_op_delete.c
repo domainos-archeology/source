@@ -51,7 +51,8 @@ static int current_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uid_t    UID_$NIL = { 0, 0 };
 
 /* The dir module data area DIR_$DO_OP establishes as A5 (0xE7DC00).  The host
@@ -258,7 +259,7 @@ static void reset(void)
     memset(fe_entry, 0, sizeof(fe_entry));
     memset(&ca_out, 0, sizeof(ca_out));
     memset(&ca_loc_out, 0, sizeof(ca_loc_out));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     enter_super_calls = exit_super_calls = 0;
     od_calls = rh_calls = fe_calls = re_calls = ca_calls = 0;
@@ -327,7 +328,7 @@ TEST(missing_entry)
 
     reset();
     fe_result = 0;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(status_$ok, (uint32_t)call(false, false, false));
 }
 
@@ -427,7 +428,7 @@ TEST(access_flag_gates)
 
     reset();
     ca_out.access_flags = (int8_t)0x80;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x0003000Au, (uint32_t)call(false, false, false));
 
     /* bit 7 alone, non-type-9, is fine */

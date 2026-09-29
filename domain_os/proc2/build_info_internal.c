@@ -47,7 +47,7 @@ typedef struct proc_info_combined_t {
     uint8_t     pad_51;         /* 0x51 */
     uint16_t    min_priority;   /* 0x52: PROC1_$SET_PRIORITY (0x00E4098A) */
     uint16_t    max_priority;   /* 0x54: PROC1_$SET_PRIORITY (0x00E40986) */
-    uint32_t    cpu_time[4];    /* 0x56: PROC_STATS_BASE     (0x00E409C8) */
+    uint32_t    cpu_time[4];    /* 0x56: PROC1_$DATA.stats (0x00E409C8) */
     uid_t       pgroup_uid;     /* 0x66: copy of proc_uid_2  (0x00E40AD4) */
     uint16_t    pgroup_flags;   /* 0x6E: copy of pgroup_info (0x00E40AEA) */
     uint16_t    upid;           /* 0x70: entry+0x16          (0x00E40BB2) */
@@ -199,12 +199,12 @@ void PROC2_$BUILD_INFO_INTERNAL(int16_t proc2_index, int16_t proc1_pid,
          * 0x00E409BE-0x00E409DA: A0 = 0xE25D20, D4 = pid*16; the first
          * read is (-0x10,A0,D4w) = 0xE25D10 + pid*16 -> out+0x56, then
          * three more longwords from 0xE25D14 + pid*16 -> out+0x5A..0x65:
-         * the four longwords of PROC_STATS_BASE[pid].
+         * the four longwords of PROC1_$DATA.stats[pid].
          */
-        out->cpu_time[0] = PROC_STATS_BASE[proc1_pid * 4 + 0];
-        out->cpu_time[1] = PROC_STATS_BASE[proc1_pid * 4 + 1];
-        out->cpu_time[2] = PROC_STATS_BASE[proc1_pid * 4 + 2];
-        out->cpu_time[3] = PROC_STATS_BASE[proc1_pid * 4 + 3];
+        out->cpu_time[0] = PROC1_$DATA.stats[proc1_pid].stat[0];
+        out->cpu_time[1] = PROC1_$DATA.stats[proc1_pid].stat[1];
+        out->cpu_time[2] = PROC1_$DATA.stats[proc1_pid].stat[2];
+        out->cpu_time[3] = PROC1_$DATA.stats[proc1_pid].stat[3];
 
         /* 0x00E409DC-0x00E409EC: pushes 0xD8, 0xDC, 0xD0, &pid */
         PROC1_$GET_ANY_CPU_USAGE((uint16_t *)&proc1_pid_slot, &out->usage_d0,

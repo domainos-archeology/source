@@ -45,8 +45,9 @@ proc2_ec_entry_t PROC2_$EC[PROC2_EC_ENTRIES];
 uid_t PROC2_$UID[PROC2_UID_TABLE_SIZE];
 uid_t UID_$NIL = { 0, 0 };
 uint16_t PROC1_$CURRENT;
-void *FIM_$USER_FIM_ADDR[64];
-int8_t FIM_$QUIT_INH[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$data_t, FIM_$DATA, 0x00E2126C);
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 as_$info_t AS_$INFO;
 const uint32_t proc2_$map_area_size_00e735f4 = 0x00004000;   /* set_valid.c */
 
@@ -78,8 +79,8 @@ static void reset_mocks(void)
     memset(mock_pid_to_index, 0, sizeof(mock_pid_to_index));
     memset(PROC2_$EC, 0, sizeof(PROC2_$EC));
     memset(PROC2_$UID, 0, sizeof(PROC2_$UID));
-    memset(FIM_$USER_FIM_ADDR, 0, sizeof(FIM_$USER_FIM_ADDR));
-    memset(FIM_$QUIT_INH, 0, sizeof(FIM_$QUIT_INH));
+    memset(FIM_$DATA.user_fim_addr, 0, sizeof(FIM_$DATA.user_fim_addr));
+    memset(FIM_$WIRED_DATA.quit_inh, 0, sizeof(FIM_$WIRED_DATA.quit_inh));
     memset(mock_cr_arena, 0, sizeof(mock_cr_arena));
     memset(&AS_$INFO, 0, sizeof(AS_$INFO));
     ARCH_HOST_VA_BASE = (uintptr_t)mock_cr_arena;
@@ -160,8 +161,8 @@ static void setup_table(void)
     child()->cr_rec_2 = MOCK_CR_REC_VA;
     child()->pad_18[0] = 0x1234;
     parent()->uid.high = 0x0A0A0A0Au; parent()->uid.low = 0x0B0B0B0Bu;
-    FIM_$USER_FIM_ADDR[OLD_ASID] = (void *)0x00F1F1F1u;
-    FIM_$QUIT_INH[NEW_ASID] = (int8_t)0xFF;
+    FIM_$DATA.user_fim_addr[OLD_ASID] = (void *)0x00F1F1F1u;
+    FIM_$WIRED_DATA.quit_inh[NEW_ASID] = (int8_t)0xFF;
     AS_$INFO.stack_file_low = 0x00A00000u;
     AS_$INFO.init_stack_file_size = 0x00004000u;
 }
@@ -216,8 +217,8 @@ TEST(success_path_entry_layout)
 
     /* 0x00E73716..0x00E7374E */
     ASSERT_EQ(n_fp_init, 1); ASSERT_EQ(last_fp_init_asid, NEW_ASID);
-    ASSERT_EQ((uintptr_t)FIM_$USER_FIM_ADDR[NEW_ASID], 0x00F1F1F1u);
-    ASSERT_EQ(FIM_$QUIT_INH[NEW_ASID], 0);
+    ASSERT_EQ((uintptr_t)FIM_$DATA.user_fim_addr[NEW_ASID], 0x00F1F1F1u);
+    ASSERT_EQ(FIM_$WIRED_DATA.quit_inh[NEW_ASID], 0);
 
     /* 0x00E73752..0x00E73774 */
     ASSERT_EQ(n_map, 1);
@@ -261,10 +262,10 @@ TEST(success_path_entry_layout)
 TEST(user_fim_addr_zero_keeps_quit_inh)
 {
     setup_table();
-    FIM_$USER_FIM_ADDR[OLD_ASID] = NULL;
+    FIM_$DATA.user_fim_addr[OLD_ASID] = NULL;
     run_complete_vfork();
-    ASSERT_EQ((uintptr_t)FIM_$USER_FIM_ADDR[NEW_ASID], 0);
-    ASSERT_EQ(FIM_$QUIT_INH[NEW_ASID], -1);
+    ASSERT_EQ((uintptr_t)FIM_$DATA.user_fim_addr[NEW_ASID], 0);
+    ASSERT_EQ(FIM_$WIRED_DATA.quit_inh[NEW_ASID], -1);
 }
 
 TEST(map_initial_area_failure)

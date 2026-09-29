@@ -1,224 +1,118 @@
 /*
  * fim/fim_data.c - FIM Global Data
  *
- * Global variables for the Fault/Interrupt Manager subsystem.
+ * Module data blocks FIM_$DATA and FIM_$WIRED_DATA: Claude Opus 5.5
+ * (source-l2yd).
  *
- * Memory map (relative to FIM_DATA_BASE = 0x00E2126C):
- *   0x000-0x039: FIM_IN_FIM[] - Per-AS "in FIM" flags
- *   0x03C-0x123: FIM_$USER_FIM_ADDR[] - Per-AS user FIM handlers
- *   0x124-0x133: FIM_FRAME_SIZE_TABLE[] - Exception frame sizes
- *   0x446-0x549: FIM_$CLEANUP_STACK[] - Per-process cleanup handler stack heads
- *                                   (defined in fim/sau2/fim.s, not here)
- *   0x624-0x65D: FIM_$TRACE_BIT[] - Per-AS pending trace fault bit
- *                                   (defined in fim/sau2/fim.s, not here)
- *   0x6EE-0x6F1: FIM_$SPUR_CNT - Spurious interrupt count
+ * The FIM module's data lives in four SAU2 map segments:
  *
- * Every per-AS table here holds FIM_AS_COUNT (58) elements; see the
- * derivation of that count beside its definition in fim/fim.h.
- * FIM_$CLEANUP_STACK is the one FIM table that is not per-AS: it is indexed
- * by PROC1_$CURRENT and holds PROC1_MAX_PROCESSES (65) elements.
+ *   D E2126C FIM_         size = 134   FIM_$DATA (below): the A5 block of
+ *                                      the Pascal FIM routines
+ *   D E213A0 FIM_UNWIRED  size = 4F0   hand-written code (fim/sau2/fim.s)
+ *                                      with two cells: FIM_$CLEANUP_STACK
+ *                                      (defined in fim.s) and
+ *                                      FIM_$INITIAL_STACK_SIZE (below)
+ *   D E21890 FIM_WIRED    size = 1074  hand-written code (fim.s, bus_err.s,
+ *                                      the fp/sau2 files) with its cells;
+ *                                      the data run 0xE21FE6..0xE2277C is
+ *                                      FIM_$WIRED_DATA (below), the rest
+ *                                      stays with the assembly, except
+ *                                      FIM_$SPUR_CNT (below)
+ *   D E35004 FIM_WIRED    size = 24    FIM_$COLD_BUS_ERR, code in the
+ *                                      OS_INIT_DATA region
+ *
+ * Layouts, biases and asserts are in fim/fim.h.  Both blocks are linked in
+ * the SAU2 map's order; their addresses are ordering keys, not link
+ * addresses.
  */
 
 #include "fim/fim_internal.h"
 
 /*
- * FIM_IN_FIM - Per-AS flag indicating FIM is active
+ * FIM_$DATA - map "D E2126C FIM_ size = 134".
  *
- * Values:
- *   0x00 = Not in FIM
- *   0xFF = In FIM (set on entry, cleared on exit)
- *   < 0  = FIM blocked (negative = don't deliver to user)
- *
- * Indexed by PROC1_$AS_ID
- * Address: 0x00E2126C (0x00E2126C + 58 = 0x00E212A6, then 2 bytes of
- * alignment padding before FIM_$USER_FIM_ADDR)
+ * Image contents, `gsk read 0xE2126C 308': zero except the frame size
+ * table at +0x124 (0xE21390): 08 08 0c 00 10 00 00 00 3a 14 20 5c 00 00
+ * 00 00.  (The tree's former host table had 12 in the zero slots; these are
+ * the image's bytes.)
  */
-int8_t FIM_IN_FIM[FIM_AS_COUNT];
+MODULE_DATA_DEFINE_INIT(fim_$data_t, FIM_$DATA, 0x00E2126C, {
+    .frame_size = {
+        0x08,   /* format 0: short frame */
+        0x08,   /* format 1: throwaway frame */
+        0x0C,   /* format 2: instruction exception */
+        0x00,   /* format 3 */
+        0x10,   /* format 4 */
+        0x00,   /* format 5 */
+        0x00,   /* format 6 */
+        0x00,   /* format 7 */
+        0x3A,   /* format 8: 68010 bus error */
+        0x14,   /* format 9: coprocessor mid-instruction */
+        0x20,   /* format A: short bus cycle fault */
+        0x5C,   /* format B: long bus cycle fault */
+        0x00,   /* format C */
+        0x00,   /* format D */
+        0x00,   /* format E */
+        0x00,   /* format F */
+    },
+});
 
 /*
- * FIM_$USER_FIM_ADDR - Per-AS user-mode FIM handler
+ * FIM_$WIRED_DATA - the data run 0xE21FE6..0xE2277C of map segment
+ * "D E21890 FIM_WIRED size = 1074".
  *
- * If non-NULL, faults are delivered to this address in user mode.
- * If NULL, faults cause a crash.
+ * Image contents, `gsk read 0xE21FE6 1024' and `gsk read 0xE223E6 918':
  *
- * Indexed by PROC1_$AS_ID (multiply by 4 for byte offset)
- * Address: 0x00E212A8 (0x00E2126C + 0x3C); 0x00E212A8 + 58 * 4 = 0x00E21390,
- * the address of FIM_FRAME_SIZE_TABLE below.
+ *   quit_ec[0..57]   0xE22002..0xE222B9  each eventcount 0 with both waiter
+ *                                        links at itself, e.g. 0xE22002:
+ *                                        00000000 00e22002 00e22002
+ *   quit_inh[0..57]  0xE2248A..0xE224C3  ff throughout
+ *   deliv_ec[0..57]  0xE224C4..0xE2277B  as quit_ec, e.g. 0xE224C4:
+ *                                        00000000 00e224c4 00e224c4
+ *
+ * and zero elsewhere.  The self links are the empty-queue state EC_$INIT
+ * produces, spelled as the eventcount's own address like the other
+ * pre-linked eventcounts in the tree (pmap/pmap_data.c).
  */
-void *FIM_$USER_FIM_ADDR[FIM_AS_COUNT];
+#define FIM_EC_SELF(t, i)                                                    \
+    { .value = 0,                                                           \
+      .waiter_list_head = (ec_$eventcount_waiter_t *)&FIM_$WIRED_DATA.t[i], \
+      .waiter_list_tail = (ec_$eventcount_waiter_t *)&FIM_$WIRED_DATA.t[i] }
+#define FIM_EC_SELF_8(t, b)                                                  \
+    FIM_EC_SELF(t, (b) + 0), FIM_EC_SELF(t, (b) + 1),                       \
+    FIM_EC_SELF(t, (b) + 2), FIM_EC_SELF(t, (b) + 3),                       \
+    FIM_EC_SELF(t, (b) + 4), FIM_EC_SELF(t, (b) + 5),                       \
+    FIM_EC_SELF(t, (b) + 6), FIM_EC_SELF(t, (b) + 7)
+/* FIM_AS_COUNT = 58 = 7 * 8 + 2 */
+#define FIM_EC_SELF_ALL(t)                                                   \
+    FIM_EC_SELF_8(t, 0),  FIM_EC_SELF_8(t, 8),  FIM_EC_SELF_8(t, 16),       \
+    FIM_EC_SELF_8(t, 24), FIM_EC_SELF_8(t, 32), FIM_EC_SELF_8(t, 40),       \
+    FIM_EC_SELF_8(t, 48), FIM_EC_SELF(t, 56),   FIM_EC_SELF(t, 57)
+_Static_assert(FIM_AS_COUNT == 58, "FIM_EC_SELF_ALL spells out 58 eventcounts");
 
-/*
- * FIM_FRAME_SIZE_TABLE - Exception frame sizes by format code
- *
- * Maps m68010 exception frame format codes to sizes in bytes.
- * Format code is in bits 15:12 of the format/vector word.
- *
- * Format codes:
- *   0: Short frame (4 words = 8 bytes)
- *   1: Throwaway frame (4 words = 8 bytes)
- *   2: Instruction exception (6 words = 12 bytes)
- *   8: Bus error short (29 words = 58 bytes)
- *   9: Coprocessor mid-instruction (10 words = 20 bytes)
- *   A: Short bus cycle fault (16 words = 32 bytes)
- *   B: Long bus cycle fault (46 words = 92 bytes)
- *
- * Address: 0x00E21390
- */
-uint8_t FIM_FRAME_SIZE_TABLE[16] = {
-    8,      /* Format 0: Short frame */
-    8,      /* Format 1: Throwaway frame */
-    12,     /* Format 2: Instruction exception */
-    12,     /* Format 3: Reserved */
-    12,     /* Format 4: Reserved */
-    12,     /* Format 5: Reserved */
-    12,     /* Format 6: Reserved */
-    12,     /* Format 7: Reserved */
-    58,     /* Format 8: Bus error short (68010) */
-    20,     /* Format 9: Coprocessor mid-instruction */
-    32,     /* Format A: Short bus cycle fault */
-    92,     /* Format B: Long bus cycle fault */
-    12,     /* Format C: Reserved */
-    12,     /* Format D: Reserved */
-    12,     /* Format E: Reserved */
-    12      /* Format F: Reserved */
-};
+#define FIM_FF_8 -1, -1, -1, -1, -1, -1, -1, -1
 
-/*
- * FIM_$CLEANUP_STACK - Cleanup handler stack heads, one per process
- *
- * NOT DEFINED HERE.  The image places this table inside the FIM_ code
- * region between FIM_$SIGNAL (0x00E21688) and FIM_$PROC2_STARTUP
- * (0x00E217B6), which fim/sau2/fim.s reproduces byte for byte, so the one
- * definition of the object is the .globl FIM_$CLEANUP_STACK there and the
- * extent assertion lives beside it.  fim/fim.h declares it; see the
- * derivation of its 65-longword element count there.
- */
-
-/*
- * FIM_$QUIT_VALUE - Per-AS quit value
- *
- * Non-zero if a quit has been requested for the AS.
- * Checked by user-mode code to handle SIGQUIT.  Written by FIM_$INIT_ASID
- * (0x00E0AA24) and FIM_$ACKNOWLEDGE (0x00E0A96C), both of which copy the
- * head longword (the value) of FIM_$QUIT_EC[as].
- *
- * Address: 0x00E222BA; 0x00E222BA + 58 * 4 = 0x00E223A2, the address of
- * FIM_$TRACE_STS below.
- */
-uint32_t FIM_$QUIT_VALUE[FIM_AS_COUNT];
-
-/*
- * FIM_$QUIT_EC - Per-AS quit event count
- *
- * Event count that is advanced when a quit is requested.
- * User-mode code waits on this to detect quit requests.
- */
-/* NOTE: Each ec_$eventcount_t is 12 bytes. This array is accessed with
- * indices like as_id * 3 (to account for 12-byte stride in 4-byte units).
- * The actual layout is 58 * 12 = 696 bytes.
- *
- * Address: 0x00E22002; 0x00E22002 + 696 = 0x00E222BA, the address of
- * FIM_$QUIT_VALUE above.
- */
-ec_$eventcount_t FIM_$QUIT_EC[FIM_AS_COUNT];
-
-/*
- * FIM_$QUIT_INH - Per-AS quit inhibit flag
- *
- * Non-zero if quit delivery is inhibited for the AS.
- * Set during single-step debugging, and by FIM_$INIT_ASID (0x00E0AA24) and
- * FIM_$FREE_ASID (0x00E0AA6C).
- *
- * Address: 0x00E2248A; 0x00E2248A + 58 = 0x00E224C4, the address of the
- * signal-delivery eventcount array FIM_$ACKNOWLEDGE advances.
- */
-int8_t FIM_$QUIT_INH[FIM_AS_COUNT];
+MODULE_DATA_DEFINE_INIT(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6, {
+    .quit_ec  = { FIM_EC_SELF_ALL(quit_ec) },
+    .quit_inh = { FIM_FF_8, FIM_FF_8, FIM_FF_8, FIM_FF_8,
+                  FIM_FF_8, FIM_FF_8, FIM_FF_8, -1, -1 },
+    .deliv_ec = { FIM_EC_SELF_ALL(deliv_ec) },
+});
 
 /*
  * FIM_$INITIAL_STACK_SIZE - Bytes reserved above a new process's startup
  * context on its initial stack (used by PROC2_$CREATE / PROC2_$FORK).
- * Original address: 0x00E21824 (4 bytes; image value 0x00000008)
+ * Original address: 0x00E21824 (4 bytes; image value 0x00000008), a cell of
+ * the FIM_UNWIRED code segment (see fim/fim.h).
  */
 uint32_t FIM_$INITIAL_STACK_SIZE = 8;
 
 /*
- * FIM_$TRACE_STS - Per-AS trace fault status
- *
- * Contains the status code for a pending trace fault.
- * Set by FIM_$SINGLE_STEP, checked by fault delivery.
- *
- * Address: 0x00E223A2; 0x00E223A2 + 58 * 4 = 0x00E2248A, the address of
- * FIM_$QUIT_INH above.
- */
-status_$t FIM_$TRACE_STS[FIM_AS_COUNT];
-
-/*
- * FIM_$TRACE_BIT - Per-AS trace bit
- *
- * Bit 7 set if trace fault pending for the AS.
- * Used to coordinate trace fault delivery.
- *
- * Address: 0x00E21890.  FIM_$CLEAR_TRACE_FAULT (0x00E22890) opens with
- * "lea (-0x1002,PC),A1"; the PC value for that displacement is the address
- * of the extension word, 0x00E22892, giving A1 = 0x00E21890.  The same A1
- * then reaches FIM_$PENDING_TRACE_FAULTS at (0x76E,A1) = 0x00E21FFE and
- * FIM_$EXIT at (0x102C,A1) = 0x00E228BC, which is where FIM_$EXIT is.
- * 0x00E21890 + 58 = 0x00E218CA, the address of JMP_TO_BUS_ERR.
- *
- * NOT DEFINED HERE.  This table is the first object of the module's wired
- * data area, which the image places in the middle of the FIM code region --
- * between FIM_$SETUP_RETURN (ends 0x00E2188E) and JMP_TO_BUS_ERR -- so it is
- * emitted with the surrounding bytes in fim/sau2/fim.s.  fim/fim.h declares
- * it; the extent assertion for it lives beside the definition there.
- */
-
-/*
- * FIM_$PENDING_TRACE_FAULTS - Count of pending trace faults
- *
- * Number of processes with pending trace faults.
- * When non-zero, FIM_$EXIT is patched to NOP to allow
- * trace fault delivery.
- *
- * Address: 0x00E21FFE ((0x76E,A1) in FIM_$CLEAR_TRACE_FAULT, see
- * FIM_$TRACE_BIT above); 0x00E21FFE + 4 = 0x00E22002, the address of
- * FIM_$QUIT_EC above.
- */
-uint32_t FIM_$PENDING_TRACE_FAULTS;
-
-/*
  * FIM_$SPUR_CNT - Spurious interrupt count
  *
- * Total number of spurious interrupts received.
- * Used for diagnostics.
- *
- * Address: 0x00E21F7E (relative 0x6EE)
+ * Address: 0x00E21F7E, a cell of the FIM_WIRED code between
+ * FIM_$SPURIOUS_INT and FIM_$PARITY_TRAP, read and written PC-relative by
+ * FIM_$SPURIOUS_INT alone (0x00E21F28); fim/sau2/fim.s does not reproduce
+ * that routine's data yet, so this object has no users.
  */
 uint32_t FIM_$SPUR_CNT;
-
-/*
- * ============================================================================
- * Per-AS table extents
- * ============================================================================
- *
- * Each per-AS table's element count is pinned by the address of the object
- * that follows it in the image (see the derivation beside FIM_AS_COUNT in
- * fim/fim.h).  These assertions restate that arithmetic so a change to
- * FIM_AS_COUNT or to ec_$eventcount_t cannot silently resize a table.
- *
- * Only checked for the m68k build: on a 64-bit host ec_$eventcount_t's two
- * waiter pointers are 8 bytes each, so FIM_$QUIT_EC is not 696 bytes there.
- */
-#if defined(ARCH_M68K)
-_Static_assert(sizeof(FIM_IN_FIM) == 0x00E212A6 - 0x00E2126C,
-               "FIM_IN_FIM spans 0x00E2126C..0x00E212A5");
-_Static_assert(sizeof(FIM_$USER_FIM_ADDR) == 0x00E21390 - 0x00E212A8,
-               "FIM_$USER_FIM_ADDR ends where FIM_FRAME_SIZE_TABLE begins");
-_Static_assert(sizeof(FIM_$QUIT_EC) == 0x00E222BA - 0x00E22002,
-               "FIM_$QUIT_EC ends where FIM_$QUIT_VALUE begins");
-_Static_assert(sizeof(FIM_$QUIT_VALUE) == 0x00E223A2 - 0x00E222BA,
-               "FIM_$QUIT_VALUE ends where FIM_$TRACE_STS begins");
-_Static_assert(sizeof(FIM_$TRACE_STS) == 0x00E2248A - 0x00E223A2,
-               "FIM_$TRACE_STS ends where FIM_$QUIT_INH begins");
-_Static_assert(sizeof(FIM_$QUIT_INH) == 0x00E224C4 - 0x00E2248A,
-               "FIM_$QUIT_INH ends where the delivery eventcounts begin");
-#endif

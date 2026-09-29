@@ -374,7 +374,7 @@ void PMAP_$PURIFIER_L(void)
                      * counter, 0xE25D18 + (int16)(PROC1_$CURRENT << 4),
                      * the same slot pmap_$flush_write_batch increments.
                      */
-                    PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2] +=
+                    PROC1_$DATA.stats[PROC1_$CURRENT].stat[2] +=
                         (uint32_t)page_count;   /* index truncated to 16 bits */
 
                     batch_advanced = false;         /* 0x00E13D0C */

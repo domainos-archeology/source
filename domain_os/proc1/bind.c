@@ -88,7 +88,7 @@ uint16_t PROC1_$BIND(void *entry, void *initial_sp, void *stack_base,
     uint16_t pid_result = 0;
     uint16_t pid;               /* D5 */
     proc1_t *pcb;               /* A1, then A2 */
-    uint32_t *stats;            /* A3 = A5 + pid*16, then A0 */
+    proc1_$stats_t *stats;      /* A3 = A5 + pid*16, then A0 */
 
     /* 0x00E14D2E: ML_$LOCK(PROC1_CREATE_LOCK_ID) */
     ML_$LOCK(PROC1_CREATE_LOCK_ID);
@@ -116,8 +116,9 @@ uint16_t PROC1_$BIND(void *entry, void *initial_sp, void *stack_base,
     pid_result = pid;
     *status_p = status_$ok;
 
-    /* 0x00E14D7C..0x00E14D84: OS_STACK_BASE[pid] = stack_base */
-    OS_STACK_BASE[pid] = stack_base;
+    /* 0x00E14D7C..0x00E14D84: OS_STACK_BASE[pid] = stack_base, a VA
+     * (`move.l D4,(0x730,A1)' with A1 = A5 + pid*4) */
+    PROC1_$DATA.os_stack_base[pid] = ARCH_PTR_TO_VA(stack_base);
 
     /* 0x00E14D88: PMAP_$INIT_WS_SCAN(pid, ws_param) */
     PMAP_$INIT_WS_SCAN(pid, (int16_t)ws_param);
@@ -150,11 +151,11 @@ uint16_t PROC1_$BIND(void *entry, void *initial_sp, void *stack_base,
     pcb->asid = 0;
 
     /* 0x00E14DC2..0x00E14DD6: four longwords at A5 + 0x828 + pid*16 */
-    stats = &PROC_STATS_BASE[pid * 4];
-    stats[0] = 0;
-    stats[1] = 0;
-    stats[2] = 0;
-    stats[3] = 0;
+    stats = &PROC1_$DATA.stats[pid];
+    stats->stat[0] = 0;
+    stats->stat[1] = 0;
+    stats->stat[2] = 0;
+    stats->stat[3] = 0;
 
     /* 0x00E14DD8: word 0x000A over pri_min:pri_max */
     pcb->pri_min = PROC1_BIND_PRI_MIN;

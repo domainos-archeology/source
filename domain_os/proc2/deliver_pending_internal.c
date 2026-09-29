@@ -93,10 +93,10 @@ void PROC2_$DELIVER_PENDING_INTERNAL(int16_t proc_index)
 
     asid = entry->asid;
 
-    /* 0x00E3ED16..0x00E3ED56: FIM_$QUIT_INH[asid] != 0 blocks delivery,
+    /* 0x00E3ED16..0x00E3ED56: FIM_$WIRED_DATA.quit_inh[asid] != 0 blocks delivery,
      * except for signal 9 sent by the target's debugger (the current
      * process) and for 0x13 carrying the BLAST status */
-    if (FIM_$QUIT_INH[asid] != 0) {
+    if (FIM_$WIRED_DATA.quit_inh[asid] != 0) {
         if (signal == 9 &&
             entry->debugger_idx == P2_PID_TO_INDEX(PROC1_$CURRENT)) {
             /* 0x00E3ED46 beq -> deliver */
@@ -108,23 +108,23 @@ void PROC2_$DELIVER_PENDING_INTERNAL(int16_t proc_index)
         }
     }
 
-    /* 0x00E3ED58..0x00E3ED76: FIM_$TRACE_STS[asid] = sig_status or 0 */
+    /* 0x00E3ED58..0x00E3ED76: FIM_$WIRED_DATA.trace_sts[asid] = sig_status or 0 */
     if (signal == 0x13) {
-        FIM_$TRACE_STS[asid] = (status_$t)entry->sig_status;
+        FIM_$WIRED_DATA.trace_sts[asid] = (status_$t)entry->sig_status;
     } else {
-        FIM_$TRACE_STS[asid] = 0;
+        FIM_$WIRED_DATA.trace_sts[asid] = 0;
     }
 
     /* 0x00E3ED7A..0x00E3ED80 ori.w #0x80,(0x0,A1,D1w): the HIGH word of the
      * longword, i.e. bit 23 */
-    FIM_$TRACE_STS[asid] |= 0x00800000L;
+    FIM_$WIRED_DATA.trace_sts[asid] |= 0x00800000L;
 
-    /* 0x00E3ED86..0x00E3ED8A st FIM_$QUIT_INH[asid] */
-    FIM_$QUIT_INH[asid] = (int8_t)0xFF;
+    /* 0x00E3ED86..0x00E3ED8A st FIM_$WIRED_DATA.quit_inh[asid] */
+    FIM_$WIRED_DATA.quit_inh[asid] = (int8_t)0xFF;
 
     /* 0x00E3ED8E..0x00E3ED98: result slot + word argument */
     FIM_$DELIVER_TRACE_FAULT((int16_t)asid);
 
     /* 0x00E3ED9A..0x00E3EDB0: pea FIM_$QUIT_EC + asid*12 */
-    EC_$ADVANCE(&FIM_$QUIT_EC[asid]);
+    EC_$ADVANCE(&FIM_$WIRED_DATA.quit_ec[asid]);
 }

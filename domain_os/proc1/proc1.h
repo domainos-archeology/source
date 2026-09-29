@@ -9,13 +9,8 @@
  * - Atomic operations and inhibit regions
  * - CPU time tracking and load averaging
  *
- * Memory layout (m68k):
- *   - PCB table: 0xE1EACC (array of pointers, max 65 processes)
- *   - Current PCB: 0xE1EAC8
- *   - Current PID: 0xE20608
- *   - Ready PCB: PC-relative from dispatch code
- *   - Ready count: 0xE1EBD0
- *   - Atomic depth: 0xE2060E
+ * Data: the PROC1_ module block PROC1_$DATA (A5 = 0xE254E8, below) and the
+ * cells of the PROC1_ASM code segment (0xE1EAC8.., after the block).
  */
 
 #ifndef PROC1_H
@@ -150,45 +145,84 @@ _Static_assert(sizeof(proc1_t) == 0x68, "proc1_t size");
 
 /*
  * ============================================================================
- * The PROC1_ module data block: A5 = 0x00E254E8
+ * PROC1_$DATA - the PROC1_ module data block (map "D E254E8 PROC1_ size = CC4")
  * ============================================================================
  *
- * SAU2 map: `D E254E8 PROC1_ size = CC4', so the block runs 0x00E254E8 ..
- * 0x00E261AC.  Every Pascal PROC1_ routine loads A5 with `lea (0xe254e8).l,A5';
- * PROC1_$INIT (boot-time segment) reaches it with `movea.l #0xe254e8,A0'.
- * The cells the C tree models, with the instruction that fixes each one:
+ * Module data block PROC1_$DATA: Claude Opus 5.5 (source-l2yd).
  *
- *   A5 off  absolute   object
- *   0x000   0xE254E8   PROC1_$LOADAV[3]        PROC1_$INIT_LOADAV clr.l (A5)/(4,A5)/(8,A5)
- *   0x010   0xE254F8   PROC1_$LOADAV_ELEM      PROC1_$INIT_LOADAV `pea (0x10,A5)' to
- *                                              TIME_$Q_ENTER_ELEM; fields at 0x14..0x28
- *   0x014   0xE254FC   PROC1_$TS_ELEM[]        time_queue_elem_t per pid, 0x1C stride:
- *                                              PROC1_$INIT_TS_TIMER `pea (0x14,A2)' with
- *                                              A2 = A5 + pid*0x1C; PROC1_$SET_TS
- *                                              `pea (0x14,A5,D2w)' with D2 = pid*0x1C
- *   0x730   0xE25C18   OS_STACK_BASE[]         (0x730,A1) with A1 = A5 + pid*4 (map name)
- *   0x828   0xE25D10   PROC_STATS_BASE[]       PROC1_$BIND clr.l (0x828,A3).. with
- *                                              A3 = A5 + pid*16 (map: PROC1_$STATS 0xE25D20
- *                                              is entry 1)
- *   0xC38   0xE26120   STACK_FREE_LIST         PROC1_$ALLOC_STACK / PROC1_$FREE_STACK
- *   0xC3C   0xE26124   STACK_HIGH_WATER
- *   0xC40   0xE26128   STACK_LOW_WATER
- *   0xC42   0xE2612A   PROC1_$TYPE[]           (0xC42,A0) with A0 = A5 + pid*2 (map:
- *                                              PROC1_$TYPE 0xE2612C is entry 1); the
- *                                              last entry (pid 64) ends the block at 0xCC4
+ * Every Pascal PROC1_ routine loads A5 with `lea (0xe254e8).l,A5' (e.g.
+ * PROC1_$BIND 0x00E14D24); PROC1_$INIT (boot-time segment) reaches it with
+ * `movea.l #0xe254e8,A0' (0x00E2F95C), and routines outside PROC1 address
+ * PROC1_$TYPE and PROC1_$STATS by their map addresses.  A MODULE_DATA block
+ * linked in the SAU2 map's order after PMAP_$DATA and before
+ * RING_$WIRED_DATA; the address is the ordering key, not the link address.
+ * The map names three objects in it (OS_STACK_BASE 0xE25C18, PROC1_$STATS
+ * 0xE25D20, PROC1_$TYPE 0xE2612C); the rest are known by displacement:
  *
- * The timer element for pid p therefore sits at A5 + 0x14 + p*0x1C: slot 0
- * (A5+0x14..0x30) overlaps PROC1_$LOADAV_ELEM (A5+0x10..0x2A) in the image.
- * Nothing ever uses slot 0 - PIDs start at 1 - so the two are separate C
- * objects here; the overlap is recorded, not reproduced.
+ *   A5 off  image      field
+ *   0x000   0xE254E8   loadav[3]         PROC1_$INIT_LOADAV clr.l (A5)/(4,A5)/
+ *                                        (8,A5); PROC1_$GET_LOADAV `lea (A5),A0'
+ *   0x00C   0xE254F4   (4 bytes, never addressed)
+ *   0x010   0xE254F8   loadav_elem       PROC1_$INIT_LOADAV `pea (0x10,A5)' to
+ *                                        TIME_$Q_ENTER_ELEM
+ *   0x014   0xE254FC   ts_elem[0..64]    timeslice timer element per pid
+ *   0x730   0xE25C18   os_stack_base[0..64]  map OS_STACK_BASE
+ *   0x834   0xE25D1C   (4 bytes, never addressed)
+ *   0x828   0xE25D10   stats[0..64]      per-pid counters; map PROC1_$STATS
+ *                                        (0xE25D20) is stats[1]
+ *   0xC38   0xE26120   stack_free_list   PROC1_$ALLOC_STACK / PROC1_$FREE_STACK
+ *   0xC3C   0xE26124   stack_high_water
+ *   0xC40   0xE26128   stack_low_water
+ *   0xC42   0xE2612A   type[0..64]       map PROC1_$TYPE (0xE2612C) is type[1];
+ *                                        type[64] ends the block at 0xCC4
+ *
+ * Four per-process tables, each declared at the lowest address the code can
+ * reach and indexed with the pid the assembly scales (design section 3,
+ * docs/design-per-process-data.md).  Where element 0 overlays the object
+ * before it, the table is a union arm beside that object:
+ *
+ *   ts_elem[pid]        A5 + 0x14 + pid*0x1C.  PROC1_$INIT_TS_TIMER builds
+ *                       pid*0x1C as pid*4*8 - pid*4 (0x00E14B24..0x00E14B2E)
+ *                       and passes `pea (0x14,A2)' with A2 = A5 + pid*0x1C;
+ *                       PROC1_$SET_TS `pea (0x14,A5,D2w)' with D2 = pid*0x1C.
+ *                       Element 0 (0x14..0x30) overlays loadav_elem
+ *                       (0x10..0x2A); element 64 ends at 0x730.
+ *   os_stack_base[pid]  A5 + 0x730 + pid*4: PROC1_$BIND `lsl.w #0x2,D3w' /
+ *                       `lea (0x0,A5,D3w*0x1),A1' / `move.l D4,(0x730,A1)'
+ *                       (0x00E14D7E..0x00E14D84).  Element 0 is the map's
+ *                       OS_STACK_BASE.  Target VAs of stack tops.
+ *   stats[pid]          A5 + 0x828 + pid*0x10: PROC1_$BIND `lsl.w #0x4,D3w' /
+ *                       `lea (0x0,A5,D3w*0x1),A3' / `clr.l (0x828,A3)'
+ *                       (0x00E14DC4..0x00E14DCA); callers outside PROC1 use
+ *                       `(-0x8,A2,D2w)' with A2 = 0xE25D20 and D2 = pid*0x10
+ *                       (0x00E748CA).  Element 0 (0x828..0x838) overlays
+ *                       os_stack_base[62..64] and the pad at 0x834.
+ *   type[pid]           A5 + 0xC42 + pid*2: PROC1_$SET_TYPE `(0xc42,A0)' with
+ *                       A0 = A5 + pid*2; callers outside PROC1 use
+ *                       `cmpi.w #0x9,(-0x2,A0,D0w*0x1)' with A0 = 0xE2612C and
+ *                       D0 = pid*2 (DIR_$LOCK_OBJ 0x00E4AFCA).  Element 0
+ *                       (0xC42) overlays the low word of stack_low_water.
+ *
+ * The block holds no pointers: the stack cells and os_stack_base[] are
+ * target VAs (ARCH_VA_TO_PTR / ARCH_PTR_TO_VA at the use sites), so the
+ * bias arms sit at the same offsets on a host.  The one host difference is
+ * time_queue_elem_t, 0x1A bytes on the target but padded to 0x1C by a
+ * 4-byte-aligning host, which moves everything from 0x730 on; the offsets
+ * past ts_elem are therefore asserted for the target only.
+ *
+ * Image contents: `gsk read 0xE254E8 3268' is zero throughout.
  */
+#define PROC1_$DATA_SIZE 0xCC4          /* map: PROC1_ size = CC4 */
+
+/* PROC1_$GET_LOADAV copies the three load averages out as a block
+ * (three `move.l (A0)+,(A1)+' at 0x00E14BCC). */
+#define PROC1_LOADAV_COUNT 3
 
 /*
  * proc1_ts_slot_t - one timeslice timer element with its stride padding.
  *
  * The element is an ordinary time_queue_elem_t (0x1A bytes); the table
- * stride is 0x1C (PROC1_$INIT_TS_TIMER 0x00E14B24..0x00E14B2E computes
- * pid*4*8 - pid*4).
+ * stride is 0x1C (see ts_elem above).
  */
 typedef struct proc1_ts_slot_t {
     time_queue_elem_t elem;     /* 0x00: the queue element handed to TIME */
@@ -196,11 +230,103 @@ typedef struct proc1_ts_slot_t {
 } proc1_ts_slot_t;
 
 _Static_assert(__builtin_offsetof(proc1_ts_slot_t, elem) == 0x00, "proc1_ts_slot_t.elem");
-/* time_queue_elem_t carries pointers, so the stride only holds on the target */
+/* time_queue_elem_t is 0x1A on the target, 0x1C on a 4-byte-aligning host */
 #if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(proc1_ts_slot_t, pad_1a) == 0x1A, "proc1_ts_slot_t.pad_1a");
 _Static_assert(sizeof(proc1_ts_slot_t) == 0x1C, "proc1_ts_slot_t: 0x1C stride");
 #endif
+
+/*
+ * proc1_$stats_t - one PROC1_$STATS record (0x10 bytes, four longword
+ * counters).  The counters are named by their users rather than here:
+ *   stat[0] +0x00  pages touched (AST_$TOUCH, AST_$TOUCH_AREA)
+ *   stat[1] +0x04  pages touched, the other flavour (AST_$TOUCH)
+ *   stat[2] +0x08  pages read from disk (AST_$READ_AREA_PAGES, PMAP)
+ *   stat[3] +0x0C  pages read over the network (AST_$READ_AREA_PAGES_NETWORK)
+ * PACCT_$LOG receives &stat[2] and &stat[3] (0x00E748CA / 0x00E748C6).
+ */
+typedef struct proc1_$stats_t {
+    uint32_t    stat[4];        /* 0x00 */
+} proc1_$stats_t;
+
+_Static_assert(sizeof(proc1_$stats_t) == 0x10, "proc1_$stats_t: 0x10 stride (lsl.w #0x4)");
+
+typedef struct proc1_$data_t {
+    union {                                     /* +0x000 */
+        struct {
+            int32_t           loadav[PROC1_LOADAV_COUNT]; /* +0x000 8.24 fixed */
+            uint32_t          _000c;            /* +0x00C never addressed */
+            time_queue_elem_t loadav_elem;      /* +0x010 */
+        };
+        struct {
+            uint8_t           _ts_bias[0x14];
+            /* +0x014: [0..64]; [0] overlays loadav_elem */
+            proc1_ts_slot_t   ts_elem[PROC1_MAX_PROCESSES];
+        };
+    };
+    union {                                     /* +0x730 */
+        struct {
+            uint32_t          os_stack_base[PROC1_MAX_PROCESSES]; /* +0x730 VAs */
+            uint32_t          _0834;            /* +0x834 never addressed */
+        };
+        struct {
+            uint8_t           _stats_bias[0xF8];
+            /* +0x828: [0..64]; [1] is map PROC1_$STATS, [0] overlays
+             * os_stack_base[62..64] and the pad */
+            proc1_$stats_t    stats[PROC1_MAX_PROCESSES];
+        };
+    };
+    union {                                     /* +0xC38 */
+        struct {
+            uint32_t          stack_free_list;  /* +0xC38 VA of the first free
+                                                 *        4KB stack, 0 = none */
+            uint32_t          stack_high_water; /* +0xC3C VA, grows down */
+            uint32_t          stack_low_water;  /* +0xC40 VA, grows up */
+        };
+        struct {
+            uint8_t           _type_bias[0x0A];
+            /* +0xC42: [0..64]; [1] is map PROC1_$TYPE, [0] overlays the low
+             * word of stack_low_water */
+            uint16_t          type[PROC1_MAX_PROCESSES];
+        };
+    };
+} proc1_$data_t;
+
+_Static_assert(__builtin_offsetof(proc1_$data_t, loadav) == 0x000, "loadav (A5)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, loadav_elem) == 0x010, "loadav_elem (pea (0x10,A5))");
+_Static_assert(__builtin_offsetof(proc1_$data_t, ts_elem) == 0x014, "ts_elem[0] (0x14,A5,pid*0x1C)");
+#if defined(ARCH_M68K)
+/* Target only: time_queue_elem_t pads to 0x1C on a host (see above). */
+_Static_assert(__builtin_offsetof(proc1_$data_t, ts_elem[1]) == 0x030, "ts_elem stride 0x1C");
+_Static_assert(__builtin_offsetof(proc1_$data_t, ts_elem[PROC1_MAX_PROCESSES]) == 0x730,
+               "ts_elem[64] ends at OS_STACK_BASE");
+_Static_assert(__builtin_offsetof(proc1_$data_t, os_stack_base) == 0x730, "OS_STACK_BASE (0x730,A1)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, os_stack_base[1]) == 0x734, "os_stack_base stride 4 (lsl.w #0x2)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, _0834) == 0x834, "pad after os_stack_base[64]");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stats) == 0x828, "stats[0] (0x828,A3)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stats[1]) == 0x838, "PROC1_$STATS (0xE25D20) = stats[1]");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stats[PROC1_MAX_PROCESSES]) == 0xC38,
+               "stats[64] ends at stack_free_list");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stack_free_list) == 0xC38, "stack_free_list (0xc38,A5)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stack_high_water) == 0xC3C, "stack_high_water (0xc3c,A5)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stack_low_water) == 0xC40, "stack_low_water (0xc40,A5)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, type) == 0xC42, "type[0] (0xc42,A0) / (-0x2,0xE2612C)");
+_Static_assert(__builtin_offsetof(proc1_$data_t, type[1]) == 0xC44, "PROC1_$TYPE (0xE2612C) = type[1]");
+_Static_assert(__builtin_offsetof(proc1_$data_t, type[PROC1_MAX_PROCESSES]) == PROC1_$DATA_SIZE,
+               "type[64] ends the block");
+_Static_assert(sizeof(proc1_$data_t) == PROC1_$DATA_SIZE, "PROC1_: map size 0xCC4");
+#endif
+/* Pointer-free and alignment-independent relative to its own arm. */
+_Static_assert(__builtin_offsetof(proc1_$data_t, stats[1]) - __builtin_offsetof(proc1_$data_t, stats) == 0x10,
+               "stats stride 0x10");
+_Static_assert(__builtin_offsetof(proc1_$data_t, type[1]) - __builtin_offsetof(proc1_$data_t, type) == 2,
+               "type stride 2");
+_Static_assert(__builtin_offsetof(proc1_$data_t, stats) - __builtin_offsetof(proc1_$data_t, os_stack_base) == 0xF8,
+               "stats[0] overlays os_stack_base[62]");
+_Static_assert(__builtin_offsetof(proc1_$data_t, type) - __builtin_offsetof(proc1_$data_t, stack_free_list) == 0x0A,
+               "type[0] overlays the low word of stack_low_water");
+
+MODULE_DATA_DECLARE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /*
  * Maximum number of state/priority levels for timeslice table
@@ -209,70 +335,44 @@ _Static_assert(sizeof(proc1_ts_slot_t) == 0x1C, "proc1_ts_slot_t: 0x1C stride");
 
 /*
  * ============================================================================
- * Global Variables
+ * PROC1_ASM cells (map "D E1EAC8 PROC1_ASM size = 24A4")
  * ============================================================================
  *
- * These are defined in proc1_data.c with appropriate sizes.
- * The original M68K addresses are documented for reference.
- */
-
-/*
- * Core process state (M68K addresses in comments)
+ * The PROC1_ASM segment is the hand-written dispatcher/EC/lock code with
+ * its data cells interleaved (0xE1EAC8..0xE20F6C).  Its cells are reached
+ * by absolute address or PC-relative from that code and exported by name;
+ * none is addressed through A5, so they stay individual objects here
+ * (proc1/proc1_data.c; like the NETLOG_ASM cells, ordering them is
+ * source-91vs).  Our proc1/sau2/ *.s files name them as .extern symbols and
+ * define none of them.
+ *
+ *   0xE1EAC8  PROC1_$CURRENT_PCB
+ *   0xE1EACC  PCBS[0..64]      element pid at 0xE1EACC + pid*4: PROC1_$BIND
+ *                              `movea.l #0xe1eacc,A1' / `lea (0x0,A1,D3w*0x1),A3'
+ *                              with D3 = pid*4 (0x00E14D96..0x00E14D9C);
+ *                              element 0 is the map symbol, element 64 ends
+ *                              at PROC1_$READY_COUNT (0xE1EBD0)
+ *   0xE1EBD0  PROC1_$READY_COUNT
+ *   0xE1EC3A  PROC1_$READY_PCB
+ *   0xE205D2  PROC1_$TSVV[18]
+ *   0xE205F6  PROC1_$SUSPEND_EC
+ *   0xE20608  PROC1_$CURRENT
+ *   0xE2060A  PROC1_$AS_ID
+ *   0xE2060E  PROC1_$ATOMIC_OP_DEPTH
  */
 extern proc1_t *PROC1_$CURRENT_PCB;     /* 0xE1EAC8: Current running process */
-extern proc1_t *PROC1_$READY_PCB;       /* PC-relative: Head of ready list */
-#ifndef PROC1_$CURRENT
+extern proc1_t *PROC1_$READY_PCB;       /* 0xE1EC3A: Head of ready list */
 extern uint16_t PROC1_$CURRENT;         /* 0xE20608: Current process ID */
-#endif
 extern uint16_t PROC1_$READY_COUNT;     /* 0xE1EBD0: Number of ready processes */
 extern uint16_t PROC1_$ATOMIC_OP_DEPTH; /* 0xE2060E: Atomic operation nesting */
-#ifndef PROC1_$AS_ID
 extern uint16_t PROC1_$AS_ID;           /* 0xE2060A: Current address space ID */
-#endif
-extern proc1_t *PCBS[PROC1_MAX_PROCESSES];      /* 0xE1EACC: PCB pointer table */
-#ifndef PROC1_$TYPE
-extern uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES]; /* 0xE2612A: Process types */
-#endif
-
-/*
- * Stack allocation (M68K base: 0xE254E8)
- */
-extern void *STACK_FREE_LIST;           /* 0xE26120: Free list of 4KB stacks */
-extern void *STACK_HIGH_WATER;          /* 0xE26124: High water (grows down) */
-extern void *STACK_LOW_WATER;           /* 0xE26128: Low water (grows up) */
-extern void *OS_STACK_BASE[PROC1_MAX_PROCESSES]; /* 0xE25C18: OS stacks */
-
-/*
- * Process statistics - 16 bytes per process (4 uint32_t values)
- * Original address: 0xE25D10 (A5 + 0x828); entry pid at +pid*16, so the
- * map's PROC1_$STATS (0xE25D20) is entry 1.
- */
-extern uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
-
-/*
- * Timeslice timer elements, one per pid (A5 + 0x14 + pid*0x1C, 0xE254FC).
- * See the module map above; slot 0 is never used.
- */
-extern proc1_ts_slot_t PROC1_$TS_ELEM[PROC1_MAX_PROCESSES];
+extern proc1_t *PCBS[PROC1_MAX_PROCESSES];      /* 0xE1EACC: [0..64] by pid */
 
 /* 0xE205D2: SAU2 map PROC1_$TSVV, one timeslice word per state, 18 entries
  * (0xE205D2..0xE205F6 = PROC1_$SUSPEND_EC); ADVANCE_INT bounds the index with
  * `cmp.l #0x11' at 0xE20780. */
 #define PROC1_TSVV_COUNT 18
 extern int16_t PROC1_$TSVV[PROC1_TSVV_COUNT];
-
-/*
- * Load average data: three longwords at A5 + 0 (0xE254E8), copied out as a
- * block by PROC1_$GET_LOADAV (three `move.l (A0)+,(A1)+' at 0x00E14BCC).
- */
-#define PROC1_LOADAV_COUNT 3
-extern int32_t PROC1_$LOADAV[PROC1_LOADAV_COUNT];
-
-/*
- * The load-average timer element at A5 + 0x10 (0xE254F8), entered on
- * TIME_$RTEQ by PROC1_$INIT_LOADAV.
- */
-extern time_queue_elem_t PROC1_$LOADAV_ELEM;
 
 /*
  * Event count for process suspension

@@ -6,8 +6,8 @@
  * Covered:
  *   - the argument is a by-reference word (pea (0x96,A3) at 0x00E73314)
  *   - FIM_$CLEAR_TRACE_FAULT is called with that word (0x00E0AA34)
- *   - FIM_$QUIT_EC[as].value, the head longword of the 12-byte eventcount,
- *     is copied into FIM_$QUIT_VALUE[as] (0x00E0AA54)
+ *   - FIM_$WIRED_DATA.quit_ec[as].value, the head longword of the 12-byte eventcount,
+ *     is copied into FIM_$WIRED_DATA.quit_value[as] (0x00E0AA54)
  *   - the quit inhibit is set to 0xFF / true (st at 0x00E0AA60)
  *   - only the addressed AS is touched
  */
@@ -47,9 +47,8 @@ static int tests_failed = 0;
  * Globals and callees the code under test references
  * ============================================================================ */
 
-uint32_t         FIM_$QUIT_VALUE[FIM_AS_COUNT];
-ec_$eventcount_t FIM_$QUIT_EC[FIM_AS_COUNT];
-int8_t           FIM_$QUIT_INH[FIM_AS_COUNT];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 
 static int     clear_trace_calls;
 static int16_t clear_trace_last_arg;
@@ -72,9 +71,9 @@ void FIM_$CLEAR_TRACE_FAULT(int16_t as_id)
 
 static void reset_state(void)
 {
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
-    memset(FIM_$QUIT_INH, 0, sizeof(FIM_$QUIT_INH));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
+    memset(FIM_$WIRED_DATA.quit_inh, 0, sizeof(FIM_$WIRED_DATA.quit_inh));
     clear_trace_calls = 0;
     clear_trace_last_arg = -1;
 }
@@ -98,14 +97,14 @@ TEST(snapshots_the_quit_eventcount_value)
     int16_t as_id = 5;
 
     reset_state();
-    FIM_$QUIT_EC[5].value = 0x12345678;
-    FIM_$QUIT_EC[5].waiter_list_head = (ec_$eventcount_waiter_t *)0x11223344;
-    FIM_$QUIT_EC[5].waiter_list_tail = (ec_$eventcount_waiter_t *)0x55667788;
+    FIM_$WIRED_DATA.quit_ec[5].value = 0x12345678;
+    FIM_$WIRED_DATA.quit_ec[5].waiter_list_head = (ec_$eventcount_waiter_t *)0x11223344;
+    FIM_$WIRED_DATA.quit_ec[5].waiter_list_tail = (ec_$eventcount_waiter_t *)0x55667788;
 
     FIM_$INIT_ASID(&as_id);
 
     /* 0x00E0AA54 copies one longword: the value, not the waiter links. */
-    ASSERT_EQ(0x12345678u, FIM_$QUIT_VALUE[5]);
+    ASSERT_EQ(0x12345678u, FIM_$WIRED_DATA.quit_value[5]);
 }
 
 TEST(negative_eventcount_values_are_copied_verbatim)
@@ -113,11 +112,11 @@ TEST(negative_eventcount_values_are_copied_verbatim)
     int16_t as_id = 1;
 
     reset_state();
-    FIM_$QUIT_EC[1].value = -1;
+    FIM_$WIRED_DATA.quit_ec[1].value = -1;
 
     FIM_$INIT_ASID(&as_id);
 
-    ASSERT_EQ(0xFFFFFFFFu, FIM_$QUIT_VALUE[1]);
+    ASSERT_EQ(0xFFFFFFFFu, FIM_$WIRED_DATA.quit_value[1]);
 }
 
 TEST(sets_the_quit_inhibit)
@@ -128,8 +127,8 @@ TEST(sets_the_quit_inhibit)
     FIM_$INIT_ASID(&as_id);
 
     /* "st" writes 0xFF; a Pascal boolean is true when negative. */
-    ASSERT_EQ(-1, FIM_$QUIT_INH[2]);
-    ASSERT_EQ(1, FIM_$QUIT_INH[2] < 0);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[2]);
+    ASSERT_EQ(1, FIM_$WIRED_DATA.quit_inh[2] < 0);
 }
 
 TEST(touches_only_the_addressed_as)
@@ -137,17 +136,17 @@ TEST(touches_only_the_addressed_as)
     int16_t as_id = 4;
 
     reset_state();
-    FIM_$QUIT_EC[3].value = 0xAAAAAAAA;
-    FIM_$QUIT_EC[4].value = 0xBBBBBBBB;
-    FIM_$QUIT_EC[5].value = 0xCCCCCCCC;
+    FIM_$WIRED_DATA.quit_ec[3].value = 0xAAAAAAAA;
+    FIM_$WIRED_DATA.quit_ec[4].value = 0xBBBBBBBB;
+    FIM_$WIRED_DATA.quit_ec[5].value = 0xCCCCCCCC;
 
     FIM_$INIT_ASID(&as_id);
 
-    ASSERT_EQ(0xBBBBBBBBu, FIM_$QUIT_VALUE[4]);
-    ASSERT_EQ(0u, FIM_$QUIT_VALUE[3]);
-    ASSERT_EQ(0u, FIM_$QUIT_VALUE[5]);
-    ASSERT_EQ(0, FIM_$QUIT_INH[3]);
-    ASSERT_EQ(0, FIM_$QUIT_INH[5]);
+    ASSERT_EQ(0xBBBBBBBBu, FIM_$WIRED_DATA.quit_value[4]);
+    ASSERT_EQ(0u, FIM_$WIRED_DATA.quit_value[3]);
+    ASSERT_EQ(0u, FIM_$WIRED_DATA.quit_value[5]);
+    ASSERT_EQ(0, FIM_$WIRED_DATA.quit_inh[3]);
+    ASSERT_EQ(0, FIM_$WIRED_DATA.quit_inh[5]);
 }
 
 TEST(works_at_both_ends_of_the_as_table)
@@ -157,16 +156,16 @@ TEST(works_at_both_ends_of_the_as_table)
     reset_state();
 
     as_id = 0;
-    FIM_$QUIT_EC[0].value = 0x00000101;
+    FIM_$WIRED_DATA.quit_ec[0].value = 0x00000101;
     FIM_$INIT_ASID(&as_id);
-    ASSERT_EQ(0x00000101u, FIM_$QUIT_VALUE[0]);
-    ASSERT_EQ(-1, FIM_$QUIT_INH[0]);
+    ASSERT_EQ(0x00000101u, FIM_$WIRED_DATA.quit_value[0]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[0]);
 
     as_id = FIM_AS_COUNT - 1;
-    FIM_$QUIT_EC[FIM_AS_COUNT - 1].value = 0x00000202;
+    FIM_$WIRED_DATA.quit_ec[FIM_AS_COUNT - 1].value = 0x00000202;
     FIM_$INIT_ASID(&as_id);
-    ASSERT_EQ(0x00000202u, FIM_$QUIT_VALUE[FIM_AS_COUNT - 1]);
-    ASSERT_EQ(-1, FIM_$QUIT_INH[FIM_AS_COUNT - 1]);
+    ASSERT_EQ(0x00000202u, FIM_$WIRED_DATA.quit_value[FIM_AS_COUNT - 1]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[FIM_AS_COUNT - 1]);
     ASSERT_EQ(FIM_AS_COUNT - 1, clear_trace_last_arg);
 }
 

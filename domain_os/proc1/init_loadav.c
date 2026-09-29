@@ -3,8 +3,8 @@
  * Original address: 0x00e14c94 (136 bytes)
  *
  * Re-emitted from the disassembly.  A5 = 0x00E254E8 (the PROC1_ data
- * block): (0,A5)..(0xB,A5) are PROC1_$LOADAV[3] and (0x10,A5) is the
- * time_queue_elem_t PROC1_$LOADAV_ELEM, so (0x14,A5) is its callback,
+ * block): (0,A5)..(0xB,A5) are PROC1_$DATA.loadav[3] and (0x10,A5) is the
+ * time_queue_elem_t PROC1_$DATA.loadav_elem, so (0x14,A5) is its callback,
  * (0x18,A5) callback_arg, (0x1C,A5)/(0x20,A5) expire, (0x22,A5) flags and
  * (0x24,A5)/(0x28,A5) interval.
  *
@@ -12,7 +12,7 @@
  * (-0xC,A6) status, (-0x8,A6) the current clock.
  *
  * 0x00E14C94  link.w A6,-0x14 / pea (A5) / lea A5
- * 0x00E14CA0  PROC1_$LOADAV[0..2] = 0
+ * 0x00E14CA0  PROC1_$DATA.loadav[0..2] = 0
  * 0x00E14CAA  elem.flags = 2                       TIME_QELEM_REPEAT
  * 0x00E14CB0  elem.callback = PROC1_$LOADAV_CALLBACK (0x00E14BDA)
  * 0x00E14CB8  elem.callback_arg = 0
@@ -45,24 +45,24 @@ void PROC1_$INIT_LOADAV(void)
     clock_t now;                /* (-0x8,A6) */
 
     /* 0x00E14CA0..0x00E14CA6 */
-    PROC1_$LOADAV[0] = 0;
-    PROC1_$LOADAV[1] = 0;
-    PROC1_$LOADAV[2] = 0;
+    PROC1_$DATA.loadav[0] = 0;
+    PROC1_$DATA.loadav[1] = 0;
+    PROC1_$DATA.loadav[2] = 0;
 
     /* 0x00E14CAA */
-    PROC1_$LOADAV_ELEM.flags = TIME_QELEM_REPEAT;
+    PROC1_$DATA.loadav_elem.flags = TIME_QELEM_REPEAT;
 
     /* 0x00E14CB0 / 0x00E14CB8 */
-    PROC1_$LOADAV_ELEM.callback = (uint32_t)(uintptr_t)PROC1_$LOADAV_CALLBACK;
-    PROC1_$LOADAV_ELEM.callback_arg = 0;
+    PROC1_$DATA.loadav_elem.callback = (uint32_t)(uintptr_t)PROC1_$LOADAV_CALLBACK;
+    PROC1_$DATA.loadav_elem.callback_arg = 0;
 
     /* 0x00E14CBC / 0x00E14CC0 */
     when.high = PROC1_LOADAV_INTERVAL_HIGH;
     when.low = PROC1_LOADAV_INTERVAL_LOW;
 
     /* 0x00E14CC8 / 0x00E14CCE */
-    PROC1_$LOADAV_ELEM.interval_high = when.high;
-    PROC1_$LOADAV_ELEM.interval_low = when.low;
+    PROC1_$DATA.loadav_elem.interval_high = when.high;
+    PROC1_$DATA.loadav_elem.interval_low = when.low;
 
     /* 0x00E14CD4 */
     TIME_$CLOCK(&now);
@@ -71,9 +71,9 @@ void PROC1_$INIT_LOADAV(void)
     ADD48(&when, &now);
 
     /* 0x00E14CF0 / 0x00E14CF6 */
-    PROC1_$LOADAV_ELEM.expire_high = when.high;
-    PROC1_$LOADAV_ELEM.expire_low = when.low;
+    PROC1_$DATA.loadav_elem.expire_high = when.high;
+    PROC1_$DATA.loadav_elem.expire_low = when.low;
 
     /* 0x00E14CFC..0x00E14D0E */
-    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &now, &PROC1_$LOADAV_ELEM, &status);
+    TIME_$Q_ENTER_ELEM(&TIME_$RTEQ, &now, &PROC1_$DATA.loadav_elem, &status);
 }

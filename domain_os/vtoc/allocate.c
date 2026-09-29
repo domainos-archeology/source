@@ -46,7 +46,7 @@
 /*
  * Process type that performs the (expensive) duplicate-UID chain walk before
  * allocating on a new-format volume; tested at 0xE38980 against
- * PROC1_$TYPE[PROC1_$CURRENT].
+ * PROC1_$DATA.type[PROC1_$CURRENT].
  */
 #define VTOC_DUP_CHECK_PROC_TYPE    9
 
@@ -131,7 +131,7 @@ void VTOC_$ALLOCATE(vtoc_$lookup_req_t *loc, void *new_vtoce_p,
 
     /* 0xE38972-0xE38986: only the file server walks the chain looking for
      * an existing VTOCE with this UID before allocating a new one. */
-    if (PROC1_$TYPE[PROC1_$CURRENT] == VTOC_DUP_CHECK_PROC_TYPE) {
+    if (PROC1_$DATA.type[PROC1_$CURRENT] == VTOC_DUP_CHECK_PROC_TYPE) {
         uint16_t walk_idx = bucket_idx;                 /* D3w, 0xE3898E */
         uint32_t next_block;                            /* D2 */
 

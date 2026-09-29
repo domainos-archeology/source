@@ -88,7 +88,7 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
      * 00e71f36  move.l (0x0,A4,D7w*0x1),D7   ; D7 = PROC1_$AS_ID * 4
      * 00e71f3a  addq.l #0x1,D7
      */
-    quit_check_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+    quit_check_val = (int32_t)FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;
 
     /*
      * 0x00E71F40 - 0x00E71F46: the two argument longwords are copied into an
@@ -152,7 +152,7 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
              *   00e71ff0  move.l D0,-(SP)           vals[1] = timeout_val
              *   00e71ff2  move.l D6,-(SP)           vals[0] = wait_val
              *   00e72002  pea (0x0,A4,D2w)  A4 = 0xe22002, D2 = AS_ID*4*3
-             *                                       ecs[2] = &FIM_$QUIT_EC[AS_ID]
+             *                                       ecs[2] = &FIM_$WIRED_DATA.quit_ec[AS_ID]
              *   00e72006  move.l #0xe2b0d4,-(SP)    ecs[1] = &TIME_$CLOCKH
              *   00e7200c  move.l (-0x3c,A6),-(SP)   ecs[0] = sock_ec
              *   00e72010  jsr EC_$WAIT              ; 0-based index in D0
@@ -162,7 +162,7 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
             wait_result = EC_$WAIT(
                 (ec_$wait_ecs_t){{ sock_ec,
                                    (ec_$eventcount_t *)&TIME_$CLOCKH,
-                                   &FIM_$QUIT_EC[PROC1_$AS_ID] }},
+                                   &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID] }},
                 (ec_$wait_vals_t){{ wait_val, timeout_val, quit_check_val }});
 
             if (wait_result == 1) {
@@ -172,8 +172,8 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
 
             if (wait_result == 2) {
                 /* Quit requested (00e72076 cmpi.w #0x2,D0w) */
-                FIM_$QUIT_VALUE[PROC1_$AS_ID] =
-                    (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+                FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] =
+                    (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
                 *status_ret = 0x120010;  /* Quit status */
                 goto check_visible;
             }

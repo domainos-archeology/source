@@ -25,7 +25,7 @@
  *   - read mode enqueues into the one-based request queue and wraps the
  *     write index from 0x40 to 1 (0x00E3BF14-0x00E3BF34)
  *   - the pool is grown only when growth is enabled, nothing is pending and
- *     PROC1_$TYPE[PROC1_$CURRENT] != 5 (0x00E3BED0-0x00E3BEF6)
+ *     PROC1_$DATA.type[PROC1_$CURRENT] != 5 (0x00E3BED0-0x00E3BEF6)
  *   - the lock is taken and released around the whole body, and dropped
  *     across EC_$WAIT (0x00E3BF44-0x00E3BF6C)
  *   - no store spills into the neighbouring cell of any 32-bit link
@@ -77,7 +77,7 @@ static int tests_failed = 0;
 uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 uint16_t PROC1_$CURRENT = 7;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 static int lock_starts;
 static int lock_stops;
@@ -148,7 +148,7 @@ static void reset_module(void)
 {
     memset(DISK_$DATA, 0, sizeof(DISK_$DATA));
     memset(arena, 0xCC, sizeof(arena));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     PROC1_$CURRENT = 7;
 
@@ -429,7 +429,7 @@ TEST(pool_is_not_grown_for_process_type_5)
     D16(DMOD_AVAIL_COUNT) = 0;
     D8(DMOD_ALLOC_DISABLED) = 0;
     D16(DMOD_PENDING_COUNT) = 0;
-    PROC1_$TYPE[PROC1_$CURRENT] = 5;        /* 0x00E3BEE4 */
+    PROC1_$DATA.type[PROC1_$CURRENT] = 5;        /* 0x00E3BEE4 */
     ((ec_$eventcount_t *)DISK_$DATA)->value = 10;
 
     uint32_t first = 0, last = 0;

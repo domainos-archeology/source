@@ -29,7 +29,8 @@ uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
 pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 uint16_t PROC1_$CURRENT;
 uid_t UID_$NIL = { 0, 0 };
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 int __host_intr_disable_count = 0;
 
 static status_$t mock_get_info_status, mock_sid_status;
@@ -39,7 +40,7 @@ static void reset_mocks(void)
 {
     memset(mock_entries, 0, sizeof(mock_entries));
     memset(mock_pgroups, 0, sizeof(mock_pgroups));
-    memset(PROC_STATS_BASE, 0, sizeof(PROC_STATS_BASE));
+    memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     mock_get_info_status = mock_sid_status = status_$ok;
     n_get_info = n_set_priority = n_sid = n_usage = 0;
     PROC1_$CURRENT = 5;
@@ -105,7 +106,7 @@ TEST(proc1_half_fills_and_flags_current)
 {
     status_$t st = 0;
     memset(&out, 0, sizeof(out));
-    PROC_STATS_BASE[5 * 4 + 0] = 1; PROC_STATS_BASE[5 * 4 + 3] = 4;
+    PROC1_$DATA.stats[5].stat[0] = 1; PROC1_$DATA.stats[5].stat[3] = 4;
     PROC2_$BUILD_INFO_INTERNAL(0, 5, &out, &st);
     ASSERT_EQ(st, status_$proc2_request_is_for_current_process);
     ASSERT_EQ(out.proc1_info.upc, 5);

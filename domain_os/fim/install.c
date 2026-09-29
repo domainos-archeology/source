@@ -17,14 +17,14 @@
  *   move.w   (0x00e2060a).l,D2w        ; D2w = PROC1_$AS_ID
  *   movea.l  (0x8,A6),A0               ; A0 = new_addr (by reference)
  *   lsl.w    #0x2,D2w                  ; byte offset = as_id * 4
- *   move.l   (0x3c,A5,D2w*0x1),D1      ; D1 = old FIM_$USER_FIM_ADDR[as]
+ *   move.l   (0x3c,A5,D2w*0x1),D1      ; D1 = old FIM_$DATA.user_fim_addr[as]
  *   move.l   D1,D0                     ; result = old handler
- *   move.l   (A0),(0x3c,A5,D2w*0x1)    ; FIM_$USER_FIM_ADDR[as] = *new_addr
+ *   move.l   (A0),(0x3c,A5,D2w*0x1)    ; FIM_$DATA.user_fim_addr[as] = *new_addr
  *   tst.l    D1
  *   bne.b    0x00e0a9fa                ; had a handler already: done
  *   move.w   (0x00e2060a).l,D2w        ; re-read the AS id, unscaled
  *   movea.l  #0xe2248a,A1
- *   clr.b    (0x0,A1,D2w*0x1)          ; FIM_$QUIT_INH[as] = 0
+ *   clr.b    (0x0,A1,D2w*0x1)          ; FIM_$WIRED_DATA.quit_inh[as] = 0
  *   movem.l  (-0x10,A6),{D2 A5}
  *   unlk     A6
  *   rts
@@ -43,12 +43,12 @@ void *FIM_$INSTALL(void **new_addr)
     void *old_addr;
 
     as_id = PROC1_$AS_ID;
-    old_addr = FIM_$USER_FIM_ADDR[as_id];
-    FIM_$USER_FIM_ADDR[as_id] = *new_addr;
+    old_addr = FIM_$DATA.user_fim_addr[as_id];
+    FIM_$DATA.user_fim_addr[as_id] = *new_addr;
 
     if (old_addr == NULL) {
         /* 0x00e0a9ea: PROC1_$AS_ID is re-read here in the original. */
-        FIM_$QUIT_INH[PROC1_$AS_ID] = 0;
+        FIM_$WIRED_DATA.quit_inh[PROC1_$AS_ID] = 0;
     }
 
     return old_addr;

@@ -6,8 +6,8 @@
  * details recovered from the disassembly: the ASID clamp of the set
  * operations, PMAP_$PURGE_WS's boolean landing in the high byte of its
  * word slot, the FIND_PAGE early exits, the GET_WS_LIST pairing of
- * MMAP_$WS_OWNER[i] with PROC1_$TYPE[i + 1] (A1 = 0xE2612E, `move.w
- * (-0x2,A1)`, while PROC1_$TYPE[0] sits at 0xE2612A) and the 0x40 clamp,
+ * MMAP_$WS_OWNER[i] with PROC1_$DATA.type[i + 1] (A1 = 0xE2612E, `move.w
+ * (-0x2,A1)`, while PROC1_$DATA.type[0] sits at 0xE2612A) and the 0x40 clamp,
  * and GET_WS_INFO's three longwords per WSL entry from MMAP_$WSL[5] on.
  */
 
@@ -52,7 +52,8 @@ aste_t   *ast_aste_base;
 uint32_t  ast_ws_flt_cnt, ast_page_flt_cnt, ast_alloc_too_few_cnt, ast_alloc_cnt;
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
 uint16_t  PROC1_$CURRENT;
-uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* ------------------------------------------------------------------ */
 /* Mocked callees                                                      */
@@ -119,7 +120,7 @@ static void reset_state(void)
     memset(ws_list, 0xEE, sizeof(ws_list));
     memset(ws_data, 0xEE, sizeof(ws_data));
     memset(&uid_out, 0, sizeof(uid_out));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     mmap_mmape_base = mmape_pages;
     ast_aste_base = aste_table;
     for (int i = 0; i < 4; i++) {
@@ -346,14 +347,14 @@ static void test_get_counters(void)
     ASSERT_EQ(16, counters.scan_fract);
 }
 
-/* GET_WS_LIST pairs MMAP_$WS_OWNER[i] with PROC1_$TYPE[i + 1] - the word
- * at 0xE2612C is the map's PROC1_$TYPE, entry 1 of the 0xE2612A array. */
+/* GET_WS_LIST pairs MMAP_$WS_OWNER[i] with PROC1_$DATA.type[i + 1] - the word
+ * at 0xE2612C is the map's PROC1_$DATA.type, entry 1 of the 0xE2612A array. */
 static void test_get_ws_list(void)
 {
-    PROC1_$TYPE[0] = 0xAAAA;            /* 0xE2612A: never reported */
-    PROC1_$TYPE[1] = 1;
-    PROC1_$TYPE[2] = 2;
-    PROC1_$TYPE[3] = 3;
+    PROC1_$DATA.type[0] = 0xAAAA;            /* 0xE2612A: never reported */
+    PROC1_$DATA.type[1] = 1;
+    PROC1_$DATA.type[2] = 2;
+    PROC1_$DATA.type[3] = 3;
     MMAP_$WS_OWNER[0] = 10;
     MMAP_$WS_OWNER[1] = 11;
     MMAP_$WS_OWNER[2] = 12;

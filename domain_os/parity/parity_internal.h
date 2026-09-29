@@ -14,33 +14,8 @@
 #include "misc/crash_system.h"
 #include "mmu/mmu.h"
 #include "parity/parity.h"
+#include "fim/fim.h"        /* FIM_$WIRED_DATA.parity: the parity state cells */
 
-/*
- * Parity Error State Structure
- *
- * This structure tracks the current parity error being processed.
- * Located at 0xE21FE6 on m68k systems.
- */
-typedef struct parity_state_t {
-  int16_t spurious_count; /* 0x00: Count of spurious parity errors */
-  int8_t chk_in_progress; /* 0x02: -1 if parity check in progress */
-  int8_t reserved_03;     /* 0x03: Padding */
-  uint32_t err_ppn;       /* 0x04: Physical page number of error */
-  uint32_t err_pa;        /* 0x08: Physical address of error */
-  uint32_t err_va;        /* 0x0C: Virtual address of error */
-  uint16_t err_status;    /* 0x10: Hardware status word */
-  uint16_t err_data;      /* 0x12: Data word at error location */
-} parity_state_t;
-
-/* Layout recovered from the disassembly -- see the field comments above. */
-_Static_assert(__builtin_offsetof(parity_state_t, spurious_count) == 0x00, "parity_state_t.spurious_count");
-_Static_assert(__builtin_offsetof(parity_state_t, chk_in_progress) == 0x02, "parity_state_t.chk_in_progress");
-_Static_assert(__builtin_offsetof(parity_state_t, reserved_03) == 0x03, "parity_state_t.reserved_03");
-_Static_assert(__builtin_offsetof(parity_state_t, err_ppn) == 0x04, "parity_state_t.err_ppn");
-_Static_assert(__builtin_offsetof(parity_state_t, err_pa) == 0x08, "parity_state_t.err_pa");
-_Static_assert(__builtin_offsetof(parity_state_t, err_va) == 0x0C, "parity_state_t.err_va");
-_Static_assert(__builtin_offsetof(parity_state_t, err_status) == 0x10, "parity_state_t.err_status");
-_Static_assert(__builtin_offsetof(parity_state_t, err_data) == 0x12, "parity_state_t.err_data");
 
 /*
  * Log entry structure for parity errors
@@ -104,23 +79,19 @@ _Static_assert(__builtin_offsetof(parity_log_entry_t, virt_addr) == 0x06, "parit
 /*
  * Architecture-specific definitions
  */
+/*
+ * PARITY_$DURING_DMA - "the latched parity error happened during DMA" flag,
+ * a Domain boolean (-1 / 0).  The map's one-cell segment "D E2298C PARITY
+ * size = 4" (after MEM_ 0xE22930..0xE2298C) is the PARITY module's A5 base:
+ * PARITY_$CHK (0x00E0AE70) and PARITY_$CHK_IO (0x00E0B17A) both `lea
+ * (0xe2298c).l,A5' and touch the flag as `(A5)' (0x00E0AF06 / 0x00E0AF58
+ * `move.b Dn,(A5)', 0x00E0B1B2 `clr.b (A5)').  Defined in
+ * parity/parity_data.c as a plain object for now; TODO(source-ppgz): make
+ * it the MODULE_DATA block PARITY_$DATA like the other A5 blocks.
+ */
+extern int8_t PARITY_$DURING_DMA;
+
 #if defined(ARCH_M68K)
-
-/* Parity state global (at 0xE21FE6) */
-#define PARITY_$STATE (*(parity_state_t *)0xE21FE6)
-
-/* Individual field access for compatibility */
-#define PARITY_$INFO (*(int16_t *)0xE21FE6) /* Spurious error count */
-#define PARITY_$CHK_IN_PROGRESS                                                \
-  (*(int8_t *)0xE21FE8)                            /* Check-in-progress flag */
-#define PARITY_$ERR_PPN (*(uint32_t *)0xE21FEA)    /* Error page number */
-#define PARITY_$ERR_PA (*(uint32_t *)0xE21FEE)     /* Error physical address */
-#define PARITY_$ERR_VA (*(uint32_t *)0xE21FF2)     /* Error virtual address */
-#define PARITY_$ERR_STATUS (*(uint16_t *)0xE21FF6) /* Hardware status */
-#define PARITY_$ERR_DATA (*(uint16_t *)0xE21FF8)   /* Data at error */
-
-/* Parity during DMA flag (at 0xE2298C) */
-#define PARITY_$DURING_DMA (*(int8_t *)0xE2298C)
 
 /* Memory Error Registers */
 #define MEM_ERR_STATUS_LONG (*(volatile uint32_t *)0xFFB404)
@@ -129,20 +100,9 @@ _Static_assert(__builtin_offsetof(parity_log_entry_t, virt_addr) == 0x06, "parit
 #else /* !M68K */
 
 /* For non-m68k platforms, these will be provided by platform init */
-extern parity_state_t parity_state;
-extern int8_t parity_during_dma;
 extern volatile uint32_t *mem_err_status_long;
 extern volatile uint16_t *mem_err_status_word;
 
-#define PARITY_$STATE parity_state
-#define PARITY_$INFO parity_state.spurious_count
-#define PARITY_$CHK_IN_PROGRESS parity_state.chk_in_progress
-#define PARITY_$ERR_PPN parity_state.err_ppn
-#define PARITY_$ERR_PA parity_state.err_pa
-#define PARITY_$ERR_VA parity_state.err_va
-#define PARITY_$ERR_STATUS parity_state.err_status
-#define PARITY_$ERR_DATA parity_state.err_data
-#define PARITY_$DURING_DMA parity_during_dma
 #define MEM_ERR_STATUS_LONG (*mem_err_status_long)
 #define MEM_ERR_STATUS_WORD (*mem_err_status_word)
 

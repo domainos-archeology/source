@@ -13,6 +13,16 @@
  * into another handler's body, and a self-modifying jmp), so it is
  * transcribed here rather than translated to C.
  *
+ * KNOWN DEFECT (bead source-6psc): the `.equ' cells PROC1_AS_ID
+ * (0x00E2060A) and FP_SAVEP (0x00E218D0) below embed IMAGE addresses, and
+ * `move.w (PROC1_AS_ID).l,...' / `tst.l (FP_SAVEP).l' assemble to them.
+ * Map-order placement (docs/design-per-process-data.md) means the linked
+ * PROC1_$AS_ID and FP_$SAVEP objects are not at those addresses, so the
+ * operands point at the wrong cells in our link.  The bytes stay as the
+ * image has them until source-6psc converts every .s file to symbol
+ * references under a relocation-aware byte gate; the FIM_$TRACE_STS
+ * `.set' alias below is the pattern it will apply.
+ *
  * ---------------------------------------------------------------------------
  * Stack layout
  * ---------------------------------------------------------------------------
@@ -137,9 +147,11 @@
         .equ    FIM_DELIVER_TRACE_FAULT, 0x00E22866
         .equ    FP_SAVEP,           0x00E218D0  /* Non-zero if FPU hardware present */
 
-        /* Per-AS trace fault status, 4 bytes per AS.  Defined in
-         * fim/fim_data.c; its sibling FIM_$TRACE_BIT is in fim/sau2/fim.s. */
-        .extern FIM_$TRACE_STS               /* 0x00E223A2 */
+        /* Per-AS trace fault status, 4 bytes per AS: the trace_sts field of
+         * FIM_$WIRED_DATA (fim/fim.h, block image 0x00E21FE6, field +0x3BC);
+         * its sibling FIM_$TRACE_BIT is in fim/sau2/fim.s. */
+        .extern FIM_$WIRED_DATA
+        .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC  /* 0x00E223A2 */
 
         /* Other subsystems */
         .equ    MMU_INSTALL,        0x00E24048  /* MMU_$INSTALL */

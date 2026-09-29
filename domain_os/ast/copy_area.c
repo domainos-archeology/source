@@ -313,7 +313,7 @@ top:
         }
 
         /* 0x00E03D5C..0x00E03D76: PROC1_$STATS[pid] + 0x0C */
-        PROC_STATS_BASE[PROC1_$CURRENT * 4 + 3] += (uint32_t)got;
+        PROC1_$DATA.stats[PROC1_$CURRENT].stat[3] += (uint32_t)got;
     } else {
         /* 0x00E03D7E..0x00E03D90 */
         page_req.uid.low = (uint32_t)partner_index;
@@ -367,7 +367,7 @@ top:
         DISK_$RTN_QBLKS((int16_t)run, qblk_head, qblk_tail);
 
         /* 0x00E03E54..0x00E03E6E: PROC1_$STATS[pid] + 0x08 */
-        PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2] += (uint32_t)got;
+        PROC1_$DATA.stats[PROC1_$CURRENT].stat[2] += (uint32_t)got;
     }
 
     /* 0x00E03E72..0x00E03E7E */

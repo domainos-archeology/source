@@ -63,7 +63,7 @@ uint16_t NETBUF_$DELAY_TYPE = 0;
 
 static proc1_t current_pcb;
 proc1_t *PROC1_$CURRENT_PCB = &current_pcb;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 #define TEST_ARENA_PAGES 8
 static uint8_t arena[(TEST_ARENA_PAGES + 1) * NETBUF_HDR_SIZE];
@@ -153,7 +153,7 @@ static void reset_state(void)
     memset(&globals_storage, 0, sizeof(globals_storage));
     memset(mmape_storage, 0, sizeof(mmape_storage));
     memset(arena, 0xA5, sizeof(arena));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
     current_pcb.mypid = 9;
     lock_calls = unlock_calls = lock_depth = 0;
@@ -259,7 +259,7 @@ TEST(get_dat_non_network_process_wires_a_page)
 {
     uint32_t addr = 0;
     reset_state();
-    PROC1_$TYPE[9] = 3;
+    PROC1_$DATA.type[9] = 3;
     calloc_ppn = 0x123;
     CALL_GUARDED(NETBUF_$GET_DAT(&addr));
     ASSERT_EQ(calloc_calls, 1);
@@ -279,7 +279,7 @@ TEST(get_dat_network_process_waits_then_retries)
 {
     uint32_t addr = 0;
     reset_state();
-    PROC1_$TYPE[9] = NETBUF_NETWORK_PROC_TYPE;
+    PROC1_$DATA.type[9] = NETBUF_NETWORK_PROC_TYPE;
     globals_storage.delay_time.high = 0;
     globals_storage.delay_time.low = 250;
     time_wait_hook = hook_return_dat_page;
@@ -297,7 +297,7 @@ TEST(get_dat_crashes_on_a_bad_wait_or_calloc_status)
 {
     uint32_t addr = 0;
     reset_state();
-    PROC1_$TYPE[9] = NETBUF_NETWORK_PROC_TYPE;
+    PROC1_$DATA.type[9] = NETBUF_NETWORK_PROC_TYPE;
     time_wait_status = 0x00040005;
     CALL_GUARDED(NETBUF_$GET_DAT(&addr));
     ASSERT_EQ(crash_calls, 1);
@@ -305,7 +305,7 @@ TEST(get_dat_crashes_on_a_bad_wait_or_calloc_status)
     ASSERT_EQ(globals_storage.dat_delays, 0);
 
     reset_state();
-    PROC1_$TYPE[9] = 1;
+    PROC1_$DATA.type[9] = 1;
     calloc_status = 0x00110001;
     CALL_GUARDED(NETBUF_$GET_DAT(&addr));
     ASSERT_EQ(crash_calls, 1);
@@ -356,7 +356,7 @@ TEST(get_hdr_non_network_process_wires_maps_and_initialises)
     uint8_t *buf;
     int k;
     reset_state();
-    PROC1_$TYPE[9] = 2;
+    PROC1_$DATA.type[9] = 2;
     calloc_ppn = 0x210;
     getva_va = 4 * NETBUF_HDR_SIZE;
     CALL_GUARDED(NETBUF_$GET_HDR(&phys, &va));
@@ -388,7 +388,7 @@ TEST(get_hdr_network_process_waits_then_retries)
 {
     uint32_t phys = 0, va = 0;
     reset_state();
-    PROC1_$TYPE[9] = NETBUF_NETWORK_PROC_TYPE;
+    PROC1_$DATA.type[9] = NETBUF_NETWORK_PROC_TYPE;
     time_wait_hook = hook_return_hdr_buffer;
     CALL_GUARDED(NETBUF_$GET_HDR(&phys, &va));
     ASSERT_EQ(time_wait_calls, 1);
@@ -402,7 +402,7 @@ TEST(get_hdr_calloc_failure_skips_getva_and_crashes)
 {
     uint32_t phys = 0, va = 0;
     reset_state();
-    PROC1_$TYPE[9] = 1;
+    PROC1_$DATA.type[9] = 1;
     calloc_ppn = 0x33;
     calloc_status = 0x00110001;
     CALL_GUARDED(NETBUF_$GET_HDR(&phys, &va));
@@ -413,7 +413,7 @@ TEST(get_hdr_calloc_failure_skips_getva_and_crashes)
     ASSERT_EQ(globals_storage.hdr_allocs, 0);
 
     reset_state();
-    PROC1_$TYPE[9] = 1;
+    PROC1_$DATA.type[9] = 1;
     getva_status = 0x00110002;
     CALL_GUARDED(NETBUF_$GET_HDR(&phys, &va));
     ASSERT_EQ(getva_calls, 1);

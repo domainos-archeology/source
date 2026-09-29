@@ -14,7 +14,7 @@
  *   lea     (0xe2126c).l,A5            ; A5 = FIM module data base
  *   move.w  (0x00e2060a).l,D0w         ; D0w = PROC1_$AS_ID
  *   lsl.w   #0x2,D0w                   ; byte offset = as_id * 4
- *   move.l  (0x3c,A5,D0w*0x1),D0       ; D0 = FIM_$USER_FIM_ADDR[as_id]
+ *   move.l  (0x3c,A5,D0w*0x1),D0       ; D0 = FIM_$DATA.user_fim_addr[as_id]
  *   movea.l (-0x8,A6),A5
  *   unlk    A6
  *   rts
@@ -28,5 +28,5 @@
 
 void *FIM_$GET_FIM_ADDR(void)
 {
-    return FIM_$USER_FIM_ADDR[PROC1_$AS_ID];
+    return FIM_$DATA.user_fim_addr[PROC1_$AS_ID];
 }

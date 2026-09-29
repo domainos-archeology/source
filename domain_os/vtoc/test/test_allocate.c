@@ -67,7 +67,8 @@ uint32_t ROUTE_$PORT = 0x11223344;
 uint32_t NODE_$ME    = 0x00055555;
 
 uint16_t PROC1_$CURRENT = 3;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* ================================================================
  * Mock callees
@@ -249,7 +250,7 @@ static void reset_all(uint32_t block_hint)
     memset(&loc, 0xAA, sizeof(loc));
     memset(buf_a, 0, sizeof(buf_a));
     memset(buf_b, 0, sizeof(buf_b));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     memset(gb_calls, 0, sizeof(gb_calls));
     memset(gb_result, 0, sizeof(gb_result));
     memset(gb_status, 0, sizeof(gb_status));
@@ -432,7 +433,7 @@ static int test_old_format_allocates_free_entry(void)
 }
 
 /*
- * New format (0xE3893A) with PROC1_$TYPE[current] == 9: the bucket chain
+ * New format (0xE3893A) with PROC1_$DATA.type[current] == 9: the bucket chain
  * walk at 0xE38992 finds the UID and reports its existing location.
  */
 static int test_new_format_duplicate_uid_reports_location(void)
@@ -442,7 +443,7 @@ static int test_new_format_duplicate_uid_reports_location(void)
 
     reset_all(0x00000007u);
     vtoc_$data.format[TEST_VOL] = (int8_t)0x80;  /* < 0 = new format */
-    PROC1_$TYPE[PROC1_$CURRENT] = 9;
+    PROC1_$DATA.type[PROC1_$CURRENT] = 9;
     hash_bucket = 1;
     hash_block = 0x50;
     gb_result[0] = buf_a;
@@ -485,7 +486,7 @@ static int test_new_format_allocates_and_publishes_slot(void)
 
     reset_all(0x00001234u);
     vtoc_$data.format[TEST_VOL] = (int8_t)0x80;
-    PROC1_$TYPE[PROC1_$CURRENT] = 5;    /* not 9: no chain walk */
+    PROC1_$DATA.type[PROC1_$CURRENT] = 5;    /* not 9: no chain walk */
     hash_bucket = 0;
     hash_block = 0x50;
     gb_result[0] = buf_a;

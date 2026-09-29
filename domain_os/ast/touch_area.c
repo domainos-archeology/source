@@ -214,8 +214,8 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
             }
             ML_$LOCK(PMAP_LOCK_ID);                        /* 0x00E0371E */
 
-            /* 0x00E0373E: PROC_STATS_BASE[cur*4 + 3] += pages_done */
-            PROC_STATS_BASE[(uint16_t)(PROC1_$CURRENT * 4) + 3] +=
+            /* 0x00E0373E: PROC1_$DATA.stats[cur].stat[3] += pages_done */
+            PROC1_$DATA.stats[PROC1_$CURRENT].stat[3] +=
                 (uint32_t)(int32_t)pages_done;
         } else {
             /*
@@ -303,8 +303,8 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
                 }
             }
 
-            /* 0x00E0389A: PROC_STATS_BASE[cur*4 + 2] += pages_done */
-            PROC_STATS_BASE[(uint16_t)(PROC1_$CURRENT * 4) + 2] +=
+            /* 0x00E0389A: PROC1_$DATA.stats[cur].stat[2] += pages_done */
+            PROC1_$DATA.stats[PROC1_$CURRENT].stat[2] +=
                 (uint32_t)(int32_t)pages_done;
         }
 
@@ -312,8 +312,8 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
         if (*status != status_$ok) {
             *status |= (status_$t)0x80000000;
         }
-        /* 0x00E038AA: PROC_STATS_BASE[cur*4 + 0] += pages_done */
-        PROC_STATS_BASE[(uint16_t)(PROC1_$CURRENT * 4) + 0] +=
+        /* 0x00E038AA: PROC1_$DATA.stats[cur].stat[0] += pages_done */
+        PROC1_$DATA.stats[PROC1_$CURRENT].stat[0] +=
             (uint32_t)(int32_t)pages_done;
     }
 

@@ -246,6 +246,26 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
 4. **proc1/proc2/fim/acl per-process arrays** (`PROC1_$TYPE` bias,
    `FIM_$QUIT_EC/VALUE` 12- and 4-byte strides, `ACL_$SUPER_COUNT`,
    `PROC2_UID[58]`): declaration-side bias, use sites direct.
+   Amended 2026-09-29 (proc1/fim half, source-l2yd): blocks `PROC1_$DATA`
+   (0xE254E8, 0xCC4: `loadav`, `loadav_elem`, and four pid tables each
+   declared from its bias slot as a union arm - `ts_elem[0..64]` over
+   `loadav_elem`, `os_stack_base[0..64]` (map OS_STACK_BASE is element 0),
+   `stats[0..64]` over `os_stack_base[62..64]`, `type[0..64]` over the low
+   word of `stack_low_water`; the stack cells and `os_stack_base` are target
+   VAs, so the block is pointer-free and only `time_queue_elem_t`'s host
+   padding keeps the late offsets target-only asserts), `FIM_$DATA`
+   (0xE2126C, 0x134: `in_fim`, `user_fim_addr`, the frame size table, whose
+   image bytes differ from the old host table) and `FIM_$WIRED_DATA`
+   (0xE21FE6, 0x796: the data run of the FIM_WIRED code segment - parity
+   state, `MISS_STATUS`, `pending_trace_faults` and the per-ASID
+   `quit_ec`/`quit_value`/`trace_sts`/`quit_inh`/`deliv_ec`, all `[0..57]`
+   from their map symbols, eventcounts self-linked and `quit_inh` 0xFF as in
+   the image).  PROC1_ASM cells (`PCBS`, `PROC1_$CURRENT`, ...) and the
+   FIM_UNWIRED/FIM_WIRED code-segment cells stay individual or
+   assembly-owned objects; `svc/sau2/trap8.s`, `fim/sau2/fim.s` and
+   `fim/sau2/bus_err.s` reach the block fields through `.set` aliases with
+   their bytes unchanged.  PARITY's absolute state macros became
+   `FIM_$WIRED_DATA.parity` fields.
 5. **Sweep**: remove `__A5_BASE()` callers, then the macro; ban
    `#if defined(ARCH_M68K)` around data declarations by a grep in the
    Makefile's `check` target.

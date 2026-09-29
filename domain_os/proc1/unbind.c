@@ -144,7 +144,7 @@ void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
     pcb->pri_max = (uint8_t)(pcb->pri_max & ~PROC1_FLAG_BOUND);
 
     /* 0x00E14F26..0x00E14F2E */
-    PROC1_$FREE_STACK(OS_STACK_BASE[pid]);
+    PROC1_$FREE_STACK(ARCH_VA_TO_PTR(PROC1_$DATA.os_stack_base[pid]));
 
     /* 0x00E14F34 */
     PROC1_$SET_TYPE(pid, 0);

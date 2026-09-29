@@ -15,7 +15,7 @@
  *   - the six per-process A5-table accesses must actually happen;
  *   - TIME_$WAIT must be called, with delay type 0 and a 6-byte clock value
  *     of { high = 0, low = 0x4000 } (0xE5492E);
- *   - PROC1_$TYPE[PROC1_$CURRENT] == 9 fails immediately without retrying
+ *   - PROC1_$DATA.type[PROC1_$CURRENT] == 9 fails immediately without retrying
  *     (0xE548FC);
  *   - the WDIR and NDIR cached-directory checks must reuse the cached mapping
  *     instead of calling MST_$MAPS (0xE54A2A-0xE54AAE).
@@ -61,7 +61,8 @@ static int current_failed = 0;
 uint32_t TIME_$CLOCKH;
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 name_$data_t NAME_$DATA;
 
 /* ------------------------------------------------------------------ */
@@ -212,7 +213,7 @@ static void reset(void)
     memset(NAME_$OLD_DIR_DATA.lock_mode, 0, sizeof(NAME_$OLD_DIR_DATA.lock_mode));
     memset(NAME_$OLD_DIR_DATA.lock_handle, 0, sizeof(NAME_$OLD_DIR_DATA.lock_handle));
     memset(NAME_$OLD_DIR_DATA.lock_uid, 0, sizeof(NAME_$OLD_DIR_DATA.lock_uid));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     PROC1_$CURRENT = TEST_PROC;
     PROC1_$AS_ID = TEST_ASID;
@@ -415,7 +416,7 @@ TEST(server_process_does_not_retry)
     status_$t status = 0xdeadbeef;
 
     reset();
-    PROC1_$TYPE[TEST_PROC] = 9;
+    PROC1_$DATA.type[TEST_PROC] = 9;
     mock_lock_status = 0x000F0006;
     mock_lock_status_after_retry = status_$ok;
     NAME_$LOCK_DIR(&uid, &handle, 1, 0, &status);
@@ -427,7 +428,7 @@ TEST(server_process_does_not_retry)
 
     /* The neighbouring 1-based slot must not be the one consulted. */
     reset();
-    PROC1_$TYPE[TEST_PROC - 1] = 9;
+    PROC1_$DATA.type[TEST_PROC - 1] = 9;
     mock_lock_status = 0x000F0006;
     mock_lock_status_after_retry = status_$ok;
     NAME_$LOCK_DIR(&uid, &handle, 1, 0, &status);

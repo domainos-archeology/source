@@ -22,8 +22,7 @@ int __host_intr_disable_count = 0;
 
 static proc1_t pcb_table[PROC1_MAX_PROCESSES];
 proc1_t *PCBS[PROC1_MAX_PROCESSES];
-void *OS_STACK_BASE[PROC1_MAX_PROCESSES];
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */
@@ -105,9 +104,9 @@ static void reset(void)
     for (i = 0; i < PROC1_MAX_PROCESSES; i++) {
         PCBS[i] = &pcb_table[i];
         pcb_table[i].pri_max = PROC1_FLAG_BOUND;    /* everything bound */
-        OS_STACK_BASE[i] = (void *)0;
+        PROC1_$DATA.os_stack_base[i] = 0;
     }
-    memset(PROC_STATS_BASE, 0xEE, sizeof(PROC_STATS_BASE));
+    memset(PROC1_$DATA.stats, 0xEE, sizeof(PROC1_$DATA.stats));
     n_lock = n_unlock = 0;
     last_lock_id = last_unlock_id = -1;
     n_ws_scan = 0;
@@ -153,8 +152,8 @@ static void test_pcb_initialisation(void)
     pid = PROC1_$BIND(&entry_marker, (void *)0x1234, &stack_marker, 6, &st);
     ASSERT_EQ(pid, 9);
 
-    /* 0x00E14D84: OS_STACK_BASE[pid] = stack_base (argument 3) */
-    ASSERT_EQ((uintptr_t)OS_STACK_BASE[9], (uintptr_t)&stack_marker);
+    /* 0x00E14D84: OS_STACK_BASE[pid] = stack_base (argument 3), as a VA */
+    ASSERT_EQ(PROC1_$DATA.os_stack_base[9], ARCH_PTR_TO_VA(&stack_marker));
 
     /* 0x00E14D88: PMAP_$INIT_WS_SCAN(pid, ws_param), under the lock */
     ASSERT_EQ(n_ws_scan, 1);
@@ -195,12 +194,12 @@ static void test_stats_cleared_for_pid_only(void)
     pcb_table[4].pri_max = 0;
     (void)PROC1_$BIND(&entry_marker, (void *)0x1234, &stack_marker, 0, &st);
 
-    ASSERT_EQ(PROC_STATS_BASE[4 * 4 + 0], 0);
-    ASSERT_EQ(PROC_STATS_BASE[4 * 4 + 1], 0);
-    ASSERT_EQ(PROC_STATS_BASE[4 * 4 + 2], 0);
-    ASSERT_EQ(PROC_STATS_BASE[4 * 4 + 3], 0);
-    ASSERT_EQ(PROC_STATS_BASE[3 * 4 + 3], 0xEEEEEEEEu);
-    ASSERT_EQ(PROC_STATS_BASE[5 * 4 + 0], 0xEEEEEEEEu);
+    ASSERT_EQ(PROC1_$DATA.stats[4].stat[0], 0);
+    ASSERT_EQ(PROC1_$DATA.stats[4].stat[1], 0);
+    ASSERT_EQ(PROC1_$DATA.stats[4].stat[2], 0);
+    ASSERT_EQ(PROC1_$DATA.stats[4].stat[3], 0);
+    ASSERT_EQ(PROC1_$DATA.stats[3].stat[3], 0xEEEEEEEEu);
+    ASSERT_EQ(PROC1_$DATA.stats[5].stat[0], 0xEEEEEEEEu);
 }
 
 /*

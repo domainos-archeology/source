@@ -41,7 +41,7 @@
  *
  * The growth test at 0x00E3BEE4 is `cmpi.w #0x5,(-0x2,A4,D1w*0x1)` with
  * A4 = 0x00E2612C and D1 = PROC1_$CURRENT * 2, which addresses
- * 0x00E2612A + 2*current -- exactly PROC1_$TYPE[PROC1_$CURRENT], since
+ * 0x00E2612A + 2*current -- exactly PROC1_$DATA.type[PROC1_$CURRENT], since
  * proc1/proc1.h places the PROC1_$TYPE array at 0x00E2612A.
  *
  * Parameters:
@@ -109,7 +109,7 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, uint32_t *first_out,
              * In practice disabled is always 0x00 or 0xFF (clr.b/st). */
             if (*(uint8_t *)(data + DMOD_ALLOC_DISABLED) == 0 && pending == 0) {
                 /* Don't grow for process type 5 (helper/idle processes) */
-                if (PROC1_$TYPE[PROC1_$CURRENT] == 5) {
+                if (PROC1_$DATA.type[PROC1_$CURRENT] == 5) {
                     break;
                 }
                 /* 0x00E3BEEC: the caller reserves an extra word above the

@@ -3,7 +3,7 @@
  * Original address: 0x00e14a08 (104 bytes)
  *
  * Re-emitted from the disassembly.  A5 = 0x00E254E8; the element is
- * PROC1_$TS_ELEM[pid].elem at (0x14,A5 + pid*0x1C) and the queue is
+ * PROC1_$DATA.ts_elem[pid].elem at (0x14,A5 + pid*0x1C) and the queue is
  * TIME_$VTQ[pid - 1] (`pea (-0xc,A0,D3w)' with A0 = 0xE2A4A0, D3 = pid*12).
  *
  * Frame: (0x8,A6) pcb, (0xC,A6) timeslice (word).
@@ -50,5 +50,5 @@ void PROC1_$SET_TS(proc1_t *pcb, int16_t timeslice)
     /* 0x00E14A28..0x00E14A60 */
     TIME_$Q_REENTER_ELEM(&TIME_$VTQ[pid - 1], &when, 0,
                          (clock_t *)&pcb->cpu_total,
-                         &PROC1_$TS_ELEM[pid].elem, &status);
+                         &PROC1_$DATA.ts_elem[pid].elem, &status);
 }

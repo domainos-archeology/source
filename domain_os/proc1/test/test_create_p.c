@@ -18,7 +18,7 @@ int __host_intr_disable_count = 0;
 /* Module cells                                                        */
 /* ------------------------------------------------------------------ */
 
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                               */
@@ -69,7 +69,7 @@ void PROC1_$RESUME(uint16_t pid, status_$t *status_p)
 {
     n_resume++;
     resume_pid = pid;
-    type_at_resume = PROC1_$TYPE[pid];
+    type_at_resume = PROC1_$DATA.type[pid];
     *status_p = resume_status;
 }
 
@@ -97,7 +97,7 @@ static int tests_run, tests_failed;
 
 static void reset(void)
 {
-    memset(PROC1_$TYPE, 0xEE, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0xEE, sizeof(PROC1_$DATA.type));
     n_alloc = n_bind = n_free = n_resume = 0;
     alloc_status = status_$ok;
     bind_status = status_$ok;
@@ -120,8 +120,8 @@ static void test_argument_halves(void)
     ASSERT_EQ(alloc_size, 0x0800);
     ASSERT_EQ(pid, 7);
     ASSERT_EQ(st, status_$ok);
-    /* 0x00E151E2: PROC1_$TYPE[pid] = type, before the resume */
-    ASSERT_EQ(PROC1_$TYPE[7], 0x000F);
+    /* 0x00E151E2: PROC1_$DATA.type[pid] = type, before the resume */
+    ASSERT_EQ(PROC1_$DATA.type[7], 0x000F);
     ASSERT_EQ(type_at_resume, 0x000F);
     ASSERT_EQ(n_resume, 1);
     ASSERT_EQ(resume_pid, 7);
@@ -203,7 +203,7 @@ static void test_bind_failure_frees_stack(void)
     ASSERT_EQ(st, status_$no_pcb_is_available);
     ASSERT_EQ(n_free, 1);
     ASSERT_EQ((uintptr_t)freed_stack, (uintptr_t)&alloc_stack_cell);
-    ASSERT_EQ(PROC1_$TYPE[9], 0xEEEE);
+    ASSERT_EQ(PROC1_$DATA.type[9], 0xEEEE);
     ASSERT_EQ(n_resume, 0);
 }
 

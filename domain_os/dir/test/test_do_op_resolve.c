@@ -5,7 +5,7 @@
  * The guard is three nested conditions in the image:
  *   0x00E4D12E  `cmpi.w #0x9,(-0x2,A1,D0w*1)` / `seq D5b`
  *               A1 = 0xE2612C, D0w = 2 * PROC1_$CURRENT, so the cell is
- *               PROC1_$TYPE[PROC1_$CURRENT] off the 0xE2612A base
+ *               PROC1_$DATA.type[PROC1_$CURRENT] off the 0xE2612A base
  *               proc1.h declares.  D5 is 0xFF only for a type 9 process.
  *   0x00E4D1A0  `tst.b D5b` / `bpl`  - a NON-type-9 process skips the check
  *   0x00E4D1A4  `cmpi.w #0x1,D2w` / `bls` - the FIRST component skips it
@@ -50,7 +50,8 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 uint16_t     PROC1_$CURRENT;
-uint16_t     PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 uint32_t     TIME_$CLOCKH;
 uid_t        UID_$NIL = { 0, 0 };
 name_$data_t NAME_$DATA;
@@ -131,7 +132,7 @@ typedef struct {
 
 static void reset_mocks(void)
 {
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     memset(&NAME_$DATA, 0, sizeof(NAME_$DATA));
     /* Keep root and node uids away from anything the walk produces. */
     NAME_$DATA.root_uid.high = 0x0F0F0001u;
@@ -184,7 +185,7 @@ static void run_resolve(const char *path, resolve_out_t *out)
 /* ------------------------------------------------------------------ */
 
 /*
- * 0x00E4D12E: the guard's boolean is `PROC1_$TYPE[PROC1_$CURRENT] == 9`.
+ * 0x00E4D12E: the guard's boolean is `PROC1_$DATA.type[PROC1_$CURRENT] == 9`.
  * A type 1 process walks the whole path however long the clock runs.
  */
 TEST(non_type9_process_never_times_out)
@@ -192,7 +193,7 @@ TEST(non_type9_process_never_times_out)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT] = 1;
+    PROC1_$DATA.type[PROC1_$CURRENT] = 1;
     mock_ticks_per_component = 0x1000;   /* far past 0x14 */
 
     run_resolve("a/b/c/d", &out);
@@ -212,7 +213,7 @@ TEST(type9_first_component_is_exempt)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
+    PROC1_$DATA.type[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
     mock_ticks_per_component = 0x1000;
 
     run_resolve("a", &out);
@@ -231,7 +232,7 @@ TEST(type9_times_out_on_the_second_component)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
+    PROC1_$DATA.type[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
     mock_ticks_per_component = 0x15;     /* > 0x14 after one component */
 
     run_resolve("a/b/c/d", &out);
@@ -254,7 +255,7 @@ TEST(type9_boundary_is_strictly_greater_than_0x14)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
+    PROC1_$DATA.type[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
     mock_ticks_per_component = 0x14;
 
     run_resolve("a/b/c/d", &out);
@@ -270,7 +271,7 @@ TEST(type9_within_budget_completes)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
+    PROC1_$DATA.type[PROC1_$CURRENT] = PROC1_TYPE_SERVER;
     mock_ticks_per_component = 0;
 
     run_resolve("a/b/c/d", &out);
@@ -291,8 +292,8 @@ TEST(guard_index_is_proc1_current_not_current_minus_one)
     resolve_out_t out;
 
     reset_mocks();
-    PROC1_$TYPE[PROC1_$CURRENT - 1] = PROC1_TYPE_SERVER;
-    PROC1_$TYPE[PROC1_$CURRENT] = 1;
+    PROC1_$DATA.type[PROC1_$CURRENT - 1] = PROC1_TYPE_SERVER;
+    PROC1_$DATA.type[PROC1_$CURRENT] = 1;
     mock_ticks_per_component = 0x1000;
 
     run_resolve("a/b/c/d", &out);

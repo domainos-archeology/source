@@ -77,7 +77,11 @@ typedef struct ec_$eventcount_t {
 
 /* Process stats */
 #define PROC1_MAX_PROCESSES 65
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+/* Mock of the PROC1_$DATA block (proc1/proc1.h) reduced to the one field
+ * the unit touches; this test replaces the real headers wholesale. */
+typedef struct proc1_$stats_t { uint32_t stat[4]; } proc1_$stats_t;
+typedef struct proc1_$data_t { proc1_$stats_t stats[PROC1_MAX_PROCESSES]; } proc1_$data_t;
+proc1_$data_t PROC1_$DATA;
 uint16_t PROC1_$CURRENT;
 
 /* NETLOG */
@@ -160,7 +164,7 @@ static uint16_t mock_netlog_kinds[MAX_QBLKS];
 
 static void reset_mocks(void)
 {
-    memset(PROC_STATS_BASE, 0, sizeof(PROC_STATS_BASE));
+    memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     PROC1_$CURRENT = 1;
     NETLOG_$OK_TO_LOG = 0;
     memset(mock_mmape, 0, sizeof(mock_mmape));
@@ -364,7 +368,7 @@ TEST(single_page_success)
     ASSERT_EQ(0x300, mock_write_complete_vpns[0]);
 
     /* Verify stats incremented */
-    ASSERT_EQ(1, PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2]);
+    ASSERT_EQ(1, PROC1_$DATA.stats[PROC1_$CURRENT].stat[2]);
 
     /* Verify update_seg_map called with correct args */
     ASSERT_EQ(1, mock_update_seg_map_count);
@@ -405,7 +409,7 @@ TEST(multi_page_batch)
 
     ASSERT_EQ(3, mock_write_complete_count);
     ASSERT_EQ(3, mock_update_seg_map_count);
-    ASSERT_EQ(3, PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2]);
+    ASSERT_EQ(3, PROC1_$DATA.stats[PROC1_$CURRENT].stat[2]);
     ASSERT_EQ(0, batch_count);
     ASSERT_EQ(0, status);
 }
@@ -430,7 +434,7 @@ TEST(write_error_propagates)
 
     ASSERT_EQ(2, mock_write_complete_count);
     ASSERT_EQ(1, mock_update_seg_map_count);
-    ASSERT_EQ(1, PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2]);
+    ASSERT_EQ(1, PROC1_$DATA.stats[PROC1_$CURRENT].stat[2]);
     ASSERT_EQ(0x50007, status);
     ASSERT_EQ(0, batch_count);
 }
@@ -450,7 +454,7 @@ TEST(write_status_minus_one_ignored)
 
     ASSERT_EQ(1, mock_write_complete_count);
     ASSERT_EQ(0, mock_update_seg_map_count);
-    ASSERT_EQ(0, PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2]);
+    ASSERT_EQ(0, PROC1_$DATA.stats[PROC1_$CURRENT].stat[2]);
     ASSERT_EQ(0, status);  /* -1 sentinel NOT propagated */
 }
 
@@ -548,9 +552,9 @@ TEST(process_stats_tracking)
     pmap_$flush_write_batch(&batch_count, batch_vpns, segmap, &status,
                             mock_aste, mock_flush_flags);
 
-    ASSERT_EQ(2, PROC_STATS_BASE[3 * 4 + 2]);
-    ASSERT_EQ(0, PROC_STATS_BASE[0 * 4 + 2]);
-    ASSERT_EQ(0, PROC_STATS_BASE[1 * 4 + 2]);
+    ASSERT_EQ(2, PROC1_$DATA.stats[3].stat[2]);
+    ASSERT_EQ(0, PROC1_$DATA.stats[0].stat[2]);
+    ASSERT_EQ(0, PROC1_$DATA.stats[1].stat[2]);
 }
 
 TEST(lock_ordering)

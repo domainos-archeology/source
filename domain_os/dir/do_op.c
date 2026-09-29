@@ -67,7 +67,7 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
     resp->f12 = 0;
 
     /* Check if this is a server process (type 9) */
-    is_server_proc = (((uint16_t *)PROC1_$TYPE)[(int16_t)(PROC1_$CURRENT)] == 9)
+    is_server_proc = (PROC1_$DATA.type[(int16_t)(PROC1_$CURRENT)] == 9)
                      ? (int8_t)-1 : 0;
 
     if (is_server_proc < 0) {

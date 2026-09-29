@@ -30,7 +30,7 @@
  *             (`move.l (SP),-(SP)' duplicates the stack; lea (0x14,SP),SP)
  * 0x00E151CA  tst.w (0x2,A2) / beq 0x00E151DA
  * 0x00E151D0  PROC1_$FREE_STACK(stack); bra 0x00E151F2   (no cleanup: unlk)
- * 0x00E151DA  PROC1_$TYPE[pid] = type; D2 = pid
+ * 0x00E151DA  PROC1_$DATA.type[pid] = type; D2 = pid
  * 0x00E151E8  PROC1_$RESUME(pid, status)                 (result slot, no cleanup)
  * 0x00E151F2  D0 = D2 / movem.l / unlk / rts
  *
@@ -103,8 +103,8 @@ uint16_t PROC1_$CREATE_P(void *entry, uint32_t type, status_$t *status_ret)
         return result;
     }
 
-    /* 0x00E151DA..0x00E151E2: PROC1_$TYPE[pid] = type */
-    PROC1_$TYPE[pid] = proc_type;
+    /* 0x00E151DA..0x00E151E2: PROC1_$DATA.type[pid] = type */
+    PROC1_$DATA.type[pid] = proc_type;
 
     /* 0x00E151E6 */
     result = pid;

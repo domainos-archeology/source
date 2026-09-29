@@ -25,6 +25,36 @@
 #include "base/base.h"
 
 /*
+ * Parity Error State Structure
+ *
+ * This structure tracks the current parity error being processed.  It is
+ * the first cell of the FIM wired data island, map PARITY_$INFO 0xE21FE6
+ * (PARITY_$CHK `movea.l #0xe21fe6,A2' at 0x00E0AE7E), so the one object is
+ * FIM_$WIRED_DATA.parity (fim/fim.h); it is declared here, with its owner.
+ */
+typedef struct parity_state_t {
+  int16_t spurious_count; /* 0x00: Count of spurious parity errors */
+  int8_t chk_in_progress; /* 0x02: -1 if parity check in progress */
+  int8_t reserved_03;     /* 0x03: Padding */
+  uint32_t err_ppn;       /* 0x04: Physical page number of error */
+  uint32_t err_pa;        /* 0x08: Physical address of error */
+  uint32_t err_va;        /* 0x0C: Virtual address of error */
+  uint16_t err_status;    /* 0x10: Hardware status word */
+  uint16_t err_data;      /* 0x12: Data word at error location */
+} parity_state_t;
+
+/* Layout recovered from the disassembly -- see the field comments above. */
+_Static_assert(__builtin_offsetof(parity_state_t, spurious_count) == 0x00, "parity_state_t.spurious_count");
+_Static_assert(__builtin_offsetof(parity_state_t, chk_in_progress) == 0x02, "parity_state_t.chk_in_progress");
+_Static_assert(__builtin_offsetof(parity_state_t, reserved_03) == 0x03, "parity_state_t.reserved_03");
+_Static_assert(__builtin_offsetof(parity_state_t, err_ppn) == 0x04, "parity_state_t.err_ppn");
+_Static_assert(__builtin_offsetof(parity_state_t, err_pa) == 0x08, "parity_state_t.err_pa");
+_Static_assert(__builtin_offsetof(parity_state_t, err_va) == 0x0C, "parity_state_t.err_va");
+_Static_assert(__builtin_offsetof(parity_state_t, err_status) == 0x10, "parity_state_t.err_status");
+_Static_assert(__builtin_offsetof(parity_state_t, err_data) == 0x12, "parity_state_t.err_data");
+_Static_assert(sizeof(parity_state_t) == 0x14, "parity_state_t: PARITY_$INFO..MISS_STATUS (0xE21FE6..0xE21FFA)");
+
+/*
  * Parity error status codes (module 0x0E)
  */
 extern status_$t Fault_Memory_Parity_Err;

@@ -138,14 +138,14 @@ void PROC2_$COMPLETE_VFORK(uid_t *proc_uid, uint32_t *code_desc, uint32_t *map_p
 
     /*
      * 0x00E73724-0x00E73742: A6-0x46 = old*4, D0 = new*4;
-     * FIM_$USER_FIM_ADDR[new] = FIM_$USER_FIM_ADDR[old]; the move.l sets
+     * FIM_$DATA.user_fim_addr[new] = FIM_$DATA.user_fim_addr[old]; the move.l sets
      * the flags, so `beq` skips the quit-inhibit clear when it is zero.
-     * 0x00E73744-0x00E7374E: FIM_$QUIT_INH[new asid] = 0 (byte array).
+     * 0x00E73744-0x00E7374E: FIM_$WIRED_DATA.quit_inh[new asid] = 0 (byte array).
      */
-    user_fim_addr = FIM_$USER_FIM_ADDR[old_asid];
-    FIM_$USER_FIM_ADDR[current_entry->asid] = user_fim_addr;
+    user_fim_addr = FIM_$DATA.user_fim_addr[old_asid];
+    FIM_$DATA.user_fim_addr[current_entry->asid] = user_fim_addr;
     if (user_fim_addr != NULL) {
-        FIM_$QUIT_INH[current_entry->asid] = 0;
+        FIM_$WIRED_DATA.quit_inh[current_entry->asid] = 0;
     }
 
     /*

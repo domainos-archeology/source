@@ -611,7 +611,7 @@ void ast_$set_attribute_internal(uid_t *uid, uint16_t attr_type, void *value,
     }
 
     /* 0xE05256: process types 8 and 9 are handled specially below. */
-    proc_type = PROC1_$TYPE[PROC1_$CURRENT];
+    proc_type = PROC1_$DATA.type[PROC1_$CURRENT];
     is_special_proc = (proc_type == 8 || proc_type == 9) ? true : false;
 
     ML_$LOCK(AST_LOCK_ID);                                  /* 0xE05278: 0x12 */

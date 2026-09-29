@@ -199,7 +199,7 @@ int16_t ast_$read_area_pages_network(aste_t *aste, uint32_t *segmap,
 stats:
     /* 0x00E02F12..0x00E02F24: PROC1_$STATS entry pid, longword +0x0C
      * (A0 = 0xE25D20 is entry 1; -0x4 + pid*16) */
-    PROC_STATS_BASE[PROC1_$CURRENT * 4 + 3] += (uint32_t)(int32_t)pages_read;
+    PROC1_$DATA.stats[PROC1_$CURRENT].stat[3] += (uint32_t)(int32_t)pages_read;
 
     /* 0x00E02F28 */
     return pages_read;

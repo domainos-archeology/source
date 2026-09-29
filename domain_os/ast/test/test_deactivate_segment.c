@@ -93,7 +93,8 @@ ec_$eventcount_t ast_ast_in_trans_ec;
 ec_$eventcount_t ast_pmap_in_trans_ec;
 
 uint16_t PROC1_$CURRENT;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 int8_t   NETLOG_$OK_TO_LOG;
 uid_t    ANON_$UID;
@@ -230,7 +231,7 @@ static void reset_mocks(void)
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
     memset(&test_aote, 0, sizeof(test_aote));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     lock_calls = unlock_calls = 0;
     memset(lock_ids, 0, sizeof(lock_ids));
@@ -246,7 +247,7 @@ static void reset_mocks(void)
     log_calls = 0;
 
     PROC1_$CURRENT = 1;
-    PROC1_$TYPE[1] = 4;                 /* not 8, not 9 */
+    PROC1_$DATA.type[1] = 4;                 /* not 8, not 9 */
     NETLOG_$OK_TO_LOG = 0;
     ANON_$UID.high = 0x00000407;
     ANON_$UID.low = 0;
@@ -302,7 +303,7 @@ TEST(one_flag_alone_skips_the_process_type_gate)
     status_$t status = 0;
 
     the_aste()->flags = ASTE_FLAG_DIRTY;
-    PROC1_$TYPE[1] = 8;                 /* would be refused if it were read */
+    PROC1_$DATA.type[1] = 8;                 /* would be refused if it were read */
 
     AST_$DEACTIVATE_SEGMENT(the_aste(), 0, 0, &status);
 
@@ -316,7 +317,7 @@ TEST(proc_type_8_is_refused)
     status_$t status = 0;
 
     the_aste()->flags = ASTE_FLAG_DIRTY | ASTE_FLAG_REMOTE;
-    PROC1_$TYPE[1] = 8;
+    PROC1_$DATA.type[1] = 8;
 
     AST_$DEACTIVATE_SEGMENT(the_aste(), 0, 0, &status);
 
@@ -330,7 +331,7 @@ TEST(proc_type_9_is_refused)
     status_$t status = 0;
 
     the_aste()->flags = ASTE_FLAG_DIRTY | ASTE_FLAG_REMOTE;
-    PROC1_$TYPE[1] = 9;
+    PROC1_$DATA.type[1] = 9;
 
     AST_$DEACTIVATE_SEGMENT(the_aste(), 0, 0, &status);
 
@@ -344,7 +345,7 @@ TEST(other_proc_types_proceed)
     status_$t status = 0;
 
     the_aste()->flags = ASTE_FLAG_DIRTY | ASTE_FLAG_REMOTE;
-    PROC1_$TYPE[1] = 7;
+    PROC1_$DATA.type[1] = 7;
 
     AST_$DEACTIVATE_SEGMENT(the_aste(), 0, 0, &status);
 

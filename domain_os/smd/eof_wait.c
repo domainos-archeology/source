@@ -70,16 +70,16 @@ void SMD_$EOF_WAIT(status_$t *status_ret)
     /*
      * 00e6f410-00e6f44c: EC_$WAIT with two 3-element arrays pushed by value.
      *   ec[0] = &hw->lock_ec        (pea (0x4,A4))
-     *   ec[1] = &FIM_$QUIT_EC[asid] (0x00E22002 + asid*12)
+     *   ec[1] = &FIM_$WIRED_DATA.quit_ec[asid] (0x00E22002 + asid*12)
      *   ec[2] = NULL                (move.l #0,-(SP))
      *   val[0] = target_count
-     *   val[1] = FIM_$QUIT_VALUE[asid] + 1   (0x00E222BA + asid*4)
+     *   val[1] = FIM_$WIRED_DATA.quit_value[asid] + 1   (0x00E222BA + asid*4)
      *   val[2] = 0
      */
     wait_result = EC_$WAIT(
-        (ec_$wait_ecs_t){ { &hw->lock_ec, &FIM_$QUIT_EC[asid], NULL } },
+        (ec_$wait_ecs_t){ { &hw->lock_ec, &FIM_$WIRED_DATA.quit_ec[asid], NULL } },
         (ec_$wait_vals_t){ { (int32_t)target_count,
-                             (int32_t)(FIM_$QUIT_VALUE[asid] + 1),
+                             (int32_t)(FIM_$WIRED_DATA.quit_value[asid] + 1),
                              0 } });
 
     /* 00e6f456 tst.w D0w / seq D2b / tst.b D2b / bpl */
@@ -92,7 +92,7 @@ void SMD_$EOF_WAIT(status_$t *status_ret)
          *          scaled by 12 and A1 = FIM_$QUIT_VALUE base scaled by 4:
          *          remember the quit eventcount value that woke us. */
         *status_ret = status_$display_quit_while_waiting;
-        FIM_$QUIT_VALUE[asid] = (uint32_t)FIM_$QUIT_EC[asid].count;
+        FIM_$WIRED_DATA.quit_value[asid] = (uint32_t)FIM_$WIRED_DATA.quit_ec[asid].count;
     }
 
     /* 00e6f48c movea.l (0x8,A3),A1 / move.w D3w,(A1) */

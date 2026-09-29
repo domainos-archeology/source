@@ -97,7 +97,7 @@ void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_r
     }
 
     /* 0x00E14FCE / 0x00E14FD2 */
-    stack = OS_STACK_BASE[pid];
+    stack = ARCH_VA_TO_PTR(PROC1_$DATA.os_stack_base[pid]);
     if (stack != NULL) {
         /* 0x00E14FD8..0x00E14FFC */
         PROC1_$GET_INFO_INT(pid,

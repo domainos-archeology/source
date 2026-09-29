@@ -96,10 +96,11 @@ static int mock_rem_file_calls;
 
 /*
  * PROC1 globals read by ast_$set_attribute_internal
- * (0xE05252 "PROC1_$TYPE[PROC1_$CURRENT]").
+ * (0xE05252 "PROC1_$DATA.type[PROC1_$CURRENT]").
  */
 uint16_t PROC1_$CURRENT = 0;
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 static void reset_mocks(void)
 {

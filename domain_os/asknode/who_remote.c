@@ -207,7 +207,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
 
     /* Calculate quit check value */
-    int32_t quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+    int32_t quit_val = (int32_t)FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;
 
     /* Pre-clear remaining slots in node list */
     {
@@ -229,7 +229,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         /*
          * 0x00E6657E - 0x00E665C0.  Both arrays go by value:
          *   ecs  = { A6-0x26C (socket EC), A3 (= &TIME_$CLOCKH, loaded at
-         *            0x00E66572), &FIM_$QUIT_EC[as_id] }
+         *            0x00E66572), &FIM_$WIRED_DATA.quit_ec[as_id] }
          *   vals = { D5 (socket value, bumped at 0x00E6657E),
          *            TIME_$CLOCKH + D7 + 0x14, A6-0x274 (quit value + 1) }
          * D7 carries PKT_$SEND_INTERNET's timeout on the first pass only; it
@@ -238,7 +238,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
          */
         ecs[0] = socket_ec;
         ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-        ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
+        ecs[2] = &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID];
 
         timeout_val = (int32_t)TIME_$CLOCKH + (int32_t)resp_timeout + 0x14;
 
@@ -255,7 +255,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
         }
         if (wait_result == 2) {
             /* Quit signal */
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
             local_status = status_$network_quit_fault_during_node_listing;
             break;
         }

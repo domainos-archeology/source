@@ -93,8 +93,7 @@ void dir_$do_op_create_dir(uid_t *uid, void *name, uint16_t name_len,
 
         /* Idempotent handling for server processes (type 9) */
         if (*status_ret == status_$name_already_exists) {
-            if (*(int16_t *)((char *)PROC1_$TYPE +
-                (int16_t)(PROC1_$CURRENT * 2)) == 9) {
+            if ((int16_t)PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9) {
                 /* Look up the existing entry */
                 void *entry_ptr;
                 uint8_t extra1[2];

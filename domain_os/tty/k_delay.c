@@ -14,11 +14,11 @@
  *   0x00E67AE0  TTY_$I_LOCK(tty); D6 = 0x00E22002 FIM_$QUIT_EC, D7 =
  *               0x00E222BA FIM_$QUIT_VALUE, A4 = &PROC1_$AS_ID (0x00E2060A)
  *   0x00E67B0C  loop: ecs[0] = output_ec, vals[0] = *output_ec + 1;
- *               ecs[1] = &FIM_$QUIT_EC[as] (as*12), vals[1] = QUIT_VALUE[as]+1
+ *               ecs[1] = &FIM_$WIRED_DATA.quit_ec[as] (as*12), vals[1] = QUIT_VALUE[as]+1
  *   0x00E67B42  output_head == output_read -> unlock, return
  *   0x00E67B4C  TTY_$I_UNLOCK; r = EC_$WAITN(ecs, vals, 2); TTY_$I_LOCK
  *   0x00E67B7A  r != 2 -> loop; else status 0x350007 and
- *               FIM_$QUIT_VALUE[as] = FIM_$QUIT_EC[as].value (head longword)
+ *               FIM_$WIRED_DATA.quit_value[as] = FIM_$WIRED_DATA.quit_ec[as].value (head longword)
  *   0x00E67BA0  TTY_$I_UNLOCK(tty)
  */
 
@@ -101,8 +101,8 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
         // Set up wait for quit eventcount
         /* 0x00E67B1E: as*12 into FIM_$QUIT_EC, as*4 into FIM_$QUIT_VALUE */
         short as_id = PROC1_$AS_ID;
-        ec_array[1] = &FIM_$QUIT_EC[as_id];
-        value_array[1] = FIM_$QUIT_VALUE[as_id] + 1;
+        ec_array[1] = &FIM_$WIRED_DATA.quit_ec[as_id];
+        value_array[1] = FIM_$WIRED_DATA.quit_value[as_id] + 1;
 
         // Check if output buffer is already empty
         if (tty->output_head == tty->output_read) {
@@ -123,8 +123,8 @@ void TTY_$K_DRAIN_OUTPUT(short *line_ptr, status_$t *status)
             *status = status_$tty_quit_while_waiting_for_input;
             /* 0x00E67B88..0x00E67B9A: acknowledge by snapshotting the head
              * longword of the quit eventcount (the earlier emission indexed
-             * FIM_$QUIT_EC[as*12], which is off by the element size) */
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+             * FIM_$WIRED_DATA.quit_ec[as*12], which is off by the element size) */
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
             break;
         }
 

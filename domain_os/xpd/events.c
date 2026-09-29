@@ -190,7 +190,7 @@ flag_test_zero:
             }
 rearm:
             /* 0x00E5B37C-0x00E5B3A0: another single step */
-            FIM_$TRACE_STS[entry->asid] = status_$fault_single_step_completed;
+            FIM_$WIRED_DATA.trace_sts[entry->asid] = status_$fault_single_step_completed;
             FIM_$DELIVER_TRACE_FAULT((int16_t)entry->asid);
             XPD_ENTRY_LAST_PC_SET(entry, pc);
             goto ignore;
@@ -270,7 +270,7 @@ capture:
 
     /* 0x00E5B4DA-0x00E5B502: a requested single step is armed now */
     if ((entry->flags & XPD_PF_TRACE_PENDING) != 0) {
-        FIM_$TRACE_STS[entry->asid] = status_$fault_single_step_completed;
+        FIM_$WIRED_DATA.trace_sts[entry->asid] = status_$fault_single_step_completed;
         FIM_$DELIVER_TRACE_FAULT((int16_t)entry->asid);
     }
 
@@ -291,7 +291,7 @@ capture:
 
 ignore:
     /* 0x00E5B52A-0x00E5B53E */
-    FIM_$QUIT_INH[PROC1_$AS_ID] = 0;
+    FIM_$WIRED_DATA.quit_inh[PROC1_$AS_ID] = 0;
     *signal = 0;
 }
 

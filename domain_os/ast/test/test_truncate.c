@@ -57,7 +57,8 @@ segmap_entry_t *ast_segmap_base = &test_segmap[TEST_N_PAGES];
 mmape_t        *mmap_mmape_base = test_mmapes;
 ec_$eventcount_t ast_ast_in_trans_ec;
 uint16_t  PROC1_$CURRENT;
-uint16_t  PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 static aote_t test_aote;
 
@@ -141,7 +142,7 @@ static void reset_state(void)
     memset(&test_aote, 0, sizeof(test_aote));
     memset(lookup_uid, 0, sizeof(lookup_uid));
     memset(lookup_result, 0, sizeof(lookup_result));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
     PROC1_$CURRENT = 2;
     lookup_calls = force_calls = set_attr_calls = deact_calls = crash_calls = 0;
     update_calls = bat_free_calls = advance_calls = clock_calls = vtoce_calls = 0;

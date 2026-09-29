@@ -118,8 +118,8 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         output_ec = (ec_$eventcount_t *)ARCH_VA_TO_PTR(tty->output_ec);   /* 0x00E67CBE */
         output_wait_val = output_ec->value + 1;
 
-        quit_ec = (ec_$eventcount_t *)&FIM_$QUIT_EC[PROC1_$AS_ID];
-        quit_wait_val = FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+        quit_ec = (ec_$eventcount_t *)&FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID];
+        quit_wait_val = FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;
 
         /* Check output state */
         if ((tty->state_flags & 0x07) == 0) {
@@ -155,7 +155,7 @@ void TTY_$K_PUT(short *line_ptr, void *options, void *buffer,
         if (wait_result == 2) {
             *status_ret = status_$tty_quit_while_waiting_for_input;
             /* Update quit value */
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] = FIM_$QUIT_EC[PROC1_$AS_ID].value;
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
             goto done;
         }
     }

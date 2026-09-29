@@ -93,7 +93,7 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
 
     /* 0x00E030EE..0x00E03144: access checks for a local object */
     if (aote->remote_flag >= 0) {
-        if (aote->access_flags < 0 && PROC1_$TYPE[PROC1_$CURRENT] == 8) {
+        if (aote->access_flags < 0 && PROC1_$DATA.type[PROC1_$CURRENT] == 8) {
             *status = status_$ast_only_local_access_allowed;    /* 0x3000A */
             return 0;                                           /* 0x00E0327E */
         }
@@ -285,9 +285,9 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
     /* 0x00E033AC..0x00E033D4: PROC1_$STATS entry pid: +0x04 (flags bit 3)
      * or +0x00 */
     if (flags & 0x08) {
-        PROC_STATS_BASE[PROC1_$CURRENT * 4 + 1] += touched;
+        PROC1_$DATA.stats[PROC1_$CURRENT].stat[1] += touched;
     } else {
-        PROC_STATS_BASE[PROC1_$CURRENT * 4 + 0] += touched;
+        PROC1_$DATA.stats[PROC1_$CURRENT].stat[0] += touched;
     }
 
 release_rest:

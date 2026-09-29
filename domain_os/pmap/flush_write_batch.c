@@ -149,11 +149,11 @@ void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
                     /* Write succeeded */
 
                     /* Increment per-process pages-written counter.
-                     * PROC_STATS_BASE has 4 uint32_t values (16 bytes) per process.
+                     * PROC1_$DATA.stats[] is one 16-byte proc1_$stats_t per process.
                      * Index 2 (byte offset 8) is the pages-written counter.
                      * Original: addq.l #1, (-8, A3, D0w) where A3 = 0xE25D20,
                      *           D0 = PROC1_$CURRENT << 4 */
-                    PROC_STATS_BASE[PROC1_$CURRENT * 4 + 2]++;
+                    PROC1_$DATA.stats[PROC1_$CURRENT].stat[2]++;
 
                     /* Get page index within segment from MMAPE entry.
                      * Original: move.b (-0x1FFF, A1), D2b

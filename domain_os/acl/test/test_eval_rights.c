@@ -56,7 +56,8 @@ static int current_failed = 0;
 #include "acl/acl_internal.h"
 
 uint16_t          PROC1_$CURRENT;
-uint16_t          PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 acl_sid_block_t   ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
 uid_t             ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
 uint8_t           ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];
@@ -205,7 +206,7 @@ static void reset(void)
     memset(ACL_$LOCKSMITH_OVERRIDE_BITMAP, 0,
            sizeof(ACL_$LOCKSMITH_OVERRIDE_BITMAP));
     memset(ACL_$ACL_CACHE, 0, sizeof(ACL_$ACL_CACHE));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     ga_calls = fs_calls = ee_calls = rf_calls = 0;
     ga_status_out = fs_status_out = rf_status_out = status_$ok;
@@ -524,7 +525,7 @@ TEST(locksmith_gets_the_privileged_mask)
 }
 
 /*
- * 0x00E4653E-0x00E465D6: ACL_$LOCAL_LOCKSMITH != 0 plus PROC1_$TYPE[cur] == 9
+ * 0x00E4653E-0x00E465D6: ACL_$LOCAL_LOCKSMITH != 0 plus PROC1_$DATA.type[cur] == 9
  * plus a clear override bit downgrades the locksmith to the generic user, and
  * ACL_$LOCAL_LOCKSMITH == 1 adds read+execute back at 0x00E468A0.
  */
@@ -542,14 +543,14 @@ TEST(local_locksmith_downgrade)
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 2;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x00u, call(false, 0x0000000Fu, 1, false, false, &st));
 
     /* ACL_$LOCAL_LOCKSMITH == 1 hands read+execute (0x5) back. */
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 1;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x05u, call(false, 0x0000000Fu, 1, false, false, &st));
 
     /* The downgrade substitutes the generic user, so an object owned by
@@ -557,7 +558,7 @@ TEST(local_locksmith_downgrade)
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 2;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     attrs_prot()->owner = RGYC_$P_USER_UID;
     ASSERT_EQ(0x0Fu, call(false, 0x0000000Fu, 1, false, false, &st));
 
@@ -565,7 +566,7 @@ TEST(local_locksmith_downgrade)
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 2;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
         ACL_PID_BITMAP_MASK(TEST_PID);
     ASSERT_EQ(0x0000000Fu, call(false, 0x0000000Fu, 1, false, false, &st));
@@ -574,7 +575,7 @@ TEST(local_locksmith_downgrade)
     reset();
     caller_sids.user_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 2;
-    PROC1_$TYPE[TEST_PID] = 2;
+    PROC1_$DATA.type[TEST_PID] = 2;
     ASSERT_EQ(0x0000000Fu, call(false, 0x0000000Fu, 1, false, false, &st));
 }
 

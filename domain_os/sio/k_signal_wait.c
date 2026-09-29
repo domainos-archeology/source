@@ -21,8 +21,8 @@
  *   --- loop ---
  *   00e68000    move.l D3,(-0x10,A6)           ; ecs[0] = &desc->ec
  *   00e68008    move.l (A1),D1 ; addq.l #1,D1 ; move.l D1,(-0x8,A6)   ; vals[0] = ec.value+1
- *   00e68010    asid*12 -> (-0xc,A6) = &FIM_$QUIT_EC[asid]          ; ecs[1]
- *   00e68028    asid*4 -> (-0x4,A6) = FIM_$QUIT_VALUE[asid]+1      ; vals[1]
+ *   00e68010    asid*12 -> (-0xc,A6) = &FIM_$WIRED_DATA.quit_ec[asid]          ; ecs[1]
+ *   00e68028    asid*4 -> (-0x4,A6) = FIM_$WIRED_DATA.quit_value[asid]+1      ; vals[1]
  *   00e6803c    pea (A3) ; pea (0x180).w ; move.l D6,-(SP) ; move.l (A2),-(SP)
  *   00e6804a    jsr (A1)                       ; inq_params(context, &desc->params, 0x180, status)
  *   00e68050    tst.l (A3) ; bne exit
@@ -31,7 +31,7 @@
  *   00e6806c    jsr 0x00e2063e.l               ; EC_$WAITN(ecs, vals, 2)
  *   00e68076    cmpi.w #0x2,D0w ; bne loop
  *   00e6807c    move.l #0x36000a,(A3)          ; quit while waiting
- *   00e68082    FIM_$QUIT_VALUE[asid] = FIM_$QUIT_EC[asid].value
+ *   00e68082    FIM_$WIRED_DATA.quit_value[asid] = FIM_$WIRED_DATA.quit_ec[asid].value
  *   00e680a2    movem.l (-0x44,A6),{D2 D3 D4 D5 D6 D7 A2 A3 A4} ; unlk ; rts
  */
 
@@ -56,8 +56,8 @@ void SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
         as_id = (int16_t)PROC1_$AS_ID;
         ecs[0] = &desc->ec;
         vals[0] = desc->ec.value + 1;
-        ecs[1] = (ec_$eventcount_t *)&FIM_$QUIT_EC[as_id];
-        vals[1] = FIM_$QUIT_VALUE[as_id] + 1;
+        ecs[1] = (ec_$eventcount_t *)&FIM_$WIRED_DATA.quit_ec[as_id];
+        vals[1] = FIM_$WIRED_DATA.quit_value[as_id] + 1;
 
         /* 0x00E6803C-0x00E68052: the driver refreshes desc->params in place */
         ((sio_inq_params_fn_t)ARCH_VA_TO_PTR(desc->inq_params))(
@@ -80,5 +80,5 @@ void SIO_$K_SIGNAL_WAIT(int16_t *line_ptr, uint32_t *signals_ptr,
     /* 0x00E6807C-0x00E6809C */
     *status_ret = status_$sio_quit_while_waiting;
     as_id = (int16_t)PROC1_$AS_ID;
-    FIM_$QUIT_VALUE[as_id] = FIM_$QUIT_EC[as_id].value;
+    FIM_$WIRED_DATA.quit_value[as_id] = FIM_$WIRED_DATA.quit_ec[as_id].value;
 }

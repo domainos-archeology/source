@@ -36,7 +36,8 @@ static proc2_info_t mock_entries[8];
 proc2_info_t *P2_INFO_TABLE = mock_entries;
 static uint16_t pid_to_index[64];
 uint16_t *PROC2_$PID_TO_INDEX = pid_to_index;
-status_$t FIM_$TRACE_STS[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 void *PTR_PROC2_$DATA = mock_entries;
 
 static int lock_held;
@@ -62,9 +63,9 @@ void OS_$DATA_COPY(const void *src, void *dst, uint32_t len)
 {
     memcpy(dst, src, len);
     if ((const uint8_t *)src >= guard_lo && (const uint8_t *)src < guard_hi && asid_now == guard_asid)
-        FIM_$TRACE_STS[asid_now] = status_$mst_guard_fault;
+        FIM_$WIRED_DATA.trace_sts[asid_now] = status_$mst_guard_fault;
     if ((const uint8_t *)dst >= guard_lo && (const uint8_t *)dst < guard_hi && asid_now == guard_asid)
-        FIM_$TRACE_STS[asid_now] = status_$mst_guard_fault;
+        FIM_$WIRED_DATA.trace_sts[asid_now] = status_$mst_guard_fault;
 }
 
 static int16_t xfind_result;
@@ -94,7 +95,7 @@ static void reset(void)
 {
     int i;
     memset(mock_entries, 0, sizeof(mock_entries));
-    memset(FIM_$TRACE_STS, 0x55, sizeof(FIM_$TRACE_STS));
+    memset(FIM_$WIRED_DATA.trace_sts, 0x55, sizeof(FIM_$WIRED_DATA.trace_sts));
     for (i = 0; i < 0x900; i++) { src_area[i] = (uint8_t)(i * 7); dst_area[i] = 0; }
     PROC1_$CURRENT = 3; PROC1_$AS_ID = 5;
     pid_to_index[3] = 2;
@@ -123,8 +124,8 @@ TEST(copy_in_chunks)
     ASSERT_EQ(9, set_asid_log[4]); ASSERT_EQ(7, set_asid_log[5]);
     ASSERT_EQ(5, set_asid_log[6]);
     ASSERT_EQ(1, rls_calls); ASSERT_EQ(0, pop_calls);
-    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$TRACE_STS[7]); ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$TRACE_STS[9]);
-    ASSERT_EQ(0x55555555, FIM_$TRACE_STS[5]);
+    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$WIRED_DATA.trace_sts[7]); ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$WIRED_DATA.trace_sts[9]);
+    ASSERT_EQ(0x55555555, FIM_$WIRED_DATA.trace_sts[5]);
 }
 
 TEST(copy_zero_length_and_no_asid_change)
@@ -149,7 +150,7 @@ TEST(copy_guard_fault_on_read_and_write)
     ASSERT_EQ(status_$mst_guard_fault, st);
     ASSERT_EQ(0, memcmp(src_area, dst_area, 0x400));
     ASSERT_EQ(0, dst_area[0x400]);          /* the second chunk never landed */
-    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$TRACE_STS[9]);
+    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$WIRED_DATA.trace_sts[9]);
     ASSERT_EQ(1, rls_calls);
     ASSERT_EQ(5, set_asid_log[set_asid_calls - 1]);
 
@@ -169,7 +170,7 @@ TEST(copy_after_a_fault_unwound)
     ASSERT_EQ(0x00120001, st);
     ASSERT_EQ(0, set_asid_calls);
     ASSERT_EQ(1, pop_calls); ASSERT_EQ(0, rls_calls);
-    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$TRACE_STS[7]); ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$TRACE_STS[9]);
+    ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$WIRED_DATA.trace_sts[7]); ASSERT_EQ(XPD_TRACE_STS_DONE, FIM_$WIRED_DATA.trace_sts[9]);
 }
 
 TEST(read_and_write_proc)

@@ -37,21 +37,21 @@ int8_t PARITY_$CHK(void)
     byte_offset = 0;
 
     /* Initialize error tracking state */
-    PARITY_$ERR_PA = 0;
-    PARITY_$ERR_VA = 0;
-    PARITY_$ERR_DATA = 0;
+    FIM_$WIRED_DATA.parity.err_pa = 0;
+    FIM_$WIRED_DATA.parity.err_va = 0;
+    FIM_$WIRED_DATA.parity.err_data = 0;
 
     /*
      * Check for re-entrant call or ongoing parity error.
      * If we're already processing a parity error, or if the MMU
      * status indicates a real parity error (bit 1), crash the system.
      */
-    if (PARITY_$CHK_IN_PROGRESS < 0 || (MMU_STATUS_REG & 0x02) != 0) {
+    if (FIM_$WIRED_DATA.parity.chk_in_progress < 0 || (MMU_STATUS_REG & 0x02) != 0) {
         CRASH_SYSTEM(&Fault_Memory_Parity_Err);
     }
 
     /* Mark that we're now processing a parity error */
-    PARITY_$CHK_IN_PROGRESS = 0xFF;
+    FIM_$WIRED_DATA.parity.chk_in_progress = 0xFF;
 
     /*
      * Determine MMU type from status register bit 0.
@@ -65,7 +65,7 @@ int8_t PARITY_$CHK(void)
          * SAU1 (68020-based) error register handling.
          * Error info is at 0xFFB406 (word).
          */
-        PARITY_$ERR_STATUS = MEM_ERR_STATUS_WORD;
+        FIM_$WIRED_DATA.parity.err_status = MEM_ERR_STATUS_WORD;
 
         /* Check for valid error - bits 1 and 2 indicate byte lane errors */
         if (!((MEM_ERR_STATUS_WORD & SAU1_ERR_BYTE_UPPER) ||
@@ -75,9 +75,9 @@ int8_t PARITY_$CHK(void)
         }
 
         /* Extract page frame number (bits 4-15) and shift to get PPN */
-        PARITY_$ERR_PPN = (uint32_t)(MEM_ERR_STATUS_WORD & SAU1_PPN_MASK) >> SAU1_PPN_SHIFT;
+        FIM_$WIRED_DATA.parity.err_ppn = (uint32_t)(MEM_ERR_STATUS_WORD & SAU1_PPN_MASK) >> SAU1_PPN_SHIFT;
         /* Physical address is PPN << 10 (1KB pages) */
-        PARITY_$ERR_PA = PARITY_$ERR_PPN << 10;
+        FIM_$WIRED_DATA.parity.err_pa = FIM_$WIRED_DATA.parity.err_ppn << 10;
 
         /* Clear error status */
         MEM_ERR_STATUS_WORD = 0;
@@ -90,7 +90,7 @@ int8_t PARITY_$CHK(void)
          * Error info is a 32-bit value at 0xFFB404.
          */
         err_status_long = MEM_ERR_STATUS_LONG;
-        PARITY_$ERR_STATUS = (uint16_t)(err_status_long >> 16);
+        FIM_$WIRED_DATA.parity.err_status = (uint16_t)(err_status_long >> 16);
 
         /* Check low nibble - 0xF means no error */
         if (((err_status_long >> 8) & SAU2_ERR_LANE_MASK) == SAU2_ERR_NO_ERROR) {
@@ -103,8 +103,8 @@ int8_t PARITY_$CHK(void)
          * Bits 12-27 contain the page frame << 2, so shift right 12 and left 2
          * to get the page frame, then shift left 10 for physical address.
          */
-        PARITY_$ERR_PA = (err_status_long >> SAU2_PPN_SHIFT) << 2;
-        PARITY_$ERR_PPN = PARITY_$ERR_PA >> 10;
+        FIM_$WIRED_DATA.parity.err_pa = (err_status_long >> SAU2_PPN_SHIFT) << 2;
+        FIM_$WIRED_DATA.parity.err_ppn = FIM_$WIRED_DATA.parity.err_pa >> 10;
 
         /* Clear error status by writing to the word register */
         MEM_ERR_STATUS_WORD = 0;
@@ -126,13 +126,13 @@ int8_t PARITY_$CHK(void)
     /*
      * Convert physical page to virtual address.
      */
-    PARITY_$ERR_VA = MMU_$PTOV(PARITY_$ERR_PPN);
+    FIM_$WIRED_DATA.parity.err_va = MMU_$PTOV(FIM_$WIRED_DATA.parity.err_ppn);
 
     /*
      * Get the PMAPE entry for this physical page to save protection info.
      * PMAPE is at base + (ppn * 4), with protection in bits 1-8 and ASID in bits 4-8.
      */
-    pmape_ptr = (uint32_t*)((char*)PFT_BASE + (PARITY_$ERR_PPN << 2));
+    pmape_ptr = (uint32_t*)((char*)PFT_BASE + (FIM_$WIRED_DATA.parity.err_ppn << 2));
     saved_prot = (*(uint8_t*)pmape_ptr >> 1) & 0x7F;
     saved_asid = (*pmape_ptr & PFT_PROT_MASK) >> PFT_PROT_SHIFT;
 
@@ -140,7 +140,7 @@ int8_t PARITY_$CHK(void)
      * Install the error page at scratch location to read it safely.
      * Protection 0x16 = supervisor read/write.
      */
-    MMU_$INSTALL(PARITY_$ERR_PPN, (uint32_t)PARITY_SCRATCH_PAGE, PARITY_SCRATCH_PROT);
+    MMU_$INSTALL(FIM_$WIRED_DATA.parity.err_ppn, (uint32_t)PARITY_SCRATCH_PAGE, PARITY_SCRATCH_PROT);
     did_install = -1;
     byte_offset = 0;
 
@@ -167,9 +167,9 @@ int8_t PARITY_$CHK(void)
                 word_index = word_index * 2 + byte_offset;
 
                 /* Update addresses with exact location */
-                PARITY_$ERR_VA += word_index;
-                PARITY_$ERR_PA += word_index;
-                PARITY_$ERR_DATA = err_data;
+                FIM_$WIRED_DATA.parity.err_va += word_index;
+                FIM_$WIRED_DATA.parity.err_pa += word_index;
+                FIM_$WIRED_DATA.parity.err_data = err_data;
 
                 /* Clear error status */
                 MEM_ERR_STATUS_WORD = 0;
@@ -196,7 +196,7 @@ int8_t PARITY_$CHK(void)
         word_index = (status_byte & ERR_BYTE_MASK) == ERR_BYTE_BOTH ? 1 : 0;
 
         /* Get word offset from physical address low bits */
-        word_index += (PARITY_$ERR_PA & 0x3FF) >> 1;
+        word_index += (FIM_$WIRED_DATA.parity.err_pa & 0x3FF) >> 1;
 
         /* Read the word at that location */
         scan_ptr = PARITY_SCRATCH_PAGE;
@@ -211,9 +211,9 @@ int8_t PARITY_$CHK(void)
         byte_offset = ((MEM_ERR_STATUS_WORD & ERR_BYTE_EVEN_OK) != ERR_BYTE_EVEN_OK) ? 1 : 0;
 
         /* Update addresses and data */
-        PARITY_$ERR_PA += byte_offset;
-        PARITY_$ERR_VA += word_index * 2 + byte_offset;
-        PARITY_$ERR_DATA = err_data;
+        FIM_$WIRED_DATA.parity.err_pa += byte_offset;
+        FIM_$WIRED_DATA.parity.err_va += word_index * 2 + byte_offset;
+        FIM_$WIRED_DATA.parity.err_data = err_data;
 
         /* Clear error status */
         MEM_ERR_STATUS_WORD = 0;
@@ -226,10 +226,10 @@ spurious_error:
      * Spurious parity error - no real error found.
      * Increment counter and check for overflow.
      */
-    PARITY_$INFO++;
+    FIM_$WIRED_DATA.parity.spurious_count++;
     result = 0;
 
-    if (PARITY_$INFO == 0) {
+    if (FIM_$WIRED_DATA.parity.spurious_count == 0) {
         /* Counter overflowed - too many spurious errors */
         CRASH_SYSTEM(&Fault_Spurious_Parity_Err);
     }
@@ -243,7 +243,7 @@ handle_error:
      *   < 0: Page could not be recovered (data was modified)
      *   >= 0: Page was recovered or removed successfully
      */
-    if (AST_$REMOVE_CORRUPTED_PAGE(PARITY_$ERR_PPN) < 0) {
+    if (AST_$REMOVE_CORRUPTED_PAGE(FIM_$WIRED_DATA.parity.err_ppn) < 0) {
         /* Cannot recover - page had modifications */
         did_install = 0;
     } else {
@@ -261,15 +261,15 @@ handle_error:
     }
 
 log_error:
-    MEM_$PARITY_LOG(PARITY_$ERR_PA);
+    MEM_$PARITY_LOG(FIM_$WIRED_DATA.parity.err_pa);
 
 finish:
     /* Log the error to system log */
     {
         parity_log_entry_t log_entry;
-        log_entry.status = PARITY_$ERR_STATUS;
-        log_entry.phys_addr = PARITY_$ERR_PA;
-        log_entry.virt_addr = PARITY_$ERR_VA;
+        log_entry.status = FIM_$WIRED_DATA.parity.err_status;
+        log_entry.phys_addr = FIM_$WIRED_DATA.parity.err_pa;
+        log_entry.virt_addr = FIM_$WIRED_DATA.parity.err_va;
         LOG_$ADD(3, &log_entry, sizeof(log_entry));
     }
 
@@ -282,12 +282,12 @@ finish:
 
     /* Restore original MMU mapping if we installed one */
     if (did_install < 0) {
-        if (PARITY_$ERR_VA == 0) {
+        if (FIM_$WIRED_DATA.parity.err_va == 0) {
             /* No virtual address - just remove the mapping */
-            MMU_$REMOVE(PARITY_$ERR_PPN);
+            MMU_$REMOVE(FIM_$WIRED_DATA.parity.err_ppn);
         } else {
             /* Restore original mapping with saved protection */
-            MMU_$INSTALL(PARITY_$ERR_PPN, PARITY_$ERR_VA,
+            MMU_$INSTALL(FIM_$WIRED_DATA.parity.err_ppn, FIM_$WIRED_DATA.parity.err_va,
                          ((uint32_t)saved_prot << 8) | saved_asid);
         }
     }

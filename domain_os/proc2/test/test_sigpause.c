@@ -5,7 +5,7 @@
  * PROC2_$UNDEBUG (0x00E41810), PROC2_$STARTUP (0x00E73454).
  *
  * Pinned by the disassembly: SIGPAUSE saves +0x78 into +0x88, sets flags
- * 0x4000, waits on &FIM_$QUIT_EC[AS_ID] with FIM_$QUIT_VALUE[AS_ID]+1 and
+ * 0x4000, waits on &FIM_$WIRED_DATA.quit_ec[AS_ID] with FIM_$WIRED_DATA.quit_value[AS_ID]+1 and
  * refreshes the value from the EC after each wake; SIGRETURN's onstack bit
  * is 0x0400 (high byte); SIGSETMASK returns the OLD mask; UID_TO_UPID's
  * zombie status; UPGID_TO_UID patches the low word of UID_$NIL.high;
@@ -30,8 +30,8 @@ uint16_t *PROC2_$PID_TO_INDEX = mock_pid_to_index;
 pgroup_entry_t *PGROUP_TABLE = mock_pgroups;
 uint16_t PROC1_$CURRENT, PROC1_$AS_ID;
 uid_t UID_$NIL = { 0xAAAA5555u, 0x12345678u };
-ec_$eventcount_t FIM_$QUIT_EC[8];
-uint32_t FIM_$QUIT_VALUE[8];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 int __host_intr_disable_count = 0;
 
 static int n_lock, n_unlock, n_deliver, n_waitn, n_clear, n_set_asid, n_clear_super, n_set_valid, n_fim_startup;
@@ -83,7 +83,7 @@ static proc2_info_t *E(int i) { return P2_INFO_ENTRY(i); }
 static void reset(void)
 {
     memset(mock_entries, 0, sizeof(mock_entries));
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC)); memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec)); memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
     n_lock = n_unlock = n_deliver = n_waitn = n_clear = n_set_asid = n_clear_super = n_set_valid = n_fim_startup = 0;
     mock_find_index = 3; mock_find_status = status_$ok; mock_find_by_upgid = 0;
     PROC1_$CURRENT = 5; PROC1_$AS_ID = 3; mock_pid_to_index[5] = 2;
@@ -94,14 +94,14 @@ TEST(sigpause_waits_then_delivers)
 {
     uint32_t m = 0xF0, r[2];
     E(2)->sig_blocked_2 = 0x0F; E(2)->flags = 0x0400;
-    FIM_$QUIT_EC[3].value = 10; FIM_$QUIT_VALUE[3] = 10;
+    FIM_$WIRED_DATA.quit_ec[3].value = 10; FIM_$WIRED_DATA.quit_value[3] = 10;
     PROC2_$SIGPAUSE(&m, r);
     ASSERT_EQ(E(2)->pad_88, 0x0F); ASSERT_EQ(E(2)->sig_blocked_2, 0xF0);
     ASSERT_EQ(E(2)->flags, 0x4400); ASSERT_EQ(r[0], 0xF0); ASSERT_EQ(r[1], 1);
     ASSERT_EQ(n_waitn, 2);
-    ASSERT_EQ(last_wait_ec == &FIM_$QUIT_EC[3], 1);
+    ASSERT_EQ(last_wait_ec == &FIM_$WIRED_DATA.quit_ec[3], 1);
     ASSERT_EQ(last_wait_val, 12);                    /* refreshed value 11, + 1 */
-    ASSERT_EQ(FIM_$QUIT_VALUE[3], 12);
+    ASSERT_EQ(FIM_$WIRED_DATA.quit_value[3], 12);
     ASSERT_EQ(n_deliver, 1); ASSERT_EQ(last_deliver, 2);
     ASSERT_EQ(n_lock, 2); ASSERT_EQ(n_unlock, 2);
 }

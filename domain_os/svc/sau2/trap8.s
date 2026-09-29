@@ -171,6 +171,11 @@ SVC_$BAD_USER_PTR:
 | minus 8), pushes the status and calls FIM_$GENERATE to deliver the fault.
 |----------------------------------------------------------------------
 
+| OS_STACK_BASE is PROC1_$DATA.os_stack_base (proc1/proc1.h): the map's
+| OS_STACK_BASE at 0xE25C18 is A5+0x730 of the PROC1_ block, element pid at
+| +pid*4.  An alias keeps the operand below resolvable (source-l2yd).
+        .set    OS_STACK_BASE, PROC1_$DATA + 0x730
+
         .global SVC_$GENERATE_FAULT
 SVC_$GENERATE_FAULT:
         move.w  PROC1_$CURRENT,%d1      | 00e7b2a6  32 39 00 e2 06 08
@@ -224,7 +229,7 @@ SVC_$UNIMPLEMENTED_2:
         .extern FIM_$GENERATE           | 0xE214A8: fault generation
         .extern FIM_$ILLEGAL_USP        | 0xE2158A: illegal USP handler
         .extern PROC1_$CURRENT          | 0xE20608: current process index
-        .extern OS_STACK_BASE           | 0xE25C18: per-process OS stack bases
+        .extern PROC1_$DATA             | 0xE254E8: PROC1_ block (OS_STACK_BASE = +0x730)
         .extern SVC_$TRAP8_TABLE        | 0xE7BD6A: handler table (svc_tables.c)
         .extern SVC_$TRAP8_ARGCOUNT     | 0xE7BE4A: argument count table (svc_tables.c)
 

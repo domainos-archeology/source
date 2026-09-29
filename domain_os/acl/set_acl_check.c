@@ -249,7 +249,7 @@ boolean ACL_$SET_ACL_CHECK(uid_t *obj_uid, acl_$prot_data_t *new_prot,
         acl_$uid_eq(&sid_row->user_sid,  &RGYC_$G_LOCKSMITH_UID) < 0) {
 
         if (ACL_$LOCAL_LOCKSMITH == 0 ||
-            PROC1_$TYPE[PROC1_$CURRENT] != 9 ||
+            PROC1_$DATA.type[PROC1_$CURRENT] != 9 ||
             (ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(PROC1_$CURRENT)] &
              ACL_PID_BITMAP_MASK(PROC1_$CURRENT)) != 0) {
 
@@ -443,7 +443,7 @@ sid_checks:                                             /* 0x00E4770A */
 
     /* 0x00E4773A-0x00E47756: a type-9 process may not set-id while the
      * local-locksmith feature is in force. */
-    if (ACL_$LOCAL_LOCKSMITH != 0 && PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+    if (ACL_$LOCAL_LOCKSMITH != 0 && PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
         goto unlock_and_store;
     }
 

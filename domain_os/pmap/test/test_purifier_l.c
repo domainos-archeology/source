@@ -125,7 +125,8 @@ void MMAP_$PURGE(uint16_t wsl_index)
  * link, so every external it touches gets a stub here.
  */
 uint16_t PROC1_$CURRENT;
-uint32_t PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 int8_t   NETLOG_$OK_TO_LOG;
 int8_t   NETWORK_$DISKLESS;
 log_state_t LOG_$STATE;

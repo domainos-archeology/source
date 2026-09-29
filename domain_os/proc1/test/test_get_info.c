@@ -17,8 +17,7 @@ int __host_intr_disable_count = 0;
 static proc1_t pcb_table[PROC1_MAX_PROCESSES];
 proc1_t *PCBS[PROC1_MAX_PROCESSES];
 proc1_t *PROC1_$CURRENT_PCB;
-void *OS_STACK_BASE[PROC1_MAX_PROCESSES];
-uint16_t PROC1_$TYPE[PROC1_MAX_PROCESSES];
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 static int n_add48;
 static clock_t *add48_dst;
@@ -76,8 +75,8 @@ static void reset(void)
     for (i = 0; i < PROC1_MAX_PROCESSES; i++) {
         PCBS[i] = &pcb_table[i];
         pcb_table[i].mypid = (uint16_t)i;
-        OS_STACK_BASE[i] = NULL;
-        PROC1_$TYPE[i] = (uint16_t)(0x100 + i);
+        PROC1_$DATA.os_stack_base[i] = 0;
+        PROC1_$DATA.type[i] = (uint16_t)(0x100 + i);
     }
     PROC1_$CURRENT_PCB = &pcb_table[1];
     memset(&info, 0xCC, sizeof(info));
@@ -162,7 +161,7 @@ static void test_info_other_process_with_stack(void)
 
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
     pcb_table[7].pri_max = PROC1_FLAG_BOUND;
-    OS_STACK_BASE[7] = ARCH_VA_TO_PTR(0x1800);
+    PROC1_$DATA.os_stack_base[7] = 0x1800;
     PROC1_$GET_INFO(&pid, &info, &st);
     ARCH_HOST_VA_BASE = 0;
 

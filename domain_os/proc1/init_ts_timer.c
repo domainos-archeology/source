@@ -4,7 +4,7 @@
  *
  * Re-emitted from the disassembly.  A5 = 0x00E254E8 (the PROC1_ data
  * block).  A2 = A5 + pid*0x1C (0x00E14B24..0x00E14B30 computes pid*32 -
- * pid*4), and the element used is (0x14,A2): PROC1_$TS_ELEM[pid].elem.
+ * pid*4), and the element used is (0x14,A2): PROC1_$DATA.ts_elem[pid].elem.
  * The element's fields therefore appear at A2 + 0x14 + field:
  * (0x18,A2) callback, (0x1C,A2) callback_arg, (0x20,A2)/(0x24,A2) expire,
  * (0x26,A2) flags.
@@ -54,7 +54,7 @@ void PROC1_$INIT_TS_TIMER(uint16_t pid)
     clock_t expire;             /* the 6 bytes at (0x20,A2) */
 
     /* 0x00E14B24..0x00E14B30 */
-    elem = &PROC1_$TS_ELEM[pid].elem;
+    elem = &PROC1_$DATA.ts_elem[pid].elem;
 
     /* 0x00E14B34 */
     elem->flags = 0;

@@ -162,9 +162,9 @@ loop_top:
 
     /* 0x00E3FFDE-0x00E40036: the two eventcounts and their targets */
     ecs[0] = PROC_CR_REC_EC(current->self_index);
-    ecs[1] = &FIM_$QUIT_EC[current->asid];
+    ecs[1] = &FIM_$WIRED_DATA.quit_ec[current->asid];
     vals[0] = EC_$READ(ecs[0]) + 1;                          /* 0x00E40012-0x00E4001E */
-    vals[1] = (int32_t)(FIM_$QUIT_VALUE[current->asid] + 1); /* 0x00E40024-0x00E40036 */
+    vals[1] = (int32_t)(FIM_$WIRED_DATA.quit_value[current->asid] + 1); /* 0x00E40024-0x00E40036 */
 
     /* 0x00E4003A-0x00E40046 */
     ML_$UNLOCK(PROC2_LOCK_ID);
@@ -187,7 +187,7 @@ loop_top:
     }
 
     /* 0x00E40086-0x00E400AE: a quit -- resync the value, report the fault */
-    FIM_$QUIT_VALUE[current->asid] = (uint32_t)FIM_$QUIT_EC[current->asid].value;
+    FIM_$WIRED_DATA.quit_value[current->asid] = (uint32_t)FIM_$WIRED_DATA.quit_ec[current->asid].value;
     *status_ret = status_$ec2_async_fault_while_waiting;
     goto exit;
 

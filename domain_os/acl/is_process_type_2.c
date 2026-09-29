@@ -18,5 +18,5 @@
 
 int8_t acl_$is_process_type_2(int16_t pid)
 {
-    return (PROC1_$TYPE[pid] != 2) ? -1 : 0;
+    return (PROC1_$DATA.type[pid] != 2) ? -1 : 0;
 }

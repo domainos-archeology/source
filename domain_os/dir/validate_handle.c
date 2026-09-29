@@ -102,7 +102,7 @@ void DIR_$VALIDATE_HANDLE(void *handle, int16_t mode, status_$t *status_ret)
      * such an object.
      */
     if (cattr.access_flags < 0 &&
-        PROC1_$TYPE[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {  /* 0x00E4B4CA */
+        PROC1_$DATA.type[PROC1_$CURRENT] == DIR_PROC_TYPE_NS_HELPER) {  /* 0x00E4B4CA */
         /* 0x00E4B4D2 `move.l #0x3000a,(A3)` then 0x00E4B4D8
          * `bset.b #0x7,(A3)` - the error bit goes in bit 31. */
         *status_ret = (status_$t)(status_$ast_only_local_access_allowed | 0x80000000u);

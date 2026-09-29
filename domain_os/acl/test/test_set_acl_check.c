@@ -49,7 +49,8 @@ static int current_failed = 0;
 /* ------------------------------------------------------------------ */
 
 uint16_t          PROC1_$CURRENT;
-uint16_t          PROC1_$TYPE[PROC1_MAX_PROCESSES];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 acl_sid_block_t   ACL_$CURRENT_SIDS[PROC1_MAX_PROCESSES];
 uid_t             ACL_$PROJ_UIDS[PROC1_MAX_PROCESSES][ACL_MAX_PROJECTS];
 uint8_t           ACL_$LOCKSMITH_OVERRIDE_BITMAP[8];
@@ -186,7 +187,7 @@ static void reset(void)
            sizeof(ACL_$LOCKSMITH_OVERRIDE_BITMAP));
     memset(ACL_$ASID_SUSER_BITMAP, 0, sizeof(ACL_$ASID_SUSER_BITMAP));
     memset(ACL_$ACL_CACHE, 0, sizeof(ACL_$ACL_CACHE));
-    memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
+    memset(PROC1_$DATA.type, 0, sizeof(PROC1_$DATA.type));
 
     ga_calls = fs_calls = ar_calls = rs_calls = 0;
     ml_lock_calls = ml_unlock_calls = 0; ml_last_id = -1;
@@ -413,7 +414,7 @@ TEST(locksmith_is_granted_and_marked)
     reset();
     ACL_$CURRENT_SIDS[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 1;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ar_result = 0;                      /* and no change right either */
     {
         status_$t st;
@@ -426,7 +427,7 @@ TEST(locksmith_is_granted_and_marked)
     reset();
     ACL_$CURRENT_SIDS[TEST_PID].login_sid = RGYC_$G_LOCKSMITH_UID;
     ACL_$LOCAL_LOCKSMITH = 1;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ACL_$LOCKSMITH_OVERRIDE_BITMAP[ACL_PID_BITMAP_BYTE(TEST_PID)] |=
         ACL_PID_BITMAP_MASK(TEST_PID);
     ASSERT_EQ(0xFF, (unsigned char)call(0, NULL));
@@ -520,7 +521,7 @@ TEST(type_nine_process_may_not_setid_under_local_locksmith)
     reset();
     new_prot.owner_rights = ACL_PROT_SETID_BIT;
     ACL_$LOCAL_LOCKSMITH = 1;
-    PROC1_$TYPE[TEST_PID] = 9;
+    PROC1_$DATA.type[TEST_PID] = 9;
     ASSERT_EQ(0x00, (unsigned char)call(0, NULL));
     ASSERT_EQ(0x00, (unsigned char)setid_ret);
 

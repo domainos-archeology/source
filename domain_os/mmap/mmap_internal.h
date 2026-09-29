@@ -93,7 +93,7 @@ _Static_assert(sizeof(aste_t) == 0x14, "MMAP_$SEG_ASTE stride must be 0x14");
  *                                       0x00E5C762-0x00E5C772)
  *   MMAP_$WS_DATA[i * 9]             -> MMAP_WSL[i].page_count    (0xE232B4,
  *                                       0x00E5C898-0x00E5C8B8)
- *   MMAP_$PROC_WS_LIST[i]            -> PROC1_$TYPE[i]            (0xE2612C,
+ *   MMAP_$PROC_WS_LIST[i]            -> PROC1_$DATA.type[i]            (0xE2612C,
  *                                       0x00E5C97C-0x00E5C99E)
  *
  * so the four declarations are gone and their users name the real objects.

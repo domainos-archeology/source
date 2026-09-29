@@ -358,10 +358,10 @@ void PROC2_$FORK(int32_t *entry_point, int32_t *user_data, int32_t *fork_flags,
      */
     parent_asid_x4 = (uint16_t)(PROC1_$AS_ID << 2);
     {
-        void *fim_addr = FIM_$USER_FIM_ADDR[parent_asid_x4 >> 2];
-        FIM_$USER_FIM_ADDR[new_entry->asid] = fim_addr;
+        void *fim_addr = FIM_$DATA.user_fim_addr[parent_asid_x4 >> 2];
+        FIM_$DATA.user_fim_addr[new_entry->asid] = fim_addr;
         if (fim_addr != NULL) {
-            FIM_$QUIT_INH[new_entry->asid] = 0;
+            FIM_$WIRED_DATA.quit_inh[new_entry->asid] = 0;
         }
     }
 

@@ -66,8 +66,7 @@ static int tests_failed = 0;
 
 uint16_t PROC1_$CURRENT;
 uint16_t PROC1_$AS_ID;
-uint32_t FIM_$QUIT_VALUE[64];
-ec_$eventcount_t FIM_$QUIT_EC[64];
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 void *AS_$PROTECTION;
 
 static uint8_t arena[0x10000];
@@ -218,10 +217,10 @@ static void reset(void)
 
     PROC1_$CURRENT = 3;
     PROC1_$AS_ID = 5;
-    memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
-    memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
-    FIM_$QUIT_EC[5].value = 40;
-    FIM_$QUIT_VALUE[5] = 40;
+    memset(FIM_$WIRED_DATA.quit_ec, 0, sizeof(FIM_$WIRED_DATA.quit_ec));
+    memset(FIM_$WIRED_DATA.quit_value, 0, sizeof(FIM_$WIRED_DATA.quit_value));
+    FIM_$WIRED_DATA.quit_ec[5].value = 40;
+    FIM_$WIRED_DATA.quit_value[5] = 40;
     ((ec_$eventcount_t *)(EC2_$WAIT_ECS + 3 * EC2_WAIT_EC_SIZE - EC2_WAIT_EC_SIZE))->value = 7;
 
     lock_calls = unlock_calls = lock_depth = 0;
@@ -309,7 +308,7 @@ TEST(wait_blocks_then_returns_the_satisfied_entry)
     ASSERT_EQ(waitn_n, 2);
     ASSERT_TRUE(waitn_ecs[0] == wait_ec_of(3));
     ASSERT_EQ(waitn_vals[0], 8);
-    ASSERT_TRUE(waitn_ecs[1] == &FIM_$QUIT_EC[5]);
+    ASSERT_TRUE(waitn_ecs[1] == &FIM_$WIRED_DATA.quit_ec[5]);
     ASSERT_EQ(waitn_vals[1], 41);
     ASSERT_EQ(waitn_lock_depth, 0);
 
@@ -358,12 +357,12 @@ TEST(wait_quit_returns_zero_with_async_fault)
     reset();
     ec_a->value = 10;
     ecs[0] = ec_a;
-    FIM_$QUIT_EC[5].value = 41;    /* a quit was advanced */
+    FIM_$WIRED_DATA.quit_ec[5].value = 41;    /* a quit was advanced */
     waitn_results[0] = 2;
 
     ASSERT_EQ(EC2_$WAIT(ecs, vals, &count, &status), 0);
     ASSERT_EQ(status, status_$ec2_async_fault_while_waiting);
-    ASSERT_EQ(FIM_$QUIT_VALUE[5], 41);
+    ASSERT_EQ(FIM_$WIRED_DATA.quit_value[5], 41);
     ASSERT_EQ(ec_a->awaiters, 0);
     ASSERT_EQ(free_list_length(), 225);
     ASSERT_EQ(rls_cleanup_calls, 1);

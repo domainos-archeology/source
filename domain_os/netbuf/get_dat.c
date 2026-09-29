@@ -83,10 +83,10 @@ void NETBUF_$GET_DAT(uint32_t *addr_out)
             return;
         }
 
-        /* 0x00E0EFC4-0x00E0EFDC: PROC1_$TYPE[PROC1_$CURRENT_PCB->mypid]
+        /* 0x00E0EFC4-0x00E0EFDC: PROC1_$DATA.type[PROC1_$CURRENT_PCB->mypid]
          * (`cmpi.w #0x7,(-0x2,A0,D0w*0x1)` with A0 = 0xE2612C, D0w = pid*2,
          * i.e. the word at 0xE2612A + pid*2). */
-        if (PROC1_$TYPE[PROC1_$CURRENT_PCB->mypid] != NETBUF_NETWORK_PROC_TYPE) {
+        if (PROC1_$DATA.type[PROC1_$CURRENT_PCB->mypid] != NETBUF_NETWORK_PROC_TYPE) {
             break;
         }
 

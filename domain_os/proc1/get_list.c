@@ -22,7 +22,7 @@
  * 0x00E153BA  (*count)++; D2 = *count << 2
  * 0x00E153C4  list[(D2-4)]      = pcb->mypid        (-0x4,A3,D2)
  * 0x00E153CC  D6 = pcb->mypid * 2
- * 0x00E153D6  list[(D2-2)]      = PROC1_$TYPE[mypid] (-0x2,A3,D2)
+ * 0x00E153D6  list[(D2-2)]      = PROC1_$DATA.type[mypid] (-0x2,A3,D2)
  * 0x00E153DC  advance cursors; dbf D0,0x00E15396
  * 0x00E153EE  movem.l / unlk / rts
  *
@@ -72,7 +72,7 @@ void PROC1_$GET_LIST(int16_t *count_ret, proc_list_entry_t *list_ret)
         /* 0x00E153C4: (-0x4,A3,D2*4) = pcb->mypid */
         list_ret[count - 1].pid = pcb->mypid;
 
-        /* 0x00E153CC..0x00E153D6: (-0x2,A3,D2*4) = PROC1_$TYPE[pcb->mypid] */
-        list_ret[count - 1].type = PROC1_$TYPE[pcb->mypid];
+        /* 0x00E153CC..0x00E153D6: (-0x2,A3,D2*4) = PROC1_$DATA.type[pcb->mypid] */
+        list_ret[count - 1].type = PROC1_$DATA.type[pcb->mypid];
     }
 }

@@ -158,7 +158,7 @@ retry:
 
     /* 0x00E05D1E..0x00E05D48: OS-only local object, type-9 process */
     if (aote->access_flags < 0 && aote->remote_flag >= 0 &&
-        PROC1_$TYPE[PROC1_$CURRENT] == 9) {
+        PROC1_$DATA.type[PROC1_$CURRENT] == 9) {
         local_status = status_$ast_only_local_access_allowed;   /* 0x3000A */
         goto unlock_done;                                       /* 0x00E0620E */
     }

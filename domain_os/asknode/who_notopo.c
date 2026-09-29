@@ -205,7 +205,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
      */
     timeout_end = EC_$READ((ec_$eventcount_t *)&TIME_$CLOCKH) +
                   (int32_t)resp_timeout + 6;
-    quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+    quit_val = (int32_t)FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;
 
     /* Wait for responses */
     while (1) {
@@ -215,14 +215,14 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
 
         /*
          * 0x00E661EC - 0x00E6621A.  Both arrays are pushed by value:
-         *   ecs  = { socket EC (A3), &TIME_$CLOCKH, &FIM_$QUIT_EC[as_id] }
+         *   ecs  = { socket EC (A3), &TIME_$CLOCKH, &FIM_$WIRED_DATA.quit_ec[as_id] }
          *   vals = { D4 (socket value), A6-0x28C (deadline),
-         *            A6-0x290 (FIM_$QUIT_VALUE[as_id] + 1) }
+         *            A6-0x290 (FIM_$WIRED_DATA.quit_value[as_id] + 1) }
          * Only D4 is advanced by the loop ("addq.l #1,D4" at 0x00E662E8).
          */
         ecs[0] = socket_ec;
         ecs[1] = (ec_$eventcount_t *)&TIME_$CLOCKH;
-        ecs[2] = &FIM_$QUIT_EC[PROC1_$AS_ID];
+        ecs[2] = &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID];
 
         wait_result = EC_$WAIT((ec_$wait_ecs_t){{ ecs[0], ecs[1], ecs[2] }},
                                (ec_$wait_vals_t){{ wait_val, timeout_end,
@@ -238,7 +238,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         }
         if (wait_result == 2) {
             /* Quit signal */
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] = (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] = (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
             *status = status_$network_quit_fault_during_node_listing;
             break;
         }

@@ -48,7 +48,7 @@ void AST_$ASSOC(uid_t *uid, uint16_t seg, uint32_t mode, uint16_t page,
          * cmpi.w #0x8,(-0x2,A1,D0w) with A1 = 0xE2612C and D0w = pid*2:
          * PROC1_$TYPE is declared at 0xE2612A, so this is entry [pid].
          */
-        if (PROC1_$TYPE[PROC1_$CURRENT] == 8) {
+        if (PROC1_$DATA.type[PROC1_$CURRENT] == 8) {
             *status = file_$object_not_found;   /* 0xF0001 */
             goto unlock;
         }

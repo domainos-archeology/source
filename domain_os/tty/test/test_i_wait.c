@@ -12,8 +12,7 @@
 
 static tty_desc_t tty;
 uint16_t PROC1_$AS_ID;
-ec_$eventcount_t FIM_$QUIT_EC[8];
-uint32_t FIM_$QUIT_VALUE[8];
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 static ec_$eventcount_t in_ec;
 
 void TTY_$I_LOCK(tty_desc_t *t) { (void)t; logf_call("lock;"); }
@@ -71,7 +70,7 @@ static void reset(void)
     memset(&tty, 0, sizeof(tty)); log_reset();
     ARCH_HOST_VA_BASE = (uintptr_t)&in_ec - 0x1000;
     tty.input_ec = ARCH_PTR_TO_VA(&in_ec); in_ec.value = 20;
-    PROC1_$AS_ID = 2; FIM_$QUIT_EC[2].value = 30; FIM_$QUIT_VALUE[2] = 30;
+    PROC1_$AS_ID = 2; FIM_$WIRED_DATA.quit_ec[2].value = 30; FIM_$WIRED_DATA.quit_value[2] = 30;
     done = 0; st = 0; waitn_result = 2; waitn_n = 0;
     clock_now.high = 0; clock_now.low = 0;
 }
@@ -82,7 +81,7 @@ TEST(mode0_waits_on_two_ecs_and_input_wakes)
     tty_$i_wait(&tty, 0, &done, 0, &st);
     ASSERT_STR("unlock;waitn(2);lock;", call_log);
     ASSERT_EQ(2, waitn_n);
-    ASSERT_EQ((unsigned long)&FIM_$QUIT_EC[2], (unsigned long)waitn_ecs[0]);
+    ASSERT_EQ((unsigned long)&FIM_$WIRED_DATA.quit_ec[2], (unsigned long)waitn_ecs[0]);
     ASSERT_EQ(31, waitn_vals[0]);
     ASSERT_EQ((unsigned long)&in_ec, (unsigned long)waitn_ecs[1]);
     ASSERT_EQ(21, waitn_vals[1]);
@@ -90,10 +89,10 @@ TEST(mode0_waits_on_two_ecs_and_input_wakes)
 }
 TEST(quit_wakes)
 {
-    reset(); waitn_result = 1; FIM_$QUIT_EC[2].value = 44;
+    reset(); waitn_result = 1; FIM_$WIRED_DATA.quit_ec[2].value = 44;
     tty_$i_wait(&tty, 0, &done, 3, &st);
     ASSERT_EQ(status_$tty_quit_while_waiting_for_input, st);
-    ASSERT_EQ(44, FIM_$QUIT_VALUE[2]);
+    ASSERT_EQ(44, FIM_$WIRED_DATA.quit_value[2]);
     ASSERT_EQ(0, done);
 }
 TEST(no_wait_flag)

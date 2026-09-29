@@ -88,7 +88,8 @@ uid_t     ANON_$UID = { 0x11112222u, 0x33334444u };
 area_$globals_t AREA_$GLOBALS;
 int8_t    NETLOG_$OK_TO_LOG;
 uint16_t  PROC1_$CURRENT;
-uint32_t  PROC_STATS_BASE[PROC1_MAX_PROCESSES * 4];
+#include "proc1/proc1.h"
+MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
 
 /* Mock call records. */
 static int      mock_wait_calls;
@@ -122,7 +123,7 @@ static void reset_mocks(void)
     memset(test_astes, 0, sizeof(test_astes));
     memset(test_mmapes, 0, sizeof(test_mmapes));
     memset(test_pft, 0, sizeof(test_pft));
-    memset(PROC_STATS_BASE, 0, sizeof(PROC_STATS_BASE));
+    memset(PROC1_$DATA.stats, 0, sizeof(PROC1_$DATA.stats));
     ast_ws_flt_cnt = 0;
     ast_page_flt_cnt = 0;
     memset(&ast_pmap_in_trans_ec, 0, sizeof(ast_pmap_in_trans_ec));

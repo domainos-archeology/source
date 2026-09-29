@@ -3,8 +3,7 @@
 #include "proc1/proc1.h"
 #include "fim/fim.h"
 uint16_t PROC1_$AS_ID;
-ec_$eventcount_t FIM_$QUIT_EC[8];
-uint32_t FIM_$QUIT_VALUE[8];
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 static ec_$eventcount_t out_ec;
 static int waitn_results[4]; static int waitn_calls;
 static int32_t waitn_vals[2]; static ec_$eventcount_t *waitn_ecs[2];
@@ -49,11 +48,11 @@ TEST(drain_waits_then_done)
     /* output_ec is a 32-bit VA: anchor the host arena on out_ec */
     ARCH_HOST_VA_BASE = (uintptr_t)&out_ec - 0x1000;
     tty.output_head = 1; tty.output_read = 5; tty.output_ec = ARCH_PTR_TO_VA(&out_ec);
-    out_ec.value = 41; PROC1_$AS_ID = 3; FIM_$QUIT_VALUE[3] = 10;
+    out_ec.value = 41; PROC1_$AS_ID = 3; FIM_$WIRED_DATA.quit_value[3] = 10;
     TTY_$K_DRAIN_OUTPUT(&line, &st);
     ASSERT_STR("desc(0);lock;unlock;waitn(2);lock;unlock;", call_log);
     ASSERT_EQ((unsigned long)&out_ec, (unsigned long)waitn_ecs[0]); ASSERT_EQ(42, waitn_vals[0]);
-    ASSERT_EQ((unsigned long)&FIM_$QUIT_EC[3], (unsigned long)waitn_ecs[1]); ASSERT_EQ(11, waitn_vals[1]);
+    ASSERT_EQ((unsigned long)&FIM_$WIRED_DATA.quit_ec[3], (unsigned long)waitn_ecs[1]); ASSERT_EQ(11, waitn_vals[1]);
     ASSERT_EQ(0, st);
 }
 TEST(drain_quit)
@@ -62,10 +61,10 @@ TEST(drain_quit)
     k_reset(); waitn_calls = 0; waitn_results[0] = 2;
     ARCH_HOST_VA_BASE = (uintptr_t)&out_ec - 0x1000;
     tty.output_head = 1; tty.output_read = 5; tty.output_ec = ARCH_PTR_TO_VA(&out_ec);
-    PROC1_$AS_ID = 2; FIM_$QUIT_EC[2].value = 77; FIM_$QUIT_VALUE[2] = 5;
+    PROC1_$AS_ID = 2; FIM_$WIRED_DATA.quit_ec[2].value = 77; FIM_$WIRED_DATA.quit_value[2] = 5;
     TTY_$K_DRAIN_OUTPUT(&line, &st);
     ASSERT_EQ(status_$tty_quit_while_waiting_for_input, st);
-    ASSERT_EQ(77, FIM_$QUIT_VALUE[2]);
+    ASSERT_EQ(77, FIM_$WIRED_DATA.quit_value[2]);
     ASSERT_STR("desc(0);lock;unlock;waitn(2);lock;unlock;", call_log);
 }
 int main(void)

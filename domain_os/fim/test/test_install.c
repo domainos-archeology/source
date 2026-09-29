@@ -52,8 +52,9 @@ static int tests_failed = 0;
  * ============================================================================ */
 
 uint16_t PROC1_$AS_ID;
-void    *FIM_$USER_FIM_ADDR[64];
-int8_t   FIM_$QUIT_INH[64];
+#include "fim/fim.h"
+MODULE_DATA_DEFINE(fim_$data_t, FIM_$DATA, 0x00E2126C);
+MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
 
 /* ============================================================================
  * Code under test
@@ -71,16 +72,16 @@ static void *handler_b = (void *)0x22220000;
 
 static void reset_state(void)
 {
-    memset(FIM_$USER_FIM_ADDR, 0, sizeof(FIM_$USER_FIM_ADDR));
-    memset(FIM_$QUIT_INH, -1, sizeof(FIM_$QUIT_INH));
+    memset(FIM_$DATA.user_fim_addr, 0, sizeof(FIM_$DATA.user_fim_addr));
+    memset(FIM_$WIRED_DATA.quit_inh, -1, sizeof(FIM_$WIRED_DATA.quit_inh));
     PROC1_$AS_ID = 3;
 }
 
 TEST(get_returns_the_current_as_entry)
 {
     reset_state();
-    FIM_$USER_FIM_ADDR[3] = handler_a;
-    FIM_$USER_FIM_ADDR[4] = handler_b;
+    FIM_$DATA.user_fim_addr[3] = handler_a;
+    FIM_$DATA.user_fim_addr[4] = handler_b;
 
     ASSERT_EQ((uintptr_t)handler_a, (uintptr_t)FIM_$GET_FIM_ADDR());
 
@@ -103,12 +104,12 @@ TEST(first_install_stores_and_clears_the_quit_inhibit)
     old = FIM_$INSTALL(&new_addr);
 
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)old);
-    ASSERT_EQ((uintptr_t)handler_a, (uintptr_t)FIM_$USER_FIM_ADDR[3]);
-    ASSERT_EQ(0, FIM_$QUIT_INH[3]);
+    ASSERT_EQ((uintptr_t)handler_a, (uintptr_t)FIM_$DATA.user_fim_addr[3]);
+    ASSERT_EQ(0, FIM_$WIRED_DATA.quit_inh[3]);
     /* Only the current AS is touched. */
-    ASSERT_EQ(-1, FIM_$QUIT_INH[2]);
-    ASSERT_EQ(-1, FIM_$QUIT_INH[4]);
-    ASSERT_EQ((uintptr_t)NULL, (uintptr_t)FIM_$USER_FIM_ADDR[4]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[2]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[4]);
+    ASSERT_EQ((uintptr_t)NULL, (uintptr_t)FIM_$DATA.user_fim_addr[4]);
 }
 
 TEST(second_install_returns_the_previous_and_keeps_the_inhibit)
@@ -117,14 +118,14 @@ TEST(second_install_returns_the_previous_and_keeps_the_inhibit)
     void *old;
 
     reset_state();
-    FIM_$USER_FIM_ADDR[3] = handler_a;
+    FIM_$DATA.user_fim_addr[3] = handler_a;
 
     old = FIM_$INSTALL(&new_addr);
 
     ASSERT_EQ((uintptr_t)handler_a, (uintptr_t)old);
-    ASSERT_EQ((uintptr_t)handler_b, (uintptr_t)FIM_$USER_FIM_ADDR[3]);
+    ASSERT_EQ((uintptr_t)handler_b, (uintptr_t)FIM_$DATA.user_fim_addr[3]);
     /* tst.l D1 / bne at 0x00E0A9E6: a non-nil previous handler skips the clr. */
-    ASSERT_EQ(-1, FIM_$QUIT_INH[3]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[3]);
 }
 
 TEST(installing_null_still_stores_and_clears)
@@ -136,8 +137,8 @@ TEST(installing_null_still_stores_and_clears)
     old = FIM_$INSTALL(&new_addr);
 
     ASSERT_EQ((uintptr_t)NULL, (uintptr_t)old);
-    ASSERT_EQ((uintptr_t)NULL, (uintptr_t)FIM_$USER_FIM_ADDR[3]);
-    ASSERT_EQ(0, FIM_$QUIT_INH[3]);
+    ASSERT_EQ((uintptr_t)NULL, (uintptr_t)FIM_$DATA.user_fim_addr[3]);
+    ASSERT_EQ(0, FIM_$WIRED_DATA.quit_inh[3]);
 }
 
 TEST(uninstall_then_install_clears_again)
@@ -145,15 +146,15 @@ TEST(uninstall_then_install_clears_again)
     void *addr;
 
     reset_state();
-    FIM_$USER_FIM_ADDR[3] = handler_a;
+    FIM_$DATA.user_fim_addr[3] = handler_a;
 
     addr = NULL;
     (void)FIM_$INSTALL(&addr);          /* previous non-nil: inhibit kept */
-    ASSERT_EQ(-1, FIM_$QUIT_INH[3]);
+    ASSERT_EQ(-1, FIM_$WIRED_DATA.quit_inh[3]);
 
     addr = handler_b;
     (void)FIM_$INSTALL(&addr);          /* previous nil: inhibit cleared */
-    ASSERT_EQ(0, FIM_$QUIT_INH[3]);
+    ASSERT_EQ(0, FIM_$WIRED_DATA.quit_inh[3]);
     ASSERT_EQ((uintptr_t)handler_b, (uintptr_t)FIM_$GET_FIM_ADDR());
 }
 

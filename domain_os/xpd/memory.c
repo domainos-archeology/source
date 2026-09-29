@@ -70,8 +70,8 @@ void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
     if (st == status_$fault_cleanup_in_progress) {
         /* 0x00E5B73E-0x00E5B76A */
         *status_ret = status_$ok;
-        FIM_$TRACE_STS[(uint16_t)src_asid] = 0;
-        FIM_$TRACE_STS[(uint16_t)dst_asid] = 0;
+        FIM_$WIRED_DATA.trace_sts[(uint16_t)src_asid] = 0;
+        FIM_$WIRED_DATA.trace_sts[(uint16_t)dst_asid] = 0;
         dst = (uint8_t *)dst_addr;
         src = (const uint8_t *)src_addr;
 
@@ -85,7 +85,7 @@ void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
                 chunk = remaining;
             }
             OS_$DATA_COPY(src, buf, chunk);
-            if (FIM_$TRACE_STS[(uint16_t)src_asid] == status_$mst_guard_fault) {
+            if (FIM_$WIRED_DATA.trace_sts[(uint16_t)src_asid] == status_$mst_guard_fault) {
                 *status_ret = status_$mst_guard_fault;      /* 0x00E5B822 */
                 break;
             }
@@ -101,7 +101,7 @@ void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
                 OS_$DATA_COPY(buf, dst, remaining);
                 remaining = 0;
             }
-            if (FIM_$TRACE_STS[(uint16_t)dst_asid] == status_$mst_guard_fault) {
+            if (FIM_$WIRED_DATA.trace_sts[(uint16_t)dst_asid] == status_$mst_guard_fault) {
                 *status_ret = status_$mst_guard_fault;      /* 0x00E5B822 */
                 break;
             }
@@ -114,8 +114,8 @@ void XPD_$COPY_MEMORY(int16_t dst_asid, void *dst_addr, int16_t src_asid,
     }
 
     /* 0x00E5B84A-0x00E5B86A */
-    FIM_$TRACE_STS[(uint16_t)src_asid] = XPD_TRACE_STS_DONE;
-    FIM_$TRACE_STS[(uint16_t)dst_asid] = XPD_TRACE_STS_DONE;
+    FIM_$WIRED_DATA.trace_sts[(uint16_t)src_asid] = XPD_TRACE_STS_DONE;
+    FIM_$WIRED_DATA.trace_sts[(uint16_t)dst_asid] = XPD_TRACE_STS_DONE;
 
     /* 0x00E5B870-0x00E5B87E */
     if (saved_asid != cur_asid) {

@@ -85,10 +85,10 @@ void NETBUF_$GET_HDR(uint32_t *phys_out, uint32_t *va_out)
             return;
         }
 
-        /* 0x00E0EDFA-0x00E0EE12: PROC1_$TYPE[PROC1_$CURRENT_PCB->mypid]
+        /* 0x00E0EDFA-0x00E0EE12: PROC1_$DATA.type[PROC1_$CURRENT_PCB->mypid]
          * (`cmpi.w #0x7,(-0x2,A0,D0w*0x1)` with A0 = 0xE2612C, D0w = pid*2,
          * i.e. the word at 0xE2612A + pid*2). */
-        if (PROC1_$TYPE[PROC1_$CURRENT_PCB->mypid] != NETBUF_NETWORK_PROC_TYPE) {
+        if (PROC1_$DATA.type[PROC1_$CURRENT_PCB->mypid] != NETBUF_NETWORK_PROC_TYPE) {
             break;
         }
 

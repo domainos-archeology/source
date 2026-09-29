@@ -125,7 +125,7 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
          * type test failed) and give up after 0x78 retries or 0x78 clock
          * ticks.
          */
-        if (PROC1_$TYPE[PROC1_$CURRENT] == 9 ||
+        if (PROC1_$DATA.type[PROC1_$CURRENT] == 9 ||
             ++retry_count > 0x78 ||
             (int32_t)(TIME_$CLOCKH - start_clockh) > 0x78) {
             *status_ret = status_$naming_directory_locked;   /* 0xE54926 */

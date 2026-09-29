@@ -19,8 +19,8 @@
  *   -0x30  time_queue_elem_t (0x1a)   -0x10  the timer eventcount
  *
  *   0x00E1C21C  ecs[1] = tty->input_ec; vals[1] = *input_ec + 1
- *   0x00E1C22E  ecs[0] = &FIM_$QUIT_EC[PROC1_$AS_ID] (as*12);
- *               vals[0] = FIM_$QUIT_VALUE[as] (as*4) + 1
+ *   0x00E1C22E  ecs[0] = &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID] (as*12);
+ *               vals[0] = FIM_$WIRED_DATA.quit_value[as] (as*4) + 1
  *   0x00E1C262  D4b = 0 (timer armed); D0 = break_mode; btst.l D0,#3 - bit
  *               (break_mode mod 32) of 3, i.e. modes 0 and 1 - or
  *               (break_mode == 3 and count == 0): num_ecs = 2, no timer
@@ -39,8 +39,8 @@
  *               either way no wait
  *   0x00E1C348  else TTY_$I_UNLOCK(tty); D2 = EC_$WAITN(ecs, vals, num_ecs);
  *               TTY_$I_LOCK(tty)
- *   0x00E1C372  D2 == 1 (quit): status 0x350007; FIM_$QUIT_VALUE[as] =
- *               FIM_$QUIT_EC[as].value
+ *   0x00E1C372  D2 == 1 (quit): status 0x350007; FIM_$WIRED_DATA.quit_value[as] =
+ *               FIM_$WIRED_DATA.quit_ec[as].value
  *   0x00E1C3A2  D2 == 3 (timer): *done_flag = 0xFF (st); D4 = 0
  *               (D2 == 2, input, changes nothing)
  *   0x00E1C3B0  D4 < 0 -> TIME_$CANCEL(vals[2] by value, &elem, &status64)
@@ -90,8 +90,8 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
     vals[1] = ecs[1]->value + 1;
 
     /* 0x00E1C22E..0x00E1C25E: as*12 into FIM_$QUIT_EC, as*4 into FIM_$QUIT_VALUE */
-    ecs[0] = &FIM_$QUIT_EC[PROC1_$AS_ID];
-    vals[0] = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;
+    ecs[0] = &FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID];
+    vals[0] = (int32_t)FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] + 1;
 
     /* 0x00E1C262 */
     timer_armed = false;
@@ -147,8 +147,8 @@ void tty_$i_wait(tty_desc_t *tty, char wait_flag, char *done_flag,
         if (result == 1) {                                  /* 0x00E1C372 */
             /* 0x00E1C378..0x00E1C3A0: acknowledge the quit */
             *status = status_$tty_quit_while_waiting_for_input;
-            FIM_$QUIT_VALUE[PROC1_$AS_ID] =
-                (uint32_t)FIM_$QUIT_EC[PROC1_$AS_ID].value;
+            FIM_$WIRED_DATA.quit_value[PROC1_$AS_ID] =
+                (uint32_t)FIM_$WIRED_DATA.quit_ec[PROC1_$AS_ID].value;
         } else if (result == 3) {                           /* 0x00E1C3A2 */
             /* 0x00E1C3A8..0x00E1C3AE: the timer fired, nothing to cancel */
             timer_armed = false;

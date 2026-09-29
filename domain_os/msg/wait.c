@@ -92,7 +92,7 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
      * in the original (0x00E59C22 / 0x00E59C32).
      */
     sock_target = sock->ec.value + 1;               /* 0x00E59C22, 0x00E59C24 */
-    quit_target = (int32_t)FIM_$QUIT_VALUE[asid] + 1; /* 0x00E59C32, 0x00E59C36 */
+    quit_target = (int32_t)FIM_$WIRED_DATA.quit_value[asid] + 1; /* 0x00E59C32, 0x00E59C36 */
 
     /*
      * A packet is already queued -> return immediately.
@@ -110,10 +110,10 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
      * Wait on the socket, the clock and the quit event count
      * (0x00E59C46 - 0x00E59C7A).  Arguments are pushed right-to-left, so the
      * values go down first and the pointers end up at the lower addresses:
-     *   0x00E59C46  move.l D0,-(SP)              vals[2] = FIM_$QUIT_VALUE[asid]+1
+     *   0x00E59C46  move.l D0,-(SP)              vals[2] = FIM_$WIRED_DATA.quit_value[asid]+1
      *   0x00E59C56  move.l D1,-(SP)              vals[1] = TIME_$CLOCKH + *timeout
      *   0x00E59C58  move.l D2,-(SP)              vals[0] = sock->ec.value + 1
-     *   0x00E59C6E  pea (0x0,A1,D3w*0x1)         ecs[2] = &FIM_$QUIT_EC[asid]
+     *   0x00E59C6E  pea (0x0,A1,D3w*0x1)         ecs[2] = &FIM_$WIRED_DATA.quit_ec[asid]
      *                                            (A1 = 0xE22002, D3 = asid*12)
      *   0x00E59C72  move.l #0xe2b0d4,-(SP)       ecs[1] = &TIME_$CLOCKH
      *   0x00E59C78  pea (A3)                     ecs[0] = the socket
@@ -123,7 +123,7 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
     result = EC_$WAIT(
         (ec_$wait_ecs_t){{ &sock->ec,
                            (ec_$eventcount_t *)&TIME_$CLOCKH,
-                           &FIM_$QUIT_EC[asid] }},
+                           &FIM_$WIRED_DATA.quit_ec[asid] }},
         (ec_$wait_vals_t){{ sock_target,
                             (int32_t)(TIME_$CLOCKH + (uint32_t)(uint16_t)*timeout),
                             quit_target }});
@@ -145,7 +145,7 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
          *   A1 = 0xE22002 (FIM_$QUIT_EC, 12 bytes each, D1 = asid*12)
          *   A0 = 0xE222BA (FIM_$QUIT_VALUE, 4 bytes each, D0 = asid*4)
          */
-        FIM_$QUIT_VALUE[asid] = (uint32_t)FIM_$QUIT_EC[asid].value;
+        FIM_$WIRED_DATA.quit_value[asid] = (uint32_t)FIM_$WIRED_DATA.quit_ec[asid].value;
         *status_ret = status_$msg_quit_fault;
     }
 }
