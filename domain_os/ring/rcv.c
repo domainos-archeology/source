@@ -165,7 +165,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
     wait_val = unit_data->rx_wake_ec.value + 1;
 
     /* 0x00E760AC: D5 = RING_$DATA base; the unit is 0 based. */
-    stats = &RING_$DATA[unit];
+    stats = &RING_$WIRED_DATA.stats[unit];
 
     for (;;) {                                      /* 0x00E760B8 */
         /*
@@ -229,7 +229,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
                        (ec_$wait_vals_t){{ wait_val, 0, 0 }});
 
         wait_val++;                                 /* 0x00E76164 */
-        RING_$WAKEUP_CNT++;                         /* 0x00E76166 */
+        RING_$CTL.wakeup_cnt++;                         /* 0x00E76166 */
 
         /* 0x00E7616A: snapshot the header pointer for the nested procedure. */
         fr.hdr = unit_data->rx_hdr;
@@ -269,7 +269,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
         } else {
             /* 0x00E76202 */
             if ((RING_$RCV_CSR_READ(fr.hw_regs) & RING_RCV_CSR_BUSY) != 0) {
-                RING_$BUSY_ON_RCV_INT++;            /* 0x00E76210 */
+                RING_$CTL.busy_on_rcv_int++;            /* 0x00E76210 */
             }
         }
 
@@ -309,7 +309,7 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit)
                 unit_data->rx_data_pa = 0;
             }
         } else {
-            RING_$ABORT_CNT++;                      /* 0x00E76282 */
+            RING_$CTL.abort_cnt++;                      /* 0x00E76282 */
         }
     }
 }
@@ -339,10 +339,10 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
     result = false;                                 /* 0x00E75DEE */
 
     /* 0x00E75DF0-0x00E75E04: A3 = &RING_$DATA[unit] */
-    stats = &RING_$DATA[fr->unit];
+    stats = &RING_$WIRED_DATA.stats[fr->unit];
 
     /* 0x00E75E08 */
-    swdiag = &RING_$SWDIAG_DATA;
+    swdiag = &RING_$WIRED_DATA.swdiag;
 
     /* 0x00E75E12 */
     fr->rcv_status = RING_$RCV_CSR_READ(fr->hw_regs);
@@ -386,7 +386,7 @@ static boolean ring_$validate_receive(ring_rcv_frame_t *fr)
     /* 0x00E75E8A-0x00E75E9C */
     if (fr->rcv_data_len != fr->hdr_data_len ||
         fr->rcv_hdr_len != fr->hdr_hdr_len) {
-        RING_$BAD_DATA_CNT++;                       /* 0x00E75E9E */
+        RING_$CTL.bad_data_cnt++;                       /* 0x00E75E9E */
         goto done;
     }
 
@@ -447,10 +447,10 @@ error_path:
     /* 0x00E75F4C */
     if ((fr->rcv_status & 0x0400) != 0 || (fr->rcv_status & 0x0800) != 0) {
         if ((fr->rcv_status & 0x0400) != 0) {
-            RING_$RCV_ESB++;                        /* 0x00E75F66 */
+            RING_$WIRED_DATA.rcv_esb++;                        /* 0x00E75F66 */
         }
         if ((fr->rcv_status & 0x0800) != 0) {
-            RING_$RCV_BIPHASE++;                    /* 0x00E75F76 */
+            RING_$WIRED_DATA.rcv_biphase++;                    /* 0x00E75F76 */
         }
         stats->rcvpkt++;                  /* 0x00E75F7C */
         if (is_swdiag < 0) {

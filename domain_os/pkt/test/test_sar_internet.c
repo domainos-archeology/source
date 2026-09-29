@@ -57,7 +57,7 @@ static int tests_run = 0;
 
 uint32_t NODE_$ME = 0x00012345;
 uint32_t TIME_$CLOCKH = 1000;
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 uint32_t FIM_$QUIT_VALUE[64];
 ec_$eventcount_t FIM_$QUIT_EC[64];
 uint16_t PROC1_$AS_ID = 3;
@@ -260,7 +260,7 @@ static void reset(void)
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
 
     sock_eventcount.value = 7;
-    SOCK_$EVENT_COUNTERS[0] = &sock_eventcount;   /* slot for socket 1 */
+    SOCK_$DATA.socket_ptr[1] = (sock_$sock_t *)&sock_eventcount;   /* slot for socket 1 */
 
     sock_alloc_result = -1;         /* bmi taken: allocation succeeded */
     sock_alloc_num = 1;

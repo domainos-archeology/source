@@ -31,13 +31,9 @@
 /*
  * The request template PKT_$SEND_INTERNET is given, with a template length of
  * 2 (`pea (A5)` at 0x00E2FCA6, A5 = 0x00E3502C from `lea (0xe3502c).l,A5` at
- * 0x00E2FBD8).
- *
- * The SAU2 10.2 map calls it "D E3502C RIP_WIRED size = 4", a four-byte cell
- * inside the OS_INIT_DATA segment with no interior symbol; `gsk read
- * 0x00E3502C 4` gives 00 00 00 00, so the two transmitted bytes are zero.
+ * 0x00E2FBD8), is RIP_$INIT_DATA (rip/rip.h), the four-byte block the map
+ * calls "D E3502C RIP_WIRED size = 4"; its two transmitted bytes are zero.
  */
-uint32_t RIP_$INIT_REQUEST;
 
 /*
  * The data pointer the same call is given, with a data length of 0
@@ -50,7 +46,7 @@ uint32_t RIP_$INIT_REQUEST;
 static const uint32_t rip_$init_nil_data = 0;
 
 /*
- * The 30-byte packet-info template lives at RIP_$DATA+0xC68 and is copied to
+ * The 30-byte packet-info template lives at RIP_$WIRED_DATA+0xC68 and is copied to
  * the frame before use (7 longwords plus a word, 0x00E2FC28-0x00E2FC36).
  */
 #define RIP_INIT_PKT_INFO_LEN   30
@@ -78,10 +74,10 @@ void RIP_$INIT(void)
     int       i;
 
     /* 0x00E2FBDE-0x00E2FC12.  The three locks are reached through the literal
-     * base 0x00E26258 (RIP_$DATA), not through A5. */
-    ML_$EXCLUSION_INIT(&RIP_$DATA.exclusion);           /* +0x40 */
-    ML_$EXCLUSION_INIT(&RIP_$DATA.route_service_mutex); /* +0x28 */
-    ML_$EXCLUSION_INIT(&RIP_$DATA.xns_error_mutex);     /* +0x10 */
+     * base 0x00E26258 (RIP_$WIRED_DATA), not through A5. */
+    ML_$EXCLUSION_INIT(&RIP_$WIRED_DATA.exclusion);           /* +0x40 */
+    ML_$EXCLUSION_INIT(&RIP_$WIRED_DATA.route_service_mutex); /* +0x28 */
+    ML_$EXCLUSION_INIT(&RIP_$WIRED_DATA.xns_error_mutex);     /* +0x10 */
 
     /* 0x00E2FC14: only a diskless node goes looking for its network. */
     if (NETWORK_$DISKLESS >= 0) {
@@ -90,7 +86,7 @@ void RIP_$INIT(void)
 
     /* 0x00E2FC1E-0x00E2FC38 */
     for (i = 0; i < RIP_INIT_PKT_INFO_LEN; i++) {
-        pkt_info[i] = RIP_$DATA.bcast_control[i];
+        pkt_info[i] = RIP_$WIRED_DATA.bcast_control[i];
     }
     pkt_info[1] &= (uint8_t)~0x80u;                 /* `bclr.b #0x7` */
 
@@ -101,8 +97,8 @@ void RIP_$INIT(void)
     }
 
     /* 0x00E2FC62-0x00E2FC82.  The table at 0xE28DB4 is indexed with a -4
-     * displacement, so socket n's entry is SOCK_$EVENT_COUNTERS[n - 1]. */
-    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+     * displacement: SOCK_$DATA.socket_ptr[n], declared from that bias slot. */
+    sock_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;
     sock_wait_val = EC_$READ(sock_ec) + 1;
 
     pkt_id = PKT_$NEXT_ID();                        /* 0x00E2FC86 */
@@ -116,7 +112,7 @@ void RIP_$INIT(void)
                        sock_num,                    /* src_sock */
                        pkt_info,                    /* pkt_info */
                        (uint16_t)pkt_id,            /* request_id */
-                       &RIP_$INIT_REQUEST,          /* template  0x00E3502C */
+                       &RIP_$INIT_DATA.request,     /* template  0x00E3502C */
                        2,                           /* template_len */
                        (void *)&rip_$init_nil_data, /* data      0x00E2FDEC */
                        0,                           /* data_len */
@@ -144,7 +140,7 @@ void RIP_$INIT(void)
          * slot behind the NIL terminator still carries the 1 that
          * `pea (0x1).w` pushes.  `tst.w D0w / seq D3b / bmi` receives only
          * when the result is zero, i.e. the socket fired. */
-        which = EC_$WAIT((ec_$wait_ecs_t){{ SOCK_$EVENT_COUNTERS[sock_num - 1],
+        which = EC_$WAIT((ec_$wait_ecs_t){{ &SOCK_$DATA.socket_ptr[sock_num]->ec,
                                             (ec_$eventcount_t *)&TIME_$CLOCKH,
                                             terminator }},
                          (ec_$wait_vals_t){{ sock_wait_val, deadline, 1 }});
@@ -186,14 +182,14 @@ void RIP_$INIT(void)
 
     /* 0x00E2FD64-0x00E2FD70 */
     ROUTE_$PORT = route_port;
-    RIP_$DATA.route_port = route_port;
+    RIP_$WIRED_DATA.route_port = route_port;
 
     /* 0x00E2FD72-0x00E2FDA2.  The route-port cell doubles as the source
-     * address: RIP_$DATA's first ten bytes are read as a rip_$xns_addr_t.
+     * address: RIP_$WIRED_DATA's first ten bytes are read as a rip_$xns_addr_t.
      * The two calls differ only in the boolean, which picks the non-standard
      * route table on the second pass (`st` at 0x00E2FD90). */
-    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$DATA, 0, 0, false, &status);
-    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$DATA, 0, 0, true, &status);
+    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$WIRED_DATA, 0, 0, false, &status);
+    RIP_$UPDATE_INT(route_port, (rip_$xns_addr_t *)&RIP_$WIRED_DATA, 0, 0, true, &status);
 
 close_socket:                                   /* 0x00E2FDD6 */
     SOCK_$CLOSE(sock_num);

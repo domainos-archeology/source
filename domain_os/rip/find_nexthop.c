@@ -84,7 +84,7 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
 
     /* Check for null/broadcast network */
     if (dest_network == 0) {
-        RIP_$DATA.direct_hits++;
+        RIP_$WIRED_DATA.stats.local_net_pkts++;
         return 0;  /* Direct route */
     }
 
@@ -100,7 +100,7 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
             /* Check for network match */
             if (port_entry->network == dest_network) {
                 /* Direct connectivity via this port */
-                RIP_$DATA.direct_hits++;
+                RIP_$WIRED_DATA.stats.local_net_pkts++;
                 *port_ret = port_idx;
                 return 0;  /* Direct route */
             }
@@ -112,7 +112,7 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
      * No direct route - look up in routing table.
      * Need to hold exclusion lock while accessing routing table.
      */
-    ML_$EXCLUSION_START(&RIP_$DATA.exclusion);
+    ML_$EXCLUSION_START(&RIP_$WIRED_DATA.exclusion);
 
     /* Look up network (don't create, don't increment ref count) */
     rip_entry = RIP_$NET_LOOKUP(dest_network, true, false);
@@ -159,6 +159,6 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
     metric = 0;
 
 done:
-    ML_$EXCLUSION_STOP(&RIP_$DATA.exclusion);
+    ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.exclusion);
     return metric;
 }

@@ -55,8 +55,8 @@ static int tests_failed = 0;
 
 #include "ring/ringlog_internal.h"
 
-ringlog_ctl_t RINGLOG_$CTL;
-ringlog_$data_t RINGLOG_$DATA;
+MODULE_DATA_DEFINE(ringlog_ctl_t, RINGLOG_$CTL, 0x00E2C32C);
+MODULE_DATA_DEFINE(ringlog_$data_t, RINGLOG_$DATA, 0x00EA3E38);
 
 #define MAX_UNWIRES 16
 static uint32_t unwired[MAX_UNWIRES];
@@ -100,7 +100,7 @@ TEST(unwires_elements_zero_through_count_minus_one)
     int16_t parent_index = 0x7777;
 
     reset();
-    RING_$LOGGING_NOW = (int8_t)0xFF;
+    RINGLOG_$CTL.logging_active = (int8_t)0xFF;
     RINGLOG_$CTL.wire_count = 3;
 
     RINGLOG_$STOP_LOGGING(&parent_index);
@@ -112,7 +112,7 @@ TEST(unwires_elements_zero_through_count_minus_one)
     /* 0x00E72218 clr.w (0x30,A0) */
     ASSERT_EQ(0, RINGLOG_$CTL.wire_count);
     /* 0x00E721E2 clr.b (0x38,A0) */
-    ASSERT_EQ(0, RING_$LOGGING_NOW);
+    ASSERT_EQ(0, RINGLOG_$CTL.logging_active);
     /* the parent's word ran 1..3 and was left one past the end */
     ASSERT_EQ(4, parent_index);
 }
@@ -123,7 +123,7 @@ TEST(a_full_array_stops_at_element_nine)
     int16_t parent_index = 0;
 
     reset();
-    RING_$LOGGING_NOW = (int8_t)0xFF;
+    RINGLOG_$CTL.logging_active = (int8_t)0xFF;
     RINGLOG_$CTL.wire_count = 10;
 
     RINGLOG_$STOP_LOGGING(&parent_index);
@@ -140,13 +140,13 @@ TEST(zero_wire_count_unwires_nothing)
     int16_t parent_index = 0x1234;
 
     reset();
-    RING_$LOGGING_NOW = (int8_t)0xFF;
+    RINGLOG_$CTL.logging_active = (int8_t)0xFF;
     RINGLOG_$CTL.wire_count = 0;
 
     RINGLOG_$STOP_LOGGING(&parent_index);
 
     ASSERT_EQ(0, unwire_count);
-    ASSERT_EQ(0, RING_$LOGGING_NOW);
+    ASSERT_EQ(0, RINGLOG_$CTL.logging_active);
     ASSERT_EQ(0, RINGLOG_$CTL.wire_count);
     ASSERT_EQ(0x1234, parent_index);    /* the parent's word is untouched */
 }
@@ -157,7 +157,7 @@ TEST(one_wired_page_unwires_element_zero)
     int16_t parent_index = 0;
 
     reset();
-    RING_$LOGGING_NOW = (int8_t)0xFF;
+    RINGLOG_$CTL.logging_active = (int8_t)0xFF;
     RINGLOG_$CTL.wire_count = 1;
 
     RINGLOG_$STOP_LOGGING(&parent_index);
@@ -173,7 +173,7 @@ TEST(logging_off_is_a_no_op)
     int16_t parent_index = 0x0F0F;
 
     reset();
-    RING_$LOGGING_NOW = 0;
+    RINGLOG_$CTL.logging_active = 0;
     RINGLOG_$CTL.wire_count = 5;
 
     RINGLOG_$STOP_LOGGING(&parent_index);

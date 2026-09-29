@@ -11,6 +11,8 @@
  *
  * Original address: 0x00E15F14
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -19,7 +21,6 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
                            uint16_t proto_hi, uint16_t proto_lo,
                            uint16_t queue_hi, uint16_t queue_lo)
 {
-    uint16_t *user_limit;
     sock_$sock_t *sock_view;
     int8_t result;
     uint16_t sock_num;
@@ -30,11 +31,8 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
     proto_bufpages = ((uint32_t)proto_hi << 16) | proto_lo;
     max_queue = ((uint32_t)queue_hi << 16) | queue_lo;
 
-    /* Get pointer to user socket limit counter */
-    user_limit = SOCK_GET_USER_LIMIT();
-
     /* Check if user sockets are available */
-    if (*user_limit == 0) {
+    if (SOCK_$DATA.user_limit == 0) {
         /* No user sockets available */
         *sock_ret = 0;
         result = 0;
@@ -46,13 +44,13 @@ int8_t SOCK_$ALLOCATE_USER(uint16_t *sock_ret,
             /* Successfully allocated - mark as user socket */
 
             /* Decrement user socket limit */
-            (*user_limit)--;
+            SOCK_$DATA.user_limit--;
 
             /* Get the allocated socket number */
             sock_num = *sock_ret;
 
             /* Get pointer to socket's EC view */
-            sock_view = SOCK_GET_VIEW_PTR(sock_num);
+            sock_view = SOCK_$DATA.socket_ptr[sock_num];
 
             /* Set user-mode flag */
             sock_view->flags |= SOCK_FLAG_USER_MODE;

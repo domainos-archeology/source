@@ -15,18 +15,6 @@
 
 /*
  * ============================================================================
- * Data Structure Addresses (m68k)
- * ============================================================================
- */
-
-/* Ring log control data base address */
-#define RINGLOG_CTL_BASE        0xE2C32C
-
-/* Ring log buffer base address */
-#define RINGLOG_BUF_BASE        0xEA3E38
-
-/*
- * ============================================================================
  * Ring Log Entry Structure (stride 0x2E = 46 bytes)
  *
  * RINGLOG_$LOGIT reaches an entry as RINGLOG_$DATA + 0x2E * index
@@ -140,10 +128,16 @@ static inline void ringlog_$put_packed(ringlog_$entry_t *entry, int off, uint32_
 
 /*
  * ============================================================================
- * Ring Log Buffer (RINGLOG_$DATA, 0x00EA3E38, 0x11FC bytes)
+ * RINGLOG_$DATA - the ring log buffer (0x00EA3E38, 0x11FC bytes)
+ *
+ * Map "D53 EA3E38 RINGLOG_$DATA loaded at 1B2152, size = 11FC", in the
+ * trailing data region after FILE_$LOT_DATA; a MODULE_DATA block linked in
+ * the map's order.  RINGLOG_$LOGIT and RINGLOG_$CNTL address it through its
+ * literal base ("movea.l #0xea3e38,A0" at 0x00E1A2E4 and 0x00E7229A).
  *
  * A byte pool: the entry stride 0x2E is an explicit constant in the code and
  * entry 0 overlaps the index word, so there is no C array of entries.
+ * Pointer-free.
  * ============================================================================
  */
 typedef struct ringlog_$data_t {
@@ -153,7 +147,7 @@ typedef struct ringlog_$data_t {
 _Static_assert(sizeof(ringlog_$data_t) == 0x11FC,
                "RINGLOG_$DATA is 0x11FC bytes (SAU2 map D53 EA3E38)");
 
-extern ringlog_$data_t RINGLOG_$DATA;
+MODULE_DATA_DECLARE(ringlog_$data_t, RINGLOG_$DATA, 0x00EA3E38);
 
 /*
  * The next-entry index: the word at RINGLOG_$DATA + 0 (0x00E1A2B6,
@@ -210,23 +204,9 @@ static inline int16_t ringlog_$pkt_word(const uint8_t *pkt, uint16_t off)
 }
 
 /*
- * Convenience aliases for common fields
+ * The wire area MST_$WIRE_AREA pins for the log (RINGLOG_$CNTL 0x00E722BE):
+ * RINGLOG_$DATA up to RINGLOG_BUFFER_SIZE (0x11FA) bytes in; the end is the
+ * local at (-0x8,A6), the image's literal 0xEA3E38 + 0x11FA.
  */
-#define RINGLOG_$ID             (RINGLOG_$CTL.filter_id)
-#define RINGLOG_$NIL_SOCK       (RINGLOG_$CTL.nil_sock_filter)
-#define RINGLOG_$WHO_SOCK       (RINGLOG_$CTL.who_sock_filter)
-#define RINGLOG_$MBX_SOCK       (RINGLOG_$CTL.mbx_sock_filter)
-/* RING_$LOGGING_NOW is defined in ring/ringlog.h. */
-
-/*
- * ============================================================================
- * Wire area parameters (passed to MST_$WIRE_AREA)
- *
- * These are used to wire the ring buffer memory to prevent paging.
- * ============================================================================
- */
-
-/* Buffer end address for wiring */
-#define RINGLOG_WIRE_END        (RINGLOG_BUF_BASE + RINGLOG_BUFFER_SIZE)
 
 #endif /* RINGLOG_INTERNAL_H */

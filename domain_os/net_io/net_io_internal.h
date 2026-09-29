@@ -17,7 +17,7 @@
 #include "proc2/proc2.h"        /* PROC2_$SET_CLEANUP */
 #include "route/route.h"        /* route_$port_t, ROUTE_$PORTP, ROUTE_$FIND_PORTP,
                                  * route_$user_stat_t, ROUTE_$USER_STAT */
-#include "sock/sock.h"          /* SOCK_$ALLOCATE, SOCK_$EVENT_COUNTERS */
+#include "sock/sock.h"          /* SOCK_$ALLOCATE, SOCK_$DATA */
 #include "time/time.h"          /* TIME_$CURRENT_CLOCKH */
 
 /*

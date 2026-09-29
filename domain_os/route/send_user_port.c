@@ -19,7 +19,7 @@
 
 /*
  * The sequence counter (0xE88226) is ROUTE_$RTWIRED_DATA.packet_seq
- * (route/route.h), SOCK_$EVENT_COUNTERS (0xE28DB4) is in sock/sock.h and
+ * (route/route.h), SOCK_$DATA.socket_ptr (0xE28DB0) is in sock/sock.h and
  * status_$network_data_length_too_large in network/network.h.
  */
 
@@ -148,16 +148,14 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
          * Update statistics based on socket queue depth.
          *
          * The original indexes the socket pointer table from 0xE28DB4
-         * with an offset of -4, i.e. entry (socket - 1) of
-         * SOCK_$EVENT_COUNTERS (= entry [socket] of the table based at
-         * 0xE28DB0, whose slot 0 is the spinlock):
+         * with an offset of -4, i.e. SOCK_$DATA.socket_ptr[socket], the
+         * table declared from its bias slot at 0xE28DB0:
          *   00e87d08    movea.l #0xe28db4,A1
          *   00e87d0e    lsl.w #0x2,D0w
          *   00e87d10    lea (0x0,A1,D0w*0x1),A1
          *   00e87d16    movea.l (-0x4,A1),A3
          */
-        queue_count = ((const sock_$sock_t *)
-                       SOCK_$EVENT_COUNTERS[*socket_ptr - 1])->queue_count;
+        queue_count = SOCK_$DATA.socket_ptr[*socket_ptr]->queue_count;
 
         if (queue_count > 0x20) {
             /* 0x00E87D24: addq.l #0x1,(0x2,A2) */

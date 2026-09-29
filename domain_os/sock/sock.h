@@ -153,58 +153,19 @@ void SOCK_$CLOSE(uint16_t sock_num);
 int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info);
 
 /*
- * sock_table_base - The socket table (0xE27510, see sock_internal.h)
- *
- * Layout:
- *   +0x0000: header (free list head at +0x0C)
- *   +0x001C: 224 socket descriptors, 0x1C bytes each
- *   +0x18A0: socket pointer table (slot 0 = spinlock, slot n = socket n)
- *   +0x1C24: user socket limit counter
- */
-#define SOCK_TABLE_SIZE         0x1C28  /* Rounded up for alignment */
-extern uint8_t sock_table_base[SOCK_TABLE_SIZE];
-
-/*
- * SOCK_$EVENT_COUNTERS - Socket event counter array
- *
- * Array of pointers to socket event counters.  This is the socket pointer
- * table starting at its slot 1 (0xE28DB4 = sock_table_base + 0x18A4);
- * slot 0 of the table (0xE28DB0) holds the socket spinlock.  Note that
- * several users index this from 0xE28DB4 with an offset of -4, i.e.
- * SOCK_$EVENT_COUNTERS[sock - 1] is the entry for socket "sock".
- *
- * Original address: 0xE28DB4
- */
-#define SOCK_$EVENT_COUNTERS    ((ec_$eventcount_t **)(sock_table_base + 0x18A4))
-
-/*
- * Aliases for the same socket pointer table used by other subsystems.  They
- * used to be re-declared in app/app_internal.h, network/network_internal.h and
- * rem_file/rem_file_internal.h with three different types; the storage is
- * owned here (bead source-3uo).
- *
- *   SOCK_$TABLE_BASE  - slot 0 of the table (0xE28DB0, the socket spinlock);
- *                       app/ indexes from its ADDRESS by sock_num*4.
- *   SOCK_$SOCKET_PTR  - slot 1 onwards (0xE28DB4), i.e. SOCK_$EVENT_COUNTERS.
- */
-#define SOCK_$TABLE_BASE        (*(void **)(sock_table_base + 0x18A0))
-#define SOCK_$SOCKET_PTR        ((void **)(sock_table_base + 0x18A4))
-
-/*
  * =============================================================================
  * Recovered record layouts (verified against the SOCK_$GET disassembly)
  * =============================================================================
  */
 
 /*
- * sock_$sock_t - a socket descriptor as seen through SOCK_$EVENT_COUNTERS
+ * sock_$sock_t - a socket descriptor, SOCK_$DATA.socket[n]
  *
- * SOCK_$EVENT_COUNTERS[n] points at the event count that begins the socket
- * descriptor, so the pointer may be treated either as an ec_$eventcount_t *
- * (EC_$WAIT, EC_$ADVANCE) or as a sock_$sock_t *.  The descriptors are
- * spaced 0x1C bytes apart in the table (SOCK_$INIT 0x00E2FE5A), and the EC
- * of descriptor n sits 4 bytes into descriptor n's slot (0x00E2FE16), so the
- * last four bytes of one socket's view overlap the next slot's first four.
+ * SOCK_$DATA.socket_ptr[n] points at the event count that begins the socket
+ * descriptor, so callers use it either as a sock_$sock_t * or through its
+ * .ec (EC_$WAIT, EC_$ADVANCE).  The descriptors are 0x1C bytes apart
+ * (SOCK_$INIT 0x00E2FE5A) and follow each other without a gap; see
+ * SOCK_$DATA below for where the table starts.
  *
  * Field meanings recovered from SOCK_$PUT_INT_INT (0x00E161F8):
  *   0x14 is the queue depth LIMIT and 0x15 the current depth - the admission
@@ -270,6 +231,118 @@ _Static_assert(offsetof(sock_$sock_t, hdr_pages)    == 0x1A, "sock_$sock_t.hdr_p
 _Static_assert(offsetof(sock_$sock_t, data_pages)   == 0x1B, "sock_$sock_t.data_pages");
 _Static_assert(sizeof(sock_$sock_t) == 0x1C, "sock_$sock_t must be 0x1C bytes");
 #endif
+
+/*
+ * =============================================================================
+ * SOCK_$DATA - the SOCK module data block (map "D E27510 SOCK size = 1C28")
+ * =============================================================================
+ *
+ * Module data block SOCK_$DATA: Claude Opus 5.5 (source-gy7x).
+ *
+ * The A5 block of every SOCK routine ("lea (0xe27510).l,A5" at 0x00E15D94,
+ * 0x00E15E6A, 0x00E15F1C, 0x00E15F7A, 0x00E16078, 0x00E16198, 0x00E16200;
+ * SOCK_$INIT keeps the base in D3, 0x00E2FE02).  A MODULE_DATA block linked
+ * in the SAU2 map's order after GPU_ASM and before TESTPAGE; the address is
+ * the ordering key, not the link address.  The map names three objects in
+ * it, and the code addresses a fourth and fifth by displacement:
+ *
+ *   +0x0000  SOCK_LIST         the free-list header, 0x20 bytes
+ *   +0x0020  SOCK_$SOCKET      the descriptors of sockets 1..0xE0
+ *   +0x18A0  (lock)            the socket spin lock ("pea (0x18a0,A5)",
+ *                              0x00E15DBC)
+ *   +0x18A4  SOCK_$SOCKET_PTR  the descriptor pointers of sockets 1..0xE0
+ *   +0x1C24  (user limit)      user sockets still allowed (0x00E15F26)
+ *
+ * Two Pascal [1..0xE0] tables, each declared from its bias slot (design
+ * section 3) and indexed with the socket number:
+ *
+ *   socket[]      element n at +0x04 + n*0x1C.  SOCK_$INIT starts its
+ *                 descriptor cursor at "lea (0x1c,A0),A4" (0x00E2FE0A) and
+ *                 initialises the record at "lea (0x4,A2),A0" (0x00E2FE16),
+ *                 stepping "lea (0x1c,A4),A4" (0x00E2FE5A): element 1 is at
+ *                 +0x20 (map SOCK_$SOCKET 0xE27530) and element 0 overlays
+ *                 SOCK_LIST's last 0x1C bytes, so the two are union arms.
+ *                 Element 0xE0 ends exactly at the lock (+0x18A0).
+ *
+ *   socket_ptr[]  element n at +0x18A0 + n*4.  Every reader forms
+ *                 "move.w D0w,D1w / lsl.l #0x2,D1 / lea (0x0,A5,D1*0x1),A0 /
+ *                 movea.l (0x18a0,A0),A2" (SOCK_$OPEN 0x00E15DB0-0x00E15DB8,
+ *                 SOCK_$PUT_INT 0x00E161BA-0x00E161C2), and readers outside
+ *                 SOCK use "movea.l #0xe28db4,A0 / ... / movea.l (-0x4,A1),A0"
+ *                 (NETWORK_$DO_REQUEST 0x00E0F8BA-0x00E0F8C8), the same slot.
+ *                 Element 0 is the spin lock and element 0xE1 - which
+ *                 XNS_IDP_$OPEN's no-socket path reaches (xns/idp_open.c) -
+ *                 is the user-limit word and its pad, so the table is a
+ *                 union arm over the scalars around it.
+ *
+ * The free list is threaded through sock_$sock_t.queue_head (+0x0C), and the
+ * list head sits at +0x0C of the block itself: SOCK_$OPEN's unlink walk
+ * starts with "lea (A5),A0" and compares "(0xc,A0)" (0x00E15E00-0x00E15E08),
+ * treating the block base as a record whose queue_head is the head.  Both
+ * the head and the links are target VAs (ARCH_VA_TO_PTR / ARCH_PTR_TO_VA).
+ *
+ * The descriptors and the pointer table hold pointers (ec_$eventcount_t
+ * waiter links, sock_$sock_t *), so every offset past +0x04 is asserted on
+ * the target only; the host arms keep the same overlays with wider slots.
+ */
+#define SOCK_$DATA_SIZE 0x1C28          /* map: SOCK size = 1C28 */
+
+typedef struct sock_$list_t {
+    uint8_t     _0000[0x0C];            /* +0x00: not referenced */
+    uint32_t    free_head;              /* +0x0C: first free descriptor, a VA
+                                         *        (SOCK_$ALLOCATE "tst.l
+                                         *        (0xc,A5)" 0x00E15E94) */
+    uint8_t     _0010[0x10];            /* +0x10: not referenced */
+} sock_$list_t;
+
+_Static_assert(offsetof(sock_$list_t, free_head) == 0x0C, "SOCK_LIST free head (0xc,A5)");
+_Static_assert(sizeof(sock_$list_t) == 0x20, "SOCK_LIST is 0x20 bytes (0xE27510..0xE2752F)");
+
+typedef struct sock_$data_t {
+    union {
+        sock_$list_t list;              /* +0x0000 map SOCK_LIST */
+        struct {
+            uint8_t      _socket_bias[4];
+            /* +0x0004: [1..0xE0], element 1 at +0x20 (map SOCK_$SOCKET) */
+            sock_$sock_t socket[SOCK_MAX_NUMBER + 1];
+        };
+    };
+    union {
+        struct {
+            union {
+                uint32_t      lock;     /* +0x18A0: the socket spin lock */
+                sock_$sock_t *_lock_slot;   /* socket_ptr[0]'s width */
+            };
+            sock_$sock_t *_socket_ptr_slots[SOCK_MAX_NUMBER]; /* +0x18A4 */
+            uint16_t      user_limit;   /* +0x1C24: user sockets still
+                                         *          allowed (64 in the image) */
+            uint16_t      _1c26;        /* +0x1C26: pad, socket_ptr[0xE1]'s
+                                         *          low half */
+        };
+        /* +0x18A0: [1..0xE0] (map SOCK_$SOCKET_PTR 0xE28DB4 = element 1);
+         * [0] is the lock, [0xE1] the user limit and its pad */
+        sock_$sock_t *socket_ptr[SOCK_MAX_NUMBER + 2];
+    };
+} sock_$data_t;
+
+#if defined(ARCH_M68K)
+/* Pointer-bearing records: target-only (design section 3). */
+_Static_assert(offsetof(sock_$data_t, socket) == 0x0004, "socket[] bias slot (0x1c,A0) + 4");
+_Static_assert(offsetof(sock_$data_t, socket[1]) == 0x0020, "SOCK_$SOCKET (0xE27530)");
+_Static_assert(sizeof(((sock_$data_t *)0)->socket[0]) == 0x1C, "socket[] stride (lea (0x1c,A4),A4)");
+_Static_assert(offsetof(sock_$data_t, socket[SOCK_MAX_NUMBER + 1]) == 0x18A0,
+               "socket[0xE0] ends at the lock");
+_Static_assert(offsetof(sock_$data_t, lock) == 0x18A0, "socket spin lock (pea (0x18a0,A5))");
+_Static_assert(offsetof(sock_$data_t, socket_ptr) == 0x18A0, "socket_ptr[] bias slot (0x18a0,A0)");
+_Static_assert(offsetof(sock_$data_t, socket_ptr[1]) == 0x18A4, "SOCK_$SOCKET_PTR (0xE28DB4)");
+_Static_assert(sizeof(((sock_$data_t *)0)->socket_ptr[0]) == 4, "socket_ptr[] stride (lsl.l #0x2)");
+_Static_assert(offsetof(sock_$data_t, user_limit) == 0x1C24, "user limit (0xE29134)");
+_Static_assert(offsetof(sock_$data_t, socket_ptr[SOCK_MAX_NUMBER + 1]) == 0x1C24,
+               "socket_ptr[0xE1] overlays the user limit");
+_Static_assert(sizeof(sock_$data_t) == SOCK_$DATA_SIZE, "SOCK: map size 0x1C28");
+#endif
+
+MODULE_DATA_DECLARE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 /*
  * sock_$pkt_info_t - the record SOCK_$GET fills in for its caller (0x40 bytes)

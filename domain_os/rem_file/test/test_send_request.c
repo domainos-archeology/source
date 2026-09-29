@@ -78,7 +78,7 @@ uint32_t  TIME_$CLOCKH;
 uint8_t   REM_FILE_$DATA[0x1E];
 uint32_t  REM_FILE_$BUSY_RETRY_COUNT;
 uint16_t  REM_FILE_$COMPLETION_TIME = 20;
-uint8_t   sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 uint32_t  FIM_$QUIT_VALUE[64];
 ec_$eventcount_t FIM_$QUIT_EC[64];
 
@@ -300,9 +300,9 @@ static void reset(void)
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
 
     mock_sock_ec.value = 7;
-    memset(sock_table_base, 0, sizeof(sock_table_base));
-    /* socket 5's descriptor lives at SOCK_$EVENT_COUNTERS[5 - 1] */
-    SOCK_$EVENT_COUNTERS[4] = &mock_sock_ec;
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
+    /* socket 5's descriptor pointer is SOCK_$DATA.socket_ptr[5] */
+    SOCK_$DATA.socket_ptr[5] = (sock_$sock_t *)&mock_sock_ec;
 
     wait_script_len = 0; wait_calls = 0;
     recv_script_len = 0; recv_calls = 0;
@@ -448,7 +448,7 @@ TEST(socket_event_counter_is_indexed_from_one)
 {
     reset();
     /* Put a decoy at [5]; the unit must use [5 - 1]. */
-    SOCK_$EVENT_COUNTERS[5] = NULL;
+    SOCK_$DATA.socket_ptr[6] = NULL;
     script_one_good_reply(0x20, 0, 0);
     call(0x40, NULL, 0);
 

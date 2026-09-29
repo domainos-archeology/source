@@ -38,9 +38,9 @@ void RINGLOG_$STOP_LOGGING(int16_t *parent_index)
     int16_t remaining;
 
     /* 0x00E721DC tst.b (0x38,A0) / bpl - nothing to do unless logging is on */
-    if (RING_$LOGGING_NOW < 0) {
+    if (RINGLOG_$CTL.logging_active < 0) {
         /* 0x00E721E2 clr.b (0x38,A0) */
-        RING_$LOGGING_NOW = 0;
+        RINGLOG_$CTL.logging_active = 0;
 
         /*
          * 0x00E721E6-0x00E721EC: D0 = wire_count - 1, and a negative count
@@ -56,14 +56,13 @@ void RINGLOG_$STOP_LOGGING(int16_t *parent_index)
                  * 0x00E721F8-0x00E72208:
                  *   move.w (-0x2,A2),D0w / lsl.w #0x2,D0w
                  *   move.l (-0x4,A3,D0w*0x1),-(SP)   ; A3 = 0xE2C32C
-                 * The -4 displacement makes the effective address
-                 * wired_pages + (index - 1)*4, so with the index running
-                 * 1..wire_count the entries touched are [0..wire_count-1] -
-                 * the same entries MST_$WIRE_AREA fills, since
-                 * RINGLOG_$CNTL hands it "pea (A1)", the array base itself
-                 * (0x00E722C6).  The page address is pushed BY VALUE.
+                 * The -4 displacement is the Pascal [1..10] table's bias:
+                 * with the index running 1..wire_count this is
+                 * RINGLOG_WIRED_PAGE(index), the same entries MST_$WIRE_AREA
+                 * fills from the array base (RINGLOG_$CNTL "pea (A1)",
+                 * 0x00E722C6).  The page address is pushed BY VALUE.
                  */
-                WP_$UNWIRE(RINGLOG_$CTL.wired_pages[*parent_index - 1]);
+                WP_$UNWIRE(RINGLOG_WIRED_PAGE(*parent_index));
 
                 /* 0x00E7220A addq.w #0x1,(-0x2,A2) */
                 *parent_index = (int16_t)(*parent_index + 1);

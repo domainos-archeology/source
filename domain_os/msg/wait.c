@@ -83,9 +83,9 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
      *   0x00E59C18  lsl.w #0x2,D2w
      *   0x00E59C1A  lea (0x0,A1,D2w*0x1),A3
      *   0x00E59C1E  movea.l (-0x4,A3),A3
-     * i.e. *(0xE28DB0 + socket*4) == SOCK_$EVENT_COUNTERS[socket - 1].
+     * i.e. *(0xE28DB0 + socket*4) == SOCK_$DATA.socket_ptr[socket].
      */
-    sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[sock_num - 1];
+    sock = SOCK_$DATA.socket_ptr[sock_num];
 
     /*
      * Both wait targets are computed before the "message already queued" test

@@ -60,13 +60,14 @@ static int current_failed = 0;
  * Globals the unit reads
  * ============================================================================ */
 
-rip_$data_t RIP_$DATA;
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
+MODULE_DATA_DEFINE(rip_$init_data_t, RIP_$INIT_DATA, 0x00E3502C);
 int8_t      NETWORK_$DISKLESS;
 uint32_t    NETWORK_$MOTHER_NODE;
 uint32_t    NODE_$ME;
 uint32_t    TIME_$CLOCKH;
 uint32_t    ROUTE_$PORT;
-uint8_t     sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 /* ============================================================================
  * Mocks
@@ -236,12 +237,12 @@ static void reset(void)
 {
     int i;
 
-    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&RIP_$WIRED_DATA, 0, sizeof(RIP_$WIRED_DATA));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&va_arena, 0, sizeof(va_arena));
 
     for (i = 0; i < 30; i++) {
-        RIP_$DATA.bcast_control[i] = (uint8_t)(0x80 + i);
+        RIP_$WIRED_DATA.bcast_control[i] = (uint8_t)(0x80 + i);
     }
 
     NETWORK_$DISKLESS = (int8_t)0xFF;       /* diskless */
@@ -249,12 +250,12 @@ static void reset(void)
     NODE_$ME = 0x11223344u;
     TIME_$CLOCKH = 500;
     ROUTE_$PORT = 0;
-    RIP_$INIT_REQUEST = 0;
+    memset(&RIP_$INIT_DATA, 0, sizeof(RIP_$INIT_DATA));
 
     mock_sock_ec.value = 3;
     mock_bad_ec.value  = 99;
-    SOCK_$EVENT_COUNTERS[mock_alloc_sock - 1] = &mock_sock_ec;
-    SOCK_$EVENT_COUNTERS[mock_alloc_sock]     = &mock_bad_ec;
+    SOCK_$DATA.socket_ptr[mock_alloc_sock] = (sock_$sock_t *)&mock_sock_ec;
+    SOCK_$DATA.socket_ptr[mock_alloc_sock + 1] = (sock_$sock_t *)&mock_bad_ec;
 
     excl_init_calls = 0;
     mock_alloc_result = -1;
@@ -290,11 +291,11 @@ TEST(the_three_locks_are_always_initialised)
     RIP_$INIT();
 
     ASSERT_EQ(3, excl_init_calls);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$DATA.exclusion,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$WIRED_DATA.exclusion,
               (unsigned long)(size_t)excl_init_args[0]);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$DATA.route_service_mutex,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$WIRED_DATA.route_service_mutex,
               (unsigned long)(size_t)excl_init_args[1]);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$DATA.xns_error_mutex,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$WIRED_DATA.xns_error_mutex,
               (unsigned long)(size_t)excl_init_args[2]);
 }
 
@@ -337,7 +338,7 @@ TEST(the_template_and_data_arguments_are_real_cells)
     RIP_$INIT();
 
     ASSERT_EQ(1, snd_calls);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$INIT_REQUEST,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$INIT_DATA,
               (unsigned long)(size_t)snd_template);
     ASSERT_EQ(2, snd_template_len);
     ASSERT_EQ(0, snd_data_len);
@@ -377,7 +378,7 @@ TEST(the_route_port_comes_from_record_offset_0x18)
     RIP_$INIT();
 
     ASSERT_EQ(0x0C0FFEE0u, ROUTE_$PORT);
-    ASSERT_EQ(0x0C0FFEE0u, RIP_$DATA.route_port);
+    ASSERT_EQ(0x0C0FFEE0u, RIP_$WIRED_DATA.route_port);
 }
 
 TEST(netbuf_rtn_hdr_gets_the_page_aligned_data_va)
@@ -434,9 +435,9 @@ TEST(both_update_calls_share_the_source_and_differ_in_the_boolean)
     ASSERT_EQ(2, update_calls);
     ASSERT_EQ(0x0C0FFEE0u, update_network[0]);
     ASSERT_EQ(0x0C0FFEE0u, update_network[1]);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$DATA,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$WIRED_DATA,
               (unsigned long)(size_t)update_source[0]);
-    ASSERT_EQ((unsigned long)(size_t)&RIP_$DATA,
+    ASSERT_EQ((unsigned long)(size_t)&RIP_$WIRED_DATA,
               (unsigned long)(size_t)update_source[1]);
     ASSERT_EQ(0x00, (uint8_t)update_flags[0]);
     ASSERT_EQ(0xFF, (uint8_t)update_flags[1]);

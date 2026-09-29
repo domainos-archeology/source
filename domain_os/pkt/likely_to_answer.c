@@ -38,7 +38,7 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
     uint16_t sock_num;              /* A6-0x70, then D4 */
     int16_t request_id;             /* D3 */
     int16_t retry;                  /* D5, the dbf counter */
-    ec_$eventcount_t **ec_slot;     /* A6-0x88 */
+    sock_$sock_t    **ec_slot;      /* A6-0x88 */
     int32_t wait_val;               /* D2 once the socket is open */
     int32_t deadline;               /* A6-0x5C */
     uint16_t retry_hint;            /* A6-0x68 */
@@ -131,8 +131,8 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
      * 0x00E12A74  movea.l (-0x4,A0),A1         ... but re-dereferenced on
      * 0x00E12A78  move.l (A1),D2               every EC_$WAIT (0x00E12B54).
      */
-    ec_slot = &SOCK_$EVENT_COUNTERS[sock_num - 1];
-    wait_val = (*ec_slot)->value + 1;
+    ec_slot = &SOCK_$DATA.socket_ptr[sock_num];
+    wait_val = (*ec_slot)->ec.value + 1;
 
     retry = 2;                      /* 0x00E12A7A "moveq #0x2,D5" */
 
@@ -235,7 +235,7 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
          *
          * 0x00E12B68  tst.w D0w / seq D7b / tst.b D7b / bmi -> receive
          */
-        if (EC_$WAIT((ec_$wait_ecs_t){{ *ec_slot,
+        if (EC_$WAIT((ec_$wait_ecs_t){{ &(*ec_slot)->ec,
                                         (ec_$eventcount_t *)&TIME_$CLOCKH,
                                         NULL }},
                      (ec_$wait_vals_t){{ wait_val, deadline, 1 }}) == 0) {

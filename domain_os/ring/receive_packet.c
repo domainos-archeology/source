@@ -116,10 +116,10 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     }
 
     /* 0x00E764E8-0x00E764F6 */
-    chan = unit_data->pkt_types[pkt_type_idx - 1].channel;
+    chan = RING_UNIT_PKT_TYPE(unit_data, pkt_type_idx).channel;
 
     /* 0x00E764FC: the owning channel must still be open. */
-    if (unit_data->channels[chan - 1].flags >= 0) {
+    if (RING_UNIT_CHANNEL(unit_data, chan).flags >= 0) {
         goto discard;                               /* 0x00E7660C */
     }
 
@@ -131,7 +131,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     is_fragment = ((hdr->flags7 & 0x08) != 0) ? true : false;
 
     /* 0x00E76514 */
-    if (unit_data->channels[chan - 1].socket_id == RING_OS_SOCKET_ID) {
+    if (RING_UNIT_CHANNEL(unit_data, chan).socket_id == RING_OS_SOCKET_ID) {
         /*
          * OS-owned channel: build the MAC_OS demultiplex record.
          */
@@ -166,7 +166,7 @@ int16_t ring_$receive_packet(uint16_t unit, ring_$pkt_hdr_t **hdr_p,
     /*
      * 0x00E765B8: ordinary channel - queue the packet on its socket.
      */
-    socket_id = (uint16_t)unit_data->channels[chan - 1].socket_id;
+    socket_id = (uint16_t)RING_UNIT_CHANNEL(unit_data, chan).socket_id;
     /* sock_$pkt_info_t.hdr is a target VA, not a C pointer. */
     sock_rec.hdr = ARCH_PTR_TO_VA(hdr);             /* 0x00E765BE */
     sock_rec.data_pages[0] = *data_pa_p;            /* 0x00E765C2 */

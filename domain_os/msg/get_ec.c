@@ -17,7 +17,7 @@
  *   00e59d26  pea (A3)
  *   00e59d28  move.w (A2),D1w / movea.l #0xe28db4,A0 / lsl.w #0x2,D1w
  *   00e59d32  lea (0x0,A0,D1w*0x1),A1 / movea.l (-0x4,A1),A4
- *                                       ; = SOCK_$EVENT_COUNTERS[socket - 1]
+ *                                       ; = SOCK_$DATA.socket_ptr[socket]
  *   00e59d3a  pea (A4) / jsr EC2_$REGISTER_EC1
  *   00e59d42  movea.l (0xc,A6),A1 / move.l A0,(A1)
  *
@@ -54,7 +54,7 @@ void MSG_$GET_EC(msg_$socket_t *socket, uint32_t *ec, status_$t *status_ret)
     }
 
     /* 0xE59D36: the socket number is re-read from the caller's word */
-    sock_ec = SOCK_$EVENT_COUNTERS[*socket - 1];
+    sock_ec = &SOCK_$DATA.socket_ptr[*socket]->ec;
 
     /* 0xE59D3C: the handle comes back in A0 */
     *ec = ARCH_PTR_TO_VA(EC2_$REGISTER_EC1(sock_ec, status_ret));

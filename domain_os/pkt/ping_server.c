@@ -71,9 +71,9 @@ void PKT_$PING_SERVER(void)
      * 0x00E12C04  move.l (A0),D2
      * 0x00E12C0C  addq.l #0x1,D2
      * 0xE28DE4 == 0xE28DB4 + (0x0D - 1) * 4, i.e.
-     * SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1].
+     * SOCK_$DATA.socket_ptr[PKT_PING_SOCKET].
      */
-    wait_val = SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1]->value + 1;
+    wait_val = SOCK_$DATA.socket_ptr[PKT_PING_SOCKET]->ec.value + 1;
 
     for (;;) {
         /*
@@ -90,7 +90,7 @@ void PKT_$PING_SERVER(void)
          * kept because the original still pushes them.  The result is
          * discarded (no result slot is reserved).
          */
-        (void)EC_$WAIT((ec_$wait_ecs_t){{ SOCK_$EVENT_COUNTERS[PKT_PING_SOCKET - 1],
+        (void)EC_$WAIT((ec_$wait_ecs_t){{ &SOCK_$DATA.socket_ptr[PKT_PING_SOCKET]->ec,
                                           NULL, NULL }},
                        (ec_$wait_vals_t){{ wait_val, 1, 1 }});
 

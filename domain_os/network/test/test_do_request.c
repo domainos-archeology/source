@@ -53,8 +53,8 @@ static int tests_failed = 0;
 
 uint32_t NETWORK_$MOTHER_NODE;
 int16_t  NETWORK_$RETRY_TIMEOUT;
-/* SOCK_$SOCKET_PTR is a macro over sock_table_base; define the storage. */
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+/* The SOCK module data block (sock/sock.h). */
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 static int32_t  sock_ec;
 static int      close_calls;
@@ -147,8 +147,9 @@ static void reset_all(void)
     memset(stub_reply, 0, sizeof(stub_reply));
     memset(stub_resp_info, 0, sizeof(stub_resp_info));
     sock_ec = 0;
-    memset(sock_table_base, 0, sizeof(sock_table_base));
-    SOCK_$SOCKET_PTR[1] = &sock_ec;
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
+    /* the mocked SOCK_$ALLOCATE hands out socket 1 (0x00E0F8BA-0x00E0F8C8) */
+    SOCK_$DATA.socket_ptr[1] = (sock_$sock_t *)&sock_ec;
     NETWORK_$MOTHER_NODE = 0;
     NETWORK_$RETRY_TIMEOUT = 0;
     close_calls = crash_calls = note_visible_calls = wait_calls = 0;

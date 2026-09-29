@@ -79,9 +79,9 @@ MODULE_DATA_DECLARE(xns_error_$data_t, XNS_ERROR_$DATA, 0x00E2B29C);
 /*
  * XNS_ERROR_$CLIENT_MUTEX (0x00E26268, SAU2 link map) - guards
  * client_ref_count and std_idp_channel.  Pushed by its literal address at
- * 0x00E178BE / 0x00E178FA / 0x00E1791C / 0x00E1794C.
+ * 0x00E178BE / 0x00E178FA / 0x00E1791C / 0x00E1794C.  It lies in the
+ * RIP_WIRED segment, so it is RIP_$WIRED_DATA.xns_error_mutex (rip/rip.h).
  */
-extern ml_$exclusion_t XNS_ERROR_$CLIENT_MUTEX;
 
 /*
  * Internal helper function declarations

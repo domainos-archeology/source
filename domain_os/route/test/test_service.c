@@ -65,9 +65,8 @@ static int tests_run = 0;
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t ROUTE_$PORT;
-ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
-int16_t RIP_$STD_IDP_CHANNEL;
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 uint16_t APP_$STD_IDP_CHANNEL;
 
 net_io_$driver_t NET_IO_$NIL_DRIVER[1];
@@ -170,7 +169,7 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index,
  */
 MODULE_DATA_DEFINE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
 uint32_t TIME_$CURRENT_CLOCKH;
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 void ROUTE_$PROCESS(void) { }
 
@@ -418,7 +417,7 @@ static void reset_state(void)
 
     ROUTE_$PORT = 0;
     ROUTE_$RTWIRED_DATA.n_user_ports = 0;
-    RIP_$STD_IDP_CHANNEL = -1;
+    RIP_$WIRED_DATA.std_idp_channel = -1;
     APP_$STD_IDP_CHANNEL = 0xFFFF;
 
     excl_start_calls = 0;
@@ -458,7 +457,7 @@ static void reset_state(void)
     TIME_$CURRENT_CLOCKH = 0x11223344;
     memset(&test_sock_desc, 0, sizeof(test_sock_desc));
     test_sock_desc.flags = 0xFFFF;
-    SOCK_$EVENT_COUNTERS[0] = &test_sock_desc.ec;   /* slot for socket 1 */
+    SOCK_$DATA.socket_ptr[1] = (sock_$sock_t *)&test_sock_desc.ec;   /* slot for socket 1 */
     ec_init_calls = 0;
     ec_advance_calls = 0;
     ec_advance_seen = NULL;
@@ -953,13 +952,13 @@ TEST(idp_registration_on_leaving_status_one)
     ROUTE_$PORT_ARRAY[1].active = 1;
     request.status = 2;
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = 3;
+    RIP_$WIRED_DATA.std_idp_channel = 3;
     APP_$STD_IDP_CHANNEL = 4;
 
     call_service();
 
     ASSERT_EQ(2, idp_add_calls);
-    ASSERT_EQ((uintptr_t)&RIP_$STD_IDP_CHANNEL, (uintptr_t)idp_add_chan[0]);
+    ASSERT_EQ((uintptr_t)&RIP_$WIRED_DATA.std_idp_channel, (uintptr_t)idp_add_chan[0]);
     ASSERT_EQ(1, idp_add_port[0]);
     ASSERT_EQ((uintptr_t)&APP_$STD_IDP_CHANNEL, (uintptr_t)idp_add_chan[1]);
     ASSERT_EQ(1, idp_add_port[1]);
@@ -971,7 +970,7 @@ TEST(idp_registration_on_leaving_status_one)
     ROUTE_$PORT_ARRAY[1].active = 1;
     request.status = 2;
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = -1;
+    RIP_$WIRED_DATA.std_idp_channel = -1;
     APP_$STD_IDP_CHANNEL = 0xFFFF;
     call_service();
     ASSERT_EQ(0, idp_add_calls);
@@ -989,7 +988,7 @@ TEST(entering_routing_needs_the_std_channel)
     ROUTE_$PORT_ARRAY[1].active = 2;      /* in 0x0E */
     request.status = 4;                   /* in 0x30 */
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = 3;
+    RIP_$WIRED_DATA.std_idp_channel = 3;
 
     call_service();
 
@@ -1004,7 +1003,7 @@ TEST(entering_routing_needs_the_std_channel)
     ROUTE_$PORT_ARRAY[1].active = 2;
     request.status = 4;
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = -1;
+    RIP_$WIRED_DATA.std_idp_channel = -1;
 
     call_service();
 
@@ -1022,7 +1021,7 @@ TEST(entering_n_routing_has_no_channel_test)
     ROUTE_$PORT_ARRAY[1].active = 2;      /* in 0x16 */
     request.status = 3;                   /* in 0x28, not in 0x30 */
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = -1;
+    RIP_$WIRED_DATA.std_idp_channel = -1;
 
     call_service();
 
@@ -1046,7 +1045,7 @@ static void drive_std_arm(void)
     ROUTE_$PORT_ARRAY[1].active = 2;
     request.status = 4;                   /* in PORT_STATUS_ROUTING_MASK */
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = 3;
+    RIP_$WIRED_DATA.std_idp_channel = 3;
     call_service();
 }
 
@@ -1058,7 +1057,7 @@ static void drive_n_arm(void)
     ROUTE_$PORT_ARRAY[1].active = 2;      /* in PORT_STATUS_DISABLE_N */
     request.status = 3;                   /* in PORT_STATUS_N_ROUTING_MASK */
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = -1;
+    RIP_$WIRED_DATA.std_idp_channel = -1;
     call_service();
 }
 
@@ -1243,7 +1242,7 @@ TEST(restore_only_on_a_non_zero_status)
     ROUTE_$PORT_ARRAY[1].active = 2;
     request.status = 4;
     attach_driver(1);
-    RIP_$STD_IDP_CHANNEL = -1;            /* forces status 0x2B0001 */
+    RIP_$WIRED_DATA.std_idp_channel = -1;            /* forces status 0x2B0001 */
 
     call_service();
 
@@ -1293,7 +1292,7 @@ TEST(entering_status_one_runs_the_close_side_cleanup)
     request.status = 1;
     attach_driver(1);
     test_driver.enter_status_1 = ARCH_PTR_TO_VA(test_enter_fn);
-    RIP_$STD_IDP_CHANNEL = 3;
+    RIP_$WIRED_DATA.std_idp_channel = 3;
     APP_$STD_IDP_CHANNEL = 4;
 
     call_service();
@@ -1304,7 +1303,7 @@ TEST(entering_status_one_runs_the_close_side_cleanup)
     ASSERT_EQ((uintptr_t)&ROUTE_$PORT_ARRAY[1].socket,
               (uintptr_t)enter_socket_seen);
     ASSERT_EQ(2, idp_del_calls);
-    ASSERT_EQ((uintptr_t)&RIP_$STD_IDP_CHANNEL, (uintptr_t)idp_del_chan[0]);
+    ASSERT_EQ((uintptr_t)&RIP_$WIRED_DATA.std_idp_channel, (uintptr_t)idp_del_chan[0]);
     ASSERT_EQ(1, idp_del_port[0]);
     ASSERT_EQ((uintptr_t)&APP_$STD_IDP_CHANNEL, (uintptr_t)idp_del_chan[1]);
 }

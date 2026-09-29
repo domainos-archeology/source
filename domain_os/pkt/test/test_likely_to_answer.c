@@ -49,7 +49,7 @@ static int tests_run = 0;
 
 uint32_t NODE_$ME;
 uint32_t TIME_$CLOCKH;
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 int8_t NETWORK_$LOOPBACK_FLAG;
 
@@ -234,7 +234,7 @@ static void reset_state(void)
 {
     memset(&test_port, 0, sizeof(test_port));
     memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&test_socket_desc, 0, sizeof(test_socket_desc));
     memset(&recv_hdr, 0, sizeof(recv_hdr));
     memset(&recv_template, 0, sizeof(recv_template));
@@ -281,7 +281,7 @@ static void reset_state(void)
     rtn_hdr_calls = 0;
     dump_data_calls = 0;
 
-    SOCK_$EVENT_COUNTERS[TEST_SOCK - 1] = &test_socket_desc.ec;
+    SOCK_$DATA.socket_ptr[TEST_SOCK] = (sock_$sock_t *)&test_socket_desc.ec;
     test_socket_desc.ec.value = 40;
 }
 

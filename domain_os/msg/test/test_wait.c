@@ -52,8 +52,8 @@ static int tests_run = 0;
  */
 MODULE_DATA_DEFINE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
 
-/* The socket table; SOCK_$EVENT_COUNTERS is (sock_table_base + 0x18A4). */
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+/* The SOCK module data block; the socket table is SOCK_$DATA.socket_ptr. */
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 uint16_t PROC1_$AS_ID;
 uint32_t TIME_$CLOCKH;
@@ -89,7 +89,7 @@ static sock_$sock_t test_sock;
 static void reset_state(void)
 {
     memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&test_sock, 0, sizeof(test_sock));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
@@ -99,7 +99,7 @@ static void reset_state(void)
     ec_wait_result = 0;
     ec_wait_calls = 0;
 
-    SOCK_$EVENT_COUNTERS[TEST_SOCK - 1] = &test_sock.ec;
+    SOCK_$DATA.socket_ptr[TEST_SOCK] = (sock_$sock_t *)&test_sock.ec;
 }
 
 /* Grant TEST_ASID ownership of socket "sock" the way MSG_$OPENI would:

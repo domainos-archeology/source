@@ -77,8 +77,8 @@ uint32_t TIME_$CURRENT_CLOCKH;
 uint32_t ROUTE_$PORT;
 mmap_globals_t MMAP_GLOBALS_STORAGE;    /* MMAP_$REAL_PAGES lives in here */
 mem_data_t MEM_DATA;
-ring_global_t RING_$CTL;
-ring_$stats_t RING_$DATA[RING_MAX_UNITS];  /* 0xE261E0: the 15-longword copy source */
+MODULE_DATA_DEFINE(ring_global_t, RING_$CTL, 0x00E86400);
+MODULE_DATA_DEFINE(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC);  /* stats[0]: the 15-longword copy source */
 cal_$timezone_rec_t CAL_$TIMEZONE;
 name_$data_t NAME_$DATA;                /* NAME_$ROOT_UID lives in here */
 uid_t UID_$NIL;
@@ -109,15 +109,6 @@ uint16_t NETWORK_$ATTRIB_RQST_CNT;
 uint16_t NETWORK_$2LONG1;
 uint16_t REM_FILE_$2LONG1;
 
-ring_$swdiag_t RING_$SWDIAG_DATA;
-uint32_t RING_$SWDIAG_NODEID;
-uint32_t RING_$SWDIAG_GOODRCV_CNT;
-uint32_t RING_$SWDIAG_RCVCNT;
-uint16_t RING_$RCV_BIPHASE;
-uint16_t RING_$RCV_ESB;
-uint16_t RING_$XMIT_BIPHASE;
-uint16_t RING_$XMIT_ESB;
-uint16_t RING_$PAGING_OVERFLOW;
 uint16_t RING_$FILE_OVERFLOW;
 uint16_t RING_$OVERFLOW_OVERFLOW;
 uint16_t RING_$DELIVERY_FAILED;
@@ -127,8 +118,7 @@ MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 MODULE_DATA_DEFINE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
 MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
-rip_$data_t  RIP_$DATA;
-rip_$stats_t RIP_$STATS;
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 
 uint32_t MMU_$SYSTEM_REV;
 int8_t   GPU_$PRESENT;
@@ -178,7 +168,7 @@ static void reset_mocks(void)
     memset(reply, 0, sizeof(reply));
     memset(&MEM_DATA, 0, sizeof(MEM_DATA));
     memset(&RING_$CTL, 0, sizeof(RING_$CTL));
-    memset(RING_$DATA, 0, sizeof(RING_$DATA));
+    memset(RING_$WIRED_DATA.stats, 0, sizeof(RING_$WIRED_DATA.stats));
     memset(&CAL_$TIMEZONE, 0, sizeof(CAL_$TIMEZONE));
     memset(&MMAP_GLOBALS_STORAGE, 0, sizeof(MMAP_GLOBALS_STORAGE));
     NODE_$ME = 0x00012345;
@@ -218,10 +208,10 @@ static void reset_mocks(void)
     memset(NETWORK_$PAGING_BACKLOG, 0, sizeof(NETWORK_$PAGING_BACKLOG));
     memset(NETWORK_$FILE_BACKLOG, 0, sizeof(NETWORK_$FILE_BACKLOG));
     memset(&NETWORK_$FAILURE_REC, 0, sizeof(NETWORK_$FAILURE_REC));
-    memset(&RING_$SWDIAG_DATA, 0, sizeof(RING_$SWDIAG_DATA));
+    memset(&RING_$WIRED_DATA.swdiag, 0, sizeof(RING_$WIRED_DATA.swdiag));
     memset(ROUTE_$RTWIRED_DATA.q_depth, 0, sizeof(ROUTE_$RTWIRED_DATA.q_depth));
-    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
-    memset(&RIP_$STATS, 0, sizeof(RIP_$STATS));
+    memset(&RIP_$WIRED_DATA, 0, sizeof(RIP_$WIRED_DATA));
+    memset(&RIP_$WIRED_DATA.stats, 0, sizeof(RIP_$WIRED_DATA.stats));
     memset(route_ports, 0, sizeof(route_ports));
     {
         int i;

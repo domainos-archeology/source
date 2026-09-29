@@ -55,7 +55,7 @@ static int current_failed = 0;
  * Globals and mocks
  * ============================================================================ */
 
-rip_$data_t RIP_$DATA;
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 uint32_t    TIME_$CLOCKH;
 
 static int lock_calls;
@@ -106,7 +106,7 @@ static uint32_t rip_test_clock(void)
 
 static void reset(void)
 {
-    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
+    memset(&RIP_$WIRED_DATA, 0, sizeof(RIP_$WIRED_DATA));
     lock_calls = unlock_calls = send_calls = 0;
     memset(send_arg, 0, sizeof(send_arg));
     TIME_$CLOCKH = 0;
@@ -117,7 +117,7 @@ static void reset(void)
 static void arm(int entry_idx, int slot, uint8_t state, uint8_t metric,
                 uint32_t expiration)
 {
-    rip_$route_t *r = &RIP_$DATA.entries[entry_idx].routes[slot];
+    rip_$route_t *r = &RIP_$WIRED_DATA.info[entry_idx].routes[slot];
 
     r->flags      = (uint8_t)(state << RIP_STATE_SHIFT);
     r->metric     = metric;
@@ -126,7 +126,7 @@ static void arm(int entry_idx, int slot, uint8_t state, uint8_t metric,
 
 static uint8_t state_of(int entry_idx, int slot)
 {
-    return (uint8_t)((RIP_$DATA.entries[entry_idx].routes[slot].flags &
+    return (uint8_t)((RIP_$WIRED_DATA.info[entry_idx].routes[slot].flags &
                       RIP_STATE_MASK) >> RIP_STATE_SHIFT);
 }
 
@@ -157,7 +157,7 @@ TEST(valid_route_ages)
     RIP_$AGE();
 
     ASSERT_EQ(RIP_STATE_AGING, state_of(3, 0));
-    ASSERT_EQ(1000u + RIP_ROUTE_TIMEOUT, RIP_$DATA.entries[3].routes[0].expiration);
+    ASSERT_EQ(1000u + RIP_ROUTE_TIMEOUT, RIP_$WIRED_DATA.info[3].routes[0].expiration);
 }
 
 /* 0x00E1561C: a metric of 0 leaves the slot completely alone. */
@@ -169,7 +169,7 @@ TEST(direct_route_never_ages)
     RIP_$AGE();
 
     ASSERT_EQ(RIP_STATE_VALID, state_of(3, 0));
-    ASSERT_EQ(999u, RIP_$DATA.entries[3].routes[0].expiration);
+    ASSERT_EQ(999u, RIP_$WIRED_DATA.info[3].routes[0].expiration);
 }
 
 /* 0x00E15602: the comparison is <=, so an expiry equal to now does not fire. */
@@ -205,17 +205,17 @@ TEST(change_flags_follow_the_slot)
     TIME_$CLOCKH = 1000;
     arm(7, 1, RIP_STATE_AGING, 5, 999);
     RIP_$AGE();
-    ASSERT_EQ(0xFF, RIP_$DATA.std_recent_changes);
-    ASSERT_EQ(0x00, RIP_$DATA.recent_changes);
-    ASSERT_EQ(RIP_INFINITY, RIP_$DATA.entries[7].routes[1].metric);
+    ASSERT_EQ(-1, RIP_$WIRED_DATA.std_recent_changes);
+    ASSERT_EQ(0x00, RIP_$WIRED_DATA.recent_changes);
+    ASSERT_EQ(RIP_INFINITY, RIP_$WIRED_DATA.info[7].routes[1].metric);
     ASSERT_EQ(RIP_STATE_EXPIRED, state_of(7, 1));
 
     reset();
     TIME_$CLOCKH = 1000;
     arm(7, 0, RIP_STATE_AGING, 5, 999);
     RIP_$AGE();
-    ASSERT_EQ(0x00, RIP_$DATA.std_recent_changes);
-    ASSERT_EQ(0xFF, RIP_$DATA.recent_changes);
+    ASSERT_EQ(0x00, RIP_$WIRED_DATA.std_recent_changes);
+    ASSERT_EQ(-1, RIP_$WIRED_DATA.recent_changes);
 }
 
 /*
@@ -241,8 +241,8 @@ TEST(slot_one_is_visited_before_slot_zero)
     RIP_$AGE();
 
     ASSERT_EQ(4, clock_reads);
-    ASSERT_EQ(1001u + RIP_ROUTE_TIMEOUT, RIP_$DATA.entries[9].routes[1].expiration);
-    ASSERT_EQ(1003u + RIP_ROUTE_TIMEOUT, RIP_$DATA.entries[9].routes[0].expiration);
+    ASSERT_EQ(1001u + RIP_ROUTE_TIMEOUT, RIP_$WIRED_DATA.info[9].routes[1].expiration);
+    ASSERT_EQ(1003u + RIP_ROUTE_TIMEOUT, RIP_$WIRED_DATA.info[9].routes[0].expiration);
 }
 
 /*
@@ -259,8 +259,8 @@ TEST(aging_arm_also_re_reads_the_clock)
     RIP_$AGE();
 
     ASSERT_EQ(4, clock_reads);
-    ASSERT_EQ(1001u + RIP_ROUTE_TIMEOUT, RIP_$DATA.entries[9].routes[1].expiration);
-    ASSERT_EQ(1003u + RIP_ROUTE_TIMEOUT, RIP_$DATA.entries[9].routes[0].expiration);
+    ASSERT_EQ(1001u + RIP_ROUTE_TIMEOUT, RIP_$WIRED_DATA.info[9].routes[1].expiration);
+    ASSERT_EQ(1003u + RIP_ROUTE_TIMEOUT, RIP_$WIRED_DATA.info[9].routes[0].expiration);
 }
 
 /*

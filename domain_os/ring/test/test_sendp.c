@@ -46,10 +46,8 @@ static int tests_run = 0;
 /* The register file, declared up here because the mocks below observe it. */
 static ring_hw_regs_t regs;
 
-ring_global_t RING_$CTL;
-ring_$stats_t RING_$DATA[RING_MAX_UNITS];
-uint16_t RING_$XMIT_BIPHASE;
-uint16_t RING_$XMIT_ESB;
+MODULE_DATA_DEFINE(ring_global_t, RING_$CTL, 0x00E86400);
+MODULE_DATA_DEFINE(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC);
 char NETWORK_$DO_CHKSUM;
 int8_t NETWORK_$ACTIVITY_FLAG;
 
@@ -218,14 +216,14 @@ static uint16_t result_flags;
 static status_$t status;
 
 static ring_unit_t *unit_data(void) { return &RING_$CTL.units[UNIT]; }
-static ring_$stats_t *stats(void) { return &RING_$DATA[UNIT]; }
+static ring_$stats_t *stats(void) { return &RING_$WIRED_DATA.stats[UNIT]; }
 
 static void setup(void)
 {
     int i;
 
     memset(&RING_$CTL, 0, sizeof(RING_$CTL));
-    memset(RING_$DATA, 0, sizeof(RING_$DATA));
+    memset(RING_$WIRED_DATA.stats, 0, sizeof(RING_$WIRED_DATA.stats));
     memset(&regs, 0, sizeof(regs));
     memset(&hdr, 0, sizeof(hdr));
     memset(data_desc, 0, sizeof(data_desc));
@@ -239,7 +237,7 @@ static void setup(void)
     memset(abs_clock_csr, 0, sizeof(abs_clock_csr));
     memset(wait2_csr_seen, 0, sizeof(wait2_csr_seen));
     tx_dma_calls = clear_dma_calls = mcr_calls = 0;
-    RING_$XMIT_BIPHASE = RING_$XMIT_ESB = 0;
+    RING_$WIRED_DATA.xmit_biphase = RING_$WIRED_DATA.xmit_esb = 0;
     NETWORK_$DO_CHKSUM = 0;
     NETWORK_$ACTIVITY_FLAG = 0;
     parity_result = 0;
@@ -256,7 +254,7 @@ static void setup(void)
     unit_data()->hw_regs = &regs;
     unit_data()->tx_ec.value = 0;
 
-    RING_$CTL.max_data_len = 1024;
+    RING_$CTL.driver.max_data_len = 1024;
     /* a zero poll timeout makes the deadline the attempt start, so the very
      * first SUB48 in the poll loop is non-negative and the loop exits at once */
     RING_$CTL.poll_timeout = (clock_t){ 0, 0 };
@@ -301,7 +299,7 @@ TEST(uninitialised_unit)
 TEST(data_too_long)
 {
     setup();
-    RING_$CTL.max_data_len = 4;
+    RING_$CTL.driver.max_data_len = 4;
 
     run(5);
 
@@ -541,8 +539,8 @@ TEST(modem_errors_set_two_low_bits)
     decode(0x0C00);
 
     ASSERT_EQ(0x0020 | 0x0004, result_flags & 0x00FF);
-    ASSERT_EQ(1, RING_$XMIT_BIPHASE);
-    ASSERT_EQ(1, RING_$XMIT_ESB);
+    ASSERT_EQ(1, RING_$WIRED_DATA.xmit_biphase);
+    ASSERT_EQ(1, RING_$WIRED_DATA.xmit_esb);
     ASSERT_EQ(1, stats()->xmit_modem);
 }
 
@@ -665,7 +663,7 @@ TEST(unexpected_status_is_recorded)
 {
     decode(0x0010);
 
-    ASSERT_EQ(0x0010, RING_$UNEXPECTED_XMIT_STAT);
+    ASSERT_EQ(0x0010, RING_$CTL.unexpected_xmit_stat);
     ASSERT_EQ(0x0040, result_flags & 0x00FF);
 }
 
@@ -673,7 +671,7 @@ TEST(unexpected_status_with_bit3_is_not_recorded)
 {
     decode(0x0018 | 0x0010);   /* 0x18 is the packet-error pair, tested first */
 
-    ASSERT_EQ(0, RING_$UNEXPECTED_XMIT_STAT);
+    ASSERT_EQ(0, RING_$CTL.unexpected_xmit_stat);
     ASSERT_EQ(0x14, stats()->xmit_error);
 }
 

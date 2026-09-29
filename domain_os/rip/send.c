@@ -18,8 +18,9 @@
  * MST_$WIRE_AREA.  It is a region marker that happens to fall on this
  * procedure's entry, not the procedure's name.
  *
- * A5 in RIP_$SEND is 0x00E87D68 ("lea (0xe87d68).l,A5" at 0x00E871BE), so
- * A5+0xC is RTWIRED_$SEND_FLAGS at 0x00E87D74.
+ * A5 in RIP_$SEND is 0x00E87D68 ("lea (0xe87d68).l,A5" at 0x00E871BE), the
+ * RIP_$RTWIRED_DATA block (rip/rip.h), so A5+0xC is its send_flags word at
+ * 0x00E87D74.
  *
  * Original addresses:
  * - RIP_$SEND_TO_PORT_INTERNET: 0x00E87000
@@ -45,10 +46,22 @@
  *   RIP_$BCAST_CONTROL   (0xE26EC0) - rip/rip.h
  *   RIP_$INFO            (0xE263BC) - rip/rip_internal.h
  *   ROUTE_$PORT_ARRAY    (0xE2E0A0) - route/route.h
- *   RTWIRED_$CALLBACK    (0xE870D8) - rip/rip.h
- *   RTWIRED_$SEND_FLAGS  (0xE87D74) - rip/rip.h
+ *   rip_$rtwired_no_data (0xE870D8) - below
+ *   RIP_$RTWIRED_DATA.send_flags (0xE87D74) - rip/rip.h
  *   NODE_$ME             (0xE245A4) - network/network.h
  */
+
+/*
+ * rip_$rtwired_no_data - the all-zero longword at 0x00E870D8, in the code
+ * region right after RIP_$SEND_TO_PORT_INTERNET's `rts` (0x00E870D6) and
+ * before RIP_$SEND_TO_PORT (0x00E870DC); `gsk read 0xE870D0 16` gives
+ * ... 4e 75 00 00 00 00 4e 56 ...  RIP_$SEND_TO_PORT_INTERNET passes it by
+ * reference twice: as NETWORK_$GETHDR's node ("pea (0xc0,PC)" at
+ * 0x00E87016) and as NET_IO_$SEND's sixth argument ("pea (0x44,PC)" at
+ * 0x00E87092).  Neither callee's prototype is const, so the calls cast.
+ * (Formerly RTWIRED_$CALLBACK, an absolute-address macro.)
+ */
+static const uint32_t rip_$rtwired_no_data = 0;
 
 /* Port state values (route_$port_t.port_type at +0x2E) */
 #define PORT_STATE_ACTIVE       2
@@ -177,7 +190,7 @@ static void RIP_$SEND_TO_PORT(int16_t port_index, rip_$send_frame_t *frame)
     frame->send_rec.hdr_desc.address = frame->hdr;
 
     /* 0x00E87172-0x00E8718A */
-    XNS_IDP_$OS_SEND(&RIP_$STD_IDP_CHANNEL, &frame->send_rec,
+    XNS_IDP_$OS_SEND(&RIP_$WIRED_DATA.std_idp_channel, &frame->send_rec,
                      &frame->checksum, &frame->status);
 
     /* 0x00E8718E */
@@ -207,7 +220,8 @@ static void RIP_$SEND_TO_PORT_INTERNET(int16_t port_index,
     route_$port_t *port;
 
     /* 0x00E8700E-0x00E87020: NETWORK_$GETHDR(&callback, &hdr_va, &hdr_pa) */
-    NETWORK_$GETHDR(RTWIRED_$CALLBACK, &frame->hdr_va, &frame->hdr_pa);
+    NETWORK_$GETHDR((uint32_t *)&rip_$rtwired_no_data, &frame->hdr_va,
+                    &frame->hdr_pa);
 
     /* 0x00E87024 */
     port = &ROUTE_$PORT_ARRAY[port_index];
@@ -228,7 +242,7 @@ static void RIP_$SEND_TO_PORT_INTERNET(int16_t port_index,
         RIP_SOCKET,                     /* 6  src_sock   (8)                  */
         /* 7 pkt_info: "move.l #0xe26ec0,-(SP)" at 0x00E8705A pushes the
          * ADDRESS of the cell, which the builder reads as a pkt_$info_t. */
-        (const pkt_$info_t *)RIP_$BCAST_CONTROL,
+        (const pkt_$info_t *)RIP_$WIRED_DATA.bcast_control,
         frame->pkt_id,                  /* 8  request_id                      */
         frame->route_data,              /* 9  template                        */
         frame->route_len,               /* 10 hdr_len                         */
@@ -248,9 +262,9 @@ static void RIP_$SEND_TO_PORT_INTERNET(int16_t port_index,
                      frame->hdr_pa,             /* 3  hdr_pa                  */
                      frame->hdr_len,            /* 4  hdr_len                 */
                      0,                         /* 5  data_va                 */
-                     RTWIRED_$CALLBACK,         /* 6  data_len (0xE870D8)     */
+                     (uint32_t *)&rip_$rtwired_no_data, /* 6  (0xE870D8) */
                      0,                         /* 7  protocol                */
-                     RTWIRED_$SEND_FLAGS,       /* 8  flags   (0xE87D74)      */
+                     RIP_$RTWIRED_DATA.send_flags, /* 8  flags (0xE87D74) */
                      &frame->send_info,         /* 9  send_info               */
                      &frame->status);           /* 10 status_ret              */
     }
@@ -401,7 +415,7 @@ void RIP_$BROADCAST(boolean flags)
 
     /* 0x00E872B2: "moveq #0x3f,D0" + dbf = 64 iterations */
     for (i = 0; i < RIP_TABLE_SIZE; i++) {
-        entry = &RIP_$INFO[i];
+        entry = &RIP_$WIRED_DATA.info[i];
 
         /* 0x00E872D6: route[1] (+0x18) for non-standard, route[0] (+0x04) else */
         if (flags < 0) {
@@ -471,7 +485,7 @@ void RIP_$BROADCAST(boolean flags)
          * RIP_$SEND overwrites with the broadcast host and each port's
          * network in turn.  The length is 6*count + 2 (0x00E87370-0x00E8737A).
          */
-        RIP_$SEND(RIP_$SEND_DEST_ADDR, -1, response_buf,
+        RIP_$SEND(&RIP_$RTWIRED_DATA.dest_addr, -1, response_buf,
                   (uint16_t)(6 * entry_count + 2), flags);
     }
 }

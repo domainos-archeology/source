@@ -9,6 +9,8 @@
  *
  * Original address: 0x00E15D8C
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -30,15 +32,15 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue
     uint16_t max_len     = (uint16_t)(max_queue & 0xFFFF);           /* D5w -> +0x18 */
 
     /* Get pointer to socket's descriptor from the pointer table */
-    sock_view = SOCK_GET_VIEW_PTR(sock_num);
+    sock_view = SOCK_$DATA.socket_ptr[sock_num];
 
     /* Acquire spinlock to protect socket table */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /* Check if socket is already allocated (0x00E15DD0 btst.l #0xd,D1) */
     if ((sock_view->flags & SOCK_FLAG_ALLOCATED) != 0) {
         /* Socket already in use - fail */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
         result = 0;
     } else {
         /* Mark socket as allocated (0x00E15DE8 bset.b #5,(0x16,A2)) */
@@ -54,12 +56,13 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue
          * (0xc,A0) - i.e. the free-list head - against A2 (0x00E15E00-0x00E15E0E).
          */
         if (SOCK_GET_NUMBER(sock_view->flags) > SOCK_RESERVED_MAX) {
-            sock_$sock_t **prev_ptr = SOCK_GET_FREE_LIST();
+            uint32_t *link = &SOCK_$DATA.list.free_head;
+            uint32_t  self = ARCH_PTR_TO_VA(sock_view);
 
-            while (*prev_ptr != sock_view) {
-                prev_ptr = (sock_$sock_t **)&((*prev_ptr)->queue_head);
+            while (*link != self) {
+                link = &((sock_$sock_t *)ARCH_VA_TO_PTR(*link))->queue_head;
             }
-            *prev_ptr = (sock_$sock_t *)sock_view->queue_head;
+            *link = sock_view->queue_head;
         }
 
         /* Initialize queue pointers (0x00E15E14, 0x00E15E18) */
@@ -78,7 +81,7 @@ int8_t SOCK_$OPEN(uint16_t sock_num, uint32_t proto_bufpages, uint32_t max_queue
         sock_view->max_queue = queue_limit;
 
         /* Release spinlock */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 
         /*
          * Allocate network buffer pages if either count is non-zero

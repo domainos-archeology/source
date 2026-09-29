@@ -90,11 +90,11 @@ void RIP_$ANNOUNCE_NS(void)
         (int32_t)ROUTE_$PORT,   /* 4  src_node_or: 0xE2E0A0                 */
         NODE_$ME,               /* 5  src_node                              */
         0xFFFF,                 /* 6  src_sock                              */
-        RIP_$BCAST_CONTROL,     /* 7  pkt_info: 0xE26EC0                    */
+        RIP_$WIRED_DATA.bcast_control,     /* 7  pkt_info: 0xE26EC0                    */
         packet_id,              /* 8  request_id                            */
-        RIP_$NS_ANNOUNCEMENT,   /* 9  template: 0xE26EBE, 2 bytes           */
+        RIP_$WIRED_DATA.ns_announcement,   /* 9  template: 0xE26EBE, 2 bytes           */
         2,                      /* 10 template_len                          */
-        RIP_$ANNOUNCE_EXTRA,    /* 11 data: pea (-0x35a,PC) -> 0xE68E28     */
+        (void *)&rip_$no_data,    /* 11 data: pea (-0x35a,PC) -> 0xE68E28     */
         0,                      /* 12 data_len                              */
         &retry_hint,            /* 13 retry_hint   A6-0x8                   */
         &timeout_out,           /* 14 timeout_out  A6-0x6                   */
@@ -153,9 +153,9 @@ void RIP_$ANNOUNCE_NS(void)
 void RIP_$HALT_ROUTER(boolean flags)
 {
     /*
-     * The halt packet at RIP_$HALT_PACKET (0xE87D68) contains:
+     * The halt packet is RIP_$RTWIRED_DATA (0xE87D68, rip/rip.h):
      * - Header area (16 bytes, zeros)
-     * - RIP response data at +0x10 (RIP_$HALT_PACKET_DATA):
+     * - RIP response data at +0x10 (RIP_$RTWIRED_DATA.halt_data):
      *   - Command: 2 (Response)
      *   - Network: 0xFFFFFFFF (all networks)
      *   - Metric: 16 (unreachable/infinity)
@@ -172,8 +172,8 @@ void RIP_$HALT_ROUTER(boolean flags)
          * Note: The assembly uses 'st -(SP)' which sets a byte to -1 (0xFF),
          * then RIP_$SEND interprets flags < 0 as "use IDP send method"
          */
-        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, 8, (int8_t)0xFF);
-        RIP_$STD_RECENT_CHANGES = 0;
+        RIP_$SEND(&RIP_$RTWIRED_DATA.dest_addr, -1, RIP_$RTWIRED_DATA.halt_data, 8, (int8_t)0xFF);
+        RIP_$WIRED_DATA.std_recent_changes = 0;
     } else {
         /*
          * Halt standard routing:
@@ -185,7 +185,7 @@ void RIP_$HALT_ROUTER(boolean flags)
          * route_len parameter at (0x12,A6) and the high byte of its low word
          * (0x00) is the flags byte read at (0x14,A6).
          */
-        RIP_$SEND(RIP_$HALT_PACKET, -1, RIP_$HALT_PACKET_DATA, 8, 0);
-        RIP_$RECENT_CHANGES = 0;
+        RIP_$SEND(&RIP_$RTWIRED_DATA.dest_addr, -1, RIP_$RTWIRED_DATA.halt_data, 8, 0);
+        RIP_$WIRED_DATA.recent_changes = 0;
     }
 }

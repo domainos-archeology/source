@@ -113,10 +113,10 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
          * 0x00E188D2-0x00E188E6.  SOCK_$SOCKET_PTR is a 1-BASED array of
          * socket-descriptor pointers at 0x00E28DB4: the index arithmetic is
          * "A0 = 0xE28DB4 / D0 = sock << 2 / A1 = A0 + D0 / A4 = (-0x4,A1)",
-         * i.e. SOCK_$SOCKET_PTR[sock - 1].  "bclr.b #0x7,(0x16,A4)" then
+         * i.e. SOCK_$DATA.socket_ptr[sock].  "bclr.b #0x7,(0x16,A4)" then
          * clears bit 15 of that descriptor's flags word.
          */
-        sock = (sock_$sock_t *)SOCK_$SOCKET_PTR[user_socket - 1];
+        sock = SOCK_$DATA.socket_ptr[user_socket];
         sock->flags &= (uint16_t)~0x8000u;
     }
 
@@ -183,12 +183,13 @@ void XNS_IDP_$OPEN(xns_$idp_open_opt_t *options, status_$t *status_ret)
     /*
      * 0x00E18998-0x00E189B6.  QUIRK, reproduced as found: this is
      * UNCONDITIONAL.  When the NO_ALLOC arm ran, user_socket is 0xE1 and the
-     * index arithmetic reaches SOCK_$SOCKET_PTR[0xE0], well past the 0xE0
-     * descriptors SOCK_$INIT sets up, so an event count is registered on
-     * whatever pointer happens to sit there.
+     * index reaches SOCK_$DATA.socket_ptr[0xE1], past the 0xE0 descriptors
+     * SOCK_$INIT sets up: that slot is the SOCK block's user-limit word and
+     * its pad (sock/sock.h declares the table to cover it), so an event
+     * count is registered on whatever that longword holds.
      */
     options->network = (uint32_t)(uintptr_t)
-        EC2_$REGISTER_EC1((ec_$eventcount_t *)SOCK_$SOCKET_PTR[user_socket - 1],
+        EC2_$REGISTER_EC1(&SOCK_$DATA.socket_ptr[user_socket]->ec,
                           status_ret);
 }
 

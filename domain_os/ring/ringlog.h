@@ -12,9 +12,8 @@
  * - Start/stop control
  * - Buffer retrieval for analysis
  *
- * Original memory layout (m68k):
- *   - Control data at 0xE2C32C
- *   - Ring buffer at 0xEA3E38
+ * Module data: RINGLOG_$CTL (0xE2C32C, below) and RINGLOG_$DATA (0xEA3E38,
+ * ring/ringlog_internal.h).
  */
 
 #ifndef RINGLOG_H
@@ -90,25 +89,33 @@
 
 /*
  * ============================================================================
- * Ring Log Control Structure
+ * RINGLOG_$CTL - the RINGLOG_ module data block (0xE2C32C, 0x3C bytes)
  *
- * Contains configuration and state for the logging subsystem.
- * Located at base 0xE2C32C on original platform.
+ * Module data blocks RINGLOG_$CTL and RINGLOG_$DATA: Claude Opus 5.5
+ * (source-vulx).
+ *
+ * Map "D E2C32C RINGLOG_ size = 3C", with RINGLOG_$ID (+0x2C),
+ * RINGLOG_$MBX_SOCK (+0x32), RINGLOG_$WHO_SOCK (+0x34), RINGLOG_$NIL_SOCK
+ * (+0x36) and RING_$LOGGING_NOW (+0x38) named inside it.  RINGLOG_$CNTL and
+ * RINGLOG_$STOP_LOGGING reach it through its literal base (A1 / A3 =
+ * 0xE2C32C); other modules test logging_active by its absolute address.
+ * Pointer-free, so every assert is unconditional.
  * ============================================================================
  */
 typedef struct ringlog_ctl_t {
     /*
      * Wired page addresses for the ring buffer, kept so the log buffer stays
-     * resident.  The array is used from element 0: RINGLOG_$CNTL hands
-     * MST_$WIRE_AREA the record base itself as the page list
-     * ("pea (A1)" at 0x00E722C6, A1 = 0xE2C32C), and
-     * RINGLOG_$STOP_LOGGING's unwire loop reads
-     * "(-0x4,A3,D0w*0x1)" with A3 = 0xE2C32C and D0 = index*4 for
-     * index 1..wire_count (0x00E721F8-0x00E7220E), i.e. entries
-     * [0..wire_count-1].  RINGLOG_$CNTL's limit cell at 0x00E7232C caps the
-     * count at 10.
+     * resident: a Pascal [1..10] table whose element 1 is the record base.
+     * RINGLOG_$CNTL hands MST_$WIRE_AREA the record base itself as the page
+     * list ("pea (A1)" at 0x00E722C6, A1 = 0xE2C32C), and
+     * RINGLOG_$STOP_LOGGING's unwire loop reads "(-0x4,A3,D0w*0x1)" with
+     * A3 = 0xE2C32C and D0 = index*4 for index 1..wire_count
+     * (0x00E721F8-0x00E7220E).  The bias slot (0xE2C328) lies in the PCHIST
+     * segment, outside this block, so the table is declared from element 1
+     * and RINGLOG_WIRED_PAGE(k) applies the bias once.  RINGLOG_$CNTL's limit
+     * cell at 0x00E7232C caps the count at 10.
      */
-    uint32_t    wired_pages[10];        /* 0x00: Wired page addresses [0..9] */
+    uint32_t    wired_pages[10];        /* 0x00: [1..10], see RINGLOG_WIRED_PAGE */
 
     /*
      * Spinlock for buffer access.
@@ -156,7 +163,7 @@ typedef struct ringlog_ctl_t {
      * Used to detect if buffer has wrapped.
      */
     int8_t      first_entry_flag;       /* 0x3A: (at 0xE2C366) */
-
+    int8_t      _pad5;                  /* 0x3B */
 } ringlog_ctl_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -169,21 +176,24 @@ _Static_assert(__builtin_offsetof(ringlog_ctl_t, who_sock_filter) == 0x34, "ring
 _Static_assert(__builtin_offsetof(ringlog_ctl_t, nil_sock_filter) == 0x36, "ringlog_ctl_t.nil_sock_filter");
 _Static_assert(__builtin_offsetof(ringlog_ctl_t, logging_active) == 0x38, "ringlog_ctl_t.logging_active");
 _Static_assert(__builtin_offsetof(ringlog_ctl_t, first_entry_flag) == 0x3A, "ringlog_ctl_t.first_entry_flag");
+_Static_assert(sizeof(((ringlog_ctl_t *)0)->wired_pages[0]) == 4, "wired_pages stride (D0 = index*4)");
+_Static_assert(sizeof(ringlog_ctl_t) == 0x3C, "RINGLOG_: map size 0x3C");
 
 /*
- * Ring log control structure.
- * On m68k, located at 0xE2C32C.  RINGLOG_$CTL.logging_active is the global
- * Ghidra labels RING_$LOGGING_NOW at 0x00E2C364; it is read from outside the
- * RING subsystem (ROUTE_$PROCESS 0x00E87602, 0x00E0E258, 0x00E0E83C,
- * 0x00E75458), which is why the record is declared in this public header.
+ * RINGLOG_$CTL.logging_active is the map's RING_$LOGGING_NOW (0x00E2C364), a
+ * Pascal boolean (0xFF true; test it with "< 0" as the original does:
+ * "tst.b" / "bpl" at 0x00E87602).  It is read from outside the RING
+ * subsystem (ROUTE_$PROCESS 0x00E87602, 0x00E0E258, 0x00E0E83C,
+ * 0x00E75458), which is why the block is declared in this public header.
  */
-extern ringlog_ctl_t RINGLOG_$CTL;
+MODULE_DATA_DECLARE(ringlog_ctl_t, RINGLOG_$CTL, 0x00E2C32C);
 
 /*
- * RING_$LOGGING_NOW - Pascal boolean (0xFF true) at 0x00E2C364.
- * Test it with "< 0", as the original does ("tst.b" / "bpl" at 0x00E87602).
+ * RINGLOG_WIRED_PAGE(k) - wired page k (1..10) of RINGLOG_$CTL, an lvalue of
+ * type uint32_t.  The -1 is the Pascal lower bound whose bias slot falls
+ * outside the block ("(-0x4,A3,D0w*0x1)" at 0x00E72202), applied here once.
  */
-#define RING_$LOGGING_NOW       (RINGLOG_$CTL.logging_active)
+#define RINGLOG_WIRED_PAGE(k)   (RINGLOG_$CTL.wired_pages[(k) - 1])
 
 /*
  * ============================================================================
@@ -210,7 +220,7 @@ extern ringlog_ctl_t RINGLOG_$CTL;
  *
  * Original address: 0x00E1A20C
  */
-int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info);
+int16_t RINGLOG_$LOGIT(const uint8_t *header_info, void *pkt_info);
 
 /*
  * RINGLOG_$CNTL - Ring logging control
@@ -244,7 +254,7 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret);
 /*
  * RINGLOG_$STOP_LOGGING - Internal: Stop logging and unwire buffer
  *
- * Stops logging, unwires wired_pages[0..wire_count-1] and resets the wire
+ * Stops logging, unwires RINGLOG_WIRED_PAGE(1..wire_count) and resets the wire
  * count.  Called only by RINGLOG_$CNTL (0x00E7228A, 0x00E72304); the SAU2
  * link map gives the address no symbol of its own, so it is a nested
  * procedure of RINGLOG_$CNTL.
@@ -259,20 +269,5 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret);
  * Original address: 0x00E721CC
  */
 void RINGLOG_$STOP_LOGGING(int16_t *parent_index);
-
-/*
- * RINGLOG_$ROUTE_FORWARD - the 4-byte RINGLOG_$LOGIT header-info cell the
- * routing forwarder passes.  Only byte 0 is read, and only its bit 7 (the
- * "inbound" flag), at 0x00E1A2F6.  The storage is defined in
- * route/route_data.c (moved here from route/route_internal.h --
- * bead source-3uo).
- *
- * Original address: 0xE878A0
- */
-#if defined(ARCH_M68K)
-#define RINGLOG_$ROUTE_FORWARD  ((uint8_t *)0xE878A0)
-#else
-extern uint8_t RINGLOG_$ROUTE_FORWARD[4];
-#endif
 
 #endif /* RINGLOG_H */

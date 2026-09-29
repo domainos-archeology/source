@@ -1,32 +1,24 @@
 /*
  * SOCK - Global Data
  *
- * This file contains global data definitions for the SOCK subsystem.
+ * Module data block SOCK_$DATA: Claude Opus 5.5 (source-gy7x).
  *
- * Original addresses (m68k):
- *   - Socket table base:     0xE27510
- *   - Free list head:        0xE2751C (base + 0x0C)
- *   - Socket descriptors:    0xE2752C (base + 0x1C) - 224 sockets * 0x1C bytes
- *   - Spinlock:              0xE28DB0 (base + 0x18A0)
- *   - Pointer array:         0xE28DB4 (base + 0x18A4) - 224 pointers
- *   - User socket limit:     0xE29134 (base + 0x1C24)
+ * SOCK_$DATA, map "D E27510 SOCK size = 1C28": the A5 block of every SOCK
+ * routine (layout, biases and asserts in sock/sock.h), a MODULE_DATA block
+ * linked in the map's order after GPU_ASM and before TESTPAGE.  The address
+ * is the ordering key, not the link address.
  */
 
 #include "sock/sock_internal.h"
 
 /*
- * Socket Table Memory Layout:
+ * Image contents, `gsk read 0xE27510 7208`: every byte is zero except
  *
- * The socket table is a contiguous block of memory with the following layout:
- *   +0x0000: Header area (28 bytes)
- *     +0x0C: Free list head pointer
- *   +0x001C: Socket descriptor array (224 * 28 = 6272 bytes)
- *   +0x18A0: Spinlock (4 bytes, reuses socket 0 pointer slot)
- *   +0x18A4: Pointer array (224 * 4 = 896 bytes)
- *   +0x1C24: User socket limit counter (2 bytes)
+ *   0x00E29134  +0x1C24  00 40      user_limit = 64
  *
- * Total size: approximately 0x1C26 bytes (SOCK_TABLE_SIZE rounds up).
- *
- * SOCK_$EVENT_COUNTERS (0xE28DB4) is an alias into this table; see sock.h.
+ * The descriptors, the free list, the lock and the pointer table are all
+ * built at run time by SOCK_$INIT (0x00E2FDF0).
  */
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE_INIT(sock_$data_t, SOCK_$DATA, 0x00E27510, {
+    .user_limit = 0x0040,
+});

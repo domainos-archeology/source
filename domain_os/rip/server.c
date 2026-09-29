@@ -62,6 +62,12 @@ typedef struct rip_$pkt_entry_t {
     uint16_t    metric;                 /* 0x04 */
 } __attribute__((packed)) rip_$pkt_entry_t;
 
+/*
+ * rip_$no_data - 0x00E68E28, the longword after this routine's last
+ * instruction (see rip/rip_internal.h).  Zero in the image.
+ */
+const uint32_t rip_$no_data = 0;
+
 typedef struct rip_$packet_t {
     uint16_t            command;                    /* 0x000 */
     rip_$pkt_entry_t    entries[RIP_MAX_ENTRIES];   /* 0x002 */
@@ -237,20 +243,20 @@ void RIP_$SEND_UPDATES(boolean is_std)
         if (ROUTE_$WIRED_DATA.std_n_routing_ports <= 1) {
             return;
         }
-        if (RIP_$STD_RECENT_CHANGES >= 0) {
+        if (RIP_$WIRED_DATA.std_recent_changes >= 0) {
             return;
         }
-        RIP_$STD_RECENT_CHANGES = 0;
+        RIP_$WIRED_DATA.std_recent_changes = 0;
         flags = true;
     } else {
         /* 0x00E688A2-0x00E688BC */
         if (ROUTE_$WIRED_DATA.n_routing_ports <= 1) {
             return;
         }
-        if (RIP_$RECENT_CHANGES >= 0) {
+        if (RIP_$WIRED_DATA.recent_changes >= 0) {
             return;
         }
-        RIP_$RECENT_CHANGES = 0;
+        RIP_$WIRED_DATA.recent_changes = 0;
         flags = false;
     }
 
@@ -375,7 +381,7 @@ full_table_scan:
     f->response_count = 0;                               /* 0x00E68970 */
 
     for (j = 0; j <= RIP_TABLE_SIZE - 1; j++) {
-        entry = &RIP_$INFO[j];                           /* stride 0x2C */
+        entry = &RIP_$WIRED_DATA.info[j];                           /* stride 0x2C */
 
         if (is_std < 0) {
             route = &entry->routes[1];                   /* 0x00E68986: +0x18 */
@@ -506,7 +512,7 @@ void RIP_$SERVER(void)
      * it from the header copy in the response arm (0x00E68C9E). */
     network = f.network;
 
-    RIP_$STATS.packets_received++;                       /* 0x00E68AD6 */
+    RIP_$WIRED_DATA.stats.packets_received++;                       /* 0x00E68AD6 */
 
     /* 0x00E68ADC-0x00E68B14: three chances to reject the packet */
     if (f.status != status_$ok) {
@@ -648,7 +654,7 @@ arm_request:
         f.id_out,                       /*  8 request_id    A6-0x518  */
         &f.response,                    /*  9 template      A6-0x290  */
         (uint16_t)RIP_$PACKET_LENGTH(f.response_count),  /* 10 template_len */
-        RIP_$ANNOUNCE_EXTRA,            /* 11 data          0xE68E28  */
+        (void *)&rip_$no_data,            /* 11 data          0xE68E28  */
         0,                              /* 12 data_len                */
         &f.send_retry_hint,             /* 13               A6-0x50E  */
         &f.send_timeout,                /* 14               A6-0x50C  */
@@ -838,17 +844,17 @@ arm_name_register:
     return;
 
 unknown_command_std:
-    RIP_$STATS.unknown_commands++;                       /* 0x00E68DFC */
+    RIP_$WIRED_DATA.stats.unknown_commands++;                       /* 0x00E68DFC */
     return;
 
 unknown_command:
-    RIP_$STATS.unknown_commands++;                       /* 0x00E68E14 */
+    RIP_$WIRED_DATA.stats.unknown_commands++;                       /* 0x00E68E14 */
     return;
 
 /* ------------------------------------------------------------------------- */
 bad_packet:
     /* 0x00E68B16-0x00E68B2A */
-    RIP_$STATS.errors++;
+    RIP_$WIRED_DATA.stats.errors++;
     f.hdr_va = ARCH_PTR_TO_VA(packet);
     NETBUF_$RTN_HDR(&f.hdr_va);
 }

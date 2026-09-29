@@ -7,7 +7,7 @@
  *     E244F0  NET_IO_$ALL_F_ADDR
  *     E244F4  NET_IO_$NIL_DRIVER     0x50 bytes
  *     E24544  NET_IO_$USER_DRIVER    0x50 bytes
- *     E24594  RING_$OVERFLOW_OVERFLOW
+ *     E24594  RING_$OVERFLOW_OVERFLOW  (also RING_$FILE_OVERFLOW, RING_$DELIVERY_FAILED)
  *
  *   D E81668  NET_IO_UNWIRED  size = 14
  *
@@ -18,6 +18,7 @@
  */
 
 #include "net_io/net_io_internal.h"
+#include "ring/ring.h"   /* RING_$OVERFLOW_OVERFLOW .. RING_$DELIVERY_FAILED */
 
 /*
  * NET_IO_$NIL_DRIVER - the driver block ROUTE_$SERVICE hands
@@ -102,6 +103,20 @@ net_io_$driver_t NET_IO_$USER_DRIVER[1] = { {
     .send_os        = NULL,
     .network_uid    = { 0, 0 },
 } };
+
+/*
+ * The rest of the NET_IO segment: three receive-overflow counters the map
+ * files under RING_ (declared in ring/ring.h).  `gsk read 0xE24594 8`:
+ * 00 00 00 00 00 00 00 00, so all three start at zero.  Plain objects, as
+ * nothing bases A5 on this segment (their map-order placement is
+ * source-91vs).  Until the per-process-data step for ring (source-vulx)
+ * the m68k build reached them through absolute-address macros.
+ *
+ * Original addresses: 0xE24594, 0xE24596, 0xE24598
+ */
+uint16_t RING_$OVERFLOW_OVERFLOW;
+uint16_t RING_$FILE_OVERFLOW;
+uint16_t RING_$DELIVERY_FAILED;
 
 /*
  * NET_IO_UNWIRED - the module's unwired block.

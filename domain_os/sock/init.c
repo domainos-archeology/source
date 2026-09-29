@@ -3,10 +3,12 @@
  *
  * Initializes all socket descriptors, event counts, and the free list.
  * Socket numbers 0-31 are reserved for well-known services.
- * Socket numbers 32-223 are added to the free list for dynamic allocation.
+ * Socket numbers 32-224 are added to the free list for dynamic allocation.
  *
  * Original address: 0x00E2FDF0
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -14,63 +16,48 @@
 void SOCK_$INIT(void)
 {
     int16_t counter;
-    uint16_t sock_num;
-    uint8_t *sock_desc_ptr;
-    uint8_t *ptr_array_base;
-    sock_$sock_t **free_list_head;
+    int16_t sock_num;           /* the frame word at (-0x2,A6) */
+    sock_$sock_t *sock;
 
     /*
-     * Initialize loop variables:
-     * - counter: decrements from 0xDF (223) to -1 (224 iterations for sockets 1-224)
-     * - sock_num: socket number, starts at 1
-     * - sock_desc_ptr: pointer to current socket descriptor
-     * - ptr_array_base: base for indexing into pointer array
+     * 0x00E2FDF8-0x00E2FE14: D2 = 0xDF (dbf, 224 passes), the socket number
+     * starts at 1, A4 walks the descriptors from the block base + 0x1C and
+     * A3 the pointer table from the block base + 4, so pass n touches
+     * SOCK_$DATA.socket[n] (A4 + 4) and SOCK_$DATA.socket_ptr[n]
+     * (A3 + 0x18A0).
      */
-    counter = SOCK_MAX_SOCKETS - 1;  /* 0xDF = 223 */
+    counter = SOCK_MAX_SOCKETS - 1;
     sock_num = 1;
-    sock_desc_ptr = sock_table_base + SOCK_TABLE_FIRST_DESC;  /* First descriptor at +0x1C */
-    ptr_array_base = sock_table_base + 4;  /* Offset for pointer array indexing */
-
-    /* Get pointer to free list head */
-    free_list_head = SOCK_GET_FREE_LIST();
 
     do {
-        sock_$sock_t *ec_view = (sock_$sock_t *)(sock_desc_ptr + 4);
+        sock = &SOCK_$DATA.socket[sock_num];
+
+        /* 0x00E2FE16-0x00E2FE1A: lea (0x4,A2),A0 / move.l A0,(0x18a0,A3) */
+        SOCK_$DATA.socket_ptr[sock_num] = sock;
+
+        /* 0x00E2FE1E: EC_$INIT(&descriptor) */
+        EC_$INIT(&sock->ec);
 
         /*
-         * Store EC pointer in the pointer array.
-         * Array is at base + 0x18A0, indexed by (ptr_array_base - base - 4) / 4 + 1
-         * which equals sock_num. So slot sock_num stores pointer to sock_num's EC.
+         * 0x00E2FE2A-0x00E2FE38: keep bits 13..15 of the flags word and put
+         * the socket number in bits 0..12.
          */
-        *(sock_$sock_t **)(ptr_array_base + SOCK_TABLE_LOCK) = ec_view;
-
-        /* Initialize the event count */
-        EC_$INIT(&ec_view->ec);
+        sock->flags &= 0xE000;
+        sock->flags |= (uint16_t)(sock_num & SOCK_FLAG_NUMBER_MASK);
 
         /*
-         * Set the socket number in the flags field.
-         * Bits 0-12 hold the socket number, bits 13-15 are cleared (socket not allocated).
+         * 0x00E2FE3C-0x00E2FE50: "cmpi.w #0x20,(-0x2,A6) / blt" - sockets
+         * 0x20 and up are pushed on the free list through queue_head
+         * ("move.l (0xc,A0),(0x10,A2)", A2 + 0x10 = record + 0x0C), and the
+         * head at block + 0x0C takes the record's address.
          */
-        ec_view->flags = (ec_view->flags & 0xE000) | (sock_num & SOCK_FLAG_NUMBER_MASK);
-
-        /*
-         * Add sockets >= 32 to the free list.
-         * Sockets 0-31 are reserved for well-known services and not in the free list.
-         */
-        if (sock_num > SOCK_RESERVED_MAX) {
-            /*
-             * Link this socket into the free list through queue_head:
-             * "move.l (0xc,A0),(0x10,A2)" at 0x00E2FE46 writes A2+0x10, and
-             * the record starts at A2+4, so the target is record+0x0C.
-             */
-            ec_view->queue_head = (uint32_t)*free_list_head;
-            *free_list_head = ec_view;
+        if (sock_num >= SOCK_DYNAMIC_MIN) {
+            sock->queue_head = SOCK_$DATA.list.free_head;
+            SOCK_$DATA.list.free_head = ARCH_PTR_TO_VA(sock);
         }
 
-        /* Advance to next socket */
+        /* 0x00E2FE54-0x00E2FE5E */
         sock_num++;
-        ptr_array_base += 4;
-        sock_desc_ptr += SOCK_DESC_SIZE;
         counter--;
     } while (counter != -1);
 }

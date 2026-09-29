@@ -176,9 +176,9 @@ void REM_FILE_$SEND_REQUEST(void *addr_info, void *request, int16_t request_len,
     }
 
     /* 0x00E610A6-0x00E610C8.  The table base 0xE28DB4 is indexed with a -4
-     * displacement, i.e. SOCK_$EVENT_COUNTERS[sock_num - 1] is socket
+     * displacement, i.e. SOCK_$DATA.socket_ptr[sock_num] is socket
      * sock_num's descriptor (see sock/sock.h). */
-    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    sock_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;
     sock_wait_val = sock_ec->value + 1;
 
     /* 0x00E610CA-0x00E610DC */

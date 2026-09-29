@@ -71,17 +71,8 @@ static int current_failed;
  * Globals the receive path touches
  * ============================================================================ */
 
-ring_global_t   RING_$CTL;
-ring_$stats_t   RING_$DATA[RING_MAX_UNITS];
-ring_$swdiag_t  RING_$SWDIAG_DATA;
-uint16_t        RING_$RCV_BIPHASE;
-uint16_t        RING_$RCV_ESB;
-uint16_t        RING_$XMIT_BIPHASE;
-uint16_t        RING_$XMIT_ESB;
-uint32_t        RING_$SWDIAG_NODEID;
-uint32_t        RING_$SWDIAG_GOODRCV_CNT;
-uint32_t        RING_$SWDIAG_RCVCNT;
-uint16_t        RING_$PAGING_OVERFLOW;
+MODULE_DATA_DEFINE(ring_global_t, RING_$CTL, 0x00E86400);
+MODULE_DATA_DEFINE(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC);
 uid_t           RING_$NETWORK_UID;
 uint16_t        ring_dcte_ctype_net = 0x0002;
 
@@ -335,8 +326,8 @@ static ring_unit_t *U(void) { return &RING_$CTL.units[TEST_UNIT]; }
 static void setup(void)
 {
     memset(&RING_$CTL, 0, sizeof(RING_$CTL));
-    memset(RING_$DATA, 0, sizeof(RING_$DATA));
-    memset(&RING_$SWDIAG_DATA, 0, sizeof(RING_$SWDIAG_DATA));
+    memset(RING_$WIRED_DATA.stats, 0, sizeof(RING_$WIRED_DATA.stats));
+    memset(&RING_$WIRED_DATA.swdiag, 0, sizeof(RING_$WIRED_DATA.swdiag));
     memset(&hw, 0, sizeof(hw));
     memset(&hdr_buf, 0, sizeof(hdr_buf));
     memset(&NETWORK_$FAILURE_REC, 0, sizeof(NETWORK_$FAILURE_REC));
@@ -452,7 +443,7 @@ static void test_hw_register_writes(void)
     ASSERT_EQ(RING_RCV_CSR_ARM, hw.rcv_csr);
     ASSERT_EQ(RING_MODE_ENABLE, hw.mode);
     /* the congestion flag is cleared on the armed path */
-    ASSERT_EQ(0, RING_$DATA[TEST_UNIT].congestion_flag);
+    ASSERT_EQ(0, RING_$WIRED_DATA.stats[TEST_UNIT].congestion_flag);
     /* and the BUSY bit is cleared before arming */
     ASSERT_EQ(0, U()->state_flags & RING_UNIT_BUSY);
 }
@@ -633,7 +624,7 @@ static void test_validate_length_mismatch(void)
     ASSERT_EQ(1, RING_$CTL.bad_data_cnt);
     ASSERT_EQ(1, RING_$CTL.abort_cnt);
     ASSERT_EQ(0, recv_calls);
-    ASSERT_EQ(0, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(0, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, NETWORK_$ACTIVITY_FLAG);
 }
 
@@ -647,7 +638,7 @@ static void test_good_packet_dispatch(void)
 {
     ASSERT_EQ(1, run_loop(1));
 
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, RING_$CTL.abort_cnt);
     ASSERT_EQ((int8_t)-1, NETWORK_$ACTIVITY_FLAG);
     ASSERT_EQ(1, recv_calls);
@@ -698,7 +689,7 @@ static void test_checksum_arguments(void)
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(1, chksum_calls);
     ASSERT_PTR(&hdr_buf, chksum_hdr);
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, crash_calls);
 }
 
@@ -720,7 +711,7 @@ static void test_checksum_suppressed_by_flag(void)
     hdr_buf.flags = 0x01;
     ASSERT_EQ(1, run_loop(1));
     ASSERT_EQ(0, chksum_calls);
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcnt);
 }
 
 /* An error status routes to the matching per-unit counter. */
@@ -728,8 +719,8 @@ static void test_error_status_counters(void)
 {
     wake_rcv_csr = 0x0200;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvtim);
-    ASSERT_EQ(0, RING_$SWDIAG_DATA.rcvtim);   /* not a swdiag packet */
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvtim);
+    ASSERT_EQ(0, RING_$WIRED_DATA.swdiag.rcvtim);   /* not a swdiag packet */
     ASSERT_EQ(1, RING_$CTL.abort_cnt);
     ASSERT_EQ(0, recv_calls);
 }
@@ -740,8 +731,8 @@ static void test_swdiag_mirror_counters(void)
     hdr_buf.flags = 0x02 | 0x10;
     wake_rcv_csr = 0x0200;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvtim);
-    ASSERT_EQ(1, RING_$SWDIAG_DATA.rcvtim);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvtim);
+    ASSERT_EQ(1, RING_$WIRED_DATA.swdiag.rcvtim);
 }
 
 /* ESB and biphase bits bump the standalone words below the statistics. */
@@ -749,9 +740,9 @@ static void test_esb_and_biphase(void)
 {
     wake_rcv_csr = 0x0400 | 0x0800;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$RCV_ESB);
-    ASSERT_EQ(1, RING_$RCV_BIPHASE);
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvpkt);
+    ASSERT_EQ(1, RING_$WIRED_DATA.rcv_esb);
+    ASSERT_EQ(1, RING_$WIRED_DATA.rcv_biphase);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvpkt);
 }
 
 /*
@@ -762,8 +753,8 @@ static void test_bit8_falls_through_to_bit7(void)
 {
     wake_rcv_csr = 0x0100 | 0x0080;
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcrc);
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvxerr);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcrc);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvxerr);
 }
 
 /*
@@ -816,7 +807,7 @@ static void test_odd_length_pad(void)
     ring_$dma_chan0_count_cell = (0x400 - 0x1E) / 2;   /* 0x1E moved, 0x1D used */
     ring_$dma_chan1_count_cell = (0x400 - 0x42) / 2;   /* 0x42 moved, 0x41 used */
     ASSERT_EQ(1, run_loop(1));
-    ASSERT_EQ(1, RING_$DATA[TEST_UNIT].rcvcnt);
+    ASSERT_EQ(1, RING_$WIRED_DATA.stats[TEST_UNIT].rcvcnt);
     ASSERT_EQ(0, RING_$CTL.bad_data_cnt);
     ASSERT_EQ(0x1D, recv_hdr_len_val);
     ASSERT_EQ(0x41, recv_data_len_val);

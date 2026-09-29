@@ -296,8 +296,8 @@ extern uint8_t REM_FILE_$SERVER_PKT_INFO[];
 /* 0xE2E3BC: "*** diskless partner node has crashed" */
 extern char REM_FILE_$DISKLESS_CRASH_MSG[];
 
-/* The socket pointer table is owned by sock/sock.h (SOCK_$EVENT_COUNTERS /
- * SOCK_$SOCKET_PTR); the unused SOCK_$SOCKET_EC alias that used to be
+/* The socket pointer table is owned by sock/sock.h (SOCK_$DATA.socket_ptr,
+ * map SOCK_$SOCKET_PTR); the unused SOCK_$SOCKET_EC alias that used to be
  * declared here was removed (bead source-3uo). */
 
 /*

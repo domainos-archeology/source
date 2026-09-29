@@ -6,6 +6,8 @@
  *
  * Original address: 0x00E15E62
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -13,7 +15,6 @@
 int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_queue)
 {
     sock_$sock_t *sock_view;
-    sock_$sock_t **free_list_head;
     ml_$spin_token_t token;
     int8_t result;
 
@@ -27,22 +28,19 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_
     uint16_t data_pages  = (uint16_t)((max_queue >> 16) & 0xFFFF);   /* D4  -> +0x1B */
     uint16_t max_len     = (uint16_t)(max_queue & 0xFFFF);           /* D5w -> +0x18 */
 
-    /* Get pointer to free list head */
-    free_list_head = SOCK_GET_FREE_LIST();
-
     /* Acquire spinlock to protect socket table */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /* Check if free list is empty (0x00E15E94 tst.l (0xc,A5)) */
-    if (*free_list_head == NULL) {
+    if (SOCK_$DATA.list.free_head == 0) {
         /* No free sockets available */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
         *sock_ret = 0;
         result = 0;
     } else {
         /* Remove first socket from free list (0x00E15EAE) */
-        sock_view = *free_list_head;
-        *free_list_head = (sock_$sock_t *)sock_view->queue_head;
+        sock_view = (sock_$sock_t *)ARCH_VA_TO_PTR(SOCK_$DATA.list.free_head);
+        SOCK_$DATA.list.free_head = sock_view->queue_head;
 
         /* Mark socket as allocated (0x00E15EBA bset.b #5,(0x16,A2)) */
         sock_view->flags |= SOCK_FLAG_ALLOCATED;
@@ -61,7 +59,7 @@ int8_t SOCK_$ALLOCATE(uint16_t *sock_ret, uint32_t proto_bufpages, uint32_t max_
         sock_view->max_queue    = queue_limit;           /* move.b D2b,(0x14,A2) */
 
         /* Release spinlock */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 
         /* Return the socket number (from flags bits 0-12), 0x00E15EEE */
         *sock_ret = SOCK_GET_NUMBER(sock_view->flags);

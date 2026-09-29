@@ -137,10 +137,10 @@ static void rip_$apply_update(rip_$route_t *route,
     if (old_metric != hop_count) {
         if (flags < 0) {
             /* Non-standard route */
-            RIP_$DATA.std_recent_changes = 0xFF;
+            RIP_$WIRED_DATA.std_recent_changes = (int8_t)0xFF;
         } else {
             /* Standard route */
-            RIP_$DATA.recent_changes = 0xFF;
+            RIP_$WIRED_DATA.recent_changes = (int8_t)0xFF;
         }
     }
 
@@ -242,7 +242,7 @@ void RIP_$UPDATE_INT(uint32_t network, rip_$xns_addr_t *source,
          * - Source matches the provided source
          * - State is not UNUSED
          */
-        entry = &RIP_$DATA.entries[0];
+        entry = &RIP_$WIRED_DATA.info[0];
 
         for (i = RIP_TABLE_SIZE - 1; i >= 0; i--) {
             /* Select standard or non-standard route based on flags */

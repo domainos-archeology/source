@@ -91,10 +91,10 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params,
 
     /*
      * 0x00E0B98E-0x00E0B9A2: 0xE28DB4 indexed by sock_num*4 less 4 is slot
-     * sock_num of the socket pointer table, i.e. SOCK_$SOCKET_PTR[sock_num-1].
+     * sock_num of the socket pointer table, i.e. SOCK_$DATA.socket_ptr[sock_num].
      * The bclr is on the byte at descriptor offset 0x16.
      */
-    sock_ptr = (uint8_t *)SOCK_$SOCKET_PTR[sock_num - 1];
+    sock_ptr = (uint8_t *)SOCK_$DATA.socket_ptr[sock_num];
     sock_ptr[0x16] &= 0x7F;
 
     /*
@@ -168,7 +168,7 @@ void MAC_$OPEN(int16_t *port_num, mac_$open_params_t *params,
      * bclr above used.  The three results then overwrite the head of the
      * caller's record.
      */
-    sock_ptr = (uint8_t *)SOCK_$SOCKET_PTR[sock_num - 1];
+    sock_ptr = (uint8_t *)SOCK_$DATA.socket_ptr[sock_num];
     params->u.result.ec2_handle =
         ARCH_PTR_TO_VA(EC2_$REGISTER_EC1((ec_$eventcount_t *)sock_ptr, status_ret));
     params->u.result.mtu         = os_mtu;

@@ -59,9 +59,9 @@ boolean MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
     /*
      * 0x00E59FFE  move.w (A0),D1w / movea.l #0xe28db4,A2 / lsl.w #0x2,D1w /
      *             lea (0x0,A2,D1w*0x1),A2 / movea.l (-0x4,A2),A0
-     * The -4 makes this SOCK_$EVENT_COUNTERS[socket - 1].
+     * The -4 makes this SOCK_$DATA.socket_ptr[socket].
      */
-    sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[sock_num - 1];
+    sock = SOCK_$DATA.socket_ptr[sock_num];
 
     *ec_value = (uint32_t)sock->ec.value;               /* 0x00E5A014 */
     *status_ret = status_$ok;                           /* 0x00E5A016 */

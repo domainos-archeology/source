@@ -194,7 +194,7 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
     /* 0xE75930..0xE75954 */
     unit = *unit_ptr;
     unit_data = &RING_$CTL.units[unit];
-    stats = &RING_$DATA[unit];
+    stats = &RING_$WIRED_DATA.stats[unit];
 
     /* 0xE75958 */
     *result_flags = 0;
@@ -211,7 +211,7 @@ void RING_$SENDP(uint16_t *unit_ptr, uint32_t hdr_pa, ring_$pkt_hdr_t *hdr,
     }
 
     /* 0xE75974 "cmp.w (0x51a,A5),D0w / bls" */
-    if (data_len > RING_$CTL.max_data_len) {
+    if (data_len > RING_$CTL.driver.max_data_len) {
         *status_ret = status_$network_data_length_too_large;
         return;
     }
@@ -337,7 +337,7 @@ transmit_retry:
     deadline = attempt_start;
     ADD48(&deadline, &RING_$CTL.wait_timeout);
 
-    RING_$XMIT_WAITED++;                                /* 0xE75AC0 */
+    RING_$CTL.xmit_waited++;                                /* 0xE75AC0 */
 
     wait_delay_type = &ring_$c_delay_absolute;          /* 0xE75ADC */
     wait_delay = &deadline;
@@ -453,11 +453,11 @@ process_status:
     if ((hw_status & RING_XMIT_CSR_MODEM) != 0) {
         if ((hw_status & RING_XMIT_CSR_BIPHASE) != 0) {
             *result_flags |= RING_SENDP_RES_BIPHASE;    /* 0xE75C6A */
-            RING_$XMIT_BIPHASE++;                       /* 0xE75C70 */
+            RING_$WIRED_DATA.xmit_biphase++;                       /* 0xE75C70 */
         }
         if ((hw_status & RING_XMIT_CSR_ESB) != 0) {
             *result_flags |= RING_SENDP_RES_ESB;        /* 0xE75C7C */
-            RING_$XMIT_ESB++;                           /* 0xE75C82 */
+            RING_$WIRED_DATA.xmit_esb++;                           /* 0xE75C82 */
         }
         stats->xmit_modem++;                            /* 0xE75C88 */
     }
@@ -547,7 +547,7 @@ report_ok:
 
     /* 0xE75D80 */
     if ((hw_status & RING_XMIT_CSR_UNEXPECTED) == 0) {
-        RING_$UNEXPECTED_XMIT_STAT = hw_status;         /* 0xE75D86 */
+        RING_$CTL.unexpected_xmit_stat = hw_status;         /* 0xE75D86 */
     }
     *result_flags |= RING_SENDP_RES_NO_RETURN;          /* 0xE75D8A */
 

@@ -9,6 +9,8 @@
  *
  * Original address: 0x00E15F72
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -17,23 +19,21 @@
 void SOCK_$CLOSE(uint16_t sock_num)
 {
     sock_$sock_t *sock_view;
-    sock_$sock_t **free_list_head;
-    uint16_t *user_limit;
     ml_$spin_token_t token;
     sock_$pkt_info_t pkt_info;
     int8_t get_result;
 
     /* Get pointer to socket's EC view */
-    sock_view = SOCK_GET_VIEW_PTR(sock_num);
+    sock_view = SOCK_$DATA.socket_ptr[sock_num];
 
     /* Acquire spinlock */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /* Clear the allocated flag */
     sock_view->flags &= ~SOCK_FLAG_ALLOCATED;
 
     /* Release spinlock */
-    ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+    ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 
     /* Drain any queued packets (0x00E15FBA tst on the byte at +0x15) */
     if (sock_view->queue_count != 0) {
@@ -69,12 +69,11 @@ void SOCK_$CLOSE(uint16_t sock_num)
     }
 
     /* Acquire spinlock again for final cleanup */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /* If this was a user-mode socket, restore the user limit */
     if ((sock_view->flags & SOCK_FLAG_USER_MODE) != 0) {
-        user_limit = SOCK_GET_USER_LIMIT();
-        (*user_limit)++;
+        SOCK_$DATA.user_limit++;
 
         /* Clear user-mode flag */
         sock_view->flags &= ~SOCK_FLAG_USER_MODE;
@@ -85,13 +84,11 @@ void SOCK_$CLOSE(uint16_t sock_num)
 
     /* For dynamic sockets (>= 32), return to free list */
     if (sock_num >= SOCK_DYNAMIC_MIN) {
-        free_list_head = SOCK_GET_FREE_LIST();
-
         /* Link into free list */
-        sock_view->queue_head = (uint32_t)*free_list_head;
-        *free_list_head = sock_view;
+        sock_view->queue_head = SOCK_$DATA.list.free_head;
+        SOCK_$DATA.list.free_head = ARCH_PTR_TO_VA(sock_view);
     }
 
     /* Release spinlock */
-    ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+    ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 }

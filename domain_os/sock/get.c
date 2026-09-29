@@ -9,6 +9,8 @@
  *
  * Original address: 0x00E16070
  * Original source: Pascal, converted to C
+ *
+ * Module data block conversion (SOCK_$DATA): Claude Opus 5.5 (source-gy7x).
  */
 
 #include "sock/sock_internal.h"
@@ -24,15 +26,15 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info)
     uint16_t hop_count;
 
     /* Acquire spinlock */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /* Get pointer to socket's descriptor */
-    sock_view = SOCK_GET_VIEW_PTR(sock_num);
+    sock_view = SOCK_$DATA.socket_ptr[sock_num];
 
     /* Check if queue is empty (0x00E160A6 move.b (0x15,A0),D1b) */
     if (sock_view->queue_count == 0) {
         /* No packets available */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
         result = 0;
     } else {
         /* Decrement queue count (0x00E160C2 subq.b #1,(0x15,A0)) */
@@ -50,7 +52,7 @@ int8_t SOCK_$GET(uint16_t sock_num, void *pkt_info)
         }
 
         /* Release spinlock */
-        ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+        ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 
         /*
          * Copy the packet header out of the netbuf into the caller's

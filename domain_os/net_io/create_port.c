@@ -215,10 +215,10 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
         /*
          * 0x00E5A628 - 0x00E5A63C: the socket pointer table is indexed from
          * 0xE28DB4 with an offset of -4, i.e. entry (socket - 1) of
-         * SOCK_$EVENT_COUNTERS.  "bclr.b #0x7,(0x16,A4)" clears bit 7 of the
+         * SOCK_$DATA.socket_ptr.  "bclr.b #0x7,(0x16,A4)" clears bit 7 of the
          * high byte of sock_$sock_t.flags, which is bit 15 of the word.
          */
-        sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[port->socket - 1];
+        sock = SOCK_$DATA.socket_ptr[port->socket];
         sock->flags = (uint16_t)(sock->flags & (uint16_t)~0x8000u);
 
         /* 0x00E5A642  pea (0x38,A3) / jsr EC_$INIT */

@@ -51,7 +51,7 @@ net_io_unwired_t     NET_IO_UNWIRED;
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 route_$port_t        ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
-uint8_t              sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 uint32_t             TIME_$CURRENT_CLOCKH;
 uint16_t             PROC1_$AS_ID;
 
@@ -131,9 +131,9 @@ static void reset_world(void)
     ARCH_HOST_VA_BASE = (uintptr_t)ROUTE_$RTWIRED_DATA.user_stat - 0x1000;
 
     memset(ROUTE_$RTWIRED_DATA.user_stat, 0, sizeof(ROUTE_$RTWIRED_DATA.user_stat));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&test_sock, 0, sizeof(test_sock));
-    SOCK_$EVENT_COUNTERS[TEST_SOCKET - 1] = (ec_$eventcount_t *)&test_sock;
+    SOCK_$DATA.socket_ptr[TEST_SOCKET] = &test_sock;
 
     TIME_$CURRENT_CLOCKH = TEST_CLOCKH;
     PROC1_$AS_ID = TEST_ASID;

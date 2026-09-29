@@ -44,14 +44,14 @@ rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, boolean inc_refcount,
 
     /* Linear probe through the table */
     do {
-        entry = &RIP_$DATA.entries[idx];
+        entry = &RIP_$WIRED_DATA.info[idx];
 
         /* Check for match */
         if (entry->network == network) {
             /* Found matching entry */
             if (inc_refcount < 0) {
                 /* Increment reference count */
-                RIP_$DATA.ref_counts[idx]++;
+                RIP_$WIRED_DATA.stats.net_pkts[idx]++;
             }
             return entry;
         }
@@ -74,7 +74,7 @@ rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, boolean inc_refcount,
 
     /* Not found - create new entry if requested */
     if (create_if_missing < 0 && free_idx != 0xFFFF) {
-        entry = &RIP_$DATA.entries[free_idx];
+        entry = &RIP_$WIRED_DATA.info[free_idx];
 
         /* Initialize the entry */
         entry->network = network;
@@ -85,9 +85,9 @@ rip_$entry_t *RIP_$NET_LOOKUP(uint32_t network, boolean inc_refcount,
 
         /* Set reference count */
         if (inc_refcount < 0) {
-            RIP_$DATA.ref_counts[free_idx] = 0;
+            RIP_$WIRED_DATA.stats.net_pkts[free_idx] = 0;
         } else {
-            RIP_$DATA.ref_counts[free_idx] = 1;
+            RIP_$WIRED_DATA.stats.net_pkts[free_idx] = 1;
         }
 
         return entry;

@@ -237,7 +237,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
          * 0xE86400.
          */
         {
-            uint32_t *src = (uint32_t *)&RING_$DATA[0];
+            uint32_t *src = (uint32_t *)&RING_$WIRED_DATA.stats[0];
             uint32_t *dst = result + 8;
             int16_t i;
             for (i = 0; i < 15; i++) {
@@ -419,7 +419,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         reply_put_l(result, 0x0C, NETWORK_$MOTHER_NODE);
         /* 15 longwords of RING_$DATA[0] (0x00E64B42-0x00E64B52) */
         {
-            uint32_t *src = (uint32_t *)&RING_$DATA[0];
+            uint32_t *src = (uint32_t *)&RING_$WIRED_DATA.stats[0];
             int16_t i;
             for (i = 0; i < 15; i++) {
                 reply_put_l(result, 0x10 + (unsigned)i * 4, src[i]);
@@ -429,7 +429,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
         reply_put_bytes(result, 0x4C, &NETWORK_$FAILURE_REC,
                         sizeof(network_$failure_rec_t));
         /* The 30-byte software-diagnostic block (0x00E64B68-0x00E64B7A) */
-        reply_put_bytes(result, 0x5C, &RING_$SWDIAG_DATA,
+        reply_put_bytes(result, 0x5C, &RING_$WIRED_DATA.swdiag,
                         sizeof(ring_$swdiag_t));
         /*
          * 0x00E64B7C-0x00E64BA4: five counters that overwrite parts of the
@@ -437,12 +437,12 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
          * follow it.  ring/ring.h documents the -0x1A displacement between
          * each swdiag slot and its live counter.
          */
-        reply_put_l(result, 0x5E, RING_$SWDIAG_RCVCNT);
-        reply_put_l(result, 0x76, RING_$SWDIAG_NODEID);
-        reply_put_w(result, 0x7A, RING_$XMIT_BIPHASE);
-        reply_put_w(result, 0x7C, RING_$RCV_BIPHASE);
-        reply_put_w(result, 0x7E, RING_$XMIT_ESB);
-        reply_put_w(result, 0x80, RING_$RCV_ESB);
+        reply_put_l(result, 0x5E, RING_$WIRED_DATA.swdiag_rcvcnt);
+        reply_put_l(result, 0x76, RING_$WIRED_DATA.swdiag_nodeid);
+        reply_put_w(result, 0x7A, RING_$WIRED_DATA.xmit_biphase);
+        reply_put_w(result, 0x7C, RING_$WIRED_DATA.rcv_biphase);
+        reply_put_w(result, 0x7E, RING_$WIRED_DATA.xmit_esb);
+        reply_put_w(result, 0x80, RING_$WIRED_DATA.rcv_esb);
         break;
 
     case ASKNODE_REQ_PROC_INFO2:  /* 0x21, 0x00E64BB0-0x00E64BE0 */
@@ -628,7 +628,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                             NETWORK_$PAGING_BACKLOG[i]);
             }
         }
-        reply_put_w(result, 0x2E, RING_$PAGING_OVERFLOW);
+        reply_put_w(result, 0x2E, RING_$WIRED_DATA.paging_overflow);
         /* Nine file-backlog buckets (0x00E64E02-0x00E64E12) */
         {
             int16_t i;
@@ -645,16 +645,16 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                                              NETWORK_$PAGOUT_RQST_CNT));
         reply_put_w(result, 0x5E, REM_FILE_$2LONG1);
         reply_put_l(result, 0x60, 0);
-        reply_put_l(result, 0x64, RING_$DATA[0].xmitcnt);   /* 0xE261E6 */
-        reply_put_w(result, 0x68, RING_$XMIT_WAITED);
-        reply_put_w(result, 0x6A, RING_$SEND_NULL_CNT);
-        reply_put_w(result, 0x6C, RING_$CLOBBERED_HDR);
-        reply_put_l(result, 0x6E, RING_$DATA[0].rcvcnt);    /* 0xE261FC */
-        reply_put_l(result, 0x72, RING_$RCV_INT_CNT);
-        reply_put_w(result, 0x76, RING_$BUSY_ON_RCV_INT);
-        reply_put_w(result, 0x78, RING_$ABORT_CNT);
-        reply_put_w(result, 0x7A, RING_$WAKEUP_CNT);
-        reply_put_w(result, 0x7C, RING_$BAD_DATA_CNT);
+        reply_put_l(result, 0x64, RING_$WIRED_DATA.stats[0].xmitcnt);   /* 0xE261E6 */
+        reply_put_w(result, 0x68, RING_$CTL.xmit_waited);
+        reply_put_w(result, 0x6A, RING_$CTL.send_null_cnt);
+        reply_put_w(result, 0x6C, RING_$CTL.clobbered_hdr);
+        reply_put_l(result, 0x6E, RING_$WIRED_DATA.stats[0].rcvcnt);    /* 0xE261FC */
+        reply_put_l(result, 0x72, RING_$CTL.rcv_int_cnt);
+        reply_put_w(result, 0x76, RING_$CTL.busy_on_rcv_int);
+        reply_put_w(result, 0x78, RING_$CTL.abort_cnt);
+        reply_put_w(result, 0x7A, RING_$CTL.wakeup_cnt);
+        reply_put_w(result, 0x7C, RING_$CTL.bad_data_cnt);
         /* 0x00E64EA2 stores the info count out of order, at +0x90. */
         reply_put_w(result, 0x90, NETWORK_$INFO_RQST_CNT);
         reply_put_w(result, 0x7E, NETWORK_$PAGIN_RQST_CNT);
@@ -891,7 +891,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
              */
             if (network == 0) {
                 uint16_t unit = param_get_w(param, 0x04);
-                reply_put_l(result, 0x0E, RING_$DATA[unit].rcvcnt);
+                reply_put_l(result, 0x0E, RING_$WIRED_DATA.stats[unit].rcvcnt);
             }
 
             /* 0x00E65238-0x00E65248 */
@@ -922,7 +922,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 reply_put_l(result, 0x0C, asknode_$c_local_route_nexthop);
                 reply_put_l(result, 0x10, asknode_$c_local_route_expiration);
                 reply_put_w(result, 0x14, asknode_$c_local_route_metric);
-                reply_put_l(result, 0x16, RIP_$STATS.local_net_pkts);
+                reply_put_l(result, 0x16, RIP_$WIRED_DATA.stats.local_net_pkts);
                 ROUTE_$SHORT_PORT(ROUTE_$WIRED_DATA.portp[0],
                                   (route_$short_port_t *)
                                       ((uint8_t *)result + 0x1C));
@@ -932,7 +932,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
 
             *local_status = status_$network_unknown_network;
             for (i = 0; i < RIP_TABLE_SIZE; i++) {
-                rip_$entry_t *entry = &RIP_$INFO[i];
+                rip_$entry_t *entry = &RIP_$WIRED_DATA.info[i];
                 uint16_t state;
 
                 if (entry->network != wanted) {
@@ -958,7 +958,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 reply_put_l(result, 0x10, entry->routes[0].expiration);
                 reply_put_w(result, 0x14, entry->routes[0].metric);
                 reply_put_w(result, 0x1A, state);
-                reply_put_l(result, 0x16, RIP_$STATS.net_pkts[i]);
+                reply_put_l(result, 0x16, RIP_$WIRED_DATA.stats.net_pkts[i]);
                 ROUTE_$SHORT_PORT(ROUTE_$WIRED_DATA.portp[entry->routes[0].port],
                                   (route_$short_port_t *)
                                       ((uint8_t *)result + 0x1C));

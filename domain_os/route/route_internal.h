@@ -18,7 +18,7 @@
 #include "rip/rip.h"
 #include "sock/sock.h"
 #include "xns/xns.h"
-#include "ring/ringlog.h"   /* RINGLOG_$ROUTE_FORWARD */
+#include "ring/ringlog.h"   /* RINGLOG_$LOGIT, RINGLOG_$CTL */
 
 /*
  * =============================================================================
@@ -46,9 +46,9 @@
 /*
  * ROUTE_$SERVICE_MUTEX - Mutex for route service operations
  *
- * Lives in the RIP_WIRED segment (map 0xE26280), not in a ROUTE block.
+ * Lives in the RIP_WIRED segment (map 0xE26280), not in a ROUTE block: it is
+ * RIP_$WIRED_DATA.route_service_mutex (rip/rip.h).
  */
-extern ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 
 /*
  * =============================================================================
@@ -147,9 +147,8 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
  * `link.w` (0x00E878A8), carry no symbol in the SAU2 link map, and are
  * reached only PC-relative from inside ROUTE_$PROCESS.  Three of them are
  * therefore file statics in route/process.c (net_service_or_bits,
- * net_service_and_not_bits, sock_empty_status); the fourth,
- * RINGLOG_$ROUTE_FORWARD at 0x00E878A0, belongs to ring/ringlog.h because
- * RINGLOG_$LOGIT is its consumer.
+ * net_service_and_not_bits, ringlog_route_forward at 0x00E878A0 and
+ * sock_empty_status).
  */
 
 /*

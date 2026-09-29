@@ -96,21 +96,15 @@ static int current_failed = 0;
 
 uint32_t TIME_$CLOCKH;
 uint32_t NODE_$ME;
-uint8_t  sock_table_base[SOCK_TABLE_SIZE];
-ringlog_ctl_t RINGLOG_$CTL;
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
+MODULE_DATA_DEFINE(ringlog_ctl_t, RINGLOG_$CTL, 0x00E2C32C);
 MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t ROUTE_$PORT;
-ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
-
-uint8_t  RIP_$HALT_PACKET[24];
-uint16_t RTWIRED_$SEND_FLAGS;
 MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
-uint8_t  RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
-uint32_t RTWIRED_$CALLBACK_DATA;
 MODULE_DATA_DEFINE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
 
 /* ==========================================================================
@@ -179,6 +173,7 @@ static int      mock_crash_calls;
 static int      mock_broadcast_std_calls;
 static int      mock_broadcast_n_calls;
 static int      mock_ringlog_calls;
+static uint8_t  mock_ringlog_hdr[4];
 static int      mock_unwire_calls;
 static uint32_t mock_unwire_order[ROUTE_$MAX_WIRED_PAGES];
 static int      mock_sock_close_calls;
@@ -284,9 +279,10 @@ int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset)
     return (int16_t)(current_sum + 1);
 }
 
-int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
+int16_t RINGLOG_$LOGIT(const uint8_t *header_info, void *pkt_info)
 {
-    (void)header_info; (void)pkt_info;
+    (void)pkt_info;
+    memcpy(mock_ringlog_hdr, header_info, sizeof(mock_ringlog_hdr));
     mock_ringlog_calls++;
     return 0;
 }
@@ -394,7 +390,7 @@ static void reset_mocks(void)
                  ~(uintptr_t)(MOCK_PKT_PAGE_SIZE - 1));
 
     ROUTE_$WIRED_DATA.sock = MOCK_SOCK;
-    SOCK_$EVENT_COUNTERS[MOCK_SOCK - 1] = (ec_$eventcount_t *)&mock_sock_desc;
+    SOCK_$DATA.socket_ptr[MOCK_SOCK] = (sock_$sock_t *)&mock_sock_desc;
 
     ROUTE_$RTWIRED_DATA.std_dlen_err = 0;
     ROUTE_$RTWIRED_DATA.std_too_far = 0;
@@ -415,7 +411,7 @@ static void reset_mocks(void)
     ROUTE_$RTWIRED_DATA.pid = 0x1234;
     TIME_$CLOCKH = 1000;
     NODE_$ME = 0xABCDE;
-    RING_$LOGGING_NOW = 0;
+    RINGLOG_$CTL.logging_active = 0;
 
     mock_wait_len = 0;
     mock_wait_pos = 0;
@@ -912,7 +908,8 @@ TEST(user_routing_port_put_failure)
     ASSERT_EQ(1, mock_dump_data_calls);
 }
 
-/* Ring logging is only invoked while RING_$LOGGING_NOW is true - 0x00E87602. */
+/* Ring logging is only invoked while RINGLOG_$CTL.logging_active (map
+ * RING_$LOGGING_NOW) is true - 0x00E87602. */
 TEST(ringlog_gated_on_logging_flag)
 {
     script_one_packet();
@@ -926,10 +923,15 @@ TEST(ringlog_gated_on_logging_flag)
     script_one_packet();
     setup_packet(0, 2, 0x40, 0x20, 0x2000);
     setup_port(1, 3, ROUTE_PORT_TYPE_ROUTING, 0x0055);
-    RING_$LOGGING_NOW = (int8_t)0xFF;
+    RINGLOG_$CTL.logging_active = (int8_t)0xFF;
 
     ROUTE_$PROCESS();
     ASSERT_EQ(1, mock_ringlog_calls);
+    /* the header-info cell is the image's 0x00E878A0: 00 00 20 48 */
+    ASSERT_EQ(0x00, mock_ringlog_hdr[0]);
+    ASSERT_EQ(0x00, mock_ringlog_hdr[1]);
+    ASSERT_EQ(0x20, mock_ringlog_hdr[2]);
+    ASSERT_EQ(0x48, mock_ringlog_hdr[3]);
 }
 
 /* Anything over 0x400 bytes cannot go out on a real port - 0x00E8766C. */

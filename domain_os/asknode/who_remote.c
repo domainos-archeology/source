@@ -112,8 +112,8 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     }
 
     /* Get the event count for socket 5 */
-    /* Socket 5 event count: table slot 5 (0xE28DC4) = SOCK_$EVENT_COUNTERS[4] */
-    ec_$eventcount_t *socket_ec = SOCK_$EVENT_COUNTERS[ASKNODE_WHO_SOCKET - 1];
+    /* Socket 5 event count: table slot 5 (0xE28DC4) = SOCK_$DATA.socket_ptr[5] */
+    ec_$eventcount_t *socket_ec = &SOCK_$DATA.socket_ptr[ASKNODE_WHO_SOCKET]->ec;
     int32_t wait_val;
 
     /*

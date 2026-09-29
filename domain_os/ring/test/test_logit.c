@@ -58,8 +58,8 @@ void ML_$SPIN_UNLOCK(void *lock, ml_$spin_token_t token)
 }
 
 /* The two module objects, normally defined by ring/ringlog_data.c */
-ringlog_ctl_t   RINGLOG_$CTL;
-ringlog_$data_t RINGLOG_$DATA;
+MODULE_DATA_DEFINE(ringlog_ctl_t, RINGLOG_$CTL, 0x00E2C32C);
+MODULE_DATA_DEFINE(ringlog_$data_t, RINGLOG_$DATA, 0x00EA3E38);
 
 #include "../logit.c"
 

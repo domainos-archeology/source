@@ -26,8 +26,12 @@
  * ============================================================================
  */
 
-/* DMA controller base address */
-#define RING_DMA_BASE           0xFFA000
+/*
+ * DMA controller base address: a SAU2 hardware address, so it lives in
+ * arch/m68k/sau2/hw.h (SAU2_RING_DMA_BASE, 0xFFA000).  The host build has no
+ * such device; only the two byte-count registers below have host cells.
+ */
+#define RING_DMA_BASE           SAU2_RING_DMA_BASE
 
 /* DMA channel offsets (0x40 bytes per channel) */
 #define RING_DMA_CHAN0          0x00    /* Receive header */
@@ -81,21 +85,6 @@ extern volatile uint16_t ring_$dma_chan1_count_cell;
 
 /*
  * ============================================================================
- * Data Structure Addresses (m68k)
- * ============================================================================
- */
-
-/* Ring subsystem base address */
-#define RING_CTL_BASE           0xE86400
-
-/* Per-unit statistics base address */
-#define RING_DATA_BASE          0xE261E0
-
-/* IIC data start (used for per-unit data) */
-#define IIC_DATA_START          (RING_CTL_BASE)
-
-/*
- * ============================================================================
  * Global Data Declarations
  *
  * Note: ring_global_t, ring_unit_t, and ring_channel_t are defined in ring.h
@@ -119,14 +108,12 @@ extern uint16_t ring_dcte_ctype_net;
  */
 extern status_$t Network_hardware_error;
 
-/* Internal counters */
-/* The RING_$CTL counter aliases moved to ring/ring.h. */
-
 /*
- * RING_$XMIT_BIPHASE (0x00E261BC), RING_$XMIT_ESB (0x00E261BE),
- * RING_$RCV_BIPHASE (0x00E261B8) and RING_$RCV_ESB (0x00E261BA) are standalone
- * words below the statistics array, not fields of RING_$CTL; they are
- * declared in ring/ring.h.
+ * The module data blocks - RING_$CTL (0xE86400), RING_$WIRED_DATA
+ * (0xE261AC, holding RING_$XMIT_BIPHASE / RING_$XMIT_ESB / RING_$RCV_BIPHASE
+ * / RING_$RCV_ESB, the software-diagnostic counters and RING_$DATA) and
+ * RINGLOG_$CTL / RINGLOG_$DATA - are declared in ring/ring.h and
+ * ring/ringlog.h.
  */
 
 /*

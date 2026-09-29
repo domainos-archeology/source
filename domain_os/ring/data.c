@@ -1,44 +1,100 @@
 /*
  * Ring module global data
  *
- * This file defines the global data structures used by the ring module.
- * These correspond to memory-mapped data at specific addresses on the
- * original m68k platform.
+ * Module data blocks RING_$CTL and RING_$WIRED_DATA: Claude Opus 5.5
+ * (source-vulx).
+ *
+ * The ring driver's two data segments (docs/design-per-process-data.md), as
+ * MODULE_DATA blocks that build/sau2/layout.ld links in the SAU2 map's
+ * order; the address is the ordering key, not the link address.  Layouts and
+ * asserts in ring/ring.h.
+ *
+ *   0x00E261AC  RING_$WIRED_DATA  map "D E261AC RING_WIRED size = AC"
+ *   0x00E86400  RING_$CTL         map "D30 E86400 RING_DATA loaded at 187C00,
+ *                                 size = 5D0" (RING_DATA_START .. _END)
+ *
+ * The map's third RING data segment, "D E35028 RING size = 4" in
+ * OS_INIT_DATA, has no reference anywhere in the image (gsk xrefs), so it
+ * has no object here.
  */
 
 #include "ring/ring_internal.h"
 
 /*
- * ============================================================================
- * Global Data Structures
- * ============================================================================
+ * RING_$WIRED_DATA, 0x00E261AC..0x00E26257 (`gsk read 0xE261AC 172`): zero
+ * except three words, all 1:
+ *
+ *   0x00E261C2  +0x16  00 01   swdiag._r00
+ *   0x00E261E0  +0x34  00 01   stats[0]._reserved0
+ *   0x00E2621C  +0x70  00 01   stats[1]._reserved0
  */
+MODULE_DATA_DEFINE_INIT(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC, {
+    .swdiag = { ._r00 = 1 },
+    .stats  = { { ._reserved0 = 1 }, { ._reserved0 = 1 } },
+});
 
 /*
- * Main ring control structure.
+ * RING_$CTL, 0x00E86400..0x00E869CF (`gsk read 0xE86400 1488`): the unit
+ * records, scrub/from_err cells and wire list are zero; the non-zero bytes
+ * are
  *
- * The SAU2 map (~/src/domainos-archeology/sau2-maps/domain_os.10.2.map) names
- * this segment and its one exported symbol:
+ *   +0x518  00 02 04 00 00 00 00 03       the driver record's head:
+ *                                         _unknown0 2, max_data_len 0x400,
+ *                                         mtu 0, flags 3
+ *   +0x520  00 e7 59 16  00 e7 69 50      RING_$SENDP, RING_$GET_STATS
+ *   +0x528  00 e7 69 50  00 e7 68 30      RING_$GET_STATS, RING_$START
+ *   +0x530  00 e7 69 c4  00 00 00 00      RING_$STOP, nil
+ *   +0x538  00 e7 6a 42  00 e7 6b 2c      RING_$PROC2_CLEANUP, RING_$IOCTL
+ *   +0x540  00 e7 6d f2  00 e7 6e 22      RING_$SVC_OPEN, RING_$SVC_CLOSE
+ *   +0x548  00 e7 76 b8  00 e7 6f 9e      RING_$SVC_IOCTL, RING_$SVC_WRITE
+ *   +0x550  00 e7 74 02  00 e7 7b a0      RING_$SVC_READ, RING_$OPEN_OS
+ *   +0x558  00 e7 7c 24  00 e7 7c 60      RING_$CLOSE_OS, RING_$SEND_OS
+ *   +0x560  8 zero bytes                  network_uid (RING_$INIT fills it)
+ *   +0x570  00 00 00 00 00 89             _r570          { 0, 0x0089 }
+ *   +0x578  00 00 00 00 04 22             xmit_timeout1  { 0, 0x0422 }
+ *   +0x580  00 00 00 00 02 ab             xmit_timeout2  { 0, 0x02AB }
+ *   +0x588  00 00 00 00 02 ab             _r588          { 0, 0x02AB }
+ *   +0x590  00 00 00 00 01 77             poll_timeout   { 0, 0x0177 }
+ *   +0x598  00 00 00 05 9e 22             wait_timeout   { 5, 0x9E22 }
+ *   +0x5C8  00 e7 66 42  00 e7 66 5e      rcv_proc: RING_$RCV0, RING_$RCV1
  *
- *   D30  E86400  RING_DATA          loaded at 187C00, size = 5D0
- *   D    E86400  RING               size = 5D0
- *        E86400  RING_$CTL
- *
- * so 0xE86400 is RING_$CTL, not RING_$DATA (that name belongs to the
- * per-unit statistics array at 0xE261E0, below).
+ * force_start_timeout (+0x568) is zero.  The procedure variables name the
+ * routines the map gives their targets, as net_io/net_io_data.c does for
+ * the NIL and USER driver records.
  */
-ring_global_t RING_$CTL;
-
-/*
- * Per-unit statistics array, 0x3C bytes per unit.
- *
- * SAU2 map:
- *
- *        E261E0  RING_$DATA                       MARKED
- *
- * i.e. the last object in the `D E261AC RING_WIRED size = AC` segment.
- */
-ring_$stats_t RING_$DATA[RING_MAX_UNITS];
+MODULE_DATA_DEFINE_INIT(ring_global_t, RING_$CTL, 0x00E86400, {
+    .driver = {
+        ._unknown0      = 0x0002,
+        .max_data_len   = 0x0400,
+        .mtu            = 0x0000,
+        ._unknown6      = 0x00,
+        .flags          = 0x03,
+        .sendp          = (net_io_$driver_fn_t)RING_$SENDP,         /* 0x00E75916 */
+        .get_stats      = (net_io_$driver_fn_t)RING_$GET_STATS,     /* 0x00E76950 */
+        .get_stats2     = (net_io_$driver_fn_t)RING_$GET_STATS,     /* 0x00E76950 */
+        .start          = (net_io_$driver_fn_t)RING_$START,         /* 0x00E76830 */
+        .stop           = (net_io_$driver_fn_t)RING_$STOP,          /* 0x00E769C4 */
+        .detach         = NULL,
+        .proc2_cleanup  = (net_io_$driver_fn_t)RING_$PROC2_CLEANUP, /* 0x00E76A42 */
+        .ioctl          = (net_io_$driver_fn_t)RING_$IOCTL,         /* 0x00E76B2C */
+        .svc_open       = (net_io_$driver_fn_t)RING_$SVC_OPEN,      /* 0x00E76DF2 */
+        .svc_close      = (net_io_$driver_fn_t)RING_$SVC_CLOSE,     /* 0x00E76E22 */
+        .svc_ioctl      = (net_io_$driver_fn_t)RING_$SVC_IOCTL,     /* 0x00E776B8 */
+        .svc_write      = (net_io_$driver_fn_t)RING_$SVC_WRITE,     /* 0x00E76F9E */
+        .svc_read       = (net_io_$driver_fn_t)RING_$SVC_READ,      /* 0x00E77402 */
+        .open_os        = (net_io_$driver_fn_t)RING_$OPEN_OS,       /* 0x00E77BA0 */
+        .close_os       = (net_io_$driver_fn_t)RING_$CLOSE_OS,      /* 0x00E77C24 */
+        .send_os        = (net_io_$driver_fn_t)RING_$SEND_OS,       /* 0x00E77C60 */
+        .network_uid    = { 0, 0 },
+    },
+    ._r570          = { .high = 0, .low = 0x0089 },
+    .xmit_timeout1  = { .high = 0, .low = 0x0422 },
+    .xmit_timeout2  = { .high = 0, .low = 0x02AB },
+    ._r588          = { .high = 0, .low = 0x02AB },
+    .poll_timeout   = { .high = 0, .low = 0x0177 },
+    .wait_timeout   = { .high = 5, .low = 0x9E22 },
+    .rcv_proc       = { RING_$RCV0, RING_$RCV1 },   /* 0x00E76642, 0x00E7665E */
+});
 
 /*
  * RING_$NETWORK_UID - the ring network's UID.
@@ -80,80 +136,3 @@ uint16_t ring_dcte_ctype_net = 0x0002;  /* 0x00E7628A: the literal cell the
  */
 status_$t Network_hardware_error = 0x00110001;
 
-/*
- * ============================================================================
- * Global Counters (for external reference)
- * ============================================================================
- *
- * These are aliases to fields in RING_$CTL for convenience.
- * The actual counters are in the ring_global_t structure.
- */
-
-/*
- * NETWORK_$ACTIVITY_FLAG (0x00E24C42) is defined in network/network_data.c.
- */
-
-/*
- * ============================================================================
- * Transmit Statistics (shared across units)
- * ============================================================================
- *
- * These global counters track transmit events across all units.
- * Located in the global data area (0xE261BC-0xE261BE range).
- */
-
-/*
- * Global biphase error count.
- */
-uint16_t RING_$GLOBAL_BIPHASE_CNT;
-
-/*
- * Global ESB error count.
- */
-uint16_t RING_$GLOBAL_ESB_CNT;
-
-/*
- * ============================================================================
- * Software-diagnostic counters (`D E261AC RING_WIRED size = AC`)
- * ============================================================================
- *
- * The SAU2 map names every cell in this segment:
- *
- *   E261AC  RING_$SWDIAG_NODEID       MARKED
- *   E261B0  RING_$SWDIAG_GOODRCV_CNT  MARKED
- *   E261B4  RING_$SWDIAG_RCVCNT       MARKED
- *   E261B8  RING_$RCV_BIPHASE         MARKED
- *   E261BA  RING_$RCV_ESB             MARKED
- *   E261BC  RING_$XMIT_BIPHASE
- *   E261BE  RING_$XMIT_ESB
- *   E261C0  RING_$PAGING_OVERFLOW     MARKED
- *   E261C2  RING_$SWDIAG_DATA         MARKED
- *   E261E0  RING_$DATA                MARKED
- *
- * so RING_$SWDIAG_DATA runs 0xE261C2..0xE261E0 - the 0x1E bytes
- * ring_$swdiag_t describes - and each of the four biphase/ESB counters is a
- * single word.
- *
- * Image contents (gsk read 0x00E261AC 60): the whole segment is zero except
- * RING_$SWDIAG_DATA._r00, which reads 0x0001.
- */
-
-/*
- * Per-line biphase-violation and end-of-single-bit error counts.  Bumped
- * alongside the per-unit statistics; see ring/ring.h.
- *
- * Original addresses: 0xE261B8, 0xE261BA, 0xE261BC, 0xE261BE
- */
-uint16_t RING_$RCV_BIPHASE;
-uint16_t RING_$RCV_ESB;
-uint16_t RING_$XMIT_BIPHASE;
-uint16_t RING_$XMIT_ESB;
-
-/*
- * RING_$SWDIAG_DATA - the software-diagnostic receive-error mirror block that
- * NETWORK_$PROCESS_PAGING_REQUEST (0x00E11278) and ASKNODE_$INTERNET_INFO
- * (0x00E64B68) copy whole into their replies.
- *
- * Original address: 0xE261C2 (0x1E bytes)
- */
-ring_$swdiag_t RING_$SWDIAG_DATA = { ._r00 = 1 };

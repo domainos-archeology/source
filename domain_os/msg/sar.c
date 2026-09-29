@@ -28,7 +28,7 @@
  *                                       ; 1 data page, max data 0x400
  *   00e59dfe  tst.b D0b / bmi
  *   00e59e02  0x290004 no more sockets  ; note: no SOCK_$CLOSE on this path
- *   00e59e0c  (-0x6c,A6) = SOCK_$EVENT_COUNTERS[sock - 1]
+ *   00e59e0c  (-0x6c,A6) = SOCK_$DATA.socket_ptr[sock]
  *   00e59e22  jsr PKT_$NEXT_ID          ; D3 = the request id
  *   00e59e2e  move.l (A1),D2            ; the socket eventcount's value
  *   00e59e30  (-0x50,A6) = FIM_$QUIT_VALUE[AS_ID] + 1
@@ -93,7 +93,7 @@ void MSG_$SARI(int16_t *timeout,
         return;
     }
 
-    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];       /* 0xE59E0C */
+    sock_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;       /* 0xE59E0C */
     request_id = (uint16_t)PKT_$NEXT_ID();              /* 0xE59E22 */
     wait_val = (int32_t)sock_ec->value;                 /* 0xE59E2E */
     quit_val = (int32_t)FIM_$QUIT_VALUE[PROC1_$AS_ID] + 1;   /* 0xE59E30 */

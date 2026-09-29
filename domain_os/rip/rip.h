@@ -191,46 +191,131 @@ _Static_assert(sizeof(rip_$entry_t) == 0x2C, "rip_$entry_t must be 0x2C bytes");
 #endif
 
 /*
- * RIP subsystem data structure
+ * =============================================================================
+ * RIP_$WIRED_DATA - the RIP_WIRED module data block (0xE26258, 0xC8C bytes)
+ * =============================================================================
  *
- * This is the main data block for the RIP subsystem, located at 0xE26258.
- * All offsets are relative to this base address.
+ * Module data blocks RIP_$WIRED_DATA, RIP_$INIT_DATA and RIP_$RTWIRED_DATA:
+ * Claude Opus 5.5 (source-thww).
  *
- * The structure contains:
- * - Routing port information at offset 0x00
- * - Three exclusion locks for different subsystems
- * - Routing table entries with reference counts
- * - Broadcast control parameters at offset 0xC68
+ * Map "D E26258 RIP_WIRED size = C8C".  The A5 block of the RIP_WIRED code
+ * ("lea (0xe26258).l,A5" in RIP_$NET_LOOKUP 0x00E154EC and
+ * RIP_$FIND_NEXTHOP 0x00E1569E); RIP_$INIT reaches it through the literal
+ * base instead ("movea.l #0xe26258,A0 / pea (0x40,A0)", 0x00E2FBDE) and
+ * other modules through absolute cells.  It also holds the two locks the
+ * map exports for XNS_ERROR and ROUTE, which RIP_$INIT initialises together
+ * with its own (0x00E2FBE4, 0x00E2FBF6, 0x00E2FC08).  Every map symbol in the
+ * segment is a field here:
+ *
+ *   +0x000  (route port)               RIP_$INIT 0x00E2FD6A; also read as
+ *                                      the rip_$xns_addr_t source of its two
+ *                                      RIP_$UPDATE_INT calls (0x00E2FD72)
+ *   +0x010  XNS_ERROR_$CLIENT_MUTEX    0xE26268
+ *   +0x028  ROUTE_$SERVICE_MUTEX       0xE26280 ("move.l #0xe26280,-(SP)"
+ *                                      in ROUTE_$SERVICE, 0x00E6A048)
+ *   +0x040  (RIP exclusion lock)       RIP_$LOCK / RIP_$UNLOCK
+ *   +0x054  RIP_$STATS                 0xE262AC, rip_$stats_t (0x110)
+ *   +0x164  RIP_$INFO                  0xE263BC, 64 entries of 0x2C
+ *   +0xC64  RIP_$STD_IDP_CHANNEL       0xE26EBC, -1 = no channel
+ *   +0xC66  RIP_$NS_ANNOUNCEMENT       0xE26EBE, the 2-byte template 00 03
+ *   +0xC68  RIP_$BCAST_CONTROL         0xE26EC0, a 30-byte pkt_$info_t
+ *   +0xC86  RIP_$STD_RECENT_CHANGES    0xE26EDE, Pascal boolean
+ *   +0xC88  RIP_$RECENT_CHANGES        0xE26EE0, Pascal boolean
+ *
+ * RIP_$STATS's last two fields are the counters RIP_$FIND_NEXTHOP and
+ * RIP_$NET_LOOKUP bump: stats.local_net_pkts (+0x060) and stats.net_pkts[i]
+ * (+0x064 + i*4, one per RIP_$INFO slot, indexed with the 0-based slot) -
+ * the same cells ASKNODE_$INTERNET_INFO reports (0x00E6526E, 0x00E652F2).
+ *
+ * The exclusion locks hold pointers, so every offset past +0x10 is asserted
+ * on the target only.
  */
-typedef struct rip_$data_t {
-    uint32_t            route_port;         /* 0x00: Route port (set during diskless init) */
-    uint8_t             _reserved0[0x0C];   /* 0x04: Reserved/unknown */
-    ml_$exclusion_t     xns_error_mutex;    /* 0x10: XNS error client mutex (18 bytes) */
-    uint8_t             _pad0[0x06];        /* 0x22: Padding to offset 0x28 */
-    ml_$exclusion_t     route_service_mutex;/* 0x28: Route service mutex (18 bytes) */
-    uint8_t             _pad0a[0x06];       /* 0x3A: Padding to offset 0x40 */
-    ml_$exclusion_t     exclusion;          /* 0x40: RIP exclusion lock (18 bytes) */
-    uint8_t             _pad1[0x0A];        /* 0x52: Padding to offset 0x5C */
-    uint32_t            _reserved1;         /* 0x5C: Reserved */
-    uint32_t            direct_hits;        /* 0x60: Direct route hit counter */
-    uint32_t            ref_counts[RIP_TABLE_SIZE]; /* 0x64: Per-entry reference counts */
-    rip_$entry_t        entries[RIP_TABLE_SIZE];    /* 0x164: Routing table entries */
-    uint8_t             _reserved2[0x862];  /* Padding to 0xC68 */
-    uint8_t             bcast_control[30];  /* 0xC68: Broadcast control params */
-    uint8_t             _pad3[0x1C];        /* Padding to 0xC86 */
-    uint8_t             std_recent_changes; /* 0xC86: Standard route changes flag */
-    uint8_t             _pad4;              /* 0xC87: Padding */
-    uint8_t             recent_changes;     /* 0xC88: Non-standard route changes flag */
-} rip_$data_t;
+#define RIP_$WIRED_DATA_SIZE    0xC8C   /* map: RIP_WIRED size = C8C */
 
-extern rip_$data_t RIP_$DATA;
-extern rip_$stats_t RIP_$STATS;
+typedef struct rip_$wired_data_t {
+    uint32_t            route_port;         /* +0x000: the node's network,
+                                             *         read by RIP_$INIT's
+                                             *         RIP_$UPDATE_INT calls as
+                                             *         a rip_$xns_addr_t */
+    uint8_t             _0004[0x0C];        /* +0x004: the source address's
+                                             *         host half, never
+                                             *         written */
+    ml_$exclusion_t     xns_error_mutex;    /* +0x010 map XNS_ERROR_$CLIENT_MUTEX */
+    uint8_t             _0022[0x06];        /* +0x022 */
+    ml_$exclusion_t     route_service_mutex;/* +0x028 map ROUTE_$SERVICE_MUTEX */
+    uint8_t             _003a[0x06];        /* +0x03A */
+    ml_$exclusion_t     exclusion;          /* +0x040: the RIP lock */
+    uint8_t             _0052[0x02];        /* +0x052 */
+    rip_$stats_t        stats;              /* +0x054 map RIP_$STATS */
+    rip_$entry_t        info[RIP_TABLE_SIZE];   /* +0x164 map RIP_$INFO, [0..63] */
+    int16_t             std_idp_channel;    /* +0xC64 map RIP_$STD_IDP_CHANNEL */
+    uint8_t             ns_announcement[2]; /* +0xC66 map RIP_$NS_ANNOUNCEMENT */
+    uint8_t             bcast_control[30];  /* +0xC68 map RIP_$BCAST_CONTROL:
+                                             *         a pkt_$info_t, kept in
+                                             *         bytes because it is
+                                             *         copied and passed by
+                                             *         address, never read
+                                             *         field by field here */
+    int8_t              std_recent_changes; /* +0xC86 map RIP_$STD_RECENT_CHANGES */
+    uint8_t             _0c87;              /* +0xC87 */
+    int8_t              recent_changes;     /* +0xC88 map RIP_$RECENT_CHANGES */
+    uint8_t             _0c89[3];           /* +0xC89 */
+} rip_$wired_data_t;
+
+_Static_assert(offsetof(rip_$wired_data_t, route_port) == 0x000, "RIP_WIRED route port");
+_Static_assert(offsetof(rip_$wired_data_t, xns_error_mutex) == 0x010,
+               "XNS_ERROR_$CLIENT_MUTEX (0xE26268)");
+#if defined(ARCH_M68K)
+/* Pointer-bearing records from +0x10 on: target-only (design section 3). */
+_Static_assert(offsetof(rip_$wired_data_t, route_service_mutex) == 0x028,
+               "ROUTE_$SERVICE_MUTEX (0xE26280)");
+_Static_assert(offsetof(rip_$wired_data_t, exclusion) == 0x040, "RIP lock (pea (0x40,A0))");
+_Static_assert(offsetof(rip_$wired_data_t, stats) == 0x054, "RIP_$STATS (0xE262AC)");
+_Static_assert(offsetof(rip_$wired_data_t, stats.local_net_pkts) == 0x060,
+               "RIP_$STATS.local_net_pkts (0xE262B8)");
+_Static_assert(offsetof(rip_$wired_data_t, stats.net_pkts) == 0x064,
+               "RIP_$STATS.net_pkts (0xE262BC)");
+_Static_assert(offsetof(rip_$wired_data_t, info) == 0x164, "RIP_$INFO (0xE263BC)");
+_Static_assert(sizeof(((rip_$wired_data_t *)0)->info[0]) == 0x2C, "RIP_$INFO stride 0x2C");
+_Static_assert(offsetof(rip_$wired_data_t, std_idp_channel) == 0xC64,
+               "RIP_$STD_IDP_CHANNEL (0xE26EBC)");
+_Static_assert(offsetof(rip_$wired_data_t, ns_announcement) == 0xC66,
+               "RIP_$NS_ANNOUNCEMENT (0xE26EBE)");
+_Static_assert(offsetof(rip_$wired_data_t, bcast_control) == 0xC68,
+               "RIP_$BCAST_CONTROL (0xE26EC0)");
+_Static_assert(offsetof(rip_$wired_data_t, std_recent_changes) == 0xC86,
+               "RIP_$STD_RECENT_CHANGES (0xE26EDE)");
+_Static_assert(offsetof(rip_$wired_data_t, recent_changes) == 0xC88,
+               "RIP_$RECENT_CHANGES (0xE26EE0)");
+_Static_assert(sizeof(rip_$wired_data_t) == RIP_$WIRED_DATA_SIZE, "RIP_WIRED: map size 0xC8C");
+#endif
+
+MODULE_DATA_DECLARE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 
 /*
- * RIP_$INFO - Base of the routing table entries (0xE263BC).
- * This is RIP_$DATA.entries (offset 0x164 of the RIP data block).
+ * =============================================================================
+ * RIP_$INIT_DATA - RIP_$INIT's A5 block (0xE3502C, 4 bytes)
+ * =============================================================================
+ *
+ * Map "D E3502C RIP_WIRED size = 4", inside OS_INIT_DATA with no interior
+ * symbol.  RIP_$INIT loads it into A5 ("lea (0xe3502c).l,A5" at 0x00E2FBD8)
+ * and passes it as the 2-byte request template of its PKT_$SEND_INTERNET
+ * call ("pea (A5)" at 0x00E2FCA6, template length 2).  RING_$INIT loads the
+ * same address into A5 (0x00E2FAE8) and never uses it.  All four bytes are
+ * zero in the image.
  */
-#define RIP_$INFO               (RIP_$DATA.entries)
+#define RIP_$INIT_DATA_SIZE     4       /* map: RIP_WIRED size = 4 */
+
+typedef struct rip_$init_data_t {
+    uint16_t    request;                /* +0x00: the template, 0 */
+    uint16_t    _02;                    /* +0x02: not referenced */
+} rip_$init_data_t;
+
+_Static_assert(offsetof(rip_$init_data_t, request) == 0x00, "RIP_$INIT template (pea (A5))");
+_Static_assert(sizeof(rip_$init_data_t) == RIP_$INIT_DATA_SIZE, "RIP_WIRED (0xE3502C): map size 4");
+
+MODULE_DATA_DECLARE(rip_$init_data_t, RIP_$INIT_DATA, 0x00E3502C);
+
 
 
 /*
@@ -462,27 +547,6 @@ void RIP_$ANNOUNCE_NS(void);
 #define RIP_$STATUS_NO_ROUTE    0x3C0001    /* No route to destination */
 
 /*
- * =============================================================================
- * Global Data shared with the ROUTE / XNS subsystems
- * =============================================================================
- *
- * These live in the RIP data block (0xE26258 ..).  On m68k they are accessed
- * at their absolute addresses; elsewhere they are variables in rip_data.c.
- */
-#if defined(ARCH_M68K)
-/* RIP_$STD_IDP_CHANNEL - IDP channel for RIP packets (0xFFFF = no channel) */
-#define RIP_$STD_IDP_CHANNEL    (*(int16_t *)0xE26EBC)
-/* RIP_$NS_ANNOUNCEMENT - Name service announcement data (2 bytes: 00 03) */
-#define RIP_$NS_ANNOUNCEMENT    ((uint8_t *)0xE26EBE)
-/* RIP_$BCAST_CONTROL - Broadcast control packet template (30 bytes) */
-#define RIP_$BCAST_CONTROL      ((uint8_t *)0xE26EC0)
-#else
-extern int16_t RIP_$STD_IDP_CHANNEL;
-extern uint8_t RIP_$NS_ANNOUNCEMENT[2];
-extern uint8_t RIP_$BCAST_CONTROL[30];
-#endif
-
-/*
  * RIP_$PORT_CLOSE - Invalidate routes through a closing port
  *
  * @param port_index    Port index (0-7) being closed
@@ -556,52 +620,43 @@ void RIP_$SEND_UPDATES(boolean is_std);
 void RIP_$BROADCAST(boolean flags);
 
 /*
- * RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA - the RIP "poison" packet the
- * router transmits when it shuts down: a 16-byte internet header followed by
- * 8 bytes of RIP data at +0x10.  The storage lives in the ROUTE wired data
- * area (route/route_data.c) but the only user is RIP_$HALT_ROUTER
- * (rip/misc.c, 0x00E873B4 / 0x00E873D6), so the declaration is public.
+ * =============================================================================
+ * RIP_$RTWIRED_DATA - the RIP_RTWIRED module data block (0xE87D68, 0x18)
+ * =============================================================================
  *
- * Original addresses: 0xE87D68, 0xE87D78
+ * Map "D E87D68 RIP_RTWIRED size = 18", the first block of the wired routing
+ * data (RTWIRED_DATA_START); ROUTE_$RTWIRED_DATA follows it.  RIP_$SEND,
+ * RIP_$BROADCAST and RIP_$HALT_ROUTER all load it into A5
+ * ("lea (0xe87d68).l,A5" at 0x00E871BE, 0x00E872A0, 0x00E8739C):
+ *
+ *   +0x00  dest_addr   the rip_$dest_addr_t RIP_$SEND is handed ("pea (A5)"
+ *                      at 0x00E87386 and 0x00E873B4) and rewrites in place
+ *                      when it sends to every port
+ *   +0x0C  send_flags  the NET_IO_$SEND flags word of the Domain internet
+ *                      transmit ("move.w (0xc,A5),-(SP)" at 0x00E8708C,
+ *                      RIP_$SEND_TO_PORT_INTERNET inheriting RIP_$SEND's A5)
+ *   +0x10  halt_data   the 8-byte RIP response RIP_$HALT_ROUTER sends when
+ *                      the router stops ("pea (0x10,A5)"): command 2,
+ *                      network 0xFFFFFFFF, metric 16.  Kept in bytes: it is
+ *                      packet payload, copied out as it stands.
+ *
+ * Pointer-free, so every assert is unconditional.
  */
-#if defined(ARCH_M68K)
-#define RIP_$HALT_PACKET        ((uint8_t *)0xE87D68)
-#define RIP_$HALT_PACKET_DATA   ((uint8_t *)0xE87D78)
-#else
-extern uint8_t RIP_$HALT_PACKET[24];
-#define RIP_$HALT_PACKET_DATA   (&RIP_$HALT_PACKET[0x10])
-#endif
+#define RIP_$RTWIRED_DATA_SIZE  0x18    /* map: RIP_RTWIRED size = 18 */
 
-/*
- * RIP_$SEND_DEST_ADDR - the destination-address scratch RIP_$SEND is handed
- *
- * The first 12 bytes of the same 0x00E87D68 block are a rip_$dest_addr_t that
- * RIP_$SEND rewrites in place (broadcast host and socket, then each port's
- * network in turn).  Both RIP_$BROADCAST ("lea (0xe87d68).l,A5" at
- * 0x00E872A0, "pea (A5)" at 0x00E87386) and RIP_$HALT_ROUTER (0x00E873B4)
- * pass it.  RIP_$SEND itself uses the same address as its A5 module base
- * (0x00E871BE).
- */
-#define RIP_$SEND_DEST_ADDR     ((rip_$dest_addr_t *)RIP_$HALT_PACKET)
+typedef struct rip_$rtwired_data_t {
+    rip_$dest_addr_t    dest_addr;      /* +0x00 */
+    uint16_t            send_flags;     /* +0x0C */
+    uint16_t            _0e;            /* +0x0E: not referenced */
+    uint8_t             halt_data[8];   /* +0x10 */
+} rip_$rtwired_data_t;
 
-/*
- * Wired routing-send cells used by RIP_$SEND's nested procedure
- * RIP_$SEND_TO_PORT_INTERNET (rip/send.c).  Both addresses fall inside the
- * RIP_RTWIRED segments the SAU2 map names (I 0xE87000 size 0x3EC, D 0xE87D68
- * size 0x18), so RIP owns them; the storage is defined in route/route_data.c
- * (moved here from route/route.h -- bead source-3uo).
- *
- *   RTWIRED_$SEND_FLAGS  - send flags word at 0xE87D74 (A5+0xC, A5 = 0xE87D68)
- *   RTWIRED_$CALLBACK    - callback/data-length cell at 0xE870D8
- */
-#if defined(ARCH_M68K)
-#define RTWIRED_$SEND_FLAGS     (*(uint16_t *)0xE87D74)
-#define RTWIRED_$CALLBACK       ((uint32_t *)0xE870D8)
-#else
-extern uint16_t RTWIRED_$SEND_FLAGS;
-extern uint32_t RTWIRED_$CALLBACK_DATA;
-#define RTWIRED_$CALLBACK       (&RTWIRED_$CALLBACK_DATA)
-#endif
+_Static_assert(offsetof(rip_$rtwired_data_t, dest_addr) == 0x00, "RIP_$SEND destination (pea (A5))");
+_Static_assert(offsetof(rip_$rtwired_data_t, send_flags) == 0x0C, "send flags (0xc,A5)");
+_Static_assert(offsetof(rip_$rtwired_data_t, halt_data) == 0x10, "halt packet data (0x10,A5)");
+_Static_assert(sizeof(rip_$rtwired_data_t) == RIP_$RTWIRED_DATA_SIZE, "RIP_RTWIRED: map size 0x18");
+
+MODULE_DATA_DECLARE(rip_$rtwired_data_t, RIP_$RTWIRED_DATA, 0x00E87D68);
 
 
 #endif /* RIP_H */

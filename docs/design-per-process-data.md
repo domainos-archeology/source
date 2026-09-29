@@ -223,6 +223,26 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    are public (route/route.h); users in app, hint, mac, mac_os, msg,
    net_io, network, pkt, rip and xns name the fields directly.  Two image values the old host objects had wrong
    are now the image's: MSG's send template and `DPAGE_LOCK` = -1.
+   Amended 2026-09-29 (ring/rip/sock step, source-vulx, source-thww,
+   source-gy7x): blocks `SOCK_$DATA` (0xE27510: `socket[]` and
+   `socket_ptr[]` both Pascal `[1..0xE0]` declared from their bias slots as
+   union arms - `socket[0]` overlays SOCK_LIST, `socket_ptr[0]` is the spin
+   lock and `socket_ptr[0xE1]` the user-limit word - so every user indexes
+   with the socket number; the free list threads VAs), `RIP_$WIRED_DATA`
+   (0xE26258, holding `RIP_$STATS`, `RIP_$INFO`, the recent-change flags and
+   the two foreign locks `XNS_ERROR_$CLIENT_MUTEX` / `ROUTE_$SERVICE_MUTEX`,
+   now fields), `RIP_$INIT_DATA` (0xE3502C) and `RIP_$RTWIRED_DATA`
+   (0xE87D68), `RING_$WIRED_DATA` (0xE261AC: the swdiag counters and
+   `RING_$DATA` as `stats[0..1]`), `RING_$CTL` (0xE86400, with the ring
+   `net_io_$driver_t` at +0x518 and its procedure variables as image
+   contents), `RINGLOG_$CTL` (0xE2C32C; `wired_pages` is `[1..10]` whose
+   bias slot lies in PCHIST, so `RINGLOG_WIRED_PAGE(k)` applies it) and
+   `RINGLOG_$DATA` (0xEA3E38).  The ring unit record's channel and
+   packet-type tables keep element 1 at index 0 behind `RING_UNIT_CHANNEL` /
+   `RING_UNIT_PKT_TYPE`, because a bias-slot union arm would sit elsewhere
+   on a 64-bit host (pointers precede them).  PC-relative cells formerly
+   spelled as absolute macros (`RINGLOG_$ROUTE_FORWARD`, `RTWIRED_$CALLBACK`,
+   `RIP_$ANNOUNCE_EXTRA`) are file-scope `const` objects.
 4. **proc1/proc2/fim/acl per-process arrays** (`PROC1_$TYPE` bias,
    `FIM_$QUIT_EC/VALUE` 12- and 4-byte strides, `ACL_$SUPER_COUNT`,
    `PROC2_UID[58]`): declaration-side bias, use sites direct.

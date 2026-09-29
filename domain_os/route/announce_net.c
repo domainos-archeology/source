@@ -76,7 +76,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network)
 
     /* 0x00E69FBE-0x00E69FD2: copy the 30-byte control template */
     for (i = 0; i < BCAST_CONTROL_SIZE; i++) {
-        control_packet[i] = RIP_$BCAST_CONTROL[i];
+        control_packet[i] = RIP_$WIRED_DATA.bcast_control[i];
     }
 
     /*

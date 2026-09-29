@@ -65,7 +65,7 @@ void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
 
         /* 0x00E68E56-0x00E68E6E: 0xE263BC + index * 0x2C, eleven longwords
          * into the local. */
-        memcpy(&local_entry, &RIP_$INFO[*index], sizeof(rip_$entry_t));
+        memcpy(&local_entry, &RIP_$WIRED_DATA.info[*index], sizeof(rip_$entry_t));
 
         /* 0x00E68E72: buffer->dest_network (+4) = entry.network */
         buffer->dest_network = local_entry.network;
@@ -158,7 +158,7 @@ void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
 
         /* 0x00E68F6C-0x00E68F82: the whole local, eleven longwords, into
          * 0xE263BC + index * 0x2C. */
-        memcpy(&RIP_$INFO[*index], &local_entry, sizeof(rip_$entry_t));
+        memcpy(&RIP_$WIRED_DATA.info[*index], &local_entry, sizeof(rip_$entry_t));
     }
 
     /* 0x00E68F86-0x00E68F8E */

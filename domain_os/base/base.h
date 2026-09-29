@@ -92,8 +92,10 @@ typedef uint32_t m68k_ptr_t;
 #else
 /* Compile-time byte swap for 32-bit constants */
 #define BE32_CONST(x)                                                          \
-  ((uint32_t)((((x) >> 24) & 0x000000FF) | (((x) >> 8) & 0x0000FF00) |         \
-              (((x) << 8) & 0x00FF0000) | (((x) << 24) & 0xFF000000)))
+  ((uint32_t)((((uint32_t)(x) >> 24) & 0x000000FF) |                          \
+              (((uint32_t)(x) >> 8) & 0x0000FF00) |                           \
+              (((uint32_t)(x) << 8) & 0x00FF0000) |                           \
+              (((uint32_t)(x) << 24) & 0xFF000000)))
 /* Compile-time byte swap for 16-bit constants */
 #define BE16_CONST(x)                                                          \
   ((uint16_t)((((x) >> 8) & 0x00FF) | (((x) << 8) & 0xFF00)))

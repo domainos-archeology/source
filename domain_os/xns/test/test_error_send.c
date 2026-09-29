@@ -199,6 +199,7 @@ void XNS_IDP_$OS_SEND(int16_t *channel, xns_$os_send_rec_t *send_rec,
 /* The XNS_ERROR module block the code under test works on (its image
  * contents are in xns/xns_data.c; setup() below sets them). */
 MODULE_DATA_DEFINE(xns_error_$data_t, XNS_ERROR_$DATA, 0x00E2B29C);
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 
 /* The code under test, for real. */
 #include "../error_send.c"
@@ -654,8 +655,8 @@ static void test_error_socket_is_reference_counted(void)
     ASSERT_EQ(-1, XNS_ERROR_$DATA.std_idp_channel, "and the cell is reset");
     ASSERT_EQ(2, excl_start_calls, "the mutex was taken twice");
     ASSERT_EQ(2, excl_stop_calls, "and released twice");
-    ASSERT_EQ((uintptr_t)&XNS_ERROR_$CLIENT_MUTEX, (uintptr_t)excl_last,
-              "it is XNS_ERROR_$CLIENT_MUTEX");
+    ASSERT_EQ((uintptr_t)&RIP_$WIRED_DATA.xns_error_mutex, (uintptr_t)excl_last,
+              "it is RIP_$WIRED_DATA.xns_error_mutex");
     ASSERT_EQ(1, rls_cleanup_calls, "the cleanup handler was released");
 }
 

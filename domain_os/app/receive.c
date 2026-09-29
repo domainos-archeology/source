@@ -51,7 +51,7 @@ void APP_$RECEIVE(uint16_t sock_num, void *result, status_$t *status_ret)
     res->dest_uid_low = uid_data[3];
 
     /* Get socket entry and extract flags */
-    sock_entry = (uint8_t *)(*(uint32_t *)((uint8_t *)&SOCK_$TABLE_BASE + sock_num * 4));
+    sock_entry = (uint8_t *)SOCK_$DATA.socket_ptr[sock_num];
     sock_flags = sock_entry[0x15];
 
     /* Set flags in result (bits 15-22) */

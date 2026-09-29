@@ -72,9 +72,9 @@ void PKT_$SAR_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_s
      * 00e71f0c  lsl.l #0x2,D0            ; D0 = sock_num * 4
      * 00e71f0e  lea (0x0,A0,D0*0x1),A1
      * 00e71f12  move.l (-0x4,A1),(-0x3c,A6)
-     * i.e. *(0xe28db0 + sock_num*4) == SOCK_$EVENT_COUNTERS[sock_num - 1].
+     * i.e. *(0xe28db0 + sock_num*4) == SOCK_$DATA.socket_ptr[sock_num].
      */
-    sock_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    sock_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;
 
     /* 0x00E71F18 */
     request_id = PKT_$NEXT_ID();

@@ -2,6 +2,9 @@
  * RINGLOG_$CNTL - ring logging control
  *
  * Original address: 0x00E72226, size 244 bytes (0x00E72226-0x00E7232B).
+ *
+ * Module data block conversion (RINGLOG_$CTL, RINGLOG_$DATA): Claude Opus
+ * 5.5 (source-vulx).
  * The two constant cells that follow the code are part of the same segment:
  *   0x00E7232C  word 0x000A        the MST_$WIRE_AREA page limit
  *   0x00E7232E  long 0x00EA3E38    the wire start VA (RINGLOG_$DATA)
@@ -15,9 +18,12 @@
  * of the MST_$WIRE_AREA call at 0x00E722C2 / 0x00E722D4, initialised with the
  * bytes at those addresses:
  *   00e72326  ...  00 0a 00 ea 3e 38  ...
- * i.e. 0x00E7232C = 0x000A and 0x00E7232E = 0x00EA3E38.
+ * i.e. 0x00E7232C = 0x000A and 0x00E7232E = 0x00EA3E38.  The start cell
+ * holds the VA of RINGLOG_$DATA, a linked object, so it names it
+ * (docs/design-per-process-data.md, section 6 (d)).
  */
-static const uint32_t ringlog_wire_start    = RINGLOG_BUF_BASE;  /* 0x00E7232E */
+static const uint32_t ringlog_wire_start =                       /* 0x00E7232E */
+    ARCH_PTR_TO_VA_STATIC(&RINGLOG_$DATA, 0x00EA3E38);
 static const uint16_t ringlog_wire_max_pages = 0x000A;           /* 0x00E7232C */
 
 /*
@@ -87,7 +93,9 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
          *   arg 5  pea (0x30,A1)   -> RINGLOG_$CTL.wire_count
          */
         {
-            uint32_t wire_end = RINGLOG_WIRE_END;    /* A6-0x8 */
+            /* 0x00E722C8: "lea (0x11fa,A0),A1", A0 = RINGLOG_$DATA */
+            uint32_t wire_end = ARCH_PTR_TO_VA(&RINGLOG_$DATA) +
+                                RINGLOG_BUFFER_SIZE;         /* A6-0x8 */
 
             MST_$WIRE_AREA(&ringlog_wire_start,
                            &wire_end,
@@ -98,13 +106,13 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
 
         /* 0x00E722E2-0x00E722FC: the ID filter, taken from *param for cmd 5 */
         if (*cmd_ptr == RINGLOG_CMD_START_FILTERED) {
-            RINGLOG_$ID = *(uint32_t *)param;
+            RINGLOG_$CTL.filter_id = *(uint32_t *)param;
         } else {
-            RINGLOG_$ID = 0;
+            RINGLOG_$CTL.filter_id = 0;
         }
 
         /* 0x00E722FE: st (0x38,A1) */
-        RING_$LOGGING_NOW = (int8_t)0xFF;
+        RINGLOG_$CTL.logging_active = (int8_t)0xFF;
         break;
 
     case RINGLOG_CMD_STOP_COPY:         /* 1 */
@@ -115,17 +123,17 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret)
 
     case RINGLOG_CMD_SET_NIL_SOCK:      /* 6 */
         /* 0x00E72262: move.b (A3),(0x36,A1) */
-        RINGLOG_$NIL_SOCK = *(int8_t *)param;
+        RINGLOG_$CTL.nil_sock_filter = *(int8_t *)param;
         break;
 
     case RINGLOG_CMD_SET_WHO_SOCK:      /* 7 */
         /* 0x00E72270: move.b (A3),(0x34,A1) */
-        RINGLOG_$WHO_SOCK = *(int8_t *)param;
+        RINGLOG_$CTL.who_sock_filter = *(int8_t *)param;
         break;
 
     case RINGLOG_CMD_SET_MBX_SOCK:      /* 8 */
         /* 0x00E7227E: move.b (A3),(0x32,A1) */
-        RINGLOG_$MBX_SOCK = *(int8_t *)param;
+        RINGLOG_$CTL.mbx_sock_filter = *(int8_t *)param;
         break;
 
     default:

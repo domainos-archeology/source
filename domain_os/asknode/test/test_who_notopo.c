@@ -76,7 +76,7 @@ uint32_t TIME_$CLOCKH;
 uint16_t PROC1_$AS_ID;
 uint32_t ASKNODE_$EMPTY_DATA;
 MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
-uint8_t  sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 ec_$eventcount_t FIM_$QUIT_EC[8];
 uint32_t FIM_$QUIT_VALUE[8];
 name_$data_t NAME_$DATA;            /* NAME_$ROOT_UID lives in here */
@@ -119,7 +119,7 @@ static void reset_mocks(void)
 {
     memset(&mock_socket_ec, 0, sizeof(mock_socket_ec));
     memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
     memset(route_ports, 0, sizeof(route_ports));
@@ -137,8 +137,8 @@ static void reset_mocks(void)
     PROC1_$AS_ID = 1;
     ASKNODE_$EMPTY_DATA = 0;
 
-    /* socket 6's entry: SOCK_$EVENT_COUNTERS[6 - 1] */
-    SOCK_$EVENT_COUNTERS[5] = &mock_socket_ec;
+    /* socket 6's entry */
+    SOCK_$DATA.socket_ptr[6] = (sock_$sock_t *)&mock_socket_ec;
 
     mock_allocate_result = (int8_t)0xFF;     /* success */
     mock_allocate_sock = 6;

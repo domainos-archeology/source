@@ -78,7 +78,7 @@ uint16_t PROC1_$AS_ID;
 uint32_t NETWORK_$ALLOWED_SERVICE;
 uint32_t ASKNODE_$EMPTY_DATA;
 MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
-uint8_t  sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 ec_$eventcount_t FIM_$QUIT_EC[8];
 uint32_t FIM_$QUIT_VALUE[8];
 name_$data_t NAME_$DATA;            /* NAME_$ROOT_UID lives in here */
@@ -121,7 +121,7 @@ static void reset_mocks(void)
     memset(&mock_reply_hdr, 0, sizeof(mock_reply_hdr));
     memset(&mock_payload, 0, sizeof(mock_payload));
     memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
     memset(&NAME_$DATA, 0, sizeof(NAME_$DATA));
@@ -136,8 +136,8 @@ static void reset_mocks(void)
     /* NETWORK_$CAPABLE_FLAGS bit 0 must be set for the function to proceed */
     NETWORK_$ALLOWED_SERVICE = 0x00010000;
 
-    /* socket 5's entry: SOCK_$EVENT_COUNTERS[5 - 1] */
-    SOCK_$EVENT_COUNTERS[4] = &mock_socket_ec;
+    /* socket 5's entry */
+    SOCK_$DATA.socket_ptr[5] = (sock_$sock_t *)&mock_socket_ec;
 
     /* the reply header the receive path reads */
     mock_reply_hdr.prefix.magic    = 0x0118;

@@ -131,9 +131,9 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
     /*
      * Get the event count for this socket: entry sock_num of the socket
      * pointer table at 0xE28DB0 (slot 0 = spinlock), i.e.
-     * SOCK_$EVENT_COUNTERS[sock_num - 1] (SOCK_$EVENT_COUNTERS is 0xE28DB4).
+     * SOCK_$DATA.socket_ptr[sock_num] (its element 1 is 0xE28DB4).
      */
-    socket_ec = SOCK_$EVENT_COUNTERS[sock_num - 1];
+    socket_ec = &SOCK_$DATA.socket_ptr[sock_num]->ec;
     wait_val = EC_$READ(socket_ec) + 1;
 
     /*

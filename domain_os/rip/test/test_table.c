@@ -65,7 +65,7 @@ static route_$port_t port2, port5;
 
 static void reset(void)
 {
-    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
+    memset(&RIP_$WIRED_DATA, 0, sizeof(RIP_$WIRED_DATA));
     memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
     memset(&port2, 0, sizeof(port2));
@@ -82,8 +82,8 @@ static void fill_entry(int idx, uint32_t net, int slot, uint32_t exp,
                        uint32_t nh_net, uint8_t nh_last, uint8_t port,
                        uint8_t metric, uint8_t flags)
 {
-    rip_$route_t *r = &RIP_$DATA.entries[idx].routes[slot];
-    RIP_$DATA.entries[idx].network = net;
+    rip_$route_t *r = &RIP_$WIRED_DATA.info[idx].routes[slot];
+    RIP_$WIRED_DATA.info[idx].network = net;
     r->expiration = exp;
     r->nexthop.network = nh_net;
     r->nexthop.host[0] = 0x10; r->nexthop.host[1] = 0x20; r->nexthop.host[2] = 0x30;
@@ -194,8 +194,8 @@ TEST(table_d_write_standard_slot)
     ASSERT_EQ(find_port_type_seen, 0x0002);
     ASSERT_EQ((uint32_t)find_port_socket_seen, 0xFFFF8102u);
 
-    ASSERT_EQ(RIP_$DATA.entries[3].network, 0x11110003);
-    r = &RIP_$DATA.entries[3].routes[0];
+    ASSERT_EQ(RIP_$WIRED_DATA.info[3].network, 0x11110003);
+    r = &RIP_$WIRED_DATA.info[3].routes[0];
     ASSERT_EQ(r->expiration, 0xDEADBEEF);
     ASSERT_EQ(r->nexthop.network, 0x22220003);
     ASSERT_EQ(r->nexthop.host[0], 0x01);
@@ -219,7 +219,7 @@ TEST(table_d_write_unknown_port_sets_status_and_leaves_table)
     RIP_$TABLE_D(&op, &rt, &index, &buf, &status);
     ASSERT_EQ(status, status_$internet_unknown_network_port);
     ASSERT_EQ(find_port_calls, 1);
-    ASSERT_EQ(RIP_$DATA.entries[9].network, 0);
+    ASSERT_EQ(RIP_$WIRED_DATA.info[9].network, 0);
     /* the index is only masked on the successful path */
     ASSERT_EQ(index, 9);
 }
@@ -275,8 +275,8 @@ TEST(table_write_goes_through_port_array_then_table_d)
     ASSERT_EQ(find_port_calls, 1);
     ASSERT_EQ(find_port_type_seen, 0x0007);
     ASSERT_EQ(find_port_socket_seen, 0x0203);
-    ASSERT_EQ(RIP_$DATA.entries[4].network, 0x11110004);
-    r = &RIP_$DATA.entries[4].routes[0];
+    ASSERT_EQ(RIP_$WIRED_DATA.info[4].network, 0x11110004);
+    r = &RIP_$WIRED_DATA.info[4].routes[0];
     ASSERT_EQ(r->expiration, 0x66666666);
     ASSERT_EQ(r->nexthop.network, 0x33330003);
     /* 0x000FABCD over host[2..5]: the top twelve bits (host[2], high
@@ -301,7 +301,7 @@ TEST(table_write_ignores_a_bad_port_index)
 
     RIP_$TABLE(&op, &index, &buf);
     ASSERT_EQ(find_port_calls, 0);
-    ASSERT_EQ(RIP_$DATA.entries[4].network, 0);
+    ASSERT_EQ(RIP_$WIRED_DATA.info[4].network, 0);
 }
 
 int main(void)

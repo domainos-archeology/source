@@ -29,6 +29,7 @@
 #include "network/network.h"    /* status_$network_* */
 #include "route/route.h"        /* status_$internet_* */
 #include "io/io.h"   /* status_$io_controller_not_in_system */
+#include "net_io/net_io.h"  /* net_io_$driver_t: RING_$CTL.driver */
 
 /*
  * ============================================================================
@@ -218,7 +219,8 @@ typedef struct ring_$pkt_hdr_t {
  * The Pascal array is 1-based: entry i lives at unit + 0x5A + 8*i, so entry 1
  * is at unit + 0x62 (RING_$INIT 0x00E2FB56, RING_$SVC_CLOSE 0x00E76E72,
  * ring_$open_internal 0x00E76D72).  The C array below starts at 0x62 and is
- * therefore indexed with [i - 1].
+ * reached only through RING_UNIT_CHANNEL(unit, i), which applies the bias
+ * once (see ring_unit_t).
  * ============================================================================
  */
 typedef struct ring_channel_t {
@@ -248,7 +250,8 @@ _Static_assert(__builtin_offsetof(ring_channel_t, socket_id) == 0x04, "ring_chan
  *
  * Also a 1-based Pascal array: entry i is at unit + 0xA8 + 12*i, so entry 1 is
  * at unit + 0xB4, which is the base ring_$open_internal (0x00E76CD0) and
- * ring_$receive_packet (0x00E764D2) hand to ring_$find_pkt_type.
+ * ring_$receive_packet (0x00E764D2) hand to ring_$find_pkt_type.  Reached
+ * through RING_UNIT_PKT_TYPE(unit, i) (see ring_unit_t).
  * ============================================================================
  */
 typedef struct ring_pkt_type_t {
@@ -268,7 +271,18 @@ _Static_assert(__builtin_offsetof(ring_pkt_type_t, _pad0a) == 0x0A, "ring_pkt_ty
  * ============================================================================
  * Per-Unit Data Structure (0x244 bytes)
  *
- * Located at RING_CTL_BASE + (unit * RING_UNIT_SIZE)
+ * RING_$CTL.units[unit], i.e. RING_$CTL + unit * RING_UNIT_SIZE with a
+ * 0-based unit ("mulu.w #0x244,D1 / lea (0x0,A0,D1w*0x1),A3" in RING_$INIT,
+ * 0x00E2FB04).
+ *
+ * The two per-index tables inside it are Pascal [1..n] arrays whose bias
+ * slot (element 0) would overlay the fields in front of them: channel 0 at
+ * +0x5A covers the tail of rx_exclusion, _r05e, initialized and _r061, and
+ * packet type 0 at +0xA8 covers channel 10's tail and _r0b2.  Those fields
+ * hold or follow pointers, so a union arm from the bias slot would sit at a
+ * different place on a 64-bit host; the arrays are declared from element 1
+ * instead and RING_UNIT_CHANNEL / RING_UNIT_PKT_TYPE apply the bias once, as
+ * PKT_MISSING_ENTRY does (docs/design-per-process-data.md, section 3).
  * ============================================================================
  */
 typedef struct ring_unit_t {
@@ -289,9 +303,11 @@ typedef struct ring_unit_t {
     uint8_t             _r05e[2];           /* 0x05E */
     boolean             initialized;        /* 0x060: -1 once RING_$INIT succeeded */
     uint8_t             _r061;              /* 0x061 */
-    ring_channel_t      channels[RING_MAX_CHANNELS];    /* 0x062..0x0B1 (1-based: [i-1]) */
+    ring_channel_t      channels[RING_MAX_CHANNELS];    /* 0x062..0x0B1: [1..10], see
+                                                         * RING_UNIT_CHANNEL */
     uint8_t             _r0b2[2];           /* 0x0B2 */
-    ring_pkt_type_t     pkt_types[RING_MAX_PKT_TYPES];  /* 0x0B4..0x233 (1-based: [i-1]) */
+    ring_pkt_type_t     pkt_types[RING_MAX_PKT_TYPES];  /* 0x0B4..0x233: [1..0x20], see
+                                                         * RING_UNIT_PKT_TYPE */
     uint16_t            pkt_type_cnt;       /* 0x234: entries in use */
     uint16_t            _r236;              /* 0x236 */
     uint32_t            rx_hdr_pa;          /* 0x238: header buffer DMA address */
@@ -335,30 +351,73 @@ _Static_assert(sizeof(ring_pkt_type_t)             == 12, "sizeof ring_pkt_type_
 #endif /* ARCH_M68K */
 
 /*
+ * RING_UNIT_CHANNEL(u, i) - channel i (1..10) of unit record u, an lvalue of
+ * type ring_channel_t: unit + 0x5A + 8*i ("clr.b (0x5a,A0)" with
+ * A0 = unit + 8*i at 0x00E2FB5C).
+ * RING_UNIT_PKT_TYPE(u, i) - packet-type entry i (1..0x20), an lvalue of
+ * type ring_pkt_type_t: unit + 0xA8 + 12*i (the base unit + 0xB4 handed to
+ * ring_$find_pkt_type at 0x00E764D2 is entry 1).
+ * The -1 is the Pascal lower bound, applied here once.
+ */
+#define RING_UNIT_CHANNEL(u, i)     ((u)->channels[(i) - 1])
+#define RING_UNIT_PKT_TYPE(u, i)    ((u)->pkt_types[(i) - 1])
+
+/*
  * ============================================================================
- * Global Ring Data Structure
+ * RING_$CTL - the RING module data block (0xE86400, 0x5D0 bytes)
  *
- * Located at RING_CTL_BASE (0xE86400).  This is the A5 module base every
- * ring routine loads with "lea (0xe86400).l,A5".
+ * Module data blocks RING_$CTL, RING_$WIRED_DATA, RINGLOG_$CTL and
+ * RINGLOG_$DATA: Claude Opus 5.5 (source-vulx).
+ *
+ * Map "D30 E86400 RING_DATA loaded at 187C00, size = 5D0" / "D E86400 RING
+ * size = 5D0" (RING_DATA_START .. RING_DATA_END), the A5 module base every
+ * wired ring routine loads with "lea (0xe86400).l,A5" (RING_$RCV_FROM_UNIT_PRIV
+ * 0x00E76050).  The map names RING_$CTL at its first byte and these cells in
+ * it: RING_$SCRUB +0x488, RING_$FROM_ERR +0x490, RING_$FORCE_START +0x568,
+ * RING_$SET_TMASK_CHG_CNT +0x5A4 .. RING_$XMIT_WAITED +0x5C4.
+ *
+ * +0x518 is the ring driver's net_io_$driver_t (RING_$INIT hands
+ * "pea (0x518,A0)" to NET_IO_$CREATE_PORT, 0x00E2FB84), shipped filled in by
+ * the image with the driver's entry points; RING_$INIT copies
+ * RING_$NETWORK_UID into its network_uid tail (+0x560, 0x00E2FB0C) and
+ * RING_$SENDP reads its max_data_len (+0x51A, "cmp.w (0x51a,A5),D0w" at
+ * 0x00E75974).  The six clock cells +0x568..+0x598 are 6-byte clock_t values
+ * on an 8-byte pitch.
+ *
+ * Pointer-bearing (unit records, the driver's procedure variables,
+ * rcv_proc), so the offsets are asserted on the target only.
  * ============================================================================
  */
+#define RING_$CTL_SIZE          0x5D0   /* map: RING size = 5D0 */
+
 typedef struct ring_global_t {
-    ring_unit_t     units[RING_MAX_UNITS];  /* 0x000: per-unit data */
-    uint8_t         scrub[0x10];            /* 0x488: RING_$SCRUB */
-    uint32_t        wire_list[0x20];        /* 0x498: wired page list (0x00E766A4) */
-    uint16_t        _r518;                  /* 0x518: passed to NET_IO_$CREATE_PORT */
-    uint16_t        max_data_len;           /* 0x51A: max data length (0x00E75974) */
-    uint8_t         _r51c[0x44];            /* 0x51C */
-    uid_t           network_uid;            /* 0x560: network UID (0x00E2FB0C) */
-    clock_t         force_start_timeout;    /* 0x568: RING_$FORCE_START (6 bytes) */
-    uint8_t         _r56e[0x0A];            /* 0x56E */
-    clock_t         xmit_timeout1;          /* 0x578 */
+    ring_unit_t     units[RING_MAX_UNITS];  /* 0x000: per-unit data, 0-based */
+    uint8_t         scrub[8];               /* 0x488: map RING_$SCRUB; not
+                                             *        referenced by the image */
+    uint8_t         from_err[8];            /* 0x490: map RING_$FROM_ERR; not
+                                             *        referenced by the image */
+    uint32_t        wire_list[0x20];        /* 0x498: wired page list
+                                             *        ("pea (0x498,A5)" at
+                                             *        0x00E766A4) */
+    net_io_$driver_t driver;                /* 0x518: the ring driver record */
+    clock_t         force_start_timeout;    /* 0x568: map RING_$FORCE_START
+                                             *        ("pea (0x568,A5)" at
+                                             *        0x00E75B24, 0x00E75B34) */
+    uint8_t         _r56e[2];               /* 0x56E */
+    clock_t         _r570;                  /* 0x570: no accessor; { 0, 0x89 }
+                                             *        in the image */
+    uint8_t         _r576[2];               /* 0x576 */
+    clock_t         xmit_timeout1;          /* 0x578 ("pea (0x578,A5)" at
+                                             *        0x00E75B5A) */
     uint8_t         _r57e[0x02];            /* 0x57E */
-    clock_t         xmit_timeout2;          /* 0x580 */
-    uint8_t         _r586[0x0A];            /* 0x586 */
-    clock_t         poll_timeout;           /* 0x590 */
+    clock_t         xmit_timeout2;          /* 0x580 (0x00E75B92) */
+    uint8_t         _r586[2];               /* 0x586 */
+    clock_t         _r588;                  /* 0x588: no accessor; { 0, 0x2AB }
+                                             *        in the image */
+    uint8_t         _r58e[2];               /* 0x58E */
+    clock_t         poll_timeout;           /* 0x590 (0x00E75A66) */
     uint8_t         _r596[0x02];            /* 0x596 */
-    clock_t         wait_timeout;           /* 0x598 */
+    clock_t         wait_timeout;           /* 0x598 (0x00E75AB0) */
     uint8_t         _r59e[0x02];            /* 0x59E */
     int16_t         port_array[RING_MAX_UNITS]; /* 0x5A0: NET_IO port per unit */
     uint32_t        set_tmask_chg_cnt;      /* 0x5A4: RING_$SET_TMASK_CHG_CNT */
@@ -381,75 +440,54 @@ typedef struct ring_global_t {
     uint16_t        clobbered_hdr;          /* 0x5C2: RING_$CLOBBERED_HDR */
     uint16_t        xmit_waited;            /* 0x5C4: RING_$XMIT_WAITED */
     uint16_t        _r5c6;                  /* 0x5C6 */
-    void          (*rcv_proc[RING_MAX_UNITS])(void); /* 0x5C8: RING_$RCV0 / RING_$RCV1 */
+    void          (*rcv_proc[RING_MAX_UNITS])(void); /* 0x5C8: RING_$RCV0 /
+                                             *        RING_$RCV1 (image), read
+                                             *        at 0x00E76762 */
 } ring_global_t;
 
-/* Remaining documented offsets (bead source-pewa). */
 #if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(ring_global_t, units) == 0x00, "ring_global_t.units");
-_Static_assert(__builtin_offsetof(ring_global_t, _r518) == 0x518, "ring_global_t._r518");
-_Static_assert(__builtin_offsetof(ring_global_t, _r51c) == 0x51C, "ring_global_t._r51c");
-_Static_assert(__builtin_offsetof(ring_global_t, _r56e) == 0x56E, "ring_global_t._r56e");
-_Static_assert(__builtin_offsetof(ring_global_t, _r57e) == 0x57E, "ring_global_t._r57e");
-_Static_assert(__builtin_offsetof(ring_global_t, _r586) == 0x586, "ring_global_t._r586");
-_Static_assert(__builtin_offsetof(ring_global_t, _r596) == 0x596, "ring_global_t._r596");
-_Static_assert(__builtin_offsetof(ring_global_t, _r59e) == 0x59E, "ring_global_t._r59e");
-_Static_assert(__builtin_offsetof(ring_global_t, tmask_chg_and_busy_cnt) == 0x5AC, "ring_global_t.tmask_chg_and_busy_cnt");
-_Static_assert(__builtin_offsetof(ring_global_t, _r5c6) == 0x5C6, "ring_global_t._r5c6");
-#endif
-
-#if defined(ARCH_M68K)
-_Static_assert(offsetof(ring_global_t, scrub)               == 0x488, "ring_global_t.scrub");
+/* Pointer-bearing records: target-only (design section 3). */
+_Static_assert(offsetof(ring_global_t, units)               == 0x000, "ring_global_t.units");
+_Static_assert(sizeof(((ring_global_t *)0)->units[0])       == RING_UNIT_SIZE, "units[] stride 0x244 (mulu.w #0x244)");
+_Static_assert(offsetof(ring_global_t, scrub)               == 0x488, "RING_$SCRUB (0xE86888)");
+_Static_assert(offsetof(ring_global_t, from_err)            == 0x490, "RING_$FROM_ERR (0xE86890)");
 _Static_assert(offsetof(ring_global_t, wire_list)           == 0x498, "ring_global_t.wire_list");
-_Static_assert(offsetof(ring_global_t, max_data_len)        == 0x51A, "ring_global_t.max_data_len");
-_Static_assert(offsetof(ring_global_t, network_uid)         == 0x560, "ring_global_t.network_uid");
-_Static_assert(offsetof(ring_global_t, force_start_timeout) == 0x568, "ring_global_t.force_start_timeout");
+_Static_assert(offsetof(ring_global_t, driver)              == 0x518, "ring driver (pea (0x518,A0))");
+_Static_assert(offsetof(ring_global_t, driver.max_data_len) == 0x51A, "ring driver max_data_len (0x51a,A5)");
+_Static_assert(offsetof(ring_global_t, driver.network_uid)  == 0x560, "ring driver network_uid (0x560,A0)");
+_Static_assert(offsetof(ring_global_t, force_start_timeout) == 0x568, "RING_$FORCE_START (0xE86968)");
+_Static_assert(offsetof(ring_global_t, _r570)               == 0x570, "ring_global_t._r570");
 _Static_assert(offsetof(ring_global_t, xmit_timeout1)       == 0x578, "ring_global_t.xmit_timeout1");
 _Static_assert(offsetof(ring_global_t, xmit_timeout2)       == 0x580, "ring_global_t.xmit_timeout2");
+_Static_assert(offsetof(ring_global_t, _r588)               == 0x588, "ring_global_t._r588");
 _Static_assert(offsetof(ring_global_t, poll_timeout)        == 0x590, "ring_global_t.poll_timeout");
 _Static_assert(offsetof(ring_global_t, wait_timeout)        == 0x598, "ring_global_t.wait_timeout");
 _Static_assert(offsetof(ring_global_t, port_array)          == 0x5A0, "ring_global_t.port_array");
-_Static_assert(offsetof(ring_global_t, set_tmask_chg_cnt)   == 0x5A4, "ring_global_t.set_tmask_chg_cnt");
-_Static_assert(offsetof(ring_global_t, unit_tmask_chg_cnt)  == 0x5A8, "ring_global_t.unit_tmask_chg_cnt");
-_Static_assert(offsetof(ring_global_t, rcv_int_cnt)         == 0x5B0, "ring_global_t.rcv_int_cnt");
+_Static_assert(offsetof(ring_global_t, set_tmask_chg_cnt)   == 0x5A4, "RING_$SET_TMASK_CHG_CNT (0xE869A4)");
+_Static_assert(offsetof(ring_global_t, unit_tmask_chg_cnt)  == 0x5A8, "RING_$UNIT_TMASK_CHG_CNT (0xE869A8)");
+_Static_assert(offsetof(ring_global_t, tmask_chg_and_busy_cnt) == 0x5AC, "RING_$TMASK_CHG_AND_BUSY_CNT (0xE869AC)");
+_Static_assert(offsetof(ring_global_t, rcv_int_cnt)         == 0x5B0, "RING_$RCV_INT_CNT (0xE869B0)");
 _Static_assert(offsetof(ring_global_t, wire_cnt)            == 0x5B4, "ring_global_t.wire_cnt");
-_Static_assert(offsetof(ring_global_t, unexpected_xmit_stat)== 0x5B6, "ring_global_t.unexpected_xmit_stat");
-_Static_assert(offsetof(ring_global_t, bad_data_cnt)        == 0x5B8, "ring_global_t.bad_data_cnt");
-_Static_assert(offsetof(ring_global_t, wakeup_cnt)          == 0x5BA, "ring_global_t.wakeup_cnt");
-_Static_assert(offsetof(ring_global_t, abort_cnt)           == 0x5BC, "ring_global_t.abort_cnt");
-_Static_assert(offsetof(ring_global_t, busy_on_rcv_int)     == 0x5BE, "ring_global_t.busy_on_rcv_int");
-_Static_assert(offsetof(ring_global_t, send_null_cnt)       == 0x5C0, "ring_global_t.send_null_cnt");
-_Static_assert(offsetof(ring_global_t, xmit_waited)         == 0x5C4, "ring_global_t.xmit_waited");
+_Static_assert(offsetof(ring_global_t, unexpected_xmit_stat)== 0x5B6, "RING_$UNEXPECTED_XMIT_STAT (0xE869B6)");
+_Static_assert(offsetof(ring_global_t, bad_data_cnt)        == 0x5B8, "RING_$BAD_DATA_CNT (0xE869B8)");
+_Static_assert(offsetof(ring_global_t, wakeup_cnt)          == 0x5BA, "RING_$WAKEUP_CNT (0xE869BA)");
+_Static_assert(offsetof(ring_global_t, abort_cnt)           == 0x5BC, "RING_$ABORT_CNT (0xE869BC)");
+_Static_assert(offsetof(ring_global_t, busy_on_rcv_int)     == 0x5BE, "RING_$BUSY_ON_RCV_INT (0xE869BE)");
+_Static_assert(offsetof(ring_global_t, send_null_cnt)       == 0x5C0, "RING_$SEND_NULL_CNT (0xE869C0)");
+_Static_assert(offsetof(ring_global_t, clobbered_hdr)       == 0x5C2, "RING_$CLOBBERED_HDR (0xE869C2)");
+_Static_assert(offsetof(ring_global_t, xmit_waited)         == 0x5C4, "RING_$XMIT_WAITED (0xE869C4)");
+_Static_assert(offsetof(ring_global_t, _r5c6)               == 0x5C6, "ring_global_t._r5c6");
 _Static_assert(offsetof(ring_global_t, rcv_proc)            == 0x5C8, "ring_global_t.rcv_proc");
-#endif /* ARCH_M68K */
+_Static_assert(sizeof(ring_global_t)                        == RING_$CTL_SIZE, "RING: map size 0x5D0");
+#endif
+
+MODULE_DATA_DECLARE(ring_global_t, RING_$CTL, 0x00E86400);
 
 /*
  * ============================================================================
  * Public Data
  * ============================================================================
  */
-
-/*
- * Ring module control block, 0x00E86400.
- *
- * SAU2 map: `D E86400 RING size = 5D0` with the single exported symbol
- * `E86400 RING_$CTL`.  The name RING_$DATA belongs to the per-unit statistics
- * array at 0x00E261E0 (below), not to this block.
- */
-extern ring_global_t RING_$CTL;
-
-/*
- * Software-diagnostic counters.  These live just below the per-unit statistics
- * array, at 0x00E261AC..0x00E261DF; they are NOT part of RING_$CTL.
- */
-extern uint32_t RING_$SWDIAG_NODEID;    /* 0x00E261AC */
-extern uint32_t RING_$SWDIAG_GOODRCV_CNT; /* 0x00E261B0 */
-extern uint32_t RING_$SWDIAG_RCVCNT;    /* 0x00E261B4 */
-extern uint16_t RING_$RCV_BIPHASE;      /* 0x00E261B8 */
-extern uint16_t RING_$RCV_ESB;          /* 0x00E261BA */
-extern uint16_t RING_$XMIT_BIPHASE;     /* 0x00E261BC */
-extern uint16_t RING_$XMIT_ESB;         /* 0x00E261BE */
-extern uint16_t RING_$PAGING_OVERFLOW;  /* 0x00E261C0 */
 
 /*
  * RING_$SWDIAG_DATA (0x00E261C2) - software diagnostic error counters,
@@ -524,7 +562,6 @@ typedef struct ring_$swdiag_t {
 _Static_assert(sizeof(ring_$swdiag_t) == 0x1E,
                "ring_$swdiag_t must be 30 bytes (0x00E261C2..0x00E261DF)");
 
-extern ring_$swdiag_t RING_$SWDIAG_DATA;
 
 /* Network UID for ring interface */
 extern uid_t RING_$NETWORK_UID;
@@ -626,7 +663,9 @@ extern uid_t RING_$NETWORK_UID;
  */
 typedef struct ring_$stats_t {
     uint16_t    _reserved0;         /* 0x00: never read or written by the
-                                     *       kernel; netmain does not display it */
+                                     *       kernel; netmain does not display it.
+                                     *       1 in both units' image records
+                                     *       (0x00E261E0, 0x00E2621C) */
     uint32_t    xmit_call;          /* 0x02: RING_$SENDP calls; bumped once on
                                      *       entry, 0x00E759CE `addq.l #0x1,(0x2,A2)` */
     uint32_t    xmitcnt;            /* 0x06: successful sends; 0x00E75C42 (status
@@ -679,16 +718,13 @@ typedef struct ring_$stats_t {
     int8_t      _reserved4;         /* 0x39 */
     int8_t      retry_pending;      /* 0x3A: Retry is pending */
     int8_t      _reserved5;         /* 0x3B */
-} ring_$stats_t;
+} __attribute__((packed, aligned(2))) ring_$stats_t;
 
 /*
- * Per-unit statistics array, 0x00E261E0.  SAU2 map: `E261E0 RING_$DATA`, the
- * last object in `D E261AC RING_WIRED size = AC`.  Public because
- * ASKNODE_$INTERNET_INFO copies RING_$DATA[0] into its reply (0x00E647E6).
+ * packed, aligned(2): the longwords at +0x02 and +0x06 sit on the m68k's
+ * word alignment, so the record keeps the image layout on every host (the
+ * same spelling as clock_t) and the asserts are unconditional.
  */
-extern ring_$stats_t RING_$DATA[RING_MAX_UNITS];
-
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(ring_$stats_t, xmit_call)          == 0x02, "ring_$stats_t.xmit_call");
 _Static_assert(offsetof(ring_$stats_t, xmitcnt)            == 0x06, "ring_$stats_t.xmitcnt");
 _Static_assert(offsetof(ring_$stats_t, xmit_nack)          == 0x0A, "ring_$stats_t.xmit_nack");
@@ -713,7 +749,65 @@ _Static_assert(offsetof(ring_$swdiag_t, rcvpkt)            == 0x10, "ring_$swdia
 _Static_assert(offsetof(ring_$swdiag_t, rcvxerr)           == 0x16, "ring_$swdiag_t.rcvxerr");
 _Static_assert(offsetof(ring_$swdiag_t, rcvhcsum)          == 0x18, "ring_$swdiag_t.rcvhcsum");
 _Static_assert(offsetof(ring_$swdiag_t, _r1a)              == 0x1a, "ring_$swdiag_t._r1a");
-#endif /* ARCH_M68K */
+
+/*
+ * ============================================================================
+ * RING_$WIRED_DATA - the RING_WIRED module data block (0xE261AC, 0xAC bytes)
+ * ============================================================================
+ *
+ * Map "D E261AC RING_WIRED size = AC"; every cell the map names in it is a
+ * field here:
+ *
+ *   +0x00  RING_$SWDIAG_NODEID        0xE261AC  (NETWORK_$PROCESS_PAGING_-
+ *                                               REQUEST 0x00E11294)
+ *   +0x04  RING_$SWDIAG_GOODRCV_CNT   0xE261B0
+ *   +0x08  RING_$SWDIAG_RCVCNT        0xE261B4  (0x00E1128C)
+ *   +0x0C  RING_$RCV_BIPHASE          0xE261B8  (ring_$validate_receive
+ *   +0x0E  RING_$RCV_ESB              0xE261BA   0x00E75F76 / 0x00E75F66)
+ *   +0x10  RING_$XMIT_BIPHASE         0xE261BC  (RING_$SENDP 0x00E75C70 /
+ *   +0x12  RING_$XMIT_ESB             0xE261BE   0x00E75C82)
+ *   +0x14  RING_$PAGING_OVERFLOW      0xE261C0
+ *   +0x16  RING_$SWDIAG_DATA          0xE261C2  ring_$swdiag_t, 0x1E bytes
+ *   +0x34  RING_$DATA                 0xE261E0  ring_$stats_t per unit,
+ *                                               0-based: "movea.l #0xe261e0,A2"
+ *                                               plus unit * 0x3C in RING_$SENDP
+ *                                               (0x00E7594C-0x00E75954)
+ *
+ * The code addresses these through their absolute addresses (there is no
+ * A5 base for this segment).  Pointer-free, so every assert is
+ * unconditional.  Public because NETWORK_$PROCESS_PAGING_REQUEST and
+ * ASKNODE_$INTERNET_INFO copy parts of it into their replies (0x00E11246..,
+ * 0x00E647E6, 0x00E64B42..).
+ */
+#define RING_$WIRED_DATA_SIZE   0xAC    /* map: RING_WIRED size = AC */
+
+typedef struct ring_$wired_data_t {
+    uint32_t        swdiag_nodeid;      /* +0x00 map RING_$SWDIAG_NODEID */
+    uint32_t        swdiag_goodrcv_cnt; /* +0x04 map RING_$SWDIAG_GOODRCV_CNT */
+    uint32_t        swdiag_rcvcnt;      /* +0x08 map RING_$SWDIAG_RCVCNT */
+    uint16_t        rcv_biphase;        /* +0x0C map RING_$RCV_BIPHASE */
+    uint16_t        rcv_esb;            /* +0x0E map RING_$RCV_ESB */
+    uint16_t        xmit_biphase;       /* +0x10 map RING_$XMIT_BIPHASE */
+    uint16_t        xmit_esb;           /* +0x12 map RING_$XMIT_ESB */
+    uint16_t        paging_overflow;    /* +0x14 map RING_$PAGING_OVERFLOW */
+    ring_$swdiag_t  swdiag;             /* +0x16 map RING_$SWDIAG_DATA */
+    ring_$stats_t   stats[RING_MAX_UNITS];  /* +0x34 map RING_$DATA, [0..1] */
+} ring_$wired_data_t;
+
+_Static_assert(offsetof(ring_$wired_data_t, swdiag_nodeid)      == 0x00, "RING_$SWDIAG_NODEID (0xE261AC)");
+_Static_assert(offsetof(ring_$wired_data_t, swdiag_goodrcv_cnt) == 0x04, "RING_$SWDIAG_GOODRCV_CNT (0xE261B0)");
+_Static_assert(offsetof(ring_$wired_data_t, swdiag_rcvcnt)      == 0x08, "RING_$SWDIAG_RCVCNT (0xE261B4)");
+_Static_assert(offsetof(ring_$wired_data_t, rcv_biphase)        == 0x0C, "RING_$RCV_BIPHASE (0xE261B8)");
+_Static_assert(offsetof(ring_$wired_data_t, rcv_esb)            == 0x0E, "RING_$RCV_ESB (0xE261BA)");
+_Static_assert(offsetof(ring_$wired_data_t, xmit_biphase)       == 0x10, "RING_$XMIT_BIPHASE (0xE261BC)");
+_Static_assert(offsetof(ring_$wired_data_t, xmit_esb)           == 0x12, "RING_$XMIT_ESB (0xE261BE)");
+_Static_assert(offsetof(ring_$wired_data_t, paging_overflow)    == 0x14, "RING_$PAGING_OVERFLOW (0xE261C0)");
+_Static_assert(offsetof(ring_$wired_data_t, swdiag)             == 0x16, "RING_$SWDIAG_DATA (0xE261C2)");
+_Static_assert(offsetof(ring_$wired_data_t, stats)              == 0x34, "RING_$DATA (0xE261E0)");
+_Static_assert(sizeof(((ring_$wired_data_t *)0)->stats[0])      == 0x3C, "RING_$DATA stride 0x3C");
+_Static_assert(sizeof(ring_$wired_data_t) == RING_$WIRED_DATA_SIZE, "RING_WIRED: map size 0xAC");
+
+MODULE_DATA_DECLARE(ring_$wired_data_t, RING_$WIRED_DATA, 0x00E261AC);
 
 /*
  * ============================================================================
@@ -1074,38 +1168,17 @@ void RING_$POLL_STICKY_BPHERR(void *param1, void *param2);
 void RING_$PROC2_CLEANUP(void *param1);
 
 /*
- * Ring receive overflow counters (moved here from app/app_internal.h --
- * bead source-3uo).
+ * Ring receive overflow counters.  The SAU2 map puts all three in the NET_IO
+ * segment ("D E244F0 NET_IO size = AC": RING_$OVERFLOW_OVERFLOW 0xE24594,
+ * RING_$FILE_OVERFLOW 0xE24596, RING_$DELIVERY_FAILED 0xE24598), so they are
+ * defined with that segment's other cells in net_io/net_io_data.c; nothing
+ * bases A5 on the segment, so they stay individual objects (ordering them by
+ * map address is source-91vs).  APP_$DEMUX bumps the first two (0x00E00B3E,
+ * 0x00E00B60) and ASKNODE_$INTERNET_INFO's request-0x29 arm reports all three
+ * ("move.w (0x00E24598).l,(0x58,A1)" at 0x00E64E26).
  */
-#if defined(ARCH_M68K)
-#define RING_$FILE_OVERFLOW     (*(uint16_t *)0xE24596)
-#define RING_$OVERFLOW_OVERFLOW (*(uint16_t *)0xE24594)
-/*
- * RING_$DELIVERY_FAILED (0xE24598) - the third counter of this group; the
- * SAU2 link map names it and ASKNODE_$INTERNET_INFO's request-0x29 arm
- * reports all three together ("move.w (0x00E24598).l,(0x58,A1)" at
- * 0x00E64E26).
- */
-#define RING_$DELIVERY_FAILED   (*(uint16_t *)0xE24598)
-#else
-extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$OVERFLOW_OVERFLOW;
+extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$DELIVERY_FAILED;
-#endif
-
-/*
- * RING_$CTL counter aliases (moved here from ring/ring_internal.h so that
- * ASKNODE_$INTERNET_INFO's request-0x29 arm can reach them - it reports every
- * one of them, 0x00E64E5A-0x00E64E9A).
- */
-#define RING_$RCV_INT_CNT       (RING_$CTL.rcv_int_cnt)
-#define RING_$WAKEUP_CNT        (RING_$CTL.wakeup_cnt)
-#define RING_$ABORT_CNT         (RING_$CTL.abort_cnt)
-#define RING_$BUSY_ON_RCV_INT   (RING_$CTL.busy_on_rcv_int)
-#define RING_$XMIT_WAITED       (RING_$CTL.xmit_waited)
-#define RING_$BAD_DATA_CNT      (RING_$CTL.bad_data_cnt)
-#define RING_$SEND_NULL_CNT     (RING_$CTL.send_null_cnt)
-#define RING_$CLOBBERED_HDR     (RING_$CTL.clobbered_hdr)
-#define RING_$UNEXPECTED_XMIT_STAT (RING_$CTL.unexpected_xmit_stat)
 
 #endif /* RING_H */

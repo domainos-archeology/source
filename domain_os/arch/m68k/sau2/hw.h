@@ -38,4 +38,15 @@
 #define SAU2_DISPLAY_CTRL_REGS  ((volatile uint16_t *)0x00FF9800u)
 #define SAU2_DISPLAY_MEM_BASE   0x00FC0000u
 
+/*
+ * Token ring DMA controller
+ *
+ * SAU2_RING_DMA_BASE - three DMA channels 0x40 bytes apart (0: receive
+ *   header, 1: receive data, 2: transmit); the register layout within a
+ *   channel is the ring driver's (ring/ring_internal.h).  Loaded as
+ *   "movea.l #0xffa000,An" by ring_$clear_dma_channel 0x00E757F2,
+ *   ring_$setup_tx_dma 0x00E75868 and ring_$setup_rx_dma 0x00E758CC.
+ */
+#define SAU2_RING_DMA_BASE      0x00FFA000u
+
 #endif /* ARCH_M68K_SAU2_HW_H */

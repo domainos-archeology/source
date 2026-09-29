@@ -94,7 +94,7 @@ extern rem_name_data_t rem_name_$data;  /* 0xE7DBB8 */
  *     movea.l (0x00e28dd8).l,A0 ; move.w (0x16,A0),D0w ; btst.l #0xd,D0
  * 0xE28DD8 is not an eventcount of its own: it is slot 10 of the SOCK socket
  * pointer table (sock_table_base + 0x18A4 + 9*4, that is
- * SOCK_$EVENT_COUNTERS[REM_NAME_$SOCK - 1]), and the word at +0x16 of the
+ * SOCK_$DATA.socket_ptr[REM_NAME_$SOCK]), and the word at +0x16 of the
  * socket descriptor it points at is sock_$sock_t.flags.  Bit 13 of that word
  * means "the name server runs on this node".  The descriptor declaration
  * lives in sock/sock.h; only the socket number belongs to REM_NAME.

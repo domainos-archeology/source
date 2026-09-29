@@ -4,7 +4,7 @@
  * Registers and returns an event count for the specified port.
  * The port is identified by network/socket pair within the port_info
  * structure. Supports two EC types:
- *   - Type 0: Socket event count (from SOCK_$EVENT_COUNTERS array)
+ *   - Type 0: Socket event count (from SOCK_$DATA.socket_ptr)
  *   - Type 1: Port event count (embedded in port structure at offset 0x38)
  *
  * Original address: 0x00E69C2C
@@ -41,7 +41,7 @@
  * 00e69c8c    bra.b 0x00e69cbc          ; Invalid type
  * 00e69c8e    pea (A3)                  ; status_ret
  * 00e69c90    move.w (0x30,A2),D0w      ; D0 = port->socket
- * 00e69c94    movea.l #0xe28db4,A4      ; SOCK_$EVENT_COUNTERS base
+ * 00e69c94    movea.l #0xe28db4,A4      ; SOCK_$DATA.socket_ptr[1]
  * 00e69c9a    lsl.w #0x2,D0w            ; D0 *= 4
  * 00e69c9c    lea (0x0,A4,D0w),A4       ; A4 += socket*4
  * 00e69ca0    movea.l (-0x4,A4),A0      ; Get EC pointer (offset by -4)
@@ -103,11 +103,10 @@ void ROUTE_$GET_EC(void *port_info, int16_t *ec_type, void **ec_ret,
     if (*ec_type == 0) {
         /*
          * Type 0: Socket event count
-         * The original code accesses SOCK_$EVENT_COUNTERS with an offset
-         * calculation that effectively does: SOCK_$EVENT_COUNTERS[socket - 1]
-         * (due to the -4 byte offset in the assembly)
+         * The original reads the table at 0xE28DB4 with a -4 displacement,
+         * i.e. SOCK_$DATA.socket_ptr[socket] (declared from that bias slot)
          */
-        ec1 = SOCK_$EVENT_COUNTERS[port->socket - 1];
+        ec1 = &SOCK_$DATA.socket_ptr[port->socket]->ec;
     } else if (*ec_type == 1) {
         /*
          * Type 1: Port event count

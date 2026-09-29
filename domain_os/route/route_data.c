@@ -50,16 +50,9 @@ uint32_t ROUTE_$PORT;
 #endif
 
 /*
- * ROUTE_$SERVICE_MUTEX - Mutex for route service operations
- *
- * ROUTE_$SERVICE passes its address to ML_$EXCLUSION_START as a literal:
- * "move.l #0xe26280,-(SP) / jsr 0x00e20df8" at 0x00E6A048, so the cell is a
- * whole ml_$exclusion_t (0x12 bytes), not a longword.  It lives in the
- * RIP_WIRED segment (map 0xE26280), whose block is rip's (bead source-thww).
- *
- * Original address: 0xE26280
+ * ROUTE_$SERVICE_MUTEX (map 0xE26280) lies in the RIP_WIRED segment: it is
+ * RIP_$WIRED_DATA.route_service_mutex (rip/rip.h, rip/rip_data.c).
  */
-ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 
 /*
  * =============================================================================
@@ -121,25 +114,3 @@ MODULE_DATA_DEFINE_INIT(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80, 
     .fwd_timeout    = 1,
     .packet_seq     = 0x8000,
 });
-
-/*
- * Wired routing area data owned by RIP and RING (RIP_RTWIRED 0xE87D68,
- * RIP_RTWIRED code 0xE870D8, ROUTE_ code 0xE878A0).  Their m68k spellings
- * are still absolute-address macros in rip/rip.h and ring/ringlog.h, so the
- * host objects stay here, host-only, until those modules' blocks land
- * (beads source-thww, source-vulx).
- */
-#if !defined(ARCH_M68K)
-/* RIP halt packet: 16 byte header (zeros) + RIP response {cmd=2, net=-1, metric=16} */
-uint8_t RIP_$HALT_PACKET[24] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x10
-};
-uint16_t RTWIRED_$SEND_FLAGS;
-/*
- * Contents of 0x00E878A0: 00 00 20 48.  RINGLOG_$LOGIT reads only byte 0
- * (its bit 7 is the log entry's "inbound" flag).
- */
-uint8_t RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
-uint32_t RTWIRED_$CALLBACK_DATA = 0;
-#endif

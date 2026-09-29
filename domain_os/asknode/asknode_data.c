@@ -38,7 +38,7 @@ MODULE_DATA_DEFINE_INIT(asknode_$data_t, ASKNODE_$DATA, 0x00E82408, {
 
 /*
  * The socket event count pointers (0x00E28DB0 + n * 4) are entries of the
- * socket pointer table in sock/sock_data.c (SOCK_$EVENT_COUNTERS).
+ * socket pointer table in sock/sock_data.c (SOCK_$DATA.socket_ptr).
  */
 
 /*

@@ -65,7 +65,7 @@ void RIP_$AGE(void)
     RIP_$LOCK();
 
     /* 0x00E155D2-0x00E155DA */
-    entry = &RIP_$DATA.entries[0];
+    entry = &RIP_$WIRED_DATA.info[0];
     for (entry_idx = RIP_TABLE_SIZE - 1; entry_idx >= 0; entry_idx--) {
 
         for (slot = 0; slot < RIP_ROUTES_PER_ENTRY; slot++) {
@@ -115,9 +115,9 @@ void RIP_$AGE(void)
 
                 /* 0x00E1563E-0x00E1564A */
                 if (is_std < 0) {
-                    RIP_$DATA.std_recent_changes = 0xFF;   /* 0x00E15642 */
+                    RIP_$WIRED_DATA.std_recent_changes = (int8_t)0xFF;   /* 0x00E15642 */
                 } else {
-                    RIP_$DATA.recent_changes = 0xFF;       /* 0x00E15648 */
+                    RIP_$WIRED_DATA.recent_changes = (int8_t)0xFF;       /* 0x00E15648 */
                 }
 
                 /* 0x00E1564C: TIME_$CLOCKH read a third time. */

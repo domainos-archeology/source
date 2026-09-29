@@ -47,20 +47,21 @@
  * =============================================================================
  */
 
-/* rip_$data_t / RIP_$DATA / RIP_$STATS: moved to rip/rip.h. */
-/* ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS: see route/route.h */
-extern int8_t RIP_$STD_RECENT_CHANGES;
-extern int8_t RIP_$RECENT_CHANGES;
+/*
+ * RIP_$WIRED_DATA (the old RIP_$DATA, RIP_$STATS, RIP_$INFO and the recent-
+ * change flags), RIP_$INIT_DATA and RIP_$RTWIRED_DATA: rip/rip.h.
+ */
 
-/* RIP_$INFO: moved to rip/rip.h (ASKNODE_$INTERNET_INFO request 0x41
- * scans it), see that header. */
-
-#if defined(ARCH_M68K)
-/* Extra data reference for PKT_$SEND_INTERNET in RIP_$ANNOUNCE_NS (0xE68E28) */
-#define RIP_$ANNOUNCE_EXTRA     ((uint8_t *)0xE68E28)
-#else
-extern uint8_t RIP_$ANNOUNCE_EXTRA[4];
-#endif
+/*
+ * rip_$no_data - the all-zero longword at 0x00E68E28, in the code region
+ * right after RIP_$SERVER's last instruction and before RIP_$TABLE_D
+ * (0x00E68E2C); `gsk read 0xE68E28 4` gives 00 00 00 00.  Both routines
+ * that send a RIP packet with no data pass it as PKT_$SEND_INTERNET's data
+ * pointer with a length of 0: RIP_$SERVER ("pea (0x1de,PC)" at 0x00E68C48)
+ * and RIP_$ANNOUNCE_NS ("pea (-0x35a,PC)" at 0x00E69180).  One cell shared by two files, so it
+ * is defined once, in rip/server.c, and never read (the length is 0).
+ */
+extern const uint32_t rip_$no_data;
 
 /*
  * status_$internet_unknown_network_port: route/route.h
@@ -308,11 +309,5 @@ void RIP_$STD_DEMUX(idp_$packet_t *pkt, uint16_t *param_2, uint16_t *param_3,
  *   prefix.request_id  `move.w (0x6,A0),D3w`         0x00E2FD28
  * (source-ca0z)
  */
-
-/*
- * RIP_$INIT_REQUEST - the 4-byte cell at 0x00E3502C that RIP_$INIT sends as
- * its 2-byte request template.  See rip/init.c.
- */
-extern uint32_t RIP_$INIT_REQUEST;
 
 #endif /* RIP_INTERNAL_H */

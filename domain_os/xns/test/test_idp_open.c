@@ -67,7 +67,7 @@ static int current_failed;
 
 MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 uint16_t PROC1_$AS_ID;
 
 /* ============================================================================
@@ -188,7 +188,7 @@ static xns_$channel_t *channel_base(uint16_t idx)
 static void setup(void)
 {
     memset(&XNS_IDP_$DATA, 0, sizeof(XNS_IDP_$DATA));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(sock_descs, 0, sizeof(sock_descs));
     memset(&opt, 0, sizeof(opt));
 
@@ -209,8 +209,8 @@ static void setup(void)
     excl_stop_calls = 0;
     PROC1_$AS_ID = 3;
 
-    /* SOCK_$SOCKET_PTR is 1-based: entry [n-1] belongs to socket n. */
-    SOCK_$SOCKET_PTR[TEST_USER_SOCKET - 1] = &sock_descs[0];
+    /* SOCK_$DATA.socket_ptr is indexed with the socket number. */
+    SOCK_$DATA.socket_ptr[TEST_USER_SOCKET] = (sock_$sock_t *)&sock_descs[0];
     sock_descs[0].flags = 0xFFFF;
 
     opt.version = 1;
@@ -354,7 +354,7 @@ static void test_register_ec1_uses_the_socket_descriptor(void)
 
     ASSERT_EQ(1, reg_ec1_calls, "registered once");
     ASSERT_EQ((uintptr_t)&sock_descs[0], (uintptr_t)reg_ec1_arg,
-              "SOCK_$SOCKET_PTR[socket - 1]");
+              "SOCK_$DATA.socket_ptr[socket]");
     ASSERT_EQ((uintptr_t)&st, (uintptr_t)reg_ec1_status,
               "the caller's own status cell is the second argument");
     ASSERT_EQ(0x12345678u, opt.network, "the result lands at options + 0x04");
@@ -362,13 +362,14 @@ static void test_register_ec1_uses_the_socket_descriptor(void)
 
 /*
  * QUIRK: with XNS_OPEN_FLAG_NO_ALLOC no socket is allocated, user_socket is
- * 0xE1 - and EC2_$REGISTER_EC1 still runs, on SOCK_$SOCKET_PTR[0xE0], one
- * past the 0xE0 descriptors SOCK_$INIT sets up.
+ * 0xE1 - and EC2_$REGISTER_EC1 still runs, on SOCK_$DATA.socket_ptr[0xE1],
+ * one past the 0xE0 descriptors SOCK_$INIT sets up (the slot that overlays
+ * the SOCK block's user-limit word).
  */
 static void test_register_ec1_runs_even_with_no_socket(void)
 {
     opt.flags = XNS_OPEN_FLAG_NO_ALLOC;
-    SOCK_$SOCKET_PTR[XNS_NO_SOCKET - 1] = &sock_descs[1];
+    SOCK_$DATA.socket_ptr[XNS_NO_SOCKET] = (sock_$sock_t *)&sock_descs[1];
 
     XNS_IDP_$OPEN(&opt, &st);
 

@@ -49,7 +49,7 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, sock_$pkt_info_t *pkt_info,
     int16_t i;
 
     /* Acquire spinlock */
-    token = ML_$SPIN_LOCK(SOCK_GET_LOCK());
+    token = ML_$SPIN_LOCK(&SOCK_$DATA.lock);
 
     /*
      * Validate socket state (0x00E1622A-0x00E16248):
@@ -149,7 +149,7 @@ int16_t SOCK_$PUT_INT_INT(sock_$sock_t *sock_view, sock_$pkt_info_t *pkt_info,
     }
 
     /* Release spinlock */
-    ML_$SPIN_UNLOCK(SOCK_GET_LOCK(), token);
+    ML_$SPIN_UNLOCK(&SOCK_$DATA.lock, token);
 
     return result;
 }
@@ -182,7 +182,7 @@ int8_t SOCK_$PUT_INT(uint16_t sock_num, sock_$pkt_info_t *pkt_info,
     }
 
     /* Get pointer to socket's EC view */
-    sock_view = SOCK_GET_VIEW_PTR(sock_num);
+    sock_view = SOCK_$DATA.socket_ptr[sock_num];
 
     /* Return EC pointer to caller */
     *ec_ret = &sock_view->ec;

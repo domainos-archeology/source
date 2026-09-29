@@ -21,7 +21,7 @@
  *   header_info - a byte cell; only bit 7 of byte 0 is read
  *   pkt_info    - the packet record being logged
  */
-int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
+int16_t RINGLOG_$LOGIT(const uint8_t *header_info, void *pkt_info)
 {
     const uint8_t      *pkt = (const uint8_t *)pkt_info;
     int16_t             result = -1;
@@ -35,12 +35,12 @@ int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
     uint32_t            node;
 
     /*
-     * 0x00E1A21E-0x00E1A230: when RINGLOG_$ID is set, the packet must name it
+     * 0x00E1A21E-0x00E1A230: when the filter (map RINGLOG_$ID) is set, the packet must name it
      * either at +0x00 or at +0x08.
      */
-    if (RINGLOG_$ID != 0 &&
-        RINGLOG_$ID != ringlog_$pkt_long(pkt, 0x00) &&
-        RINGLOG_$ID != ringlog_$pkt_long(pkt, 0x08)) {
+    if (RINGLOG_$CTL.filter_id != 0 &&
+        RINGLOG_$CTL.filter_id != ringlog_$pkt_long(pkt, 0x00) &&
+        RINGLOG_$CTL.filter_id != ringlog_$pkt_long(pkt, 0x08)) {
         return -1;
     }
 
@@ -65,13 +65,13 @@ int16_t RINGLOG_$LOGIT(uint8_t *header_info, void *pkt_info)
      * 0x00E1A26E-0x00E1A294.  Each filter byte is a Domain boolean: negative
      * means "do not filter this socket type".
      */
-    if (RINGLOG_$NIL_SOCK >= 0 && socket_type == RINGLOG_SOCK_NIL) {
+    if (RINGLOG_$CTL.nil_sock_filter >= 0 && socket_type == RINGLOG_SOCK_NIL) {
         return -1;
     }
-    if (RINGLOG_$WHO_SOCK >= 0 && socket_type == RINGLOG_SOCK_WHO) {
+    if (RINGLOG_$CTL.who_sock_filter >= 0 && socket_type == RINGLOG_SOCK_WHO) {
         return -1;
     }
-    if (RINGLOG_$MBX_SOCK >= 0 && socket_type == RINGLOG_SOCK_MBX) {
+    if (RINGLOG_$CTL.mbx_sock_filter >= 0 && socket_type == RINGLOG_SOCK_MBX) {
         return -1;
     }
 

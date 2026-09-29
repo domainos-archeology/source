@@ -40,7 +40,7 @@ static int tests_failed = 0;
 #include "sock/sock_internal.h"
 
 /* Globals the code under test links against. */
-uint8_t sock_table_base[SOCK_TABLE_SIZE];
+MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 /* Mocked callees. */
 static int spin_locks;
@@ -95,12 +95,12 @@ static sock_$pkt_info_t pkt;
 static void setup(void)
 {
     memset(arena, 0, sizeof(arena));
-    memset(sock_table_base, 0, sizeof(sock_table_base));
+    memset(&SOCK_$DATA, 0, sizeof(SOCK_$DATA));
     memset(&sock_desc, 0, sizeof(sock_desc));
     memset(&pkt, 0, sizeof(pkt));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
 
-    SOCK_GET_VIEW_PTR(TEST_SOCK) = &sock_desc;
+    SOCK_$DATA.socket_ptr[TEST_SOCK] = &sock_desc;
 
     sock_desc.flags = SOCK_FLAG_ALLOCATED | SOCK_FLAG_OPEN | TEST_SOCK;
     sock_desc.max_queue = 4;
@@ -319,7 +319,7 @@ TEST(socket_number_bounds)
 
     /* 0xE0 is inside the range: it reaches the (null) table slot */
     setup();
-    SOCK_GET_VIEW_PTR(0xE0) = &sock_desc;
+    SOCK_$DATA.socket_ptr[0xE0] = &sock_desc;
     ASSERT_EQ((int8_t)-1, SOCK_$PUT_INT(0xE0, &pkt, 0, 0, 0, &ec));
 }
 

@@ -9,13 +9,7 @@
  *   - Sockets 32-223: Dynamically allocated from free list
  *   - Total: 224 sockets (0x00 - 0xDF)
  *
- * Memory Layout (base at 0xE27510):
- *   - Base + 0x00:    Socket table header
- *   - Base + 0x0C:    Free list head pointer
- *   - Base + 0x1C:    First socket descriptor
- *   - Base + 0x18A0:  Spinlock (reuses socket 0 pointer slot)
- *   - Base + 0x18A4:  Socket pointer array (sockets 1-223)
- *   - Base + 0x1C24:  User socket limit counter
+ * Module data: SOCK_$DATA (sock/sock.h), map "D E27510 SOCK size = 1C28".
  */
 
 #ifndef SOCK_INTERNAL_H
@@ -35,27 +29,13 @@
 #define SOCK_DYNAMIC_MIN        32      /* First dynamically allocatable socket */
 #define SOCK_DYNAMIC_MAX        223     /* Last dynamically allocatable socket (0xDF) */
 
-#define SOCK_DESC_SIZE          0x1C    /* Size of socket descriptor (28 bytes) */
-
 /* The sock_$sock_t.flags masks live in sock/sock.h with the record. */
 
 /*
- * Socket Table Offsets (relative to sock_table_base)
+ * The descriptor of socket n is SOCK_$DATA.socket[n] and its table entry
+ * SOCK_$DATA.socket_ptr[n] (sock/sock.h); SOCK_$INIT points the one at the
+ * other (0x00E2FE1A).
  */
-#define SOCK_TABLE_FREE_LIST    0x0C    /* Offset to free list head */
-#define SOCK_TABLE_FIRST_DESC   0x1C    /* Offset to first socket descriptor */
-#define SOCK_TABLE_LOCK         0x18A0  /* Offset to spinlock */
-#define SOCK_TABLE_PTR_ARRAY    0x18A0  /* Offset to pointer array (slot 0 = lock) */
-#define SOCK_TABLE_USER_LIMIT   0x1C24  /* Offset to user socket limit counter */
-
-/*
- * The socket descriptor record itself is sock_$sock_t in sock/sock.h; the
- * table entry for socket n is SOCK_GET_VIEW_PTR(n) (the pointer array slot
- * written by SOCK_$INIT at 0x00E2FE1A).  Descriptor slots are SOCK_DESC_SIZE
- * apart and the record starts 4 bytes into each slot (0x00E2FE16), so the
- * last four bytes of one record overlap the next slot's first four.
- */
-#define SOCK_EC_VIEW_SIZE   0x1C
 
 /*
  * Network Buffer Header Offsets (for packet queue operations)
@@ -84,32 +64,8 @@
  */
 
 /*
- * Socket Table Base: sock_table_base, declared in sock/sock.h.
- *
- * The socket table is located at a fixed address in the kernel (0xE27510).
- * All socket operations reference this base address.
- */
-
-/*
  * Internal Helper Macros
  */
-
-/* Get pointer to socket EC view from socket number */
-#define SOCK_GET_VIEW_PTR(sock_num) \
-    (*(sock_$sock_t **)((uint8_t *)sock_table_base + \
-                          SOCK_TABLE_PTR_ARRAY + ((sock_num) * 4)))
-
-/* Get pointer to spinlock */
-#define SOCK_GET_LOCK() \
-    ((void *)((uint8_t *)sock_table_base + SOCK_TABLE_LOCK))
-
-/* Get pointer to free list head (stores EC view pointers) */
-#define SOCK_GET_FREE_LIST() \
-    ((sock_$sock_t **)((uint8_t *)sock_table_base + SOCK_TABLE_FREE_LIST))
-
-/* Get pointer to user socket limit counter */
-#define SOCK_GET_USER_LIMIT() \
-    ((uint16_t *)((uint8_t *)sock_table_base + SOCK_TABLE_USER_LIMIT))
 
 /* Extract socket number from flags */
 #define SOCK_GET_NUMBER(flags)  ((flags) & SOCK_FLAG_NUMBER_MASK)

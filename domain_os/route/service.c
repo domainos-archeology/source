@@ -423,11 +423,11 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
 
     /*
      * 0x00E69DB8-0x00E69DCC.  "movea.l #0xe28db4,A0 / lea (0,A0,D1*4),A1 /
-     * movea.l (-0x4,A1),A2" is SOCK_$EVENT_COUNTERS[socket - 1], the
+     * movea.l (-0x4,A1),A2" is SOCK_$DATA.socket_ptr[socket], the
      * descriptor for `socket`.  "bclr.b #0x7,(0x16,A2)" clears bit 15 of the
      * flags word, SOCK_FLAG_OPEN.
      */
-    sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[socket - 1];
+    sock = SOCK_$DATA.socket_ptr[socket];
     sock->flags = (uint16_t)(sock->flags & (uint16_t)~SOCK_FLAG_OPEN);
 
     /* 0x00E69DD2-0x00E69DE4 */
@@ -484,7 +484,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
     *status_ret = status_$ok;
 
     /* 0x00E6A048-0x00E6A054 */
-    ML_$EXCLUSION_START(&ROUTE_$SERVICE_MUTEX);
+    ML_$EXCLUSION_START(&RIP_$WIRED_DATA.route_service_mutex);
 
     /*
      * 0x00E6A056-0x00E6A064.  route_$close_port (0x00E69EC2) is a nested
@@ -511,7 +511,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 #pragma GCC diagnostic pop
 #endif
         /* 0x00E6A062 branches into the unlock at 0x00E6A274 */
-        ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+        ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
         return;
     }
 
@@ -530,7 +530,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 
         /* 0x00E6A0AC-0x00E6A0B4 */
         if (*status_ret != status_$ok) {
-            ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
             return;
         }
     }
@@ -590,7 +590,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 
         /* 0x00E6A18E-0x00E6A196 */
         if (*status_ret != status_$ok) {
-            ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
             return;
         }
 
@@ -609,7 +609,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 
         /* 0x00E6A1CC-0x00E6A1EA: the unlock happens before the status store */
         if (port_index == -1) {
-            ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
             *status_ret = status_$internet_unknown_network_port;
             return;
         }
@@ -618,7 +618,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
     /* 0x00E6A1EC-0x00E6A21A */
     if (*operation & SERVICE_OP_SET_STATUS) {
         if ((((uint32_t)PORT_STATUS_VALID_MASK >> (port_info->status & 0x1F)) & 1) == 0) {
-            ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
             *status_ret = status_$route_service_type_bad;
             return;
         }
@@ -647,7 +647,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
             *status_ret = status_$route_no_routing_zero_network;
             ROUTE_$SHORT_PORT(port, port_info);
             /* falls into the unlock at 0x00E6A274 */
-            ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
             return;
         }
     }
@@ -770,9 +770,9 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 
         /* 0x00E6A452-0x00E6A4AC */
         if (old_status == PORT_STATUS_CLOSED && *status_ret == status_$ok) {
-            if (RIP_$STD_IDP_CHANNEL != -1) {
+            if (RIP_$WIRED_DATA.std_idp_channel != -1) {
                 idp_port = (uint16_t)port_index;
-                XNS_IDP_$OS_ADD_PORT((uint16_t *)&RIP_$STD_IDP_CHANNEL,
+                XNS_IDP_$OS_ADD_PORT((uint16_t *)&RIP_$WIRED_DATA.std_idp_channel,
                                      &idp_port, &idp_status);
             }
             /* "cmpi.w #-0x1,(0x00e1dc20).l" is a signed word compare */
@@ -787,7 +787,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
         if (*status_ret == status_$ok &&
             (((uint32_t)PORT_STATUS_DISABLE_STD >> (old_status & 0x1F)) & 1) &&
             (((uint32_t)PORT_STATUS_ROUTING_MASK >> (port_info->status & 0x1F)) & 1)) {
-            if (RIP_$STD_IDP_CHANNEL != -1) {
+            if (RIP_$WIRED_DATA.std_idp_channel != -1) {
                 route_$init_routing(port_index, (boolean)0xFF, status_ret);
             } else {
                 /* 0x00E6A4E4 */
@@ -825,9 +825,9 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
             }
 
             /* 0x00E6A542-0x00E6A58C */
-            if (RIP_$STD_IDP_CHANNEL != -1) {
+            if (RIP_$WIRED_DATA.std_idp_channel != -1) {
                 idp_port = (uint16_t)port_index;
-                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&RIP_$STD_IDP_CHANNEL,
+                XNS_IDP_$OS_DELETE_PORT((uint16_t *)&RIP_$WIRED_DATA.std_idp_channel,
                                         &idp_port, &idp_status);
             }
             if ((int16_t)APP_$STD_IDP_CHANNEL != -1) {
@@ -839,7 +839,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
     }
 
     /* 0x00E6A596-0x00E6A5A2 */
-    ML_$EXCLUSION_STOP(&ROUTE_$SERVICE_MUTEX);
+    ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.route_service_mutex);
 
     /*
      * 0x00E6A5A4-0x00E6A5BA.  Both calls reserve a discarded word result slot

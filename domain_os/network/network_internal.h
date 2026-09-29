@@ -9,7 +9,7 @@
 #define NETWORK_INTERNAL_H
 
 #include "network/network.h"
-#include "sock/sock.h"   /* SOCK_$SOCKET_PTR */
+#include "sock/sock.h"   /* SOCK_$DATA */
 
 /*
  * NETWORK_$LOOPBACK_FLAG - Loopback mode indicator
@@ -94,7 +94,7 @@ extern int16_t NETWORK_$RETRY_TIMEOUT; /* 0xE24C18 - timeout for retries */
  */
 extern void *NETWORK_$LOCK;
 
-/* SOCK_$SOCKET_PTR is exported from sock/sock.h (bead source-3uo). */
+/* The socket pointer table is SOCK_$DATA.socket_ptr (sock/sock.h). */
 
 /*
  * network_$reply_hdr_t - the head of the reply buffer network_$do_request

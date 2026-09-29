@@ -90,13 +90,9 @@ static void reset_mocks(void);
 #include "uid/uid.h"
 #include "xns/xns.h"
 
-rip_$data_t     RIP_$DATA;
-rip_$stats_t    RIP_$STATS;
-int8_t          RIP_$STD_RECENT_CHANGES;
-int8_t          RIP_$RECENT_CHANGES;
+MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t        NODE_$ME;
-uint8_t         RIP_$ANNOUNCE_EXTRA[4];
 
 /* ==========================================================================
  * Mocks
@@ -356,11 +352,11 @@ static rip_$packet_t *payload_in_page(void)
 
 static void reset_mocks(void)
 {
-    memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
-    memset(&RIP_$STATS, 0, sizeof(RIP_$STATS));
+    memset(&RIP_$WIRED_DATA, 0, sizeof(RIP_$WIRED_DATA));
+    memset(&RIP_$WIRED_DATA.stats, 0, sizeof(RIP_$WIRED_DATA.stats));
     memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
-    RIP_$STD_RECENT_CHANGES = 0;
-    RIP_$RECENT_CHANGES = 0;
+    RIP_$WIRED_DATA.std_recent_changes = 0;
+    RIP_$WIRED_DATA.recent_changes = 0;
     ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
     ROUTE_$WIRED_DATA.n_routing_ports = 2;
     NODE_$ME = 0xABCDE;
@@ -445,9 +441,9 @@ static void set_port_ident(uint16_t network, uint16_t socket)
 static void set_route(int idx, int slot, uint32_t network, uint8_t metric,
                       uint8_t state)
 {
-    RIP_$INFO[idx].network = network;
-    RIP_$INFO[idx].routes[slot].metric = metric;
-    RIP_$INFO[idx].routes[slot].flags =
+    RIP_$WIRED_DATA.info[idx].network = network;
+    RIP_$WIRED_DATA.info[idx].routes[slot].metric = metric;
+    RIP_$WIRED_DATA.info[idx].routes[slot].flags =
         (uint8_t)((state << RIP_STATE_SHIFT) & RIP_STATE_MASK);
 }
 
@@ -471,45 +467,45 @@ TEST(packet_length)
 TEST(send_updates_std_broadcasts_and_clears)
 {
     ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
-    RIP_$STD_RECENT_CHANGES = -1;
+    RIP_$WIRED_DATA.std_recent_changes = -1;
 
     RIP_$SEND_UPDATES(true);
 
     ASSERT_EQ(1, broadcast_calls);
     ASSERT_EQ((uint8_t)true, (uint8_t)broadcast_flags);
-    ASSERT_EQ(0, RIP_$STD_RECENT_CHANGES);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.std_recent_changes);
 }
 
 TEST(send_updates_internet_broadcasts_and_clears)
 {
     ROUTE_$WIRED_DATA.n_routing_ports = 2;
-    RIP_$RECENT_CHANGES = -1;
+    RIP_$WIRED_DATA.recent_changes = -1;
 
     RIP_$SEND_UPDATES(false);
 
     ASSERT_EQ(1, broadcast_calls);
     ASSERT_EQ(0, (uint8_t)broadcast_flags);
-    ASSERT_EQ(0, RIP_$RECENT_CHANGES);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.recent_changes);
 }
 
 TEST(send_updates_needs_two_ports)
 {
     /* "cmpi.w #0x1,... / ble" at 0x00E68884 and 0x00E688A2 */
     ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
-    RIP_$STD_RECENT_CHANGES = -1;
+    RIP_$WIRED_DATA.std_recent_changes = -1;
     RIP_$SEND_UPDATES(true);
     ASSERT_EQ(0, broadcast_calls);
-    ASSERT_EQ(-1, RIP_$STD_RECENT_CHANGES);
+    ASSERT_EQ(-1, RIP_$WIRED_DATA.std_recent_changes);
 
     ROUTE_$WIRED_DATA.n_routing_ports = 1;
-    RIP_$RECENT_CHANGES = -1;
+    RIP_$WIRED_DATA.recent_changes = -1;
     RIP_$SEND_UPDATES(false);
     ASSERT_EQ(0, broadcast_calls);
 }
 
 TEST(send_updates_needs_the_change_flag)
 {
-    RIP_$STD_RECENT_CHANGES = 0;
+    RIP_$WIRED_DATA.std_recent_changes = 0;
     RIP_$SEND_UPDATES(true);
     ASSERT_EQ(0, broadcast_calls);
 }
@@ -526,7 +522,7 @@ TEST(server_empty_queue_does_nothing)
     ASSERT_EQ(1, sock_get_calls);
     ASSERT_EQ(0, dump_data_calls);
     ASSERT_EQ(0, rtn_hdr_calls);
-    ASSERT_EQ(0, RIP_$STATS.packets_received);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.stats.packets_received);
 }
 
 TEST(server_length_mismatch_returns_the_buffer)
@@ -538,8 +534,8 @@ TEST(server_length_mismatch_returns_the_buffer)
 
     RIP_$SERVER();
 
-    ASSERT_EQ(1, RIP_$STATS.packets_received);
-    ASSERT_EQ(1, RIP_$STATS.errors);
+    ASSERT_EQ(1, RIP_$WIRED_DATA.stats.packets_received);
+    ASSERT_EQ(1, RIP_$WIRED_DATA.stats.errors);
     ASSERT_EQ(1, rtn_hdr_calls);
     ASSERT_EQ(ARCH_PTR_TO_VA(hdr_in_page()), rtn_hdr_va[0]);
     ASSERT_EQ(0, send_calls);
@@ -554,7 +550,7 @@ TEST(server_too_many_entries_is_an_error)
 
     RIP_$SERVER();
 
-    ASSERT_EQ(1, RIP_$STATS.errors);
+    ASSERT_EQ(1, RIP_$WIRED_DATA.stats.errors);
     ASSERT_EQ(1, rtn_hdr_calls);
 }
 
@@ -570,7 +566,7 @@ TEST(server_unknown_port_drops_after_returning_the_buffer)
     ASSERT_EQ(0x1234, find_port_network);
     ASSERT_EQ(0x5678, find_port_socket);
     ASSERT_EQ(1, rtn_hdr_calls);
-    ASSERT_EQ(0, RIP_$STATS.errors);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.stats.errors);
     ASSERT_EQ(0, send_calls);
 }
 
@@ -579,7 +575,7 @@ TEST(server_unknown_command_counts)
     /* 0x00E68E14 */
     arm_xns_packet(9, 1);
     RIP_$SERVER();
-    ASSERT_EQ(1, RIP_$STATS.unknown_commands);
+    ASSERT_EQ(1, RIP_$WIRED_DATA.stats.unknown_commands);
 }
 
 /* ==========================================================================
@@ -900,7 +896,7 @@ TEST(response_std_updates_every_entry)
     h->src_host[3] = 0x04; h->src_host[4] = 0x05; h->src_host[5] = 0x06;
 
     ROUTE_$WIRED_DATA.std_n_routing_ports = 1;             /* < 2 -> process the routes */
-    RIP_$STD_RECENT_CHANGES = 0;
+    RIP_$WIRED_DATA.std_recent_changes = 0;
 
     RIP_$SERVER();
 
@@ -1028,7 +1024,7 @@ TEST(response_sends_updates_at_the_end)
     arm_xns_packet(RIP_CMD_RESPONSE, 0);
     hdr_in_page()->dest_network = 0x0000BEEF;
     ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
-    RIP_$STD_RECENT_CHANGES = -1;
+    RIP_$WIRED_DATA.std_recent_changes = -1;
 
     RIP_$SERVER();
 
@@ -1050,7 +1046,7 @@ TEST(name_register_std_requires_packet_type_be)
     RIP_$SERVER();
 
     ASSERT_EQ(1, register_server_calls);
-    ASSERT_EQ(0, RIP_$STATS.unknown_commands);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.stats.unknown_commands);
 
     /*
      * "pea (-0x538,A6)" (0x00E68DF2, reg_node_id) then "pea (-0x4e0,A6)"
@@ -1069,7 +1065,7 @@ TEST(name_register_std_wrong_packet_type_counts)
     RIP_$SERVER();
 
     ASSERT_EQ(0, register_server_calls);
-    ASSERT_EQ(1, RIP_$STATS.unknown_commands);
+    ASSERT_EQ(1, RIP_$WIRED_DATA.stats.unknown_commands);
 }
 
 TEST(name_register_internet_always_registers)
@@ -1082,7 +1078,7 @@ TEST(name_register_internet_always_registers)
     RIP_$SERVER();
 
     ASSERT_EQ(1, register_server_calls);
-    ASSERT_EQ(0, RIP_$STATS.unknown_commands);
+    ASSERT_EQ(0, RIP_$WIRED_DATA.stats.unknown_commands);
 
     /*
      * "pea (-0x4f8,A6)" (0x00E68E04, src_node) then "pea (-0x4f4,A6)"

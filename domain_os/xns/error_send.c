@@ -31,11 +31,10 @@
  */
 
 /*
- * XNS_ERROR_$CLIENT_MUTEX, 0x00E26268 (SAU2 link map).  All sixteen bytes of
- * the image are zero; ML_$EXCLUSION_INIT is what puts it into its unlocked
- * state.
+ * XNS_ERROR_$CLIENT_MUTEX, 0x00E26268 (SAU2 link map), lies in the RIP_WIRED
+ * segment: it is RIP_$WIRED_DATA.xns_error_mutex (rip/rip.h), zero in the
+ * image and set up by RIP_$INIT's ML_$EXCLUSION_INIT (0x00E2FC08).
  */
-ml_$exclusion_t XNS_ERROR_$CLIENT_MUTEX;
 
 /*
  * xns_$maybe_open_error_socket (0x00E178AA)
@@ -50,7 +49,7 @@ static void xns_$maybe_open_error_socket(status_$t *status_ret)
 
     *status_ret = status_$ok;                           /* 0x00E178BC clr.l (A2) */
 
-    ML_$EXCLUSION_START(&XNS_ERROR_$CLIENT_MUTEX);      /* 0x00E178BE */
+    ML_$EXCLUSION_START(&RIP_$WIRED_DATA.xns_error_mutex);      /* 0x00E178BE */
 
     if (XNS_ERROR_$DATA.client_ref_count == 0) {        /* 0x00E178CC tst.w (0x74,A5) */
         /*
@@ -69,7 +68,7 @@ static void xns_$maybe_open_error_socket(status_$t *status_ret)
 
         if (*status_ret != status_$ok) {                /* 0x00E178EC tst.l (A2) */
             /* 0x00E178EE "bne.b 0x00E178FA" skips the increment. */
-            ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);
+            ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.xns_error_mutex);
             return;
         }
 
@@ -80,7 +79,7 @@ static void xns_$maybe_open_error_socket(status_$t *status_ret)
 
     XNS_ERROR_$DATA.client_ref_count += 1;              /* 0x00E178F6 */
 
-    ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);       /* 0x00E178FA */
+    ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.xns_error_mutex);       /* 0x00E178FA */
 }
 
 /*
@@ -93,7 +92,7 @@ static void xns_$maybe_close_error_socket(void)
 {
     status_$t close_status;             /* A6-0x04 */
 
-    ML_$EXCLUSION_START(&XNS_ERROR_$CLIENT_MUTEX);      /* 0x00E1791C */
+    ML_$EXCLUSION_START(&RIP_$WIRED_DATA.xns_error_mutex);      /* 0x00E1791C */
 
     if (XNS_ERROR_$DATA.client_ref_count == 0) {        /* 0x00E1792A tst.w (0x74,A5) */
         /*
@@ -114,7 +113,7 @@ static void xns_$maybe_close_error_socket(void)
         XNS_ERROR_$DATA.std_idp_channel = -1;           /* 0x00E17946 */
     }
 
-    ML_$EXCLUSION_STOP(&XNS_ERROR_$CLIENT_MUTEX);       /* 0x00E1794C */
+    ML_$EXCLUSION_STOP(&RIP_$WIRED_DATA.xns_error_mutex);       /* 0x00E1794C */
 }
 
 /*

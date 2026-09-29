@@ -91,7 +91,7 @@ int8_t RING_$INT(void *device_info)
         /*
          * Increment receive interrupt counter.
          */
-        RING_$RCV_INT_CNT++;
+        RING_$CTL.rcv_int_cnt++;
 
         /*
          * Call MMU_$MCR_CHANGE to set memory control register mode 5.
@@ -128,7 +128,7 @@ int8_t RING_$INT(void *device_info)
              * accepted-packet counter at stats+0x1C, the same one
              * ring_$validate_receive bumps at 0x00E75EEC.
              */
-            RING_$DATA[unit_num].rcvcnt++;
+            RING_$WIRED_DATA.stats[unit_num].rcvcnt++;
 
             return (int8_t)-1;  /* 0xFF */
         }

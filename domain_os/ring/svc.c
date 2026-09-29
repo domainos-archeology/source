@@ -123,14 +123,14 @@ void RING_$SVC_CLOSE(uint16_t *unit_ptr, void *args, status_$t *status_ret)
     }
 
     /* Check if channel is open */
-    if (unit_data->channels[channel - 1].flags >= 0) {
+    if (RING_UNIT_CHANNEL(unit_data, channel).flags >= 0) {
         *status_ret = status_$ring_channel_not_open;
         return;
     }
 
     /* Close the channel */
-    unit_data->channels[channel - 1].flags = 0;
-    unit_data->channels[channel - 1].socket_id = 0;
+    RING_UNIT_CHANNEL(unit_data, channel).flags = 0;
+    RING_UNIT_CHANNEL(unit_data, channel).socket_id = 0;
 
     *status_ret = status_$ok;
 }
@@ -211,7 +211,7 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
     }
 
     /* Check if channel is open */
-    if (unit_data->channels[channel - 1].flags >= 0) {
+    if (RING_UNIT_CHANNEL(unit_data, channel).flags >= 0) {
         FIM_$RLS_CLEANUP(fim_cleanup);
         *status_ret = status_$ring_channel_not_open;
         return;
@@ -222,7 +222,7 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
      */
     while (1) {
         /* Try to get data from socket */
-        SOCK_$GET(unit_data->channels[channel - 1].socket_id, sock_info);
+        SOCK_$GET(RING_UNIT_CHANNEL(unit_data, channel).socket_id, sock_info);
 
         /* Check if we got valid data (sock_info[0] would be header pointer) */
         if (sock_info[0] == 0) {
@@ -378,7 +378,7 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
 
     /* Validate channel number and check if open */
     if (channel == 0 || channel > RING_MAX_CHANNELS ||
-        unit_data->channels[channel - 1].flags >= 0) {
+        RING_UNIT_CHANNEL(unit_data, channel).flags >= 0) {
         FIM_$RLS_CLEANUP(fim_cleanup);
         *status_ret = status_$ring_channel_not_open;
         return;

@@ -78,11 +78,15 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
     }
 
     /*
-     * Get the initial event count for this socket.
-     * The socket structure is accessed via SOCK_$SOCKET_PTR[sock_num].
-     * The event count is at offset 0 in the structure, and we add 1.
+     * Get the initial event count for this socket:
+     *   0x00E0F8B8  move.w D4w,D0w
+     *   0x00E0F8BA  movea.l #0xe28db4,A0
+     *   0x00E0F8C2  lsl.l #0x2,D0 / lea (0x0,A0,D0*0x1),A1
+     *   0x00E0F8C8  movea.l (-0x4,A1),A0 / move.l (A0),D0 / addq.l #0x1,D0
+     * i.e. SOCK_$DATA.socket_ptr[sock_num] (the -4 is the table's bias; the
+     * old SOCK_$SOCKET_PTR[sock_num] read one slot too far).
      */
-    event_count = *((int32_t *)SOCK_$SOCKET_PTR[sock_num]) + 1;
+    event_count = SOCK_$DATA.socket_ptr[sock_num]->ec.value + 1;
 
     /*
      * Get a unique packet ID for this request.

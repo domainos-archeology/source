@@ -28,7 +28,7 @@ boolean REM_NAME_SERVER_LOCAL(void)
      * the 0xFF/0x00 Domain boolean.
      */
     sock_$sock_t *sock =
-        (sock_$sock_t *)SOCK_$EVENT_COUNTERS[REM_NAME_$SOCK - 1];
+        SOCK_$DATA.socket_ptr[REM_NAME_$SOCK];
 
     return ((sock->flags & SOCK_FLAG_SERVER_LOCAL) != 0) ? true : false;
 }

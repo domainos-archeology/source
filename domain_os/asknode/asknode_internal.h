@@ -348,7 +348,7 @@ extern uint32_t ASKNODE_$EMPTY_DATA;
 /*
  * The socket event counts used by WHO_NOTOPO / WHO_REMOTE (sock_spinlock at
  * 0x00E28DB0 + sock_num * 4, SOCK_$EC_5 at 0x00E28DC4) are entries of the
- * socket pointer table: SOCK_$EVENT_COUNTERS[sock_num - 1] (sock/sock.h).
+ * socket pointer table: SOCK_$DATA.socket_ptr[sock_num] (sock/sock.h).
  */
 
 #endif /* ASKNODE_INTERNAL_H */

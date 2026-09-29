@@ -73,8 +73,8 @@ status_$t RING_$INIT(void *device_info)
      * 0x00E1747C) into RING_$CTL.network_uid (+0x560).  Done on every
      * init, so all units share the same UID.
      */
-    RING_$CTL.network_uid.high = RING_$NETWORK_UID.high;
-    RING_$CTL.network_uid.low = RING_$NETWORK_UID.low;
+    RING_$CTL.driver.network_uid.high = RING_$NETWORK_UID.high;
+    RING_$CTL.driver.network_uid.low = RING_$NETWORK_UID.low;
 
     /*
      * Store the device info pointer in the unit structure.
@@ -111,11 +111,12 @@ status_$t RING_$INIT(void *device_info)
      *   addq.l #0x8,A0            ; Next channel
      *   dbf D0,loop
      *
-     * The channel array starts at offset 0x5A within unit_data,
-     * with the flags byte at offset 0 of each 8-byte channel entry.
+     * The first store lands at unit + 8 + 0x5A = unit + 0x62, channel 1 of
+     * the Pascal [1..10] table whose bias slot is unit + 0x5A; the flags
+     * byte is offset 0 of each 8-byte entry.
      */
-    for (i = 0; i < RING_MAX_CHANNELS; i++) {
-        unit_data->channels[i].flags = 0;
+    for (i = 1; i <= RING_MAX_CHANNELS; i++) {
+        RING_UNIT_CHANNEL(unit_data, i).flags = 0;
     }
 
     /*
@@ -137,7 +138,7 @@ status_$t RING_$INIT(void *device_info)
          * Returns the port number which is stored in the port array.
          */
         port_num = NET_IO_$CREATE_PORT(0, unit_num,
-                                       (void *)((uint8_t *)&RING_$CTL + 0x518),
+                                       &RING_$CTL.driver,
                                        0, &status);
 
         /*

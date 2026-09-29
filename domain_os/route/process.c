@@ -37,10 +37,10 @@
 /*
  * Every global this function touches comes from a header:
  *   ROUTE_$*                      route/route_internal.h, route/route.h
- *   SOCK_$EVENT_COUNTERS, SOCK_$* sock/sock.h
+ *   SOCK_$DATA, SOCK_$*           sock/sock.h
  *   TIME_$CLOCKH                  time/time.h
  *   NODE_$ME                      uid/uid.h
- *   RING_$LOGGING_NOW             ring/ringlog.h
+ *   RINGLOG_$CTL.logging_active   ring/ringlog.h (map RING_$LOGGING_NOW)
  *   XNS_IDP_$DATA (port table)    xns/xns.h
  */
 
@@ -54,7 +54,7 @@
  *
  *   00e8789c  00 00               net_service_or_bits
  *   00e8789e  00 01               net_service_and_not_bits
- *   00e878a0  00 00 20 48         RINGLOG_$ROUTE_FORWARD (ring/ringlog.h)
+ *   00e878a0  00 00 20 48         ringlog_route_forward
  *   00e878a4  00 11 00 06         sock_empty_status
  */
 
@@ -65,6 +65,16 @@ static const int16_t net_service_or_bits = 0x0000;      /* 0x00E8789C */
 /* NETWORK_$SET_SERVICE opcode 1, "and not these service bits".
  * `pea (0x76,PC)` at 0x00E87826. */
 static const int16_t net_service_and_not_bits = 0x0001; /* 0x00E8789E */
+
+/*
+ * The header-info cell RINGLOG_$LOGIT is handed when a forwarded packet is
+ * logged: `pea (0x292,PC)` at 0x00E8760C.  Only byte 0 is read, and only its
+ * bit 7 (the "inbound" flag, clear here), at 0x00E1A2F6.  (Formerly
+ * RINGLOG_$ROUTE_FORWARD, an absolute-address macro in ring/ringlog.h.)
+ */
+static const uint8_t ringlog_route_forward[4] = {       /* 0x00E878A0 */
+    0x00, 0x00, 0x20, 0x48
+};
 
 /*
  * status_$network_buffer_queue_is_empty (OS / network, code 6 - "buffer
@@ -113,11 +123,11 @@ void ROUTE_$PROCESS(void)
 
     /*
      * 0x00E8741A - 0x00E87428: the socket table is indexed from 0xE28DB4
-     * with a -4 displacement, i.e. SOCK_$EVENT_COUNTERS[sock - 1].  The
+     * with a -4 displacement, i.e. SOCK_$DATA.socket_ptr[sock].  The
      * pointer is the socket descriptor, whose first field is its event
      * count.
      */
-    route_sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[ROUTE_$WIRED_DATA.sock - 1];
+    route_sock = SOCK_$DATA.socket_ptr[ROUTE_$WIRED_DATA.sock];
 
     /* 0x00E8742E: "st (0x00E26F1E).l" - ROUTE_$ROUTING is a byte */
     ROUTE_$WIRED_DATA.routing = true;
@@ -309,8 +319,8 @@ void ROUTE_$PROCESS(void)
                 /*
                  * A user routing port: hand the packet to its socket.
                  */
-                if (RING_$LOGGING_NOW < 0) {                /* 0x00E87602 */
-                    RINGLOG_$LOGIT(RINGLOG_$ROUTE_FORWARD, pkt);
+                if (RINGLOG_$CTL.logging_active < 0) {      /* 0x00E87602 */
+                    RINGLOG_$LOGIT(ringlog_route_forward, pkt);
                 }
 
                 port_stats = ROUTE_$PORT_STATS(port);

@@ -93,7 +93,7 @@ void RIP_$STD_OPEN(void)
 
     if (status == status_$ok) {
         /* 0x00E15AE8: the OUT channel index is the word at +0x02. */
-        RIP_$STD_IDP_CHANNEL = (int16_t)open_params.flags_channel;
+        RIP_$WIRED_DATA.std_idp_channel = (int16_t)open_params.flags_channel;
     }
 }
 
@@ -235,7 +235,7 @@ void RIP_$PORT_CLOSE(uint16_t port_index, boolean flags, boolean force)
 
     /* Iterate through all routing table entries */
     for (i = 0; i < RIP_TABLE_SIZE; i++) {
-        entry = &RIP_$DATA.entries[i];
+        entry = &RIP_$WIRED_DATA.info[i];
 
         /* Select standard or non-standard route based on flags */
         if (flags < 0) {
@@ -276,9 +276,9 @@ void RIP_$PORT_CLOSE(uint16_t port_index, boolean flags, boolean force)
 
         /* Signal that routes have changed */
         if (flags < 0) {
-            RIP_$STD_RECENT_CHANGES = (int8_t)0xFF;
+            RIP_$WIRED_DATA.std_recent_changes = (int8_t)0xFF;
         } else {
-            RIP_$RECENT_CHANGES = (int8_t)0xFF;
+            RIP_$WIRED_DATA.recent_changes = (int8_t)0xFF;
         }
     }
 
