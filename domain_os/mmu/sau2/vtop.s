@@ -1,6 +1,10 @@
 /*
  * MMU_$VTOP - Virtual address to physical page number
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Original address: 0x00E2410E, 170 bytes (0xE2410E..0xE241B7).
  *
  * Image bytes (`gsk read 0xe2410e 170`):
@@ -40,12 +44,12 @@
         .section ".text.MMU_$VTOP","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C
-        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30
-        .equ    MMU_$VA_SHIFT,  0x00E23D34
-        .equ    PROC1_$AS_ID,   0x00E2060A
-        .equ    MMU_CSR,        0x00FFB400
-        .equ    PFT_BASE,       0x00FFB800
+        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30  /* MMU_ASM data cell 0xE23D30, not yet an object: TODO(source-o56c) */
+        .equ    MMU_$VA_SHIFT,  0x00E23D34  /* MMU_ASM data cell 0xE23D34, not yet an object: TODO(source-o56c) */
+        .extern PROC1_$AS_ID            /* uint16_t, proc1/proc1_data.c, map 0xE2060A (source-6psc) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
 
         .globl  MMU_$VTOP
         .globl  _MMU_$VTOP
@@ -61,7 +65,7 @@ _MMU_$VTOP:
         movea.l %d1,%a1                 /* 0xE24122  22 41             */
         move.w  MMU_$VA_SHIFT,%d0       /* 0xE24124  30 3a fc 0e in the image */
         lsl.l   %d0,%d5                 /* 0xE24128  e1 ad             */
-        move.w  PROC1_$AS_ID,%d5        /* 0xE2412A  3a 39 00 e2 06 0a */
+        move.w  (PROC1_$AS_ID).l,%d5    /* 0xE2412A  3a 39 00 e2 06 0a */
         ror.l   #7,%d5                  /* 0xE24130  ee 9d             */
         swap    %d5                     /* 0xE24132  48 45             */
         move.w  %sr,-(%sp)              /* 0xE24134  40 e7             */

@@ -1,6 +1,10 @@
 /*
  * IO_$USE_INT_STACK - Switch from OS stack to interrupt stack
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * This routine saves the current OS stack pointer and switches to a
  * dedicated interrupt stack. If already on the interrupt stack (indicated
  * by IO_$SAVED_OS_SP being non-zero), the switch is skipped.
@@ -48,7 +52,7 @@
  * On M68K, the stack grows downward, so this is the top of the
  * interrupt stack region. SP is set to this value when switching.
  */
-        .set    IO_INT_STACK_BASE, 0x00EB2BE8
+        .set    IO_INT_STACK_BASE, 0x00EB2BE8  /* STACK segment (map D EB0000 STACK, 0x18 below INT_STACK_BASE 0xEB2C00), not yet an object: TODO(source-4k71) */
 
         .globl  IO_$USE_INT_STACK
         .globl  _IO_$USE_INT_STACK

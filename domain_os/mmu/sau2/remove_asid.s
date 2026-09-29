@@ -32,11 +32,11 @@
         .section ".text.MMU_$REMOVE_ASID","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C
-        .equ    MMAP_$HPPN,     0x00E23C8C
-        .equ    MMAP_$LPPN,     0x00E23C90
-        .equ    MMU_CSR,        0x00FFB400
-        .equ    PFT_BASE,       0x00FFB800
+        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .equ    MMAP_$HPPN,     0x00E23C8C  /* MMAP_ cell; MMAP_GLOBALS is an absolute macro on m68k: TODO(source-alpj) */
+        .equ    MMAP_$LPPN,     0x00E23C90  /* MMAP_ cell; MMAP_GLOBALS is an absolute macro on m68k: TODO(source-alpj) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
 
         .globl  MMU_$REMOVE_ASID
         .globl  _MMU_$REMOVE_ASID

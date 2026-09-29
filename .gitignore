@@ -1,2 +1,3 @@
 .vscode/
 .claude/reemit/
+__pycache__/

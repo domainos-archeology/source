@@ -1,6 +1,10 @@
 /*
  * misc/sau2/crash_system.s - CRASH_SYSTEM and the crash console (SAU2)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Faithful transcription of the hand-written assembly at 0x00E1E700..0x00E1E863.
  * These routines cannot be expressed in C: they save and restore the whole
  * register file with `movem` (including A7), read the USP with `movec`, take
@@ -11,7 +15,14 @@
  * they live at 0x00E1E97E and 0x00E1E7B6 and are reached through the module
  * base A5 = 0x00E1E700 (`lea (-0xc,PC),A5`) or PC-relative.  Since the code is
  * relinked, this file names them instead of using those displacements; the
- * original displacement is given in the comment on each access.
+ * original displacement is given in the comment on each access.  The crash
+ * record the image writes at 0x00E00000 (map `D E00000 CRASH_RECORD size =
+ * C') is CRASH_$RECORD, log/log_data.c, likewise named (source-6psc).
+ * tools/asm_compare.py (`make check') checks the result: encodings identical
+ * to the image except the documented A5 rebase and widenings; address
+ * operands resolve to our objects.  REMAP_DISPLAY's 0x00FC0000 is the
+ * display frame buffer VA (arch/m68k/sau2/hw.h SAU2_DISPLAY_MEM_BASE),
+ * legitimately absolute.
  *
  *   0x00E1E700  CRASH_SYSTEM
  *   0x00E1E7B8  CRASH_SHOW_STRING
@@ -53,7 +64,7 @@ _CRASH_SYSTEM:
     bsr.w   crash_puts_string               /* 0xE1E734 */
 
 Lcrash_no_message:
-    lea     0x00e00000, %a1                 /* 0xE1E738: the crash record area */
+    lea     (CRASH_$RECORD).l, %a1          /* 0xE1E738: lea (0x00e00000).l,A1 - the crash record (log/log_data.c) */
     clr.l   (%a1)                           /* 0xE1E73E */
     tst.l   0x10(%a5)                       /* 0xE1E740 */
     beq.b   Lcrash_save_regs

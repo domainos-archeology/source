@@ -1,6 +1,10 @@
 /*
  * PROC1_$SET_LOCK - Acquire a resource lock
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Acquires a lock by setting a bit in the process's resource_locks_held
  * bitmask. The lock is identified by an ID (0-31).
  *
@@ -73,7 +77,7 @@ proc1_$set_lock_body:
          * this is a lock ordering violation.
          */
         cmp.l   (0x40,%a1), %d1         /* compare mask vs resource_locks_held */
-        bls.s   .Lcrash                 /* ordering violation if mask <= held */
+        bls.s   set_lock_crash          /* ordering violation if mask <= held */
 
         /* Valid acquisition - set the lock bit */
         or.l    %d1, (0x40,%a1)
@@ -91,10 +95,12 @@ proc1_$set_lock_body:
 .Ldone:
         rts
 
-.Lcrash:
+/* The image's copy of this stub is at 0x00E20B56 (shared with
+ * PROC1_$CLR_LOCK / ML_$UNLOCK); its loop re-enters the jsr, not the pea. */
+set_lock_crash:
         pea     Illegal_lock_err
-        jsr     CRASH_SYSTEM
-        bra.s   .Lcrash                 /* loop forever (shouldn't return) */
+1:      jsr     CRASH_SYSTEM
+        bra.s   1b                      /* 0x00E20B60 60f8 */
 
 /*
  * Illegal_lock_err - the crash status longword at 0x00E20DE4 (0x000A0002),

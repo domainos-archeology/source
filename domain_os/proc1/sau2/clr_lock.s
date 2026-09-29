@@ -1,6 +1,11 @@
 /*
  * PROC1_$CLR_LOCK - Release a resource lock
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects. The shared tail is a documented deviation
+ * (KNOWN_DEVIATIONS, source-9jiy).
+ *
  * Releases a lock by clearing a bit in the process's resource_locks_held
  * bitmask. After releasing:
  * - Decrements lock depth counter
@@ -70,7 +75,7 @@ PROC1_$CLR_LOCK:
 proc1_$clr_lock_body:
         move.l  (0x40,%a1), %d1         /* D1 = resource_locks_held */
         bclr.l  %d0, %d1               /* clear lock bit */
-        beq.s   .Lcrash                 /* crash if bit wasn't set */
+        beq.s   clr_lock_crash          /* crash if bit wasn't set */
         move.l  %d1, (0x40,%a1)         /* store updated locks */
 
         /* Decrement lock depth counter */
@@ -115,7 +120,9 @@ proc1_$clr_lock_body:
         andi    #0xF8FF, %sr            /* re-enable interrupts */
         rts
 
-.Lcrash:
+/* A copy of the stub at 0x00E20B56 (proc1/sau2/set_lock.s); its loop
+ * re-enters the jsr, not the pea. */
+clr_lock_crash:
         pea     Illegal_lock_err
-        jsr     CRASH_SYSTEM
-        bra.s   .Lcrash                 /* loop forever (shouldn't return) */
+1:      jsr     CRASH_SYSTEM
+        bra.s   1b                      /* 0x00E20B60 60f8 */

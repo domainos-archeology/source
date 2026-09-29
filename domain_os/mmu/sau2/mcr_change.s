@@ -26,10 +26,10 @@
         .section ".text.MMU_$MCR_CHANGE","ax",@progbits
         .even
 
-        .equ    M68020,         0x00E23D2E
-        .equ    MCR_020,        0x00FFB408
-        .equ    MCR_010,        0x00FFB405
-        .equ    MCR_MASK,       0x00FFB407
+        .equ    M68020,         0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
+        .equ    MCR_020,        0x00FFB408  /* SAU2 MCR (hardware) */
+        .equ    MCR_010,        0x00FFB405  /* SAU2 MCR (hardware) */
+        .equ    MCR_MASK,       0x00FFB407  /* SAU2 MCR mask (hardware) */
 
         .globl  MMU_$MCR_CHANGE
         .globl  _MMU_$MCR_CHANGE

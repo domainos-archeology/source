@@ -11,7 +11,8 @@
         .section ".text.DTTY_$PUTC","ax",@progbits
         .even
 
-| PROM entry point addresses (low memory)
+| PROM entry point addresses (low memory): common to every m68k Apollo,
+| legitimately absolute
         .equ    PROM_PUTC_ADDR,   0x00000108
         .equ    PROM_CLEAR_ADDR,  0x00000140
 

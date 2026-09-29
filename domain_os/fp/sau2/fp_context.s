@@ -1,6 +1,10 @@
 /*
  * fp/sau2/fp_context.s - 68881/68882 context switching (m68k / SAU2)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Transcribed from the image.  These routines pass their arguments in
  * registers and fall through into one another, so they are hand-written
  * assembly, not compiled Pascal:

@@ -1,6 +1,10 @@
 |
 | SVC_$TRAP0 - Domain/OS TRAP #0 System Call Dispatcher
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | TRAP #0 handles "simple" system calls (0-31) that take no arguments
 | or handle their own argument validation.  Unlike TRAP #1-5/7/8 this
 | handler does NOT validate the user stack pointer or copy arguments.

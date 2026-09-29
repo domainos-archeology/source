@@ -1,5 +1,9 @@
 | stop/sau2/watch.s - hand-written assembly of the stopwatch module (SAU2)
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | Everything in this file is register-argument or exception-entry code and
 | therefore cannot be expressed in C:
 |
@@ -29,8 +33,9 @@
 |
 | The module's data lives immediately after this code in the original image,
 | addressed as (off,A5) with A5 = 0x00E81814.  Here it is the C object
-| STOP_$DATA (stop/stop_data.c, stop_$data_t in stop/stop_internal.h), which
-| the link places at the block's original address, 0x00E81BEC = A5+0x3D8.
+| STOP_$DATA (stop/stop_data.c, stop_$data_t in stop/stop_internal.h), whose
+| image address is 0x00E81BEC = A5+0x3D8; the link orders it after this code
+| as the map does but does not pin it there, so the cells are reached by name.
 | The cells this file touches keep their old names as assembler-local
 | aliases for STOP_$DATA + field offset (below), so every instruction and its
 | encoding is unchanged; each reference carries the original (off,A5) or
@@ -197,7 +202,7 @@ STOP_$WATCH_TRACE:
         sf      STOP_$WATCH_TRACE_FLAG  | 00e81abc
         move.b  %d0,(28,%sp)            | 00e81ac2  restore the caller's SR byte
         btst.l  #8,%d1                  | 00e81ac6
-        bne.w   .Ltr_exit               | 00e81aca
+        bne.w   stop_$watch_trace_exit               | 00e81aca
         | ---- entry trap ----
         move.w  %d1,(%a0)               | 00e81ace  re-arm the entry patch
         move.w  PROC1_$CURRENT,%d1      | 00e81ad0
@@ -242,7 +247,7 @@ STOP_$WATCH_TRACE:
         rte                             | 00e81b52
 
 | ---- exit trap (0x00E81B72) ----
-.Ltr_exit:
+stop_$watch_trace_exit:
         btst.b  #6,(16,%a1)             | 00e81b72
         beq.b   .Ltr_no_exit_patch      | 00e81b78
         move.w  %d1,(%a0)               | 00e81b7a  re-arm the exit patch

@@ -17,7 +17,7 @@
         .section ".text.MMU_$SYSTEM_REV","ax",@progbits
         .even
 
-        .equ    DN330_MMU_HARDWARE_REV, 0x00FFB409
+        .equ    DN330_MMU_HARDWARE_REV, 0x00FFB409  /* SAU2 MMU revision register (hardware) */
 
         .globl  MMU_$SYSTEM_REV
         .globl  _MMU_$SYSTEM_REV

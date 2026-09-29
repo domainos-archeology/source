@@ -1,6 +1,10 @@
 /*
  * sio2681/sau2/int_rte.s - SIO2681_$INT1_RTE / SIO2681_$INT2_RTE
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Original addresses: 0x00E2DFA0 (INT1) and 0x00E2DFB0 (INT2), sharing the
  * tail at 0x00E2DFBC.  Together 0x38 bytes, 0x00E2DFA0..0x00E2DFD7.
  *

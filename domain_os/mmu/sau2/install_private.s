@@ -29,10 +29,10 @@
         .section ".text.MMU_$INSTALL_PRIVATE","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C
-        .equ    M68020,         0x00E23D2E
-        .equ    MMU_$PTT_SHIFT, 0x00E23D36
-        .equ    MMU_CSR,        0x00FFB400
+        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .equ    M68020,         0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
+        .equ    MMU_$PTT_SHIFT, 0x00E23D36  /* MMU_ASM data cell 0xE23D36, not yet an object: TODO(source-o56c) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
 
         .globl  MMU_$INSTALL_PRIVATE
         .globl  _MMU_$INSTALL_PRIVATE

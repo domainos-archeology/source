@@ -44,9 +44,9 @@
         .section ".text.mmu_$installi","ax",@progbits
         .even
 
-        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30
-        .equ    PFT_BASE,       0x00FFB800
-        .equ    ASID_TABLE,     0x00EC2800
+        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30  /* MMU_ASM data cell 0xE23D30, not yet an object: TODO(source-o56c) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
 
         .globl  mmu_$installi
         .globl  _mmu_$installi

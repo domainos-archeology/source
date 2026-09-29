@@ -50,11 +50,11 @@
         .section ".text.MMU_$REMOVE_VIRTUAL","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C
-        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30
-        .equ    MMU_$VA_SHIFT,  0x00E23D34
-        .equ    MMU_CSR,        0x00FFB400
-        .equ    PFT_BASE,       0x00FFB800
+        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .equ    VA_TO_PTT_OFFSET_MASK, 0x00E23D30  /* MMU_ASM data cell 0xE23D30, not yet an object: TODO(source-o56c) */
+        .equ    MMU_$VA_SHIFT,  0x00E23D34  /* MMU_ASM data cell 0xE23D34, not yet an object: TODO(source-o56c) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
 
         .globl  MMU_$REMOVE_VIRTUAL
         .globl  _MMU_$REMOVE_VIRTUAL

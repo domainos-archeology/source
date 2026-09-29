@@ -47,7 +47,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test check check-layout
+.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm
 
 all:: domain_os
 
@@ -107,7 +107,7 @@ $(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(SAU2_MAP)
 # first inversion, the number placed and what fell into the catch-all.  (The
 # ELF has one RWX segment because the module data blocks now sit among the
 # code in `.text'; the RFC image is flat binary, so that is expected.)
-check: check-layout
+check: check-layout check-asm
 
 check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	@echo "[CHECK] layout: static checks"
@@ -117,6 +117,22 @@ check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	    --unresolved-symbols=ignore-all -o $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
 	@echo "[CHECK] layout: map order"
 	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) --check-elf $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
+
+# Relocation-aware byte gate for the hand-written assembly (source-6psc):
+# every <subsystem>/sau2/*.s object is compared run by run with the SAU2
+# image bytes in tools/asm_image_ref.txt (checked in, extracted once from
+# Ghidra with `asm_compare.py --extract'), with the bytes under each
+# relocation set aside and every relocated operand resolved against the
+# image operand: encodings identical to the image; address operands resolve
+# to our objects.  Documented widenings and deviations are listed by the
+# script.
+ALL_ASM_OBJS = $(foreach sub,$(SUBSYSTEMS),$($(sub)_ASM_OBJS))
+ASM_COMPARE := tools/asm_compare.py
+ASM_IMAGE_REF := tools/asm_image_ref.txt
+
+check-asm: $(ALL_ASM_OBJS) $(ASM_COMPARE) $(ASM_IMAGE_REF)
+	@echo "[CHECK] asm: relocation-aware compare with the image"
+	@python3 $(ASM_COMPARE) --map $(SAU2_MAP) --ref $(ASM_IMAGE_REF) $(ALL_ASM_OBJS)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c

@@ -67,10 +67,12 @@
  *   0xe244ec: ff                           literal: byte 0xff
  *   0xe244ed: 00 00 00                     zero fill to 0x00e244f0
  *
- * Every cross-module reference in the original is already an absolute long,
- * so the addresses below are `.set` constants rather than `.extern` symbols
- * (the same convention as fim/sau2/fim.s); that keeps the emitted bytes
- * identical to the image regardless of where the linker places anything.
+ * Every cross-module reference in the original is an absolute long; those
+ * whose target exists in our tree are symbols (source-6psc), so the
+ * encodings stay identical to the image and the address operands resolve
+ * to our objects (checked by tools/asm_compare.py in `make check').  The
+ * hardware registers and the one PEB data cell not yet in our tree keep
+ * their image addresses.
  * The one encoding gas cannot be asked for is the AND-immediate-effective-
  * address form the Apollo assembler used at 0x00E2449E (0xC0BC); gas always
  * picks ANDI (0x0280), so that instruction is emitted with .short.
@@ -79,16 +81,25 @@
         .section ".text.PEB_$STATUS_REG","ax",@progbits
         .even
 
-/* Hardware and code addresses the original encodes absolutely. */
+/* PEB hardware registers (SAU2, legitimately absolute). */
         .set    PEB_CTL_BYTE,       0x00FF7001  /* PEB control, bit 2 = ours  */
         .set    PEB_ACK_BYTE,       0x00FF73FC  /* touched to acknowledge     */
         .set    PEB_EXC_STATUS,     0x000070F4  /* absolute short in the image*/
+/* The owner ASID byte, the low byte of PEB_GLOBALS.owner_asid (image
+ * 0xE24C78 + 0x16 + 1, peb/peb_internal.h), which is still an absolute
+ * macro in C: kept until the PEB_PARITY data is an object.  TODO(source-i1uu) */
         .set    PEB_$OWNER_ASID_B,  0x00E24C8E  /* owner ASID byte            */
-        .set    FIM_$SPURIOUS_INT,  0x00E21F20  /* default jmp target         */
-        .set    IO_$USE_INT_STACK,  0x00E2E826
-        .set    CRASH_SYSTEM,       0x00E1E700
-        .set    DXM_$ADD_SIGNAL,    0x00E17270
-        .set    FIM_$EXIT,          0x00E208FE  /* shared interrupt exit      */
+/* Routines in our tree, by name: FIM_$SPURIOUS_INT (fim/sau2/fim.s, map
+ * 0xE21F20, the default jmp target), IO_$USE_INT_STACK (io/sau2, map
+ * 0xE2E826), CRASH_SYSTEM (misc/sau2, map 0xE1E700), DXM_$ADD_SIGNAL (dxm/,
+ * map 0xE17270) and PROC1_$INT_EXIT, the shared interrupt exit (proc1/sau2,
+ * map 0xE208FE; this file used to call it FIM_$EXIT, which is the map's name
+ * for 0xE228BC). */
+        .extern FIM_$SPURIOUS_INT
+        .extern IO_$USE_INT_STACK
+        .extern CRASH_SYSTEM
+        .extern DXM_$ADD_SIGNAL
+        .extern PROC1_$INT_EXIT
         .set    PEB_EXC_MASK,       0x0000003F
 
         .globl  PEB_$STATUS_REG
@@ -139,7 +150,7 @@ PEB_$DISP_INT_ADDR:
         move.w  (.Lw0,%pc),-(%sp)               /* 0x00e244cc */
         jsr     (DXM_$ADD_SIGNAL).l             /* 0x00e244d0 */
         adda.w  #0x10,%sp                       /* 0x00e244d6 */
-        jmp     (FIM_$EXIT).l                   /* 0x00e244da */
+        jmp     (PROC1_$INT_EXIT).l             /* 0x00e244da */
 
 /* Literal pool, 0x00e244e0..0x00e244ef. */
 .Lzero: .long   0                       /* 0x00e244e0 */

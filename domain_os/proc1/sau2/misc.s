@@ -1,4 +1,8 @@
 /*
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * PROC1_$GET_USP, PROC1_$GET_INFO_INT - Miscellaneous assembly functions
  *
  * Original addresses:
@@ -74,7 +78,7 @@ _PROC1_$GET_INFO_INT:
         /* Get PCB for this process */
         lsl.w   #2, %d1                 /* PID * 4 */
         lea     PCBS, %a0
-        movea.l (0, %a0, %d1*1), %a0    /* A0 = PCB */
+        movea.l (0, %a0, %d1.w*1), %a0  /* A0 = PCB; 0x00E20F38 2070 1000: word index */
 
         /* Get saved USP from PCB */
         move.l  0x38(%a0), (%a4)        /* *usp_ret = pcb->save_usp */

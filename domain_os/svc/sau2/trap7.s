@@ -1,6 +1,10 @@
 |
 | SVC_$TRAP7 - Domain/OS TRAP #7 System Call Dispatcher
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | TRAP #7 handles syscalls (0-58) that take 6 arguments.
 | User programs invoke system calls via TRAP #7 with:
 |   - D0.w = syscall number (0-58)

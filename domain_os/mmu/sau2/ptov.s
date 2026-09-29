@@ -24,9 +24,9 @@
         .section ".text.MMU_$PTOV","ax",@progbits
         .even
 
-        .equ    M68020,         0x00E23D2E
-        .equ    PFT_BASE,       0x00FFB800
-        .equ    ASID_TABLE,     0x00EC2800
+        .equ    M68020,         0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
 
         .globl  MMU_$PTOV
         .globl  _MMU_$PTOV

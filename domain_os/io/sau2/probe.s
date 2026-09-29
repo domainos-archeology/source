@@ -1,6 +1,10 @@
 /*
  * io_$probe - Hardware probe with bus error recovery
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Touches a device register with interrupts off and a temporary bus-error
  * handler installed, and reports whether the access completed.  Used by
  * flp/, prom/, peb/, win/ and smd/ to decide whether a controller is
@@ -54,8 +58,11 @@
         .even
 
         /* Patch cell read by FIM_$BUS_ERR: when non-zero the bus-error
-         * handler jumps here instead of crashing (fim/sau2/bus_err.s). */
-        .equ    BUS_ERROR_SWITCH,   0x00E218CC
+         * handler jumps here instead of crashing.  BUS_ERROR_SWITCH (map
+         * 0x00E218CC) is the operand of JMP_TO_BUS_ERR in
+         * fim/sau2/bus_err.s, used by name (source-6psc). */
+        .extern BUS_ERROR_SWITCH
+        /* SAU2 MMU status register (hardware, legitimately absolute). */
         .equ    MMU_STATUS_REG,     0x00FFB403
 
         .globl  io_$probe
@@ -78,7 +85,7 @@ _io_$probe:
         ori     #0x0700, %sr            /* 0x00E29150 IPL 7                */
 
         lea     .Lbus_error(%pc), %a0   /* 0x00E29154 -> 0x00E29192        */
-        move.l  %a0, BUS_ERROR_SWITCH   /* 0x00E29158 arm the recovery     */
+        move.l  %a0, (BUS_ERROR_SWITCH).l /* 0x00E29158 arm the recovery   */
 
         move.l  %sp, %d1                /* 0x00E2915E SP for the stub      */
 
@@ -113,7 +120,7 @@ _io_$probe:
         st      %d0                     /* 0x00E29182 D0.b = 0xFF          */
 
 .Lexit:
-        clr.l   BUS_ERROR_SWITCH        /* 0x00E29184 disarm the recovery  */
+        clr.l   (BUS_ERROR_SWITCH).l    /* 0x00E29184 disarm the recovery  */
         move    %d3, %sr                /* 0x00E2918A restore SR/IPL       */
         movem.l (%sp)+, %d3/%a2/%a4     /* 0x00E2918C                      */
         rts                             /* 0x00E29190                      */

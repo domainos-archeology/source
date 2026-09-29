@@ -2,6 +2,10 @@
  * smd/sau2/cursor_thunks.s - SMD_$XOR_CURSOR / SMD_$OR_CURSOR
  *                            (hand-written assembly)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Original addresses:
  *   SMD_$XOR_CURSOR  0x00E2720E (trampoline, 10 bytes)
  *   SMD_$OR_CURSOR   0x00E27218 (trampoline, 10 bytes)
@@ -41,6 +45,14 @@
  * The two dispatch cells are unnamed in the map; they are emitted below so
  * the block stays contiguous through 0x00E27229, where
  * MATROX_$BOARD_INSTALLED begins.
+ *
+ * Our link does not keep those distances (SMD_$CURSOR_TABLE is a C object
+ * in smd/smd_data.c, placed with the other data, not 0x3a6 bytes after
+ * SMD_$DISP1_INT), so the three (d16,A5) references are written as
+ * absolute references to the cells by name (source-6psc): 2 bytes longer
+ * each; tools/asm_compare.py checks that each names the cell the image's
+ * (d16,A5) did (A5 = 0x00E26F20).  Everything else is byte-identical to
+ * the image; A5 still receives the base for nothing else.
  *
  * Entry (Pascal calling sequence, caller cleans up; the one caller,
  * SHOW_CURSOR at 0x00E6E396..0x00E6E3B6, pushes seven longwords and then
@@ -126,7 +138,7 @@ Lor_entry:
 
 Lbody:
         move.w  #0x8,-(%sp)             /* 00e15ba2                          */
-        movea.l 0x302(%a5),%a0          /* 00e15ba6: -> PROC1_$SET_LOCK      */
+        movea.l (Lsmd_wired_set_lock).l,%a0 /* 00e15ba6: movea.l (0x302,A5) -> PROC1_$SET_LOCK */
         jsr     (%a0)                   /* 00e15baa                          */
         addq.l  #2,%sp                  /* 00e15bac                          */
 
@@ -134,7 +146,7 @@ Lbody:
         move.w  #0x28,%d0               /* 00e15bae                          */
         movea.l 0x24(%sp),%a0           /* 00e15bb2: A0 = cursor_num         */
         mulu.w  (%a0),%d0               /* 00e15bb6                          */
-        lea     0x3a6(%a5),%a1          /* 00e15bb8: = SMD_$CURSOR_TABLE     */
+        lea     (SMD_$CURSOR_TABLE).l,%a1 /* 00e15bb8: lea (0x3a6,A5) = SMD_$CURSOR_TABLE */
         adda.w  %d0,%a1                 /* 00e15bbc                          */
 
         movea.l 0x28(%sp),%a0           /* 00e15bbe: A0 = cursor_pos         */
@@ -234,7 +246,7 @@ Lor_loop:
 Lunlock:
         st      %d2                     /* 00e15c52: low byte true, rest kept*/
         move.w  #0x8,-(%sp)             /* 00e15c54                          */
-        movea.l 0x306(%a5),%a0          /* 00e15c58: -> PROC1_$CLR_LOCK      */
+        movea.l (Lsmd_wired_clr_lock).l,%a0 /* 00e15c58: movea.l (0x306,A5) -> PROC1_$CLR_LOCK */
         jsr     (%a0)                   /* 00e15c5c                          */
         addq.l  #2,%sp                  /* 00e15c5e                          */
         move.l  %d2,%d0                 /* 00e15c60                          */

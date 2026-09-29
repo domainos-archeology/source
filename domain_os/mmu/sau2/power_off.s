@@ -14,7 +14,7 @@
         .section ".text.MMU_$POWER_OFF","ax",@progbits
         .even
 
-        .equ    MMU_POWER_REG,  0x00FFB402
+        .equ    MMU_POWER_REG,  0x00FFB402  /* SAU2 MMU power register (hardware) */
 
         .globl  MMU_$POWER_OFF
         .globl  _MMU_$POWER_OFF

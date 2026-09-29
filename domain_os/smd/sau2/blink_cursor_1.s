@@ -2,6 +2,10 @@
  * smd/sau2/blink_cursor_1.s - SMD_$BLINK_CURSOR_1 / SMD_$BLINK_CURSOR
  *                             (hand-written assembly)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Original addresses (SAU2 map domain_os.10.2.map, segment
  * "D E26F20 SMD_WIRED size = 5E0"):
  *   SMD_$BLINK_CURSOR_1   0x00E2722C, 0x54 bytes (..0x00E2727F)
@@ -76,7 +80,10 @@
         .globl  SMD_$BLINK_CURSOR_1
         .globl  SMD_$BLINK_CURSOR
 
-/* Unit 1's controller register block and display memory, wired addresses. */
+/* Unit 1's controller register block and display memory, wired addresses:
+ * SAU2 hardware, legitimately absolute (arch/m68k/sau2/hw.h
+ * SAU2_DISPLAY_CTRL_REGS / SAU2_DISPLAY_MEM_BASE; gas cannot include that
+ * C header, so the values are repeated here). */
         .set    SMD_UNIT1_CTRL_REGS,    0x00FF9800
         .set    SMD_UNIT1_DISPLAY_BASE, 0x00FC0000
 

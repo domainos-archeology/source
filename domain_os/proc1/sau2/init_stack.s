@@ -1,6 +1,10 @@
 /*
  * proc1/sau2/init_stack.s - Process Stack Initialization (m68k/SAU2)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Initializes a process's stack for first context switch.
  * Sets up the initial stack frame so that when the dispatcher
  * context-switches to this process, it will "return" to the

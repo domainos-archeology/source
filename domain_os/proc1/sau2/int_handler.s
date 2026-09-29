@@ -1,6 +1,10 @@
 /*
  * PROC1_$INT_ADVANCE, PROC1_$INT_EXIT - Interrupt handler exit routines
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * These functions handle the cleanup and potential rescheduling when
  * exiting from an interrupt handler.
  *
@@ -28,7 +32,7 @@
 /*
  * OS stack boundary
  */
-        .set    OS_STACK_LIMIT, 0x00EB2BE8
+        .set    OS_STACK_LIMIT, 0x00EB2BE8  /* STACK segment (map D EB0000 STACK, 0x18 below INT_STACK_BASE 0xEB2C00), not yet an object: TODO(source-4k71) */
 
 /*
  * PROC1_$INT_ADVANCE - Called after advancing an event count from interrupt
@@ -44,7 +48,22 @@ PROC1_$INT_ADVANCE:
 _PROC1_$INT_ADVANCE:
         ori.w   #0x0700, %sr            /* Disable interrupts */
         bsr.w   ADVANCE_INT             /* Advance the event count */
-        /* Fall through to common exit path */
+        /* Fall through into PROC1_$INT_EXIT, which masks again */
+
+/*
+ * PROC1_$INT_EXIT (0x00E208FE) - Standard interrupt exit routine
+ *
+ * Called at the end of interrupt handlers to check for rescheduling
+ * and process deferred work.  In the image it directly follows
+ * PROC1_$INT_ADVANCE, which falls into it (re-executing the `ori').
+ *
+ * Entry: SR on stack at offset 0x10 (standard interrupt frame)
+ */
+        .globl  PROC1_$INT_EXIT
+        .globl  _PROC1_$INT_EXIT
+PROC1_$INT_EXIT:
+_PROC1_$INT_EXIT:
+        ori.w   #0x0700, %sr            /* Disable interrupts */
 
 /*
  * Common interrupt exit processing
@@ -108,32 +127,17 @@ check_reschedule:
         move.w  PROC1_$ATOMIC_OP_DEPTH, %d0
         bne.s   atomic_deferred         /* Can't switch now */
 
-        /* Perform context switch */
+        /* Perform context switch, then fall into the return */
         bsr.w   PROC1_$DISPATCH_INT3
-        bra.s   int_exit_return
-
-atomic_deferred:
-        /* Mark that switch was deferred */
-        blt.s   int_exit_return         /* If negative, already marked */
-        sub.w   #-0x7FFF, %d0           /* Add 0x7FFF to mark deferred */
-        move.w  %d0, PROC1_$ATOMIC_OP_DEPTH
-        /* Fall through to return */
 
 int_exit_return:
         movem.l (%sp)+, %d0-%d1/%a0-%a1 /* Restore scratch registers */
         jmp     FIM_$EXIT               /* Return from interrupt */
 
-/*
- * PROC1_$INT_EXIT - Standard interrupt exit routine
- *
- * Called at the end of interrupt handlers to check for rescheduling
- * and process deferred work.
- *
- * Entry: SR on stack at offset 0x10 (standard interrupt frame)
- */
-        .globl  PROC1_$INT_EXIT
-        .globl  _PROC1_$INT_EXIT
-PROC1_$INT_EXIT:
-_PROC1_$INT_EXIT:
-        ori.w   #0x0700, %sr            /* Disable interrupts */
-        bra.w   int_exit_check          /* Join common exit path */
+/* In the image this arm follows the return (0x00E2099A..0x00E209A7). */
+atomic_deferred:
+        /* Mark that switch was deferred */
+        blt.s   int_exit_return         /* If negative, already marked */
+        sub.w   #-0x7FFF, %d0           /* Add 0x7FFF to mark deferred */
+        move.w  %d0, PROC1_$ATOMIC_OP_DEPTH
+        bra.s   int_exit_return

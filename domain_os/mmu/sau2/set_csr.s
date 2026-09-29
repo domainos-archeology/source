@@ -17,8 +17,8 @@
         .section ".text.MMU_$SET_CSR","ax",@progbits
         .even
 
-        .equ    MMU_$PID_PRIV,  0x00E23D2C
-        .equ    MMU_CSR,        0x00FFB400
+        .equ    MMU_$PID_PRIV,  0x00E23D2C  /* MMU_ASM data cell (map 0xE23D2C), not yet an object: TODO(source-o56c) */
+        .equ    MMU_CSR,        0x00FFB400  /* SAU2 MMU CSR (hardware) */
 
         .globl  MMU_$SET_CSR
         .globl  _MMU_$SET_CSR

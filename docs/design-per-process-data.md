@@ -187,7 +187,17 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    the generator orders instead of pins - `-ffunction-sections`, per-routine
    sections in the hand-written assembly (byte-identical per file), and
    `build/sau2/layout.ld` listing code and blocks in SAU2-map order;
-   `make check` verifies the order. `STOP_$DATA.wire_start` is the link-time
+   `make check` verifies the order.  Amended 2026-09-29 (source-6psc): the
+   hand-written assembly is no longer byte-identical per file - a data
+   cell or routine it reached by its image address names different memory
+   once nothing is pinned, so those operands are symbol references
+   (`.extern`, or `.set NAME, BLOCK + off` aliases) and `make check`
+   (`check-asm`, `tools/asm_compare.py`) compares each file with the image
+   bytes in `tools/asm_image_ref.txt` modulo the relocation fields:
+   encodings identical, every relocated operand resolved in the image's
+   address space against the image operand.  Four `(d16,An)` operands whose
+   base register held an image address widened to `(xxx).l`; hardware and
+   PROM addresses stay literal. `STOP_$DATA.wire_start` is the link-time
    address of `STOP_$WATCH`; `wire_end` keeps the image literal until the
    FILE_ block exists (source-h5ro).
 2. **name** (four lock arrays, A5 0xE7FD24; done as `NAME_$OLD_DIR_DATA`,

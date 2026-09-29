@@ -1,6 +1,10 @@
 /*
  * proc1/sau2/ready_list.s - the ready-list primitives, as the image has them
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Two blocks of hand-written code from the PROC1_ASM segment:
  *
  *   0x00E206D2 .. 0x00E206EE   PROC1_$REMOVE_READY (4-byte stack gate)

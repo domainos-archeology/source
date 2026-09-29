@@ -1,6 +1,11 @@
 /*
  * fim/sau2/fim.s - FIM Assembly Routines (m68k/SAU2)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects. Most of this file is a documented deviation
+ * (KNOWN_DEVIATIONS, source-kt66).
+ *
  * Combined assembly for the Fault/Interrupt Manager module.
  * All functions are ordered by their original ROM addresses to preserve
  * the memory layout, enabling PC-relative references between functions
@@ -47,20 +52,14 @@
  * SAU2/68010 build which has no FPU.  For builds targeting 68020+
  * with 68881/68882, replace with full implementations.
  *
- * KNOWN DEFECT (bead source-6psc): the `.equ' cells below still embed the
- * IMAGE addresses of foreign data - PROC1_CURRENT 0x00E20608,
- * PROC1_AS_ID 0x00E2060A, OS_STACK_BASE 0x00E25C18, FIM_QUIT_INH
- * 0x00E2248A, TIME_CLOCKH 0x00E2B0D4 - and the instructions that use them
- * (`move.w (PROC1_CURRENT).l,%d0', `lea (OS_STACK_BASE).l,%a0', ...)
- * assemble to those absolute addresses.  Since map-order placement
- * replaced pinning (docs/design-per-process-data.md), the linked objects
- * PROC1_$CURRENT, PROC1_$AS_ID, PROC1_$DATA.os_stack_base,
- * FIM_$WIRED_DATA.quit_inh and TIME_$CLOCKH no longer sit at those
- * addresses, so these operands point at the wrong cells in our link.  The
- * bytes are kept as the image has them until source-6psc converts all
- * .s files to symbol references under a relocation-aware byte gate; the
- * FIM_$TRACE_STS / FIM_$PENDING_TRACE_FAULTS `.set' aliases below are the
- * pattern it will apply.
+ * Address operands (source-6psc): every reference to a cell or routine
+ * that exists in our tree is a symbol (or a `.set NAME, BLOCK + off' alias
+ * onto a MODULE_DATA block field), so the operand relocates to our object;
+ * encodings are those of the image except where noted.  Targets not yet in
+ * our tree keep the image literal with a TODO citing their bead.  The
+ * relocation-aware gate (tools/asm_compare.py, `make check') lists this
+ * file as a documented deviation: most of its routines are not yet a
+ * faithful transcription of the image (bead in tools/asm_abs_addrs.md).
  */
 
         .section ".text.FIM_$CRASH","ax",@progbits
@@ -70,50 +69,51 @@
  * External references - code and data outside this file
  * ==================================================================== */
 
-        /* Process/scheduling data */
-        .equ    PROC1_CURRENT,      0x00E20608  /* Current process ID (word) */
-        .equ    PROC1_AS_ID,        0x00E2060A  /* Current address space ID */
-        .equ    OS_STACK_BASE,      0x00E25C18  /* OS stack base table */
+        /* Process/scheduling data: PROC1_$CURRENT (uint16_t, map
+         * 0xE20608) and PROC1_$AS_ID (uint16_t, map 0xE2060A) are
+         * proc1/proc1_data.c objects, used by name. */
+        .extern PROC1_$CURRENT
+        .extern PROC1_$AS_ID
+        /* OS stack base table: PROC1_$DATA.os_stack_base[pid] (uint32_t,
+         * proc1/proc1.h, block image 0x00E254E8, field +0x730 = map
+         * OS_STACK_BASE 0x00E25C18). */
+        .extern PROC1_$DATA
+        .set    OS_STACK_BASE, PROC1_$DATA + 0x730
 
         /* Number of elements in every FIM per-address-space table; see the
          * derivation of FIM_AS_COUNT in fim/fim.h. */
         .equ    FIM_AS_COUNT,       58
 
-        /* FIM data (not yet emitted in this file) */
-        .equ    FIM_QUIT_INH,       0x00E2248A  /* Quit inhibit array */
-
         /* FIM data in the FIM_$WIRED_DATA block (fim/fim.h, block image
          * 0x00E21FE6), reached by name through these aliases.
-         * FIM_$TRACE_BIT is the sibling of these two and IS emitted in this
+         * FIM_$TRACE_BIT is the sibling of these and IS emitted in this
          * file (0x00E21890, just after FIM_$SETUP_RETURN). */
         .extern FIM_$WIRED_DATA
-        .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC            /* 0x00E223A2: 4 bytes per AS */
+        .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC            /* 0x00E223A2: status_$t per AS */
         .set    FIM_$PENDING_TRACE_FAULTS, FIM_$WIRED_DATA + 0x018 /* 0x00E21FFE: longword count */
+        .set    FIM_$QUIT_INH, FIM_$WIRED_DATA + 0x4A4             /* 0x00E2248A: int8_t per AS */
 
-        /* FIM code not yet in this file */
-        .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler (Ghidra: FIM_$COMMON_FAULT) */
-        .equ    FIM_BUILD_DF,       0x00E213A4  /* Build delivery frame (Ghidra label: FIM_$COM; NOT FIM_$BUILD_DF, which is 0x00E0A458) */
+        /* FIM code not yet in our tree: keep the image address.
+         * TODO(source-k79b): FIM_UNWIRED's common fault entry and FIM_$COM
+         * (map 0xE213A4), and FIM_$SOFT_FAULT's tail at 0xE21458. */
+        .equ    FIM_COMMON_FAULT,   0x00E213A0  /* Common fault handler (Ghidra: FIM_$COMMON_FAULT; map segment FIM_UNWIRED) */
+        .equ    FIM_BUILD_DF,       0x00E213A4  /* map FIM_$COM (NOT FIM_$BUILD_DF, which is 0x00E0A458) */
+        .equ    GENERATE_TARGET,    0x00E21458  /* FIM_$SOFT_FAULT + 0xC (Ghidra: FIM_$GENERATE_TARGET) */
 
-        /* ML module */
-        .equ    ML_EXCLUSION_START, 0x00E20DF8  /* Acquire exclusion lock */
-        .equ    ML_EXCLUSION_STOP,  0x00E20E7E  /* Release exclusion lock */
-
-        /* FP module */
-        .equ    FP_SWITCH_OWNER_D2, 0x00E21B16  /* fp_$switch_owner+6: entry with D2 preloaded */
-
-        /* Crash support */
-        .equ    CRASH_SYSTEM,       0x00E1E700  /* System crash function */
-        .equ    CRASH_PUTS,         0x00E1E7C8  /* Console output function */
-
-        /* Hardware/peripheral */
-        .equ    STOP_WATCH_UII,     0x00E81A56  /* Stopwatch UII handler */
-        .equ    TIME_CLOCKH,        0x00E2B0D4  /* High word of system clock */
-        .equ    CACHE_CLEAR,        0x00E242D4  /* Cache clear function */
-        .equ    IO_HANDLER,         0x00E208FE  /* I/O interrupt handler */
-        .equ    PARITY_CHK,         0x00E0AE68  /* Parity check function */
-
-        /* Fault generation (not yet in this file) */
-        .equ    GENERATE_TARGET,    0x00E21458  /* Fault generation entry (Ghidra: FIM_$GENERATE_TARGET) */
+        /* Routines in our tree, by name:
+         *   ML_$EXCLUSION_START / ML_$EXCLUSION_STOP  (ml/, map 0xE20DF8 / 0xE20E7E)
+         *   fp_$switch_owner_d2   fp_$switch_owner+6, D2 preloaded
+         *                         (fp/sau2/fp_context.s, 0x00E21B16)
+         *   CRASH_SYSTEM          (misc/sau2/crash_system.s, map 0xE1E700)
+         *   crash_puts_string     console output, string in A0
+         *                         (misc/sau2/crash_system.s, 0x00E1E7C8)
+         *   STOP_$WATCH_UII       (stop/sau2/watch.s, map 0xE81A56)
+         *   CACHE_$CLEAR          (cache/sau2/clear.s, map 0xE242D4)
+         *   PROC1_$INT_EXIT       interrupt exit (proc1/sau2/int_handler.s,
+         *                         map 0xE208FE; this file used to call it
+         *                         IO_HANDLER)
+         *   PARITY_$CHK           (parity/, map 0xE0AE68)
+         * and data: TIME_$CLOCKH (uint32_t, time/time.h, map 0xE2B0D4). */
 
 
 /* ====================================================================
@@ -199,7 +199,7 @@ crash_no_extra:
 
         /* Display crash message */
         lea     (crash_msg,%pc),%a0     /* A0 = message string */
-        jsr     (CRASH_PUTS).l          /* Output to console */
+        jsr     (crash_puts_string).l          /* Output to console */
 
         /* Set up for CRASH_SYSTEM call */
         movea.l (0xA,%sp),%a0           /* A0 = register save area */
@@ -293,7 +293,7 @@ FIM_$UII:
         bne.b   uii_restore             /* Not stopwatch, fault */
 uii_stopwatch:
         movea.l (%sp)+,%a0              /* Restore A0 */
-        jmp     (STOP_WATCH_UII).l      /* Dispatch to stopwatch */
+        jmp     (STOP_$WATCH_UII).l      /* Dispatch to stopwatch */
 uii_restore:
         movea.l (%sp)+,%a0              /* Restore A0 */
 uii_fault:
@@ -427,7 +427,7 @@ FIM_$ILLEGAL_USP:
  * ==================================================================== */
         .global FIM_$CLEANUP
 FIM_$CLEANUP:
-        move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
+        move.w  (PROC1_$CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
         movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
         lsl.w   #2,%d0                  /* D0 = process * 4 (index) */
         lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
@@ -454,7 +454,7 @@ FIM_$CLEANUP:
  * ==================================================================== */
         .global FIM_$RLS_CLEANUP
 FIM_$RLS_CLEANUP:
-        move.w  (PROC1_CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
+        move.w  (PROC1_$CURRENT).l,%d0   /* D0 = PROC1_$CURRENT */
         movea.l (0x4,%sp),%a1           /* A1 = handler context ptr */
         lsl.w   #2,%d0                  /* D0 = process * 4 */
         lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
@@ -516,7 +516,7 @@ FIM_$SIGNAL:
         addq.l  #4,%sp                  /* Pop return address */
         move.l  (%sp)+,%d0              /* D0 = status code */
 signal_common:
-        move.w  (PROC1_CURRENT).l,%d1   /* D1 = PROC1_$CURRENT */
+        move.w  (PROC1_$CURRENT).l,%d1   /* D1 = PROC1_$CURRENT */
         lea     (FIM_$CLEANUP_STACK:w,%pc),%a0 /* A0 = &cleanup_stack[0] */
         lsl.w   #2,%d1                  /* D1 = process * 4 */
         adda.w  %d1,%a0                 /* A0 = &cleanup_stack[process] */
@@ -611,8 +611,8 @@ FIM_$PROC2_STARTUP:
  * ==================================================================== */
         .global FIM_$SINGLE_STEP
 FIM_$SINGLE_STEP:
-        move.w  (PROC1_AS_ID).l,%d0     /* D0 = AS ID */
-        lea     (FIM_QUIT_INH).l,%a0    /* A0 = quit inhibit table */
+        move.w  (PROC1_$AS_ID).l,%d0     /* D0 = AS ID */
+        lea     (FIM_$QUIT_INH).l,%a0    /* A0 = quit inhibit table */
         st      (0,%a0,%d0:w)           /* Set quit inhibited */
         lsl.w   #2,%d0                  /* D0 = AS * 4 */
         lea     (FIM_$TRACE_STS).l,%a0  /* A0 = trace status table */
@@ -692,7 +692,7 @@ fault_ret_exit:
  * ==================================================================== */
         .global FIM_$SETUP_RETURN
 FIM_$SETUP_RETURN:
-        move.w  (PROC1_CURRENT).l,%d0   /* D0 = current process ID */
+        move.w  (PROC1_$CURRENT).l,%d0   /* D0 = current process ID */
         lsl.w   #2,%d0                  /* D0 *= 4 (index into table) */
         lea     (OS_STACK_BASE).l,%a0   /* A0 = stack base table */
         movea.l (0,%a0,%d0:w),%a0       /* A0 = this process's stack top */
@@ -836,16 +836,16 @@ FIM_$FLINE:
 fim_fline_switch:                               /* 0x00E21AD6: alternate entry */
                                                 /* used by FIM_$BUS_ERR, which */
                                                 /* has already tested FP_$SAVEP */
-        move.w  (PROC1_AS_ID).l,%d2             /* d2 = current AS ID */
+        move.w  (PROC1_$AS_ID).l,%d2             /* d2 = current AS ID */
         beq.b   .fline_no_fpu                   /* AS 0 -> UII */
         cmp.w   (FP_$OWNER,%pc),%d2             /* Compare with FP owner */
         beq.b   .fline_no_fpu                   /* Same owner -> UII */
         pea     (FP_$EXCLUSION,%pc)              /* Push exclusion lock ptr */
-        jsr     (ML_EXCLUSION_START).l          /* Acquire exclusion */
+        jsr     (ML_$EXCLUSION_START).l          /* Acquire exclusion */
         addq.l  #4,%sp
-        jsr     (FP_SWITCH_OWNER_D2).l          /* Switch FP context (d2 has AS ID) */
+        jsr     (fp_$switch_owner_d2).l          /* Switch FP context (d2 has AS ID) */
         pea     (FP_$EXCLUSION,%pc)              /* Push exclusion lock ptr */
-        jsr     (ML_EXCLUSION_STOP).l           /* Release exclusion */
+        jsr     (ML_$EXCLUSION_STOP).l           /* Release exclusion */
         addq.l  #4,%sp
         movem.l (%sp)+,%d0-%d3/%a0-%a1          /* Restore registers */
         jmp     FIM_$EXIT                       /* RTE - retry FPU instruction */
@@ -935,7 +935,7 @@ FIM_$SPURIOUS_INT:
         movem.l %d0/%a5,-(%sp)          /* Save registers */
         lea     (spur_data,%pc),%a5     /* A5 = local data */
         addq.l  #1,(spur_count,%a5)     /* Increment count */
-        move.l  (TIME_CLOCKH).l,%d0     /* D0 = current clock */
+        move.l  (TIME_$CLOCKH).l,%d0     /* D0 = current clock */
         cmp.l   (spur_last_clock,%a5),%d0 /* Same tick? */
         bne.b   spur_new_tick           /* No, reset counter */
         subq.w  #1,(spur_tick_cnt,%a5)  /* Decrement tick count */
@@ -983,12 +983,12 @@ spur_regs:
         .global FIM_$PARITY_TRAP
 FIM_$PARITY_TRAP:
         movem.l %d0/%d1/%a0/%a1,-(%sp)  /* Save registers */
-        jsr     (PARITY_CHK).l          /* Check parity status */
+        jsr     (PARITY_$CHK).l          /* Check parity status */
         lea     (parity_data,%pc),%a0   /* A0 = local data */
         clr.w   (%a0)                   /* Clear status */
         tst.b   %d0                     /* Check result */
         bmi.b   parity_error            /* Negative = error */
-        jmp     (IO_HANDLER).l          /* Handle as I/O int */
+        jmp     (PROC1_$INT_EXIT).l          /* Handle as I/O int */
 parity_error:
         /* Parity error - try to deliver as fault */
         movem.l (%sp)+,%d0/%d1/%a0/%a1  /* Restore */
@@ -1104,7 +1104,7 @@ FIM_$DELIVER_TRACE_FAULT:
         addq.l  #1,(FIM_$PENDING_TRACE_FAULTS).l /* Increment pending count */
         /* Patch FIM_$EXIT to NOP to catch trace */
         move.w  #0x4E71,(FIM_$EXIT).l   /* Write NOP instruction */
-        jsr     (CACHE_CLEAR).l         /* Clear instruction cache */
+        jsr     (CACHE_$CLEAR).l         /* Clear instruction cache */
 trace_already_set:
         move    (%sp)+,%sr              /* Restore SR */
         rts
@@ -1133,7 +1133,7 @@ FIM_$CLEAR_TRACE_FAULT:
         bne.b   trace_not_set           /* Still others pending */
         /* Restore FIM_$EXIT to RTE */
         move.w  #0x4E73,(FIM_$EXIT).l   /* Write RTE instruction */
-        jsr     (CACHE_CLEAR).l         /* Clear instruction cache */
+        jsr     (CACHE_$CLEAR).l         /* Clear instruction cache */
 trace_not_set:
         andi    #0xF8FF,%sr             /* Re-enable interrupts */
         rts

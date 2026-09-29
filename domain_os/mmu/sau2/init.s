@@ -26,15 +26,19 @@
  * Deviation from the image bytes: `lea (-0xe,PC),A5' addresses a data cell
  * in another object; a 16-bit PC-relative displacement cannot survive
  * separate assembly, so it is `lea M68020,%a5' (6 bytes instead of 4).
- * Everything after it is byte-identical to the image; the `(-0x4,PC)'
- * read stays PC-relative because its target (local label 1) is in this
- * file.
+ * The `(-0x4,PC)' read stays PC-relative because its target (local label
+ * 1) is in this file.  The store into CACHE_$CLEAR, `(0x5a6,A5)' in the
+ * image, is written `(CACHE_$CLEAR).l' (2 bytes longer): with A5 on the
+ * image address of M68020 the displacement would name the image address of
+ * CACHE_$CLEAR, not our routine (source-6psc).  tools/asm_compare.py checks
+ * both widenings; everything else is byte-identical to the image.
  */
 
         .section ".text.MMU_$INIT","ax",@progbits
         .even
 
-        .equ    M68020, 0x00E23D2E
+        .extern CACHE_$CLEAR
+        .equ    M68020, 0x00E23D2E  /* MMU_ASM data cell (map 0xE23D2E), not yet an object: TODO(source-o56c) */
 
         .globl  MMU_$INIT
         .globl  _MMU_$INIT
@@ -50,6 +54,6 @@ _MMU_$INIT:
         move.w  #6,(8,%a5)              /* 0xE23D50  3b 7c 00 06 00 08 */
         movea.l (%sp)+,%a5              /* 0xE23D56  2a 5f             */
 1:      rts                             /* 0xE23D58  4e 75             */
-2:      move.w  1b(%pc),(0x5a6,%a5)     /* 0xE23D5A  3b 7a ff fc 05 a6 */
+2:      move.w  1b(%pc),(CACHE_$CLEAR).l /* 0xE23D5A  3b 7a ff fc 05 a6: (0x5a6,A5) */
         movea.l (%sp)+,%a5              /* 0xE23D60  2a 5f             */
         rts                             /* 0xE23D62  4e 75             */

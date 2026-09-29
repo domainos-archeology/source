@@ -1,6 +1,10 @@
 /*
  * ADVANCE / ADVANCE_INT / ADVANCE_ALL_INT - the eventcount advance engine
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * SAU2 map domain_os.10.2.map, PROC1_ASM segment (0xE1EAC8, size 0x24A4):
  *
  *      E20718  EC_$ADVANCE_WITHOUT_DISPATCH     MARKED

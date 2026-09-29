@@ -1,6 +1,10 @@
 /*
  * fim/sau2/bus_err.s - FIM_$BUS_ERR, the Domain/OS bus-error handler (m68k/SAU2)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Original ROM extent: 0x00E218CA .. 0x00E21ACB
  *   0x00E218CA  JMP_TO_BUS_ERR    (6 bytes)   jmp (BUS_ERROR_SWITCH).l
  *   0x00E218CC  BUS_ERROR_SWITCH  (4 bytes)   patchable jmp operand
@@ -13,15 +17,13 @@
  * into another handler's body, and a self-modifying jmp), so it is
  * transcribed here rather than translated to C.
  *
- * KNOWN DEFECT (bead source-6psc): the `.equ' cells PROC1_AS_ID
- * (0x00E2060A) and FP_SAVEP (0x00E218D0) below embed IMAGE addresses, and
- * `move.w (PROC1_AS_ID).l,...' / `tst.l (FP_SAVEP).l' assemble to them.
- * Map-order placement (docs/design-per-process-data.md) means the linked
- * PROC1_$AS_ID and FP_$SAVEP objects are not at those addresses, so the
- * operands point at the wrong cells in our link.  The bytes stay as the
- * image has them until source-6psc converts every .s file to symbol
- * references under a relocation-aware byte gate; the FIM_$TRACE_STS
- * `.set' alias below is the pattern it will apply.
+ * Address operands (source-6psc): references to cells and routines that
+ * exist in our tree are symbols, so they relocate to our objects; the
+ * encodings are the image's apart from the differences listed at the end
+ * of this comment, which tools/asm_compare.py (`make check') recognises
+ * and checks: encodings identical to the image; address operands resolve
+ * to our objects.  Targets not yet in our tree keep the image literal with
+ * a TODO citing their bead.
  *
  * ---------------------------------------------------------------------------
  * Stack layout
@@ -102,10 +104,10 @@
  *     displacement cannot survive independent assembly and linking, so these
  *     are re-encoded as absolute (or as a wider branch):
  *
- *       0x00E219B8  jmp (FIM_$EXIT,%pc)           4efa 0f02 -> 4ef9 00e228bc
+ *       0x00E219B8  jmp (FIM_$EXIT,%pc)           4efa 0f02 -> 4ef9 <FIM_$EXIT>
  *       0x00E219CE  bsr.w FIM_$DELIVER_TRACE_FAULT
- *                                                 6100 0e96 -> 4eb9 00e22866
- *       0x00E219DC  lea (FIM_$TRACE_STS,%pc),%a0  41fa 09c4 -> 41f9 00e223a2
+ *                                                 6100 0e96 -> 4eb9 <FIM_$DELIVER_TRACE_FAULT>
+ *       0x00E219DC  lea (FIM_$TRACE_STS,%pc),%a0  41fa 09c4 -> 41f9 <FIM_$TRACE_STS>
  *       0x00E21ACA  bra.b fim_fline_switch        600a      -> 6000 xxxx
  *
  *     Each grows by two bytes, so the emitted routine is 492 bytes rather
@@ -138,14 +140,22 @@
  * External references - code and data outside this file
  * ==================================================================== */
 
-        /* Process/scheduling data */
-        .equ    PROC1_AS_ID,        0x00E2060A  /* Current address space ID (word) */
+        /* Data and code in our tree, by name:
+         *   PROC1_$AS_ID              uint16_t, proc1/proc1_data.c (map 0xE2060A)
+         *   FIM_$EXIT                 the shared RTE, fim/sau2/fim.s (map 0xE228BC)
+         *   FIM_$DELIVER_TRACE_FAULT  fim/sau2/fim.s (map 0xE22866)
+         *   FP_$SAVEP                 uint32_t save-area table pointer,
+         *                             fim/sau2/fim.s (map 0xE218D0)
+         *   MMU_$INSTALL              mmu/sau2/install.s (map 0xE24048)
+         *   CACHE_$CLEAR              cache/sau2/clear.s (map 0xE242D4)
+         *   CRASH_SYSTEM(&status)     misc/sau2/crash_system.s (map 0xE1E700) */
+        .extern PROC1_$AS_ID
 
-        /* FIM code and data (emitted in fim/sau2/fim.s or not yet emitted) */
-        .equ    FIM_EXIT,           0x00E228BC  /* RTE */
-        .equ    FIM_COM,            0x00E213A4  /* Common fault delivery entry */
-        .equ    FIM_DELIVER_TRACE_FAULT, 0x00E22866
-        .equ    FP_SAVEP,           0x00E218D0  /* Non-zero if FPU hardware present */
+        /* Not yet in our tree: keep the image address.
+         * TODO(source-k79b): FIM_$COM, the common fault delivery entry.
+         * TODO(source-nojc): MST_$TOUCH. */
+        .equ    FIM_COM,            0x00E213A4  /* map FIM_$COM */
+        .equ    MST_TOUCH,          0x00E0DD40  /* map MST_$TOUCH */
 
         /* Per-AS trace fault status, 4 bytes per AS: the trace_sts field of
          * FIM_$WIRED_DATA (fim/fim.h, block image 0x00E21FE6, field +0x3BC);
@@ -153,13 +163,9 @@
         .extern FIM_$WIRED_DATA
         .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC  /* 0x00E223A2 */
 
-        /* Other subsystems */
-        .equ    MMU_INSTALL,        0x00E24048  /* MMU_$INSTALL */
-        .equ    MST_TOUCH,          0x00E0DD40  /* MST_$TOUCH */
-        .equ    CACHE_CLEAR,        0x00E242D4  /* CACHE_$CLEAR */
-        .equ    CRASH_SYSTEM,       0x00E1E700  /* CRASH_SYSTEM(&status) */
-
-        /* Hardware registers */
+        /* Hardware registers: SAU2 MMU/FPU registers, legitimately absolute
+         * (SAU-specific; not yet in arch/m68k/sau2/hw.h, which C shares -
+         * gas cannot include it, so the values are repeated here). */
         .equ    MMU_CSR_LOW,        0x00FFB401  /* Low byte of MMU CSR (0xFFB400) */
         .equ    FP_HW_OWNER,        0x00FFB402  /* Hardware FPU owner register */
         .equ    MMU_STATUS_REG,     0x00FFB403  /* MMU status / fault classification */
@@ -329,7 +335,7 @@ FIM_$BUS_ERR:
         lsr.l   #2,%d2
         add.w   #IO_WINDOW_PPN,%d2      /* Window starts at page frame 128 */
         move.l  %d2,-(%sp)              /* MMU_$INSTALL arg 1: page frame */
-        jsr     (MMU_INSTALL).l
+        jsr     (MMU_$INSTALL).l
         lea     (12,%sp),%sp            /* Pop the four arguments */
         bra.b   .bus_err_return
 
@@ -355,7 +361,7 @@ FIM_$BUS_ERR:
 .bus_err_return:
         movem.l (%sp)+,%d0-%d2/%a0-%a1  /* Restore working registers */
         addq.w  #8,%sp                  /* Discard the fault descriptor scratch */
-        jmp     (FIM_EXIT).l            /* RTE (was "jmp (FIM_$EXIT,%pc)") */
+        jmp     (FIM_$EXIT).l            /* RTE (was "jmp (FIM_$EXIT,%pc)") */
 
 /* --------------------------------------------------------------------
  * MST_$TOUCH could not satisfy the fault.
@@ -368,10 +374,10 @@ FIM_$BUS_ERR:
 
         /* A guard page was touched: turn it into a trace fault for the
          * current address space and let the process run on. */
-        move.w  (PROC1_AS_ID).l,-(%sp)
-        jsr     (FIM_DELIVER_TRACE_FAULT).l  /* was "bsr.w" (PC-relative) */
+        move.w  (PROC1_$AS_ID).l,-(%sp)
+        jsr     (FIM_$DELIVER_TRACE_FAULT).l  /* was "bsr.w" (PC-relative) */
         addq.l  #2,%sp
-        move.w  (PROC1_AS_ID).l,%d0
+        move.w  (PROC1_$AS_ID).l,%d0
         lsl.w   #2,%d0                  /* 4 bytes of trace status per AS */
         lea     (FIM_$TRACE_STS).l,%a0  /* was "lea (FIM_$TRACE_STS,%pc),%a0" */
         move.l  #STATUS_MST_GUARD_FAULT,(0,%a0,%d0.w)
@@ -455,7 +461,7 @@ FIM_$BUS_ERR:
 .bus_err_switch:
         tst.l   (BUS_ERROR_SWITCH).l
         beq.b   .bus_err_no_switch
-        jsr     (CACHE_CLEAR).l         /* Drop anything the aborted cycle cached */
+        jsr     (CACHE_$CLEAR).l         /* Drop anything the aborted cycle cached */
         movem.l (%sp)+,%d0-%d2/%a0-%a1  /* Scratch + frame stay on the stack; */
                                         /* the switch target unwinds them */
         bra.w   JMP_TO_BUS_ERR
@@ -478,7 +484,7 @@ FIM_$BUS_ERR:
  * Assembly (0x00E21A96):
  * -------------------------------------------------------------------- */
 .bus_err_fp:
-        tst.l   (FP_SAVEP).l            /* FPU hardware present? */
+        tst.l   (FP_$SAVEP).l            /* FPU hardware present? */
         bne.b   .bus_err_fp_check
         move.b  #0,(FP_HW_OWNER).l      /* No FPU: disown and retry */
         bra.b   .bus_err_fp_done
@@ -486,7 +492,7 @@ FIM_$BUS_ERR:
 .bus_err_fp_check:
         btst    #3,(MMU_CSR_LOW).l      /* FPU access cycle? */
         beq.b   .bus_err_fp_done
-        move.w  (PROC1_AS_ID).l,%d0     /* Running in a real address space? */
+        move.w  (PROC1_$AS_ID).l,%d0     /* Running in a real address space? */
         beq.b   .bus_err_fp_done
         movem.l (%sp)+,%d0-%d2/%a0-%a1  /* Undo this handler's frame entirely */
         addq.w  #8,%sp

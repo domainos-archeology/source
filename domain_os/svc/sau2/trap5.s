@@ -1,6 +1,10 @@
 |
 | SVC_$TRAP5 - Domain/OS TRAP #5 System Call Dispatcher
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | TRAP #5 handles syscalls (0-98) that take 5 arguments; it is the busiest
 | of the fixed-argument dispatchers.  User programs invoke system calls via
 | TRAP #5 with:

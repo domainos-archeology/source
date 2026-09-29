@@ -47,9 +47,9 @@
         .section ".text.mmu_$remove_internal","ax",@progbits
         .even
 
-        .equ    PFT_BASE,       0x00FFB800
-        .equ    ASID_TABLE,     0x00EC2800
-        .equ    PTT_BASE,       0x00700000
+        .equ    PFT_BASE,       0x00FFB800  /* SAU2 page frame table (hardware) */
+        .equ    ASID_TABLE,     0x00EC2800  /* map MMU_$PTTX in OS_PMAPS, not yet an object: TODO(source-o56c) */
+        .equ    PTT_BASE,       0x00700000  /* SAU2 page translation table window (hardware) */
 
         .globl  mmu_$remove_internal
         .globl  _mmu_$remove_internal

@@ -1,6 +1,10 @@
 /*
  * PROC1_$DISPATCH_* - Process dispatcher functions
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * These functions implement context switching between processes
  * on the m68k architecture.
  *
@@ -46,15 +50,15 @@
 /*
  * Memory-mapped register
  */
-        .set    MMU_STATUS_REG, 0x00FFB403
+        .set    MMU_STATUS_REG, 0x00FFB403  /* SAU2 MMU status register (hardware) */
 
 /*
  * Error handling - crash if dispatcher called during atomic operation
  */
 atomic_op_error:
         pea     Bad_atomic_operation_err
-        jsr     CRASH_SYSTEM
-        bra.s   atomic_op_error         /* Loop forever (shouldn't return) */
+1:      jsr     CRASH_SYSTEM
+        bra.s   1b                      /* 0x00E209F8 60f8: re-call, no re-push */
 
 /*
  * PROC1_$DISPATCH - High-level dispatch entry point

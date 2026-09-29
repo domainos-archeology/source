@@ -2,6 +2,10 @@
 | SVC_$TRAP8 - Domain/OS TRAP #8 Variable-Argument System Call Dispatcher
 | plus the SVC_CATCHER fault tail shared by every TRAP dispatcher.
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | This is the entry point for variable-argument system calls in Domain/OS.
 | Unlike TRAP #1-5 and #7 which have fixed argument counts, TRAP #8 uses a
 | lookup table to determine how many arguments each syscall expects.

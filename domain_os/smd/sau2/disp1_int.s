@@ -1,6 +1,10 @@
 /*
  * smd/sau2/disp1_int.s - SMD_$DISP1_INT (hand-written assembly)
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Display-1 BLT/scroll interrupt handler.
  *
  * Original address: 0x00E26F20, 0x106 bytes (0x00E26F20..0x00E27025), followed
@@ -53,7 +57,7 @@ SMD_$DISP1_INT:
          * and the two displacement bytes cannot match the image.
          */
         lea     (SMD_DISPLAY_INFO:w,%pc),%a1
-        lea     (0xff9800).l,%a0        /* 00e26f32  41f9 00ff 9800          */
+        lea     (0xff9800).l,%a0        /* 00e26f32  41f9 00ff 9800: SAU2_DISPLAY_CTRL_REGS (hardware) */
 
         /* 00e26f38 tst.b (0x1,A0) / bge.w: not a BLT-done interrupt */
         tst.b   0x1(%a0)                /* 00e26f38  4a28 0001               */
@@ -459,7 +463,8 @@ Lblt_in_use:
 
 /*
  * A trailing longword holding the address of the base-level ADVANCE
- * (0x00E206EE).  Nothing in the image references it; it is emitted so the
- * next object keeps its address.
+ * (EC_$ADVANCE, map 0x00E206EE).  Nothing in the image references it; it
+ * is emitted so the next object keeps its place, and names the routine so
+ * it relocates to ours (source-6psc).
  */
-        .long   0x00e206ee              /* 00e2720a: EC_$ADVANCE              */
+        .long   EC_$ADVANCE             /* 00e2720a: 00e2 06ee                */

@@ -1,6 +1,10 @@
 /*
  * TIME_$WRT_VT_TIMER - Load the virtual timer counter
  *
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+ * identical to the image (modulo the documented widenings); address
+ * operands resolve to our objects.
+ *
  * Hand-written assembly in the TIME_ASM segment with a register calling
  * convention: the value arrives in D0w, A0 is preserved through A2 (which
  * is clobbered), and IN_VT_INT is cleared.  Its only caller is PROC1's
@@ -25,7 +29,7 @@
 TIME_$WRT_VT_TIMER:
 _TIME_$WRT_VT_TIMER:
     movea.l %a0, %a2                /* save the caller's A0 */
-    lea     (0xffac00).l, %a0       /* timer register block */
+    lea     (0xffac00).l, %a0       /* timer register block (SAU2 hardware, legitimately absolute) */
     movep.w %d0, 9(%a0)             /* VT counter, high byte at +9, low at +0xB */
     movea.l %a2, %a0                /* restore A0 */
     sf      (IN_VT_INT):l           /* IN_VT_INT = 0 (0x00E2AF6A) */

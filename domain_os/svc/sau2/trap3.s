@@ -1,6 +1,10 @@
 |
 | SVC_$TRAP3 - Domain/OS TRAP #3 System Call Dispatcher
 |
+| Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
+| identical to the image (modulo the documented widenings); address
+| operands resolve to our objects.
+|
 | TRAP #3 handles syscalls (0-154) that take 3 arguments.
 | User programs invoke system calls via TRAP #3 with:
 |   - D0.w = syscall number (0-154)
