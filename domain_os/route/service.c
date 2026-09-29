@@ -276,7 +276,7 @@ static void route_$close_port(route_$short_port_t *port_info,
     /* 0x00E69F7A-0x00E69F9E */
     if (port->port_type == ROUTE_PORT_TYPE_ROUTING) {
         SOCK_$CLOSE(port->socket);          /* 0x00E69F84 */
-        ROUTE_$N_USER_PORTS--;              /* 0x00E69F90 */
+        ROUTE_$RTWIRED_DATA.n_user_ports--;              /* 0x00E69F90 */
         ROUTE_$CLEANUP_WIRED();             /* 0x00E69F96 */
 
         /*
@@ -349,19 +349,19 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
      * exits on "bne" (cell != 2) and the second on "ble" (2 <= cell).
      */
     if (is_std_port < 0) {
-        ROUTE_$STD_N_ROUTING_PORTS++;                   /* 0x00E69CDC */
-        if (ROUTE_$STD_N_ROUTING_PORTS != 2) {          /* 0x00E69CE4 */
+        ROUTE_$WIRED_DATA.std_n_routing_ports++;                   /* 0x00E69CDC */
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports != 2) {          /* 0x00E69CE4 */
             return;
         }
-        if (ROUTE_$N_ROUTING_PORTS >= 2) {              /* 0x00E69CEE */
+        if (ROUTE_$WIRED_DATA.n_routing_ports >= 2) {              /* 0x00E69CEE */
             return;
         }
     } else {
-        ROUTE_$N_ROUTING_PORTS++;                       /* 0x00E69CF6 */
-        if (ROUTE_$N_ROUTING_PORTS != 2) {              /* 0x00E69CFE */
+        ROUTE_$WIRED_DATA.n_routing_ports++;                       /* 0x00E69CF6 */
+        if (ROUTE_$WIRED_DATA.n_routing_ports != 2) {              /* 0x00E69CFE */
             return;
         }
-        if (ROUTE_$STD_N_ROUTING_PORTS >= 2) {          /* 0x00E69D08 */
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports >= 2) {          /* 0x00E69D08 */
             return;
         }
     }
@@ -370,21 +370,21 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
      * 0x00E69D12-0x00E69D1E: "move.w #0x80,D0w" then a dbf loop of
      * "clr.l (A0)+", i.e. 0x81 longwords from 0x00E87DA8.
      */
-    data_ptr = ROUTE_$Q_DEPTH;
+    data_ptr = ROUTE_$RTWIRED_DATA.q_depth;
     for (i = 0x80; i >= 0; i--) {
         *data_ptr++ = 0;
     }
 
     /* 0x00E69D22-0x00E69D40 */
-    EC_$INIT((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
-    ec_val = EC_$READ((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
-    ROUTE_$CONTROL_ECVAL = ec_val + 1;
+    EC_$INIT(&ROUTE_$WIRED_DATA.control_ec);
+    ec_val = EC_$READ(&ROUTE_$WIRED_DATA.control_ec);
+    ROUTE_$WIRED_DATA.control_ecval = ec_val + 1;
 
     /*
      * 0x00E69D46-0x00E69D60: the status handed to PROC1_$CREATE_P is the
      * PARENT's status_ret, not a local.
      */
-    ROUTE_$PID = PROC1_$CREATE_P((void *)ROUTE_$PROCESS,
+    ROUTE_$RTWIRED_DATA.pid = PROC1_$CREATE_P((void *)ROUTE_$PROCESS,
                                  PROC_FLAG_ROUTING,
                                  status_ret);
 
@@ -403,7 +403,7 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
     route_$wire_routing_area();
 
     /* 0x00E69D80 */
-    ROUTE_$NETBUF_ALLOC = 0x40;
+    ROUTE_$RTWIRED_DATA.netbuf_alloc = 0x40;
 
     /*
      * 0x00E69D88-0x00E69DA0.  The two longword arguments are assembled from
@@ -411,9 +411,9 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
      * word already on the stack, so the pair reads 0x00400040 / 0x00400400.
      */
     result = SOCK_$ALLOCATE(&socket,
-                            ((uint32_t)ROUTE_$NETBUF_ALLOC << 16) |
-                                (uint32_t)ROUTE_$NETBUF_ALLOC,
-                            ((uint32_t)ROUTE_$NETBUF_ALLOC << 16) |
+                            ((uint32_t)ROUTE_$RTWIRED_DATA.netbuf_alloc << 16) |
+                                (uint32_t)ROUTE_$RTWIRED_DATA.netbuf_alloc,
+                            ((uint32_t)ROUTE_$RTWIRED_DATA.netbuf_alloc << 16) |
                                 SOCK_ALLOC_QUEUE_LIMIT);
     if (result >= 0) {
         /* 0x00E69DAC: pea (0x8e,PC) -> 0x00E69E3C */
@@ -432,28 +432,28 @@ static void route_$init_routing(int16_t port_index, boolean is_std_port,
 
     /* 0x00E69DD2-0x00E69DE4 */
     ec_val = EC_$READ(&sock->ec);
-    ROUTE_$SOCK_ECVAL = ec_val + 1;
-    ROUTE_$SOCK = socket;
+    ROUTE_$WIRED_DATA.sock_ecval = ec_val + 1;
+    ROUTE_$WIRED_DATA.sock = socket;
 
     /*
      * 0x00E69DEA: "move.l (0x00e2b0e4).l,(A5)" - A5 is ROUTE_$SERVICE's,
      * loaded there with 0x00E825DC.
      */
-    ROUTE_$LAST_UPDATE_TIME = TIME_$CURRENT_CLOCKH;
+    ROUTE_$UNWIRED_DATA.start_time = TIME_$CURRENT_CLOCKH;
 
     /* 0x00E69DF0-0x00E69E20 */
-    ROUTE_$Q_OFLO = 0;             /* 0xE87FCC */
-    ROUTE_$TOO_FAR = 0;            /* 0xE87FC0 */
-    ROUTE_$MISROUTE = 0;           /* 0xE87FC4 */
-    ROUTE_$PKTS_ROUTED = 0;        /* 0xE87FC8 */
-    ROUTE_$DLEN_ERR = 0;           /* 0xE87FBC */
-    ROUTE_$STD_TOO_FAR = 0;        /* 0xE87FB0 */
-    ROUTE_$STD_MISROUTE = 0;       /* 0xE87FB4 */
-    ROUTE_$STD_PKTS_ROUTED = 0;    /* 0xE87FB8 */
-    ROUTE_$STD_DLEN_ERR = 0;       /* 0xE87FAC */
+    ROUTE_$RTWIRED_DATA.q_oflo = 0;             /* 0xE87FCC */
+    ROUTE_$RTWIRED_DATA.too_far = 0;            /* 0xE87FC0 */
+    ROUTE_$RTWIRED_DATA.misroute = 0;           /* 0xE87FC4 */
+    ROUTE_$RTWIRED_DATA.pkts_routed = 0;        /* 0xE87FC8 */
+    ROUTE_$RTWIRED_DATA.dlen_err = 0;           /* 0xE87FBC */
+    ROUTE_$RTWIRED_DATA.std_too_far = 0;        /* 0xE87FB0 */
+    ROUTE_$RTWIRED_DATA.std_misroute = 0;       /* 0xE87FB4 */
+    ROUTE_$RTWIRED_DATA.std_pkts_routed = 0;    /* 0xE87FB8 */
+    ROUTE_$RTWIRED_DATA.std_dlen_err = 0;       /* 0xE87FAC */
 
     /* 0x00E69E26 */
-    EC_$ADVANCE((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
+    EC_$ADVANCE(&ROUTE_$WIRED_DATA.control_ec);
 }
 
 /*
@@ -596,7 +596,7 @@ void ROUTE_$SERVICE(const uint16_t *operation, route_$short_port_t *port_info,
 
         /* 0x00E6A198-0x00E6A1AE */
         if (port_info->port_type == ROUTE_PORT_TYPE_ROUTING) {
-            ROUTE_$N_USER_PORTS++;
+            ROUTE_$RTWIRED_DATA.n_user_ports++;
             route_$wire_routing_area();
         }
     } else {

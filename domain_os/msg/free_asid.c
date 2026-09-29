@@ -35,7 +35,7 @@ void MSG_$FREE_ASID(uint16_t *asid_ptr)
     status_$t status;
 
     for (sock_num = 1; sock_num <= MSG_MAX_SOCKET; sock_num++) {
-        bitmap = MSG_$SOCK_OWNERS[sock_num];
+        bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
 
         asid = *asid_ptr;                       /* 0xE74E4C, re-read */
         byte_index = (uint16_t)((0x3Fu - asid) >> 3);

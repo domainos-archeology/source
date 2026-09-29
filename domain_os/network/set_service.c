@@ -112,7 +112,7 @@ after_store:
      *   tst.w   (0x342,A5) ; beq skip
      *   bset.b  #0x3,(0x343,A5)
      */
-    if (((ROUTE_$N_ROUTING_PORTS > 1 ? -1 : 0) | NETWORK_$USER_SOCK_OPEN) < 0 &&
+    if (((ROUTE_$WIRED_DATA.n_routing_ports > 1 ? -1 : 0) | NETWORK_$USER_SOCK_OPEN) < 0 &&
         NETWORK_$SERVICE_FLAGS != 0) {
         NETWORK_$SET_SERVICE_FLAGS(NETWORK_$SERVICE_FLAGS | NETWORK_SERVICE_ROUTING);
     }

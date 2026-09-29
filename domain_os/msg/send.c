@@ -63,7 +63,7 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
      * cleanup at 0x00E0DCA2 tests it as a BYTE, and the early-error paths
      * reach that cleanup with D3 still holding the port number - so a
      * MSG_$SEND / MSG_$SENDI caller (port -1, D3b = 0xFF) that fails the
-     * header build drops MSG_$DPAGE->in_use without ever having claimed it.
+     * header build drops MSG_$WIRED_DATA.dpage_lock without ever having claimed it.
      * That is what the original does; it is reproduced here, not repaired.
      */
     int8_t used_dpage = (int8_t)port_num;
@@ -116,7 +116,7 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
 
             local_status = status_$ok;                  /* 0x00E0DAB6 */
             drv = (const route_$driver_info_t *)
-                      ARCH_VA_TO_PTR(ROUTE_$PORTP[port]->driver_info);
+                      ARCH_VA_TO_PTR(ROUTE_$WIRED_DATA.portp[port]->driver_info);
                                                         /* 0x00E0DABA-0x00E0DACC */
 
             /* 0x00E0DAD0  cmp.w (0x2,A0),D2w / bls  (unsigned) */
@@ -144,7 +144,7 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
      * transmit status.  This is net_io_$send_info_t, the record
      * PKT_$SEND_INTERNET and NET_IO_$SEND share.
      */
-    send_info->port_net = ROUTE_$PORTP[port]->port_type;
+    send_info->port_net = ROUTE_$WIRED_DATA.portp[port]->port_type;
     send_info->xmit_status = 0;
 
     /* 0x00E0DB24  cmp.l NODE_$ME,D4 / bne 0x00e0dbe0 */
@@ -244,16 +244,16 @@ void MSG_$$SEND(int16_t port_num, uint32_t routing_key, uint32_t dest_node,
          * 0x00E0DBE6 - 0x00E0DBEE: claim the bounce page by pre-incrementing
          * its counter; only a result of exactly zero means it was free.
          */
-        MSG_$DPAGE->in_use++;
+        MSG_$WIRED_DATA.dpage_lock++;
 
-        if (MSG_$DPAGE->in_use == 0 && data_len <= MSG_DPAGE_MAX_DATA) {
+        if (MSG_$WIRED_DATA.dpage_lock == 0 && data_len <= MSG_DPAGE_MAX_DATA) {
             used_dpage = -1;                            /* 0x00E0DBF6  st D3b */
-            data_va = MSG_$DPAGE->va;                   /* 0x00E0DBF8 */
-            data_pages[0] = MSG_$DPAGE->pa;             /* 0x00E0DBFE */
+            data_va = MSG_$WIRED_DATA.dpage_va;                   /* 0x00E0DBF8 */
+            data_pages[0] = MSG_$WIRED_DATA.dpage_pa;             /* 0x00E0DBFE */
             OS_$DATA_COPY((char *)data, (char *)ARCH_VA_TO_PTR(data_va),
                           (uint32_t)data_len);          /* 0x00E0DC04-0x00E0DC18 */
         } else {
-            MSG_$DPAGE->in_use--;                       /* 0x00E0DC1E */
+            MSG_$WIRED_DATA.dpage_lock--;                       /* 0x00E0DC1E */
 
             /* 0x00E0DC22 - 0x00E0DC38 */
             PKT_$COPY_TO_PA((char *)data, data_len, data_pages, &local_status);
@@ -283,7 +283,7 @@ release:
 
     /* 0x00E0DCA2  tst.b D3b / bpl - see the note on used_dpage above */
     if (used_dpage < 0) {
-        MSG_$DPAGE->in_use--;                           /* 0x00E0DCA6 */
+        MSG_$WIRED_DATA.dpage_lock--;                           /* 0x00E0DCA6 */
     } else {
         PKT_$DUMP_DATA(data_pages, (int16_t)data_len);  /* 0x00E0DCB4 */
     }
@@ -361,11 +361,12 @@ void MSG_$SEND(uint32_t *dest_node,
     dat_len = *data_len;
 
     /*
-     * 0x00E59A40 - 0x00E59A4E: 30 bytes out of MSG_$DATA's template.
+     * 0x00E59A40 - 0x00E59A4E: 30 bytes out of MSG_$UNWIRED_DATA's template.
      * pkt_$info_t's trailing pad word is left as the stack found it.
      */
     for (i = 0; i < 0x1E; i++) {
-        ((uint8_t *)&info)[i] = MSG_$DATA->send_template[i];
+        ((uint8_t *)&info)[i] =
+            ((const uint8_t *)&MSG_$UNWIRED_DATA.send_template)[i];
     }
 
     /* 0x00E59A50  move.w D0w,(-0x20,A6) */

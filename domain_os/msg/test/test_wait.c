@@ -47,10 +47,10 @@ static int tests_run = 0;
 #include "msg/msg_internal.h"
 
 /*
- * The MSG globals.  MSG_$SOCK_OWNERS is the one-based view of
- * MSG_$DATA_STRUCT.ownership, so defining the record is enough.
+ * The MSG globals: the ownership bitmaps live in MSG_$UNWIRED_DATA, so
+ * defining the block is enough.
  */
-msg_$data_t MSG_$DATA_STRUCT;
+MODULE_DATA_DEFINE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
 
 /* The socket table; SOCK_$EVENT_COUNTERS is (sock_table_base + 0x18A4). */
 uint8_t sock_table_base[SOCK_TABLE_SIZE];
@@ -88,7 +88,7 @@ static sock_$sock_t test_sock;
 
 static void reset_state(void)
 {
-    memset(&MSG_$DATA_STRUCT, 0, sizeof(MSG_$DATA_STRUCT));
+    memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(&test_sock, 0, sizeof(test_sock));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
@@ -106,7 +106,7 @@ static void reset_state(void)
  * byte (0x3F - asid) >> 3, bit asid & 7. */
 static void grant_ownership(int sock, uint16_t asid)
 {
-    MSG_$SOCK_OWNERS[sock][(uint16_t)(0x3F - asid) >> 3] |= (uint8_t)(1 << (asid & 7));
+    MSG_$UNWIRED_DATA.ownership[sock][(uint16_t)(0x3F - asid) >> 3] |= (uint8_t)(1 << (asid & 7));
 }
 
 /* ==========================================================================
@@ -159,7 +159,7 @@ TEST(ownership_bitmap_indexing)
     /* asid 3 -> byte (0x3F-3)>>3 == 7, bit 3 */
     grant_ownership(TEST_SOCK, TEST_ASID);
     ASSERT_EQ(7, (int)((uint16_t)(0x3F - TEST_ASID) >> 3));
-    ASSERT_EQ(0x08, MSG_$SOCK_OWNERS[TEST_SOCK][7]);
+    ASSERT_EQ(0x08, MSG_$UNWIRED_DATA.ownership[TEST_SOCK][7]);
 
     /* A bit set for the same ASID on a *neighbouring* socket must not count. */
     reset_state();
@@ -173,7 +173,7 @@ TEST(ownership_bitmap_indexing)
     reset_state();
     PROC1_$AS_ID = 63;
     grant_ownership(TEST_SOCK, 63);
-    ASSERT_EQ(0x80, MSG_$SOCK_OWNERS[TEST_SOCK][0]);
+    ASSERT_EQ(0x80, MSG_$UNWIRED_DATA.ownership[TEST_SOCK][0]);
     test_sock.queue_count = 1;
     status = 0x5A5A5A5A;
     MSG_$WAITI(&sock, &timeout, &status);

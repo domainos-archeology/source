@@ -46,12 +46,11 @@ static int tests_run = 0;
 
 #include "msg/msg_internal.h"
 
-msg_$data_t MSG_$DATA_STRUCT;
-ml_$exclusion_t MSG_$SOCK_LOCK_STRUCT;
-msg_$dpage_t MSG_$DPAGE_STRUCT;
+MODULE_DATA_DEFINE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
+MODULE_DATA_DEFINE(msg_$wired_data_t, MSG_$WIRED_DATA, 0x00E242E4);
 
 uint32_t NODE_$ME;
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 
 #define TEST_PORT       3
@@ -268,10 +267,10 @@ static void reset_state(void)
     memset(va_arena, 0, sizeof(va_arena));
     ARCH_HOST_VA_BASE = (uintptr_t)va_arena;
 
-    memset(&MSG_$DATA_STRUCT, 0, sizeof(MSG_$DATA_STRUCT));
-    memset(&MSG_$DPAGE_STRUCT, 0, sizeof(MSG_$DPAGE_STRUCT));
+    memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
+    memset(&MSG_$WIRED_DATA, 0, sizeof(MSG_$WIRED_DATA));
     memset(&test_port, 0, sizeof(test_port));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
     memset(&last_bld, 0, sizeof(last_bld));
     memset(&last_net_send, 0, sizeof(last_net_send));
@@ -289,13 +288,13 @@ static void reset_state(void)
     test_port.port_type = 0x0077;
     test_port.driver_info = TEST_DRV_VA;
     ((route_$driver_info_t *)(va_arena + TEST_DRV_VA))->max_data_len = 0x600;
-    ROUTE_$PORTP[TEST_PORT] = &test_port;
+    ROUTE_$WIRED_DATA.portp[TEST_PORT] = &test_port;
     ROUTE_$PORT_ARRAY[0].port_type = 0xAAAA;
     ROUTE_$PORT_ARRAY[0].socket = 0xBBBB;
 
-    MSG_$DPAGE_STRUCT.va = TEST_DPAGE_VA;
-    MSG_$DPAGE_STRUCT.pa = TEST_DPAGE_PA;
-    MSG_$DPAGE_STRUCT.in_use = -1;      /* free: the pre-increment lands on 0 */
+    MSG_$WIRED_DATA.dpage_va = TEST_DPAGE_VA;
+    MSG_$WIRED_DATA.dpage_pa = TEST_DPAGE_PA;
+    MSG_$WIRED_DATA.dpage_lock = -1;      /* free: the pre-increment lands on 0 */
 
     get_hdr_calls = 0;
     rtn_hdr_calls = 0;
@@ -428,7 +427,7 @@ TEST(builder_failure_releases_the_header)
 /*
  * The register-aliasing defect at 0x00E0DCA2: on the early-error path D3
  * still holds the port argument, so port -1 (D3b == 0xFF) makes the cleanup
- * drop MSG_$DPAGE->in_use even though it was never claimed.  Reproduced, not
+ * drop MSG_$WIRED_DATA.dpage_lock even though it was never claimed.  Reproduced, not
  * repaired.
  */
 TEST(builder_failure_with_port_minus_one_drops_the_dpage_count)
@@ -436,14 +435,14 @@ TEST(builder_failure_with_port_minus_one_drops_the_dpage_count)
     reset_state();
     bld_status = 0x00110099;
     call_send(-1, TEST_REMOTE, 0);
-    ASSERT_EQ(-2, MSG_$DPAGE->in_use);          /* started at -1 */
+    ASSERT_EQ(-2, MSG_$WIRED_DATA.dpage_lock);          /* started at -1 */
     ASSERT_EQ(0, dump_data_calls);
 
     /* an even port number has a zero low byte, so the count is left alone */
     reset_state();
     bld_status = 0x00110099;
     call_send(0x0100, TEST_REMOTE, 0);
-    ASSERT_EQ(-1, MSG_$DPAGE->in_use);
+    ASSERT_EQ(-1, MSG_$WIRED_DATA.dpage_lock);
     ASSERT_EQ(1, dump_data_calls);
 }
 
@@ -486,7 +485,7 @@ TEST(auto_port_keeps_the_builders_choice)
 {
     reset_state();
     bld_port_out = 5;
-    ROUTE_$PORTP[5] = &test_port;
+    ROUTE_$WIRED_DATA.portp[5] = &test_port;
     call_send(-1, TEST_REMOTE, 0);
     ASSERT_EQ(5, last_net_send.port);
 
@@ -582,7 +581,7 @@ TEST(remote_uses_the_bounce_page)
      * The claim is made and dropped inside the call, so the counter is back
      * where it started; os_copy_calls is what proves the page was used.
      */
-    ASSERT_EQ(-1, MSG_$DPAGE->in_use);
+    ASSERT_EQ(-1, MSG_$WIRED_DATA.dpage_lock);
     ASSERT_EQ(1, os_copy_calls);
     ASSERT_EQ(0x20, os_copy_len);
     ASSERT_EQ((long long)(uintptr_t)ARCH_VA_TO_PTR(TEST_DPAGE_VA),
@@ -605,7 +604,7 @@ TEST(remote_falls_back_to_netbuf_pages)
 {
     reset_state();
     call_send(-1, TEST_REMOTE, 0x401);
-    ASSERT_EQ(-1, MSG_$DPAGE->in_use);          /* incremented then decremented */
+    ASSERT_EQ(-1, MSG_$WIRED_DATA.dpage_lock);          /* incremented then decremented */
     ASSERT_EQ(0, os_copy_calls);
     ASSERT_EQ(1, copy_to_pa_calls);
     ASSERT_EQ(0, last_net_send.data_va);
@@ -619,9 +618,9 @@ TEST(remote_falls_back_to_netbuf_pages)
 
     /* someone else holds the page */
     reset_state();
-    MSG_$DPAGE_STRUCT.in_use = 0;
+    MSG_$WIRED_DATA.dpage_lock = 0;
     call_send(-1, TEST_REMOTE, 0x20);
-    ASSERT_EQ(0, MSG_$DPAGE->in_use);
+    ASSERT_EQ(0, MSG_$WIRED_DATA.dpage_lock);
     ASSERT_EQ(0, os_copy_calls);
     ASSERT_EQ(1, copy_to_pa_calls);
 }
@@ -645,7 +644,7 @@ TEST(remote_with_no_payload)
 {
     reset_state();
     call_send(-1, TEST_REMOTE, 0);
-    ASSERT_EQ(-1, MSG_$DPAGE->in_use);
+    ASSERT_EQ(-1, MSG_$WIRED_DATA.dpage_lock);
     ASSERT_EQ(0, os_copy_calls);
     ASSERT_EQ(0, copy_to_pa_calls);
     ASSERT_EQ(0, last_net_send.data_va);
@@ -708,7 +707,7 @@ TEST(sendi_wrapper)
 }
 
 /*
- * MSG_$SEND takes its packet-info from MSG_$DATA's template, overwrites the
+ * MSG_$SEND takes its packet-info from MSG_$UNWIRED_DATA's template, overwrites the
  * flags word, and fixes port -1 / routing key 0 / source NODE_$ME.
  */
 TEST(send_wrapper_uses_the_module_template)
@@ -725,10 +724,8 @@ TEST(send_wrapper_uses_the_module_template)
 
     reset_state();
     /* a recognisable template: routing_type at +0x02, protocol at +0x06 */
-    MSG_$DATA->send_template[2] = 0x00;
-    MSG_$DATA->send_template[3] = PKT_ROUTING_INET;
-    MSG_$DATA->send_template[6] = 0x80;
-    MSG_$DATA->send_template[7] = 0x31;
+    MSG_$UNWIRED_DATA.send_template.routing_type = PKT_ROUTING_INET;
+    MSG_$UNWIRED_DATA.send_template.protocol = 0x8031;
 
     MSG_$SEND(&dnode, &dsock, &ssock, &flags, &id, template_buf, &tlen,
               payload_buf, &dlen, &xmit, &st);

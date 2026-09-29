@@ -14,7 +14,8 @@
 
 /*
  * ROUTE_$WIRED_PAGES, ROUTE_$N_WIRED_PAGES and ROUTE_$N_USER_PORTS are
- * declared in route/route_internal.h.
+ * fields of ROUTE_$RTWIRED_DATA and ROUTE_$ROUTING of ROUTE_$WIRED_DATA
+ * (route/route.h).
  */
 
 /*
@@ -37,12 +38,12 @@ void ROUTE_$CLEANUP_WIRED(void)
      *   - No user ports are active
      *   - Routing is not running
      */
-    if (ROUTE_$N_USER_PORTS != 0) {
+    if (ROUTE_$RTWIRED_DATA.n_user_ports != 0) {
         return;
     }
 
     /* 0x00E69B8C: tst.b (0x00E26F1E).l / bmi - ROUTE_$ROUTING is a byte */
-    if (ROUTE_$ROUTING < 0) {
+    if (ROUTE_$WIRED_DATA.routing < 0) {
         return;
     }
 
@@ -64,11 +65,11 @@ void ROUTE_$CLEANUP_WIRED(void)
      * -4 from it, so the first page unwired is element 0 and the walk runs
      * upward; the dbf makes the body run count times.
      */
-    count = ROUTE_$N_WIRED_PAGES;
+    count = ROUTE_$RTWIRED_DATA.n_wired_pages;
     for (i = 0; i < count; i++) {
-        WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
+        WP_$UNWIRE(ROUTE_$RTWIRED_DATA.wired_pages[i]);
     }
 
     /* 0x00E69BBE: reset the wired page count */
-    ROUTE_$N_WIRED_PAGES = 0;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 0;
 }

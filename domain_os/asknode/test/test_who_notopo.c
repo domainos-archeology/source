@@ -75,14 +75,14 @@ uint32_t ROUTE_$PORT;
 uint32_t TIME_$CLOCKH;
 uint16_t PROC1_$AS_ID;
 uint32_t ASKNODE_$EMPTY_DATA;
-uint32_t PKT_$DEFAULT_INFO[8];
+MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 uint8_t  sock_table_base[SOCK_TABLE_SIZE];
 ec_$eventcount_t FIM_$QUIT_EC[8];
 uint32_t FIM_$QUIT_VALUE[8];
 name_$data_t NAME_$DATA;            /* NAME_$ROOT_UID lives in here */
 
 route_$port_t  route_ports[8];
-route_$port_t *ROUTE_$PORTP[8];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 
 /* ==========================================================================
  * Mock state
@@ -118,7 +118,7 @@ static int       mock_wait_calls;
 static void reset_mocks(void)
 {
     memset(&mock_socket_ec, 0, sizeof(mock_socket_ec));
-    memset(PKT_$DEFAULT_INFO, 0, sizeof(PKT_$DEFAULT_INFO));
+    memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
@@ -127,7 +127,7 @@ static void reset_mocks(void)
     {
         int i;
         for (i = 0; i < 8; i++) {
-            ROUTE_$PORTP[i] = &route_ports[i];
+            ROUTE_$WIRED_DATA.portp[i] = &route_ports[i];
         }
     }
 
@@ -394,7 +394,7 @@ TEST(local_query_lists_the_local_node_whatever_the_metric)
 }
 
 /*
- * 0x00E66148 - 0x00E6615C: the 30-byte PKT_$DEFAULT_INFO copy, then a WORD
+ * 0x00E66148 - 0x00E6615C: the 30-byte ASKNODE_$DATA.pkt_info copy, then a WORD
  * clear at +0x08 and the packet length at +0x00.  Byte 0x0A must survive -
  * clearing a longword there is what the tree used to do.
  */
@@ -402,7 +402,7 @@ TEST(pkt_info_clears_only_the_word_at_offset_8)
 {
     uint16_t v;
 
-    memset(PKT_$DEFAULT_INFO, 0xA5, sizeof(PKT_$DEFAULT_INFO));
+    memset(&ASKNODE_$DATA.pkt_info, 0xA5, sizeof(ASKNODE_$DATA.pkt_info));
     mock_nexthop_metric = 0;
     run(0, 0x55, 4);
 

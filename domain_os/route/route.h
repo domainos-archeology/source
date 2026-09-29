@@ -7,6 +7,9 @@
  *
  * The ROUTE subsystem maintains up to 8 routing ports, each with its
  * associated network configuration and socket bindings.
+ *
+ * Module data blocks ROUTE_$WIRED_DATA, ROUTE_$UNWIRED_DATA and
+ * ROUTE_$RTWIRED_DATA: Claude Opus 5.5 (source-ybch).
  */
 
 #ifndef ROUTE_H
@@ -15,6 +18,7 @@
 #include "base/base.h"
 #include "rip/rip.h"   /* rip_$dest_addr_t: route_$port_t.xns_addr */
 #include "mac_os/mac_os.h" /* mac_os_$link_addr_t: route_$port_t.link_addr */
+#include "ec/ec.h"         /* ec_$eventcount_t: ROUTE_$WIRED_DATA.control_ec */
 
 /*
  * Port structure (0x5C = 92 bytes)
@@ -77,7 +81,6 @@ typedef struct route_$driver_info_t {
                                  *       reach it with ARCH_VA_TO_PTR. */
 } route_$driver_info_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$driver_info_t, max_data_len) == 0x02,
                "route_$driver_info_t.max_data_len");
 _Static_assert(offsetof(route_$driver_info_t, flags) == 0x07,
@@ -90,7 +93,6 @@ _Static_assert(offsetof(route_$driver_info_t, attach_service) == 0x1C,
                "route_$driver_info_t.attach_service");
 _Static_assert(offsetof(route_$driver_info_t, set_service) == 0x24,
                "route_$driver_info_t.set_service");
-#endif
 
 /*
  * route_$set_service_fn_t - the driver entry at route_$driver_info_t+0x24
@@ -235,7 +237,6 @@ typedef struct route_$port_t {
 } route_$port_t;
 
 /* Port entry size must match the original 0x5C-byte stride */
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$port_t, network)       == 0x00, "route_$port_t.network");
 _Static_assert(offsetof(route_$port_t, n_link_addrs)  == 0x04, "route_$port_t.n_link_addrs");
 _Static_assert(offsetof(route_$port_t, n_net_addrs)   == 0x06, "route_$port_t.n_net_addrs");
@@ -259,7 +260,6 @@ _Static_assert(offsetof(route_$port_t, _unknown2d)   == 0x52, "route_$port_t._un
 _Static_assert(offsetof(route_$port_t, stat_long_54) == 0x54, "route_$port_t.stat_long_54");
 _Static_assert(offsetof(route_$port_t, forward_count) == 0x58, "route_$port_t.forward_count");
 _Static_assert(sizeof(route_$port_t) == 0x5C, "route_$port_t must be 0x5C bytes");
-#endif
 
 /*
  * route_$port_stats_t - the statistics block a routing port points at
@@ -300,7 +300,6 @@ typedef struct route_$port_stats_t {
  * stride there is 0x90 rather than this 0x8E.
  */
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$port_stats_t, deep_queue_puts) == 0x02,
                "route_$port_stats_t.deep_queue_puts");
 _Static_assert(offsetof(route_$port_stats_t, failed_puts) == 0x06,
@@ -309,7 +308,6 @@ _Static_assert(offsetof(route_$port_stats_t, queue_depth) == 0x0A,
                "route_$port_stats_t.queue_depth");
 _Static_assert(sizeof(route_$port_stats_t) == 0x8E,
                "route_$port_stats_t must be 0x8E bytes");
-#endif
 
 /*
  * =============================================================================
@@ -372,12 +370,6 @@ _Static_assert(sizeof(route_$user_stat_t) * ROUTE_$MAX_USER_STATS
                    == 0xE88216 - 0xE87FD6,
                "ROUTE_$USER_STAT must span 0xE87FD6..0xE88216");
 
-#if defined(ARCH_M68K)
-#define ROUTE_$USER_STAT        ((route_$user_stat_t *)0xE87FD6)
-#else
-extern route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
-#endif
-
 /* Number of network ports supported */
 #define ROUTE_$MAX_PORTS        8
 
@@ -409,17 +401,6 @@ extern route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 extern uint32_t ROUTE_$PORT;
 
 /*
- * ROUTE_$PORTP - Array of pointers to port structures
- *
- * Array of 8 pointers to route_$port_t structures, one for each
- * possible network port. Used by ROUTE_$FIND_PORT to look up
- * port info by index.
- *
- * Original address: 0xE26EE8
- */
-extern route_$port_t *ROUTE_$PORTP[];
-
-/*
  * Short port info structure (12 bytes)
  *
  * Compact representation of port information.  ROUTE_$SHORT_PORT fills one
@@ -448,7 +429,6 @@ typedef struct route_$short_port_t {
                                      *       in to ROUTE_$SERVICE */
 } route_$short_port_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$short_port_t, status) == 0x04,
                "route_$short_port_t.status");
 _Static_assert(offsetof(route_$short_port_t, port_type) == 0x06,
@@ -459,7 +439,6 @@ _Static_assert(offsetof(route_$short_port_t, queue_length) == 0x0A,
                "route_$short_port_t.queue_length");
 _Static_assert(sizeof(route_$short_port_t) == 12,
                "route_$short_port_t must be 12 bytes");
-#endif
 
 /*
  * ROUTE_$FIND_PORT - Find port index by port type / socket
@@ -744,130 +723,300 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local);
 
 
 /*
- * Routing port counts (route_data.c).  Shared with the RIP subsystem.
+ * =============================================================================
+ * ROUTE module data blocks (docs/design-per-process-data.md)
+ * =============================================================================
  *
- * Original addresses: 0xE26F1A, 0xE26F1C
+ * The ROUTE module owns three data segments in the SAU2 map; each is one
+ * MODULE_DATA block (route/route_data.c) linked in the map's order.  The
+ * address given with each is the block's image address - the ordering key of
+ * tools/gen_layout_ld.py and documentation, not where the block is linked.
+ * Every access, inside ROUTE and out, goes through the block.
+ *
+ * Module data blocks: Claude Opus 5.5 (source-ybch).
  */
-extern int16_t ROUTE_$STD_N_ROUTING_PORTS;
-extern int16_t ROUTE_$N_ROUTING_PORTS;
 
 /*
- * ROUTE_$SOCK - Routing process socket number (0xFFFF when closed)
+ * -----------------------------------------------------------------------------
+ * ROUTE_$WIRED_DATA - the ROUTE_WIRED segment, 0x00E26EE4..0x00E26F1F
+ * -----------------------------------------------------------------------------
  *
- * Used by XNS_IDP_$DEMUX to queue packets that must be forwarded.
+ * SAU2 map: "D E26EE4 ROUTE_WIRED size = 3C", after RIP_WIRED's
+ * RIP_$RECENT_CHANGES (0xE26EE0) and before SMD_WIRED (0xE26F20, the code of
+ * SMD_$DISP1_INT).  Every interior symbol is a field: ROUTE_$SOCK_ECVAL
+ * (+0x00), ROUTE_$PORTP (+0x04), ROUTE_$CONTROL_ECVAL (+0x24),
+ * ROUTE_$CONTROL_EC (+0x28), ROUTE_$SOCK (+0x34),
+ * ROUTE_$STD_N_ROUTING_PORTS (+0x36), ROUTE_$N_ROUTING_PORTS (+0x38) and
+ * ROUTE_$ROUTING (+0x3A).  ROUTE_$FIND_PORT and ROUTE_$FIND_PORTP load it as
+ * A5 ("lea (0xe26ee4).l,A5" at 0x00E15B00 / 0x00E15B4E) and walk portp from
+ * "movea.l (0x4,A0),A1" with A0 = A5 + i*4 (0x00E15B14), i = 0..7; everyone
+ * else addresses the cells absolutely.
  *
- * Original address: 0xE26F18
+ * portp holds pointers and control_ec is an ec_$eventcount_t (pointers), so
+ * the offsets past sock_ecval and the size are asserted on the target only.
+ * Image contents (`gsk read 0xE26EE4 0x3C`): portp[i] = 0xE2E0A0 + i*0x5C,
+ * i.e. &ROUTE_$PORT_ARRAY[i]; sock = 0xFFFF; every other byte zero
+ * (route/route_data.c).
  */
-extern uint16_t ROUTE_$SOCK;
+#define ROUTE_$WIRED_DATA_SIZE  0x3C    /* map: ROUTE_WIRED size = 3C */
 
-/*
- * Routing drop counters shared with the XNS IDP demux.
- *
- * XNS_IDP_$OS_DEMUX increments these directly:
- *   0x00E18678  addq.l #0x1,(0x00E87FB4).l   no standard routing ports
- *   0x00E1869A  addq.l #0x1,(0x00E87FB0).l   IDP hop count exhausted
- *
- * The ROUTE subsystem's own definitions live in route/route_internal.h and
- * are textually identical on the m68k build; the declarations here exist so
- * that code outside ROUTE (and the host unit tests) can reach them without
- * including a foreign internal header.
- *
- * Original addresses: 0xE87FB0, 0xE87FB4
- */
+typedef struct route_$wired_data_t {
+    /* +0x00 map ROUTE_$SOCK_ECVAL: the routing socket's awaited eventcount
+     * value (ROUTE_$PROCESS 0x00E87466, 0x00E877B8; route_$init_routing
+     * 0x00E69DDE) */
+    uint32_t          sock_ecval;
+    /* +0x04 map ROUTE_$PORTP: the eight port pointers, 0-based [0..7] */
+    route_$port_t    *portp[ROUTE_$MAX_PORTS];
+    /* +0x24 map ROUTE_$CONTROL_ECVAL: awaited value of control_ec */
+    uint32_t          control_ecval;
+    /* +0x28 map ROUTE_$CONTROL_EC: the routing process's control eventcount
+     * (EC_$INIT at 0x00E69D22, EC_$ADVANCE at 0x00E69E26) */
+    ec_$eventcount_t  control_ec;
+    /* +0x34 map ROUTE_$SOCK: the routing process's socket, 0xFFFF when
+     * closed; XNS_IDP_$DEMUX queues packets to be forwarded on it */
+    uint16_t          sock;
+    /* +0x36 / +0x38 map ROUTE_$STD_N_ROUTING_PORTS / ROUTE_$N_ROUTING_PORTS:
+     * routing-port counts, shared with RIP */
+    int16_t           std_n_routing_ports;
+    int16_t           n_routing_ports;
+    /*
+     * +0x3A map ROUTE_$ROUTING: "the router is running", a one-BYTE Domain
+     * boolean.  ROUTE_$PROCESS sets it with "st (0x00E26F1E).l"
+     * (0x00E8742E) and clears it with "clr.b (0x00E26F1E).l" (0x00E87812);
+     * ROUTE_$CLEANUP_WIRED and the SMD readers test it with "tst.b"
+     * (0x00E69B8C, 0x00E69E94).  SMD_$DISP1_INT is the code at 0x00E26F20,
+     * right after the segment (bead source-8xb).
+     */
+    boolean           routing;
+    uint8_t           _unknown_3b;  /* +0x3B: not referenced */
+} route_$wired_data_t;
+
+_Static_assert(offsetof(route_$wired_data_t, sock_ecval) == 0x00, "ROUTE_$SOCK_ECVAL");
 #if defined(ARCH_M68K)
-/*
- * Routing statistics area (0x81 longwords, cleared by ROUTE_$INIT_ROUTING).
- * Entries 0..0x80 are indexed by the queue depth seen when a packet was
- * queued, which is why the SR10.2 SAU2 link map calls the array
- * ROUTE_$Q_DEPTH; the named counters that follow (0xE87FAC..) are cleared
- * individually.  Every name in this block comes from that map
- * (sau2-maps/domain_os.10.2.map); the previous descriptive spellings are
- * given after each one.
- */
-#define ROUTE_$Q_DEPTH          ((uint32_t *)0xE87DA8)  /* was ROUTE_$PACKET_STATS */
-#define ROUTE_$STD_DLEN_ERR    (*(uint32_t *)0xE87FAC)  /* was ..._STAT_OVERSIZED_STD */
-#define ROUTE_$STD_TOO_FAR     (*(uint32_t *)0xE87FB0)  /* was ..._STAT_DROPPED_STD_HOP */
-#define ROUTE_$STD_MISROUTE    (*(uint32_t *)0xE87FB4)  /* was ..._STAT_DROPPED_STD_ROUTE */
-#define ROUTE_$STD_PKTS_ROUTED (*(uint32_t *)0xE87FB8)  /* was ..._STAT_FORWARDED_STD */
-#define ROUTE_$DLEN_ERR        (*(uint32_t *)0xE87FBC)  /* was ..._STAT_OVERSIZED_N */
-#define ROUTE_$TOO_FAR         (*(uint32_t *)0xE87FC0)  /* was ..._STAT_DROPPED_N_HOP */
-#define ROUTE_$MISROUTE        (*(uint32_t *)0xE87FC4)  /* was ..._STAT_DROPPED_N_ROUTE */
-#define ROUTE_$PKTS_ROUTED     (*(uint32_t *)0xE87FC8)  /* was ..._STAT_FORWARDED_N */
-
-/*
- * ROUTE_$Q_OFLO - count of packets addressed to the routing socket that were
- * thrown away because that socket's queue was already full.  (Named
- * ..._USER_PORT_COUNT in the tree before the map sweep.)
- *
- * Cleared with the other forwarding counters by ROUTE_$INIT_ROUTING
- * ("clr.l (0x00E87FCC).l" at 0x00E69DF0) and bumped by one from the two
- * receive paths, each time only when the socket the packet was addressed to
- * is ROUTE_$SOCK (0xE26F18) and the enqueue reported "queue full":
- *
- *   0x00E756C6  ring_$process_rx_packet: SOCK_$PUT_INT_INT (0x00E161F8)
- *               returned 1 (0x00E7565A), the socket in D4 is neither 2 nor 1,
- *               and it matches ROUTE_$SOCK (cmp.w at 0x00E756BE).
- *   0x00E0E45E  FUN_00E0E238: SOCK_$PUT (0x00E1614E) returned false
- *               (0x00E0E3E4), the socket in D3 is not 2, it matches
- *               ROUTE_$SOCK, and ROUTE_$SOCK is not -1 (0x00E0E446 -
- *               0x00E0E45C); otherwise a per-module counter at (0xA8,A5) is
- *               bumped instead.
- *
- * ASKNODE_$INTERNET_INFO copies it into two different reply records
- * ("move.l (0x00E87FCC).l,(0x12,A1)" at 0x00E65106 and
- * "move.l (0x00E87FCC).l,(0xA,A1)" at 0x00E65330).  /etc/rtstat prints it as
- * "queue oflo" and describes it as the number of through-traffic packets
- * lost because the through-traffic queue was already full, which is exactly
- * what these two sites count.
- */
-#define ROUTE_$Q_OFLO          (*(uint32_t *)0xE87FCC)
-
-/*
- * ROUTE_$NETBUF_ALLOC - the number of netbuf pages the routing socket asks
- * SOCK_$ALLOCATE for, and hence the number of ROUTE_$Q_DEPTH buckets that
- * carry meaning.  (Named ..._USER_PORT_MAX in the tree before the map sweep;
- * it is not a port count.)
- *
- * ROUTE_$INIT_ROUTING stores 0x40 into it ("move.w #0x40,(0x00E87FD0).l" at
- * 0x00E69D80) and immediately hands the cell to SOCK_$ALLOCATE
- * ("move.w (0x00E87FD0).l,-(SP)" at 0x00E69D8C followed by two
- * "move.w (SP),-(SP)" copies at 0x00E69D92/0x00E69D94, so the same 0x40 lands
- * in three of SOCK_$ALLOCATE's four word arguments).  SOCK_$ALLOCATE passes
- * the two it keeps in D3/D4 straight to
- * NETBUF_$ADD_PAGES(hdr_count, dat_count) at 0x00E15F02, so the cell is the
- * header-page and data-page count of that allocation.
- *
- * ROUTE_$PROCESS zeroes it on shutdown, right after SOCK_$FREE
- * ("clr.w (0x250,A5)" at 0x00E87852; A5 = ROUTE_$WIRED_PAGES = 0xE87D80, so
- * 0x250+0xE87D80 = 0xE87FD0) - no netbufs are held once the socket is gone.
- *
- * ASKNODE_$INTERNET_INFO reports it as a word (0x00E650F6 into (0x10,A1),
- * 0x00E65328 into (0x8,A1)) and then uses it as the loop bound when copying
- * ROUTE_$Q_DEPTH into the reply: "move.w (0x8,A1),D0w" at 0x00E6533E feeding
- * the dbf at 0x00E6534E copies ROUTE_$NETBUF_ALLOC+1 buckets.
- */
-#define ROUTE_$NETBUF_ALLOC    (*(uint16_t *)0xE87FD0)
-
-/*
- * ROUTE_$START_TIME (0xE825DC) - TIME_$CURRENT_CLOCKH when routing started.
- * The SAU2 link map names it; ASKNODE_$INTERNET_INFO's request-0x3F arm
- * copies it into the reply ("move.l (0x00E825DC).l,(0xc,A1)" at 0x00E650EE).
- */
-#define ROUTE_$START_TIME      (*(uint32_t *)0xE825DC)
-#else
-extern uint32_t ROUTE_$Q_DEPTH[0x81];
-extern uint32_t ROUTE_$STD_DLEN_ERR;
-extern uint32_t ROUTE_$STD_TOO_FAR;
-extern uint32_t ROUTE_$STD_MISROUTE;
-extern uint32_t ROUTE_$STD_PKTS_ROUTED;
-extern uint32_t ROUTE_$DLEN_ERR;
-extern uint32_t ROUTE_$TOO_FAR;
-extern uint32_t ROUTE_$MISROUTE;
-extern uint32_t ROUTE_$PKTS_ROUTED;
-extern uint32_t ROUTE_$Q_OFLO;
-extern uint16_t ROUTE_$NETBUF_ALLOC;
-extern uint32_t ROUTE_$START_TIME;
+/* Pointer-bearing (portp, control_ec): target-only (design section 3). */
+_Static_assert(offsetof(route_$wired_data_t, portp) == 0x04, "ROUTE_$PORTP (0xE26EE8)");
+_Static_assert(sizeof(((route_$wired_data_t *)0)->portp[0]) == 4, "portp stride (addq.l #0x4,A0)");
+_Static_assert(offsetof(route_$wired_data_t, control_ecval) == 0x24, "ROUTE_$CONTROL_ECVAL (0xE26F08)");
+_Static_assert(offsetof(route_$wired_data_t, control_ec) == 0x28, "ROUTE_$CONTROL_EC (0xE26F0C)");
+_Static_assert(sizeof(ec_$eventcount_t) == 0x0C, "ec_$eventcount_t size");
+_Static_assert(offsetof(route_$wired_data_t, sock) == 0x34, "ROUTE_$SOCK (0xE26F18)");
+_Static_assert(offsetof(route_$wired_data_t, std_n_routing_ports) == 0x36,
+               "ROUTE_$STD_N_ROUTING_PORTS (0xE26F1A)");
+_Static_assert(offsetof(route_$wired_data_t, n_routing_ports) == 0x38,
+               "ROUTE_$N_ROUTING_PORTS (0xE26F1C)");
+_Static_assert(offsetof(route_$wired_data_t, routing) == 0x3A, "ROUTE_$ROUTING (0xE26F1E)");
+_Static_assert(sizeof(route_$wired_data_t) == ROUTE_$WIRED_DATA_SIZE, "ROUTE_WIRED: map size 0x3C");
 #endif
+
+MODULE_DATA_DECLARE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
+
+/*
+ * -----------------------------------------------------------------------------
+ * ROUTE_$UNWIRED_DATA - the ROUTE_UNWIRED segment, 0x00E825DC..0x00E825E3
+ * -----------------------------------------------------------------------------
+ *
+ * SAU2 map: "D E825DC ROUTE_UNWIRED size = 8", interior symbol
+ * ROUTE_$START_TIME (+0x00); after TPAD (0xE8245C) and before VFMT_$FORMATN
+ * (0xE825E4).  ROUTE_$SERVICE loads it as A5 ("lea (0xe825dc).l,A5" at
+ * 0x00E6A038) and its nested route_$init_routing and ROUTE_$ANNOUNCE_NET
+ * inherit it.  Pointer-free, so every assert is unconditional.  Image
+ * contents (`gsk read 0xE825DC 8`): 00 00 00 00 00 02 00 00.
+ */
+#define ROUTE_$UNWIRED_DATA_SIZE 0x8    /* map: ROUTE_UNWIRED size = 8 */
+
+typedef struct route_$unwired_data_t {
+    /*
+     * +0x00 map ROUTE_$START_TIME: TIME_$CURRENT_CLOCKH when routing started.
+     * route_$init_routing stores it with "move.l (0x00e2b0e4).l,(A5)"
+     * (0x00E69DEA), ROUTE_$PROCESS clears it on shutdown ("clr.l
+     * (0x00E825DC).l" at 0x00E87818) and ASKNODE_$INTERNET_INFO's request-0x3F
+     * arm reports it ("move.l (0x00E825DC).l,(0xc,A1)" at 0x00E650EE).  (The
+     * tree also called it ROUTE_$LAST_UPDATE_TIME; the map name wins, bead
+     * source-wm2s.)
+     */
+    uint32_t start_time;
+    /*
+     * +0x04: the two-byte RIP template ROUTE_$ANNOUNCE_NET sends, the word 2
+     * (a RIP response with no entries), pushed as "pea (0x4,A5)" at
+     * 0x00E69FF2 with A5 left at this block by ROUTE_$SERVICE.
+     */
+    uint16_t announce_template;
+    uint16_t _unknown_06;       /* +0x06: not referenced */
+} route_$unwired_data_t;
+
+_Static_assert(offsetof(route_$unwired_data_t, start_time) == 0x00, "ROUTE_$START_TIME");
+_Static_assert(offsetof(route_$unwired_data_t, announce_template) == 0x04,
+               "announce template (pea (0x4,A5))");
+_Static_assert(sizeof(route_$unwired_data_t) == ROUTE_$UNWIRED_DATA_SIZE, "ROUTE_UNWIRED: map size 8");
+
+MODULE_DATA_DECLARE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
+
+/*
+ * -----------------------------------------------------------------------------
+ * ROUTE_$RTWIRED_DATA - the ROUTE_RTWIRED segment, 0x00E87D80..0x00E88227
+ * -----------------------------------------------------------------------------
+ *
+ * SAU2 map: "D E87D80 ROUTE_RTWIRED size = 4A8", after RIP_RTWIRED
+ * (0xE87D68, rip's) and ending at RTWIRED_DATA_END (0xE88228), the end of
+ * the wired routing region.  ROUTE_$PROCESS loads it as A5
+ * ("lea (0xe87d80).l,A5" at 0x00E873F4); the other routines address its
+ * cells absolutely.  Map-named fields: ROUTE_$WIRED_PAGES (+0x000),
+ * ROUTE_$Q_DEPTH (+0x028), the nine forwarding counters ROUTE_$STD_DLEN_ERR
+ * .. ROUTE_$Q_OFLO (+0x22C..+0x24C), ROUTE_$NETBUF_ALLOC (+0x250),
+ * ROUTE_$N_WIRED_PAGES (+0x252), ROUTE_$N_USER_PORTS (+0x254),
+ * ROUTE_$USER_STAT (+0x256), ROUTE_$PID (+0x496) and ROUTE_$USER_CHECKSUM
+ * (+0x498); the last four cells carry tree names.
+ *
+ * Per-index tables:
+ *   wired_pages  0-based [0..9]: MST_$WIRE_AREA fills from the base
+ *                (route_$wire_routing_area) and ROUTE_$CLEANUP_WIRED walks
+ *                "lea (0x4,A0),A2 / move.l (-0x4,A2),-(SP)" (0x00E69BA6).
+ *   q_depth      0-based [0..0x80], bucketed by queue depth:
+ *                "addq.l #0x1,(0x28,A5,D1*0x1)" with D1 = depth*4 capped at
+ *                0x80 (0x00E874E6); cleared as 0x81 longwords by
+ *                route_$init_routing (0x00E69D12).
+ *   user_stat    Pascal [1..4], record n at +0x256 + (n-1)*0x90:
+ *                NET_IO_$CREATE_PORT scans from "movea.l #0xe87fd6,A0"
+ *                (0x00E5A5C4) and forms base + n*0x90 then "lea (-0x90,A1),A1"
+ *                (0x00E5A664); the bias slot is never addressed, so the table
+ *                is declared from record 1 and ROUTE_USER_STAT_ENTRY(n)
+ *                applies the bias once (as PKT_MISSING_ENTRY does).
+ *
+ * ptr_control_ec holds a pointer, so its successors and the size are asserted
+ * on the target only.  Image contents (`gsk read 0xE87D80 1192`): all zero
+ * except ptr_control_ec = 0x00E26F0C (&ROUTE_$WIRED_DATA.control_ec),
+ * fwd_timeout = 1 and packet_seq = 0x8000 (route/route_data.c).
+ */
+#define ROUTE_$RTWIRED_DATA_SIZE 0x4A8  /* map: ROUTE_RTWIRED size = 4A8 */
+
+/* Maximum number of pages to wire for routing (constant at 0xE69BFC) */
+#define ROUTE_$MAX_WIRED_PAGES  10
+
+/* ROUTE_$Q_DEPTH buckets: queue depths 0..0x80 */
+#define ROUTE_$Q_DEPTH_BUCKETS  0x81
+
+typedef struct route_$rtwired_data_t {
+    /* +0x000 map ROUTE_$WIRED_PAGES: wired page handles */
+    uint32_t wired_pages[ROUTE_$MAX_WIRED_PAGES];
+    /*
+     * +0x028 map ROUTE_$Q_DEPTH: forwarded packets bucketed by the routing
+     * socket's queue depth.  ASKNODE_$INTERNET_INFO copies netbuf_alloc + 1
+     * buckets into its reply (dbf at 0x00E6534E).
+     */
+    uint32_t q_depth[ROUTE_$Q_DEPTH_BUCKETS];
+    /*
+     * +0x22C..+0x248: forwarding counters, cleared one by one by
+     * route_$init_routing (0x00E69DF0-0x00E69E20).  XNS_IDP_$OS_DEMUX bumps
+     * two of them directly ("addq.l #0x1,(0x00E87FB4).l" at 0x00E18678,
+     * "addq.l #0x1,(0x00E87FB0).l" at 0x00E1869A).  Earlier tree spellings
+     * follow each map name.
+     */
+    uint32_t std_dlen_err;      /* +0x22C map ROUTE_$STD_DLEN_ERR (was ..._STAT_OVERSIZED_STD) */
+    uint32_t std_too_far;       /* +0x230 map ROUTE_$STD_TOO_FAR (was ..._STAT_DROPPED_STD_HOP) */
+    uint32_t std_misroute;      /* +0x234 map ROUTE_$STD_MISROUTE (was ..._STAT_DROPPED_STD_ROUTE) */
+    uint32_t std_pkts_routed;   /* +0x238 map ROUTE_$STD_PKTS_ROUTED (was ..._STAT_FORWARDED_STD) */
+    uint32_t dlen_err;          /* +0x23C map ROUTE_$DLEN_ERR (was ..._STAT_OVERSIZED_N) */
+    uint32_t too_far;           /* +0x240 map ROUTE_$TOO_FAR (was ..._STAT_DROPPED_N_HOP) */
+    uint32_t misroute;          /* +0x244 map ROUTE_$MISROUTE (was ..._STAT_DROPPED_N_ROUTE) */
+    uint32_t pkts_routed;       /* +0x248 map ROUTE_$PKTS_ROUTED (was ..._STAT_FORWARDED_N) */
+    /*
+     * +0x24C map ROUTE_$Q_OFLO: packets addressed to the routing socket that
+     * were dropped because its queue was full ("queue oflo" in /etc/rtstat).
+     * Bumped by ring_$process_rx_packet (0x00E756C6) and FUN_00E0E238
+     * (0x00E0E45E) when the full socket is ROUTE_$SOCK; reported by
+     * ASKNODE_$INTERNET_INFO (0x00E65106, 0x00E65330).  (Was
+     * ..._USER_PORT_COUNT.)
+     */
+    uint32_t q_oflo;
+    /*
+     * +0x250 map ROUTE_$NETBUF_ALLOC: the netbuf page count the routing socket
+     * asks SOCK_$ALLOCATE for (0x40, "move.w #0x40,(0x00E87FD0).l" at
+     * 0x00E69D80), zeroed by ROUTE_$PROCESS on shutdown ("clr.w (0x250,A5)"
+     * at 0x00E87852); ASKNODE_$INTERNET_INFO's loop bound over q_depth.
+     * (Was ..._USER_PORT_MAX.)
+     */
+    uint16_t netbuf_alloc;
+    /*
+     * +0x252 map ROUTE_$N_WIRED_PAGES: a word.  route_$wire_routing_area
+     * tests it ("tst.w", 0x00E69B94) and passes its address to MST_$WIRE_AREA
+     * (0x00E69BD2); ROUTE_$PROCESS reads it with "move.w (0x252,A5),D0w"
+     * (0x00E8785C) and clears it (0x00E8787E).
+     */
+    int16_t  n_wired_pages;
+    /*
+     * +0x254 map ROUTE_$N_USER_PORTS: active user (EtherBridge) ports.
+     * ROUTE_$SERVICE increments it ("addq.w #0x1,(0x00E87FD4).l" at
+     * 0x00E6A1A4), route_$close_port decrements it (0x00E69F90), and
+     * ROUTE_$CLEANUP_WIRED (0x00E69B84) and ROUTE_$PROCESS
+     * ("tst.w (0x254,A5)" at 0x00E87856) test it.
+     */
+    int16_t  n_user_ports;
+    /* +0x256 map ROUTE_$USER_STAT: records 1..4, see above */
+    route_$user_stat_t user_stat[ROUTE_$MAX_USER_STATS];
+    /* +0x496 map ROUTE_$PID: the routing process ("move.w (0x496,A5),-(SP)"
+     * at 0x00E87888) */
+    uint16_t pid;
+    /* +0x498 map ROUTE_$USER_CHECKSUM: Domain boolean ROUTE_$OUTGOING tests
+     * (0x00E87BE8) */
+    int8_t   user_checksum;
+    uint8_t  _unknown_499;      /* +0x499: not referenced */
+    uint16_t _unknown_49a;      /* +0x49A: not referenced */
+    /* +0x49C: the routing process's service id ("pea (0x49c,A5)" at
+     * 0x00E87438 / 0x00E87822) */
+    uint32_t service_id;
+    /* +0x4A0: EC_$WAITN's one-element eventcount list ("pea (0x4a0,A5)" at
+     * 0x00E87406); image value 0x00E26F0C, &ROUTE_$WIRED_DATA.control_ec */
+    ec_$eventcount_t *ptr_control_ec;
+    /* +0x4A4: send flags/timeout for the forwarded packet
+     * ("move.w (0x4a4,A5),-(SP)" at 0x00E87732); 1 in the image */
+    uint16_t fwd_timeout;
+    /* +0x4A6: ROUTE_$SEND_USER_PORT's sequence counter (0x00E87D02);
+     * 0x8000 in the image */
+    uint16_t packet_seq;
+} route_$rtwired_data_t;
+
+_Static_assert(offsetof(route_$rtwired_data_t, wired_pages) == 0x000, "ROUTE_$WIRED_PAGES");
+_Static_assert(offsetof(route_$rtwired_data_t, q_depth) == 0x028, "ROUTE_$Q_DEPTH (0x28,A5)");
+_Static_assert(sizeof(((route_$rtwired_data_t *)0)->q_depth[0]) == 4, "q_depth stride");
+_Static_assert(offsetof(route_$rtwired_data_t, q_depth[ROUTE_$Q_DEPTH_BUCKETS]) == 0x22C,
+               "q_depth[0x80] ends at ROUTE_$STD_DLEN_ERR");
+_Static_assert(offsetof(route_$rtwired_data_t, std_dlen_err) == 0x22C, "ROUTE_$STD_DLEN_ERR (0xE87FAC)");
+_Static_assert(offsetof(route_$rtwired_data_t, std_too_far) == 0x230, "ROUTE_$STD_TOO_FAR (0xE87FB0)");
+_Static_assert(offsetof(route_$rtwired_data_t, std_misroute) == 0x234, "ROUTE_$STD_MISROUTE (0xE87FB4)");
+_Static_assert(offsetof(route_$rtwired_data_t, std_pkts_routed) == 0x238, "ROUTE_$STD_PKTS_ROUTED (0xE87FB8)");
+_Static_assert(offsetof(route_$rtwired_data_t, dlen_err) == 0x23C, "ROUTE_$DLEN_ERR (0xE87FBC)");
+_Static_assert(offsetof(route_$rtwired_data_t, too_far) == 0x240, "ROUTE_$TOO_FAR (0xE87FC0)");
+_Static_assert(offsetof(route_$rtwired_data_t, misroute) == 0x244, "ROUTE_$MISROUTE (0xE87FC4)");
+_Static_assert(offsetof(route_$rtwired_data_t, pkts_routed) == 0x248, "ROUTE_$PKTS_ROUTED (0xE87FC8)");
+_Static_assert(offsetof(route_$rtwired_data_t, q_oflo) == 0x24C, "ROUTE_$Q_OFLO (0xE87FCC)");
+_Static_assert(offsetof(route_$rtwired_data_t, netbuf_alloc) == 0x250, "ROUTE_$NETBUF_ALLOC (0x250,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, n_wired_pages) == 0x252, "ROUTE_$N_WIRED_PAGES (0x252,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, n_user_ports) == 0x254, "ROUTE_$N_USER_PORTS (0x254,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, user_stat) == 0x256, "ROUTE_$USER_STAT (0xE87FD6)");
+_Static_assert(sizeof(((route_$rtwired_data_t *)0)->user_stat[0]) == 0x90, "user_stat stride (lea (0x90,A0),A0)");
+_Static_assert(offsetof(route_$rtwired_data_t, pid) == 0x496, "ROUTE_$PID (0x496,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, user_checksum) == 0x498, "ROUTE_$USER_CHECKSUM (0xE88218)");
+_Static_assert(offsetof(route_$rtwired_data_t, service_id) == 0x49C, "service_id (0x49c,A5)");
+#if defined(ARCH_M68K)
+/* Pointer-bearing cell and what follows it: target-only (design section 3). */
+_Static_assert(offsetof(route_$rtwired_data_t, ptr_control_ec) == 0x4A0, "ptr_control_ec (0x4a0,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, fwd_timeout) == 0x4A4, "fwd_timeout (0x4a4,A5)");
+_Static_assert(offsetof(route_$rtwired_data_t, packet_seq) == 0x4A6, "packet_seq (0xE88226)");
+_Static_assert(sizeof(route_$rtwired_data_t) == ROUTE_$RTWIRED_DATA_SIZE, "ROUTE_RTWIRED: map size 0x4A8");
+#endif
+
+MODULE_DATA_DECLARE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
+
+/*
+ * ROUTE_USER_STAT_ENTRY(n) - record n (1..4) of the Pascal [1..4] user_stat
+ * table, an lvalue of type route_$user_stat_t.  NET_IO_$CREATE_PORT forms
+ * ROUTE_$USER_STAT + n*0x90 and then "lea (-0x90,A1),A1" (0x00E5A664), and
+ * its free-record scan tests "(-0x90,A0)" from base + 0x90 (0x00E5A5D0):
+ * the code never forms an address below record 1, so - like
+ * PKT_MISSING_ENTRY - the table is declared from record 1 and the -1 is the
+ * compiler's -0x90 bias, applied here once.
+ */
+#define ROUTE_USER_STAT_ENTRY(n)    (ROUTE_$RTWIRED_DATA.user_stat[(n) - 1])
 
 /*
  * ROUTE_$DECREMENT_PORT - Decrement port counters during close

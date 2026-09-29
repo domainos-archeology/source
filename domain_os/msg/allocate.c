@@ -42,7 +42,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     }
 
     /* 0x00E59310-0x00E5931C: ML_$EXCLUSION_START(0xE242E4). */
-    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock);
 
     /* 0x00E5931E-0x00E59336: SOCK_$ALLOCATE_USER(socket, depth, depth,
      * depth, 0x400) - five words pushed: 0x400, (A3), (A3), (A3), then the
@@ -50,7 +50,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     if (SOCK_$ALLOCATE_USER(socket, (uint16_t)*depth, (uint16_t)*depth,
                             (uint16_t)*depth, 0x0400) >= 0) {
         /* 0x00E593B6-0x00E593C2 */
-        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
         *status_ret = status_$msg_no_more_sockets;              /* 0x290004 */
         return;
     }
@@ -65,18 +65,18 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     ownership[byte_index] |= (uint8_t)(1 << (asid & 7));
 
     /* 0x00E59354-0x00E59364: copy the two longwords into
-     * MSG_$SOCK_OWNERS[*socket] (base + socket*8 + 0x1D8). */
-    bitmap = MSG_$SOCK_OWNERS[*socket];
+     * MSG_$UNWIRED_DATA.ownership[*socket] (base + socket*8 + 0x1D8). */
+    bitmap = MSG_$UNWIRED_DATA.ownership[*socket];
     bitmap[0] = ownership[0]; bitmap[1] = ownership[1];
     bitmap[2] = ownership[2]; bitmap[3] = ownership[3];
     bitmap[4] = ownership[4]; bitmap[5] = ownership[5];
     bitmap[6] = ownership[6]; bitmap[7] = ownership[7];
 
     /* 0x00E59368-0x00E5936C: depth[*socket] = *depth (word, stride 2). */
-    MSG_$DATA->depth[*socket] = *depth;
+    MSG_$UNWIRED_DATA.depth[*socket] = *depth;
 
     /* 0x00E59370: open_count++ */
-    MSG_$DATA->open_count++;
+    MSG_$UNWIRED_DATA.open_count++;
 
     /* 0x00E59374-0x00E59380: PROC2_$SET_CLEANUP(7) (with a spare result
      * slot the compiler reserved). */
@@ -92,7 +92,7 @@ void MSG_$ALLOCATEI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret
     NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;
 
     /* 0x00E593A6-0x00E593B2: ML_$EXCLUSION_STOP(0xE242E4); status ok. */
-    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
     *status_ret = status_$ok;
 
     /* 0x00E593C8-0x00E593D0 */

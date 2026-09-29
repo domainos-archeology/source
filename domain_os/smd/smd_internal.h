@@ -1497,7 +1497,7 @@ extern int16_t SMD_ONE_LOCK_DATA;
  * SMD_$INTERRUPT_INIT loads it with "lea (-0x366,PC),A0" at 0x00E27284, and
  * 0x00E27286 - 0x366 = 0x00E26F20, which is where the handler's
  * "movem.l {...},-(SP)" starts.  0x00E26F1E is the byte immediately before
- * it and really is ROUTE_$ROUTING (see route/route_internal.h). */
+ * it and really is ROUTE_$ROUTING (ROUTE_$WIRED_DATA.routing, route/route.h). */
 void SMD_$DISP1_INT(void);
 
 /*

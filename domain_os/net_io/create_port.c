@@ -93,7 +93,7 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
          */
         candidate = 1;
         for (i = 0; i <= 6; i++) {
-            if (ROUTE_$PORTP[candidate]->active == 0) {
+            if (ROUTE_$WIRED_DATA.portp[candidate]->active == 0) {
                 /* 0x00E5A540 - 0x00E5A546 */
                 port_index = candidate;
                 *status_ret = status_$ok;
@@ -112,7 +112,7 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
     port_index_l = (int32_t)port_index;
 
     /* 0x00E5A55E - 0x00E5A570  A2 = ROUTE_$PORTP[D5], A3 = A2 */
-    port = ROUTE_$PORTP[port_index_l];
+    port = ROUTE_$WIRED_DATA.portp[port_index_l];
     port_bytes = (uint8_t *)port;
 
     port->network = 0;                                  /* 0x00E5A572 clr.l (A2) */
@@ -152,27 +152,25 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
     *status_ret = status_$net_io_max_user_ports_open;
 
     /*
-     * 0x00E5A5C2 - 0x00E5A5E6: find a free ROUTE_$USER_STAT record.  The base
-     * is advanced by one record before the first test and every test reads
-     * (-0x90,A0), so the record number D1 ends on is 1-based.  Byte 0 of a
-     * record is its "in use" Domain boolean.
+     * 0x00E5A5C2 - 0x00E5A5E6: find a free ROUTE_$USER_STAT record, a Pascal
+     * [1..4] table.  A0 is advanced by one record before the first test and
+     * every test reads (-0x90,A0), so the record number D1 ends on is
+     * 1-based: ROUTE_USER_STAT_ENTRY(candidate) (route/route.h) is that
+     * record.  Byte 0 of a record is its "in use" Domain boolean.
      */
     stat_index = 0;
     {
-        int16_t  candidate = 1;                         /* D1w */
-        uint8_t *rec = (uint8_t *)ROUTE_$USER_STAT;     /* A0 */
+        int16_t candidate = 1;                          /* D1w */
 
-        rec += 0x90;                                    /* 0x00E5A5CC */
         for (i = 0; i <= 3; i++) {
             /* 0x00E5A5D0  tst.b (-0x90,A0) / bmi */
-            if ((int8_t)rec[-0x90] >= 0) {
+            if ((int8_t)((uint8_t *)&ROUTE_USER_STAT_ENTRY(candidate))[0] >= 0) {
                 /* 0x00E5A5D6 - 0x00E5A5DC */
                 stat_index = candidate;
                 *status_ret = status_$ok;
                 break;
             }
             candidate = (int16_t)(candidate + 1);       /* 0x00E5A5E0 */
-            rec += 0x90;                                /* 0x00E5A5E2 */
         }
     }
 
@@ -211,8 +209,6 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
     if (*status_ret == status_$ok) {
         sock_$sock_t *sock;                             /* A4 */
         uint8_t      *stat_rec;                         /* A1 */
-        uint32_t      d0;
-        uint32_t      d1;
         int16_t       byte_index;                       /* D0w */
         int16_t       counter;                          /* D1w */
 
@@ -230,14 +226,10 @@ int16_t NET_IO_$CREATE_PORT(int16_t port_type, uint16_t unit,
 
         /*
          * 0x00E5A64E - 0x00E5A664: record address = ROUTE_$USER_STAT +
-         * n*0x90 - 0x90, with the multiply built as (n<<4) + ((n<<4)<<3).
+         * n*0x90 - 0x90 (the multiply built as (n<<4) + ((n<<4)<<3), the
+         * -0x90 the [1..4] bias): record stat_index.
          */
-        d0 = (uint32_t)(int32_t)stat_index;             /* 0x00E5A656 ext.l D0 */
-        d0 <<= 4;                                       /* 0x00E5A658 */
-        d1 = d0 << 3;                                   /* 0x00E5A65C */
-        d0 = d0 + d1;                                   /* 0x00E5A65E */
-        stat_rec = (uint8_t *)ROUTE_$USER_STAT + d0;    /* 0x00E5A660 */
-        stat_rec -= 0x90;                               /* 0x00E5A664 */
+        stat_rec = (uint8_t *)&ROUTE_USER_STAT_ENTRY(stat_index);   /* 0x00E5A660-0x00E5A664 */
 
         /* 0x00E5A668  move.l A1,(0x44,A3) */
         port->driver_stats = ARCH_PTR_TO_VA(stat_rec);

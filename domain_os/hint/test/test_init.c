@@ -52,7 +52,7 @@ hint_file_t *HINT_$HINTFILE_PTR;
 uid_t UID_$NIL = { 0, 0 };
 
 route_$port_t test_port0;
-route_$port_t *ROUTE_$PORTP[8];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t ROUTE_$PORT;
 
 /* The hint file the scripted MST_$MAPS hands back. */
@@ -189,7 +189,7 @@ static void reset_state(void)
     memset(&HINT_$GLOBALS_BLOCK, 0xA5, sizeof(HINT_$GLOBALS_BLOCK));
     memset(&test_hintfile, 0, sizeof(test_hintfile));
     memset(&test_port0, 0, sizeof(test_port0));
-    ROUTE_$PORTP[0] = &test_port0;
+    ROUTE_$WIRED_DATA.portp[0] = &test_port0;
     ROUTE_$PORT = 0xDEADBEEF;
     HINT_$HINTFILE_PTR = (hint_file_t *)(uintptr_t)0x1;
 

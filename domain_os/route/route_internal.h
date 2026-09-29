@@ -3,6 +3,8 @@
  *
  * Internal data structures, globals, and helper functions used only
  * within the ROUTE subsystem. External users should use route.h instead.
+ *
+ * Module data blocks (route/route.h): Claude Opus 5.5 (source-ybch).
  */
 
 #ifndef ROUTE_INTERNAL_H
@@ -32,60 +34,21 @@
 
 /*
  * =============================================================================
- * Global Data (m68k addresses)
+ * Global Data
  * =============================================================================
+ *
+ * The ROUTE module's own cells are fields of its three data blocks,
+ * ROUTE_$WIRED_DATA, ROUTE_$UNWIRED_DATA and ROUTE_$RTWIRED_DATA
+ * (route/route.h, defined in route/route_data.c).  ROUTE_$PORT_ARRAY /
+ * ROUTE_$PORT (NET_PORT_TABLE) are in route/route.h too.
  */
 
-/* ROUTE_$PORT_ARRAY / ROUTE_$PORT: see route/route.h */
-
-/*
- * ROUTE_$SOCK_ECVAL - Socket event count value
- *
- * First 4 bytes contain a socket EC value.
- * Following 8 uint32_t pointers (at offset 0x04) point to port structures.
- *
- * Layout:
- *   +0x00: Socket EC value (4 bytes)
- *   +0x04: Pointer to port[0] structure
- *   +0x08: Pointer to port[1] structure
- *   ...
- *   +0x20: Pointer to port[7] structure
- *
- * Original address: 0xE26EE4
- */
-extern uint32_t ROUTE_$SOCK_ECVAL;
 /*
  * ROUTE_$SERVICE_MUTEX - Mutex for route service operations
  *
- * Original address: 0xE26280
+ * Lives in the RIP_WIRED segment (map 0xE26280), not in a ROUTE block.
  */
 extern ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
-/*
- * ROUTE_$CONTROL_ECVAL - Control event count value
- *
- * Original address: 0xE26F08
- */
-extern uint32_t ROUTE_$CONTROL_ECVAL;
-/*
- * ROUTE_$CONTROL_EC - Control event count
- *
- * Original address: 0xE26F0C
- */
-extern uint32_t ROUTE_$CONTROL_EC;
-/* ROUTE_$SOCK, ROUTE_$STD_N_ROUTING_PORTS, ROUTE_$N_ROUTING_PORTS: see route/route.h */
-
-/*
- * ROUTE_$ROUTING - "the router is running" flag
- *
- * A one-BYTE Domain boolean, not a word: ROUTE_$PROCESS sets it with
- * "st (0x00E26F1E).l" (0x00E8742E) and clears it with "clr.b (0x00E26F1E).l"
- * (0x00E87812), and the SMD readers test it with "tst.b" (0x00E69B8C,
- * 0x00E69E94).  SMD_$DISP1_INT is the *code* at 0x00E26F20, immediately
- * after this byte - the two are distinct symbols (bead source-8xb).
- *
- * Original address: 0xE26F1E
- */
-extern boolean ROUTE_$ROUTING;
 
 /*
  * =============================================================================
@@ -165,69 +128,20 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
 
 /*
  * =============================================================================
- * Global Data in the Wired Routing Area (0xE87000 - 0xE88228)
+ * The wired routing area (0xE87000 - 0xE88228)
  * =============================================================================
  *
- * The routing process code and its data live in a contiguous area that
- * route_$wire_routing_area() wires into physical memory.  On m68k these
- * are accessed at their absolute addresses (the A5-relative data of the
- * original Pascal module); on other architectures they are ordinary
- * variables defined in route_data.c.
- */
-
-/* Maximum number of pages to wire for routing (constant at 0xE69BFC) */
-#define ROUTE_$MAX_WIRED_PAGES  10
-
-#if defined(ARCH_M68K)
-/* Start/end of the wired routing area (pointers at 0xE69C04 / 0xE69C00) */
-#define ROUTE_$WIRED_AREA_START ((void *)0x00E87000)
-#define ROUTE_$WIRED_AREA_END   ((void *)0x00E88228)
-
-/*
- * status_$internet_unknown_network_port constant cell, passed by reference to
- * CRASH_SYSTEM by ROUTE_$SEND_USER_PORT ("pea (0xD4,PC)" at 0x00E87C8E).
- */
-#define ROUTE_$UNKNOWN_PORT_STATUS  (*(const status_$t *)0xE87D64)
-
-/* RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA are declared in route/route.h
- * because RIP_$HALT_ROUTER (rip/misc.c) sends the packet. */
-
-/* RTWIRED_$SEND_FLAGS / RTWIRED_$CALLBACK: see rip/rip.h (used by rip/send.c) */
-
-/* Array of wired page addresses */
-#define ROUTE_$WIRED_PAGES      ((uint32_t *)0xE87D80)
-
-/*
- * The ROUTE_$Q_DEPTH / ROUTE_$Q_OFLO / ROUTE_$NETBUF_ALLOC block and the
- * eight forwarding counters that used to live here moved to route/route.h:
- * ASKNODE_$INTERNET_INFO's request-0x3F and request-0x43 arms report all of
- * them (0x00E650C6-0x00E65146, 0x00E65328-0x00E65352).
- */
-
-/*
- * Count of currently wired pages.  The SAU2 link map does name this cell
- * (line "E87FD2  ROUTE_$N_WIRED_PAGES"); an earlier note here that it was an
- * unnamed module-local was wrong.  It is a word: route_$wire_routing_area
- * tests it with "tst.w" (0x00E69B94), passes its address to the wiring call
- * (0x00E69BD2) and ROUTE_$PROCESS reads it with "move.w (0x252,A5),D0w"
- * (0x00E8785C) and clears it with "clr.w" (0x00E8787E).
- */
-#define ROUTE_$N_WIRED_PAGES    (*(int16_t *)0xE87FD2)
-
-/*
- * Count of active user (EtherBridge) routing ports.  Also named by the SAU2
- * link map ("E87FD4  ROUTE_$N_USER_PORTS"), contrary to an earlier note here.
- * A word: incremented by ROUTE_$SERVICE after NET_IO_$CREATE_PORT succeeds
- * for a type-2 port ("addq.w #0x1,(0x00E87FD4).l" at 0x00E6A1A4), decremented
- * by ROUTE_$CLOSE_PORT ("subq.w #0x1,(0x00E87FD4).l" at 0x00E69F90), and
- * tested for zero by ROUTE_$CLEANUP_WIRED (0x00E69B84) and by ROUTE_$PROCESS
- * ("tst.w (0x254,A5)" at 0x00E87856) before the wired pages are released.
- */
-#define ROUTE_$N_USER_PORTS     (*(int16_t *)0xE87FD4)
-
-/* ROUTE_$USER_STAT (0xE87FD6): see route/route.h. */
-
-/*
+ * The routing process code (RIP_RTWIRED / ROUTE_RTWIRED code) and its data
+ * (RIP_RTWIRED data, ROUTE_$RTWIRED_DATA) form one contiguous region that
+ * route_$wire_routing_area() wires into physical memory; its bounds are
+ * constant cells in route/wire_routing_area.c.  The status cell
+ * ROUTE_$SEND_USER_PORT hands to CRASH_SYSTEM is a PC-relative constant in
+ * route/send_user_port.c.
+ *
+ * RIP_$HALT_PACKET / RIP_$HALT_PACKET_DATA are declared in rip/rip.h because
+ * RIP_$HALT_ROUTER (rip/misc.c) sends the packet; RTWIRED_$SEND_FLAGS /
+ * RTWIRED_$CALLBACK too (used by rip/send.c).
+ *
  * The constant cells at 0x00E8789C..0x00E878A7 sit in the ROUTE_ CODE
  * segment between ROUTE_$PROCESS' `rts` (0x00E8789A) and the next routine's
  * `link.w` (0x00E878A8), carry no symbol in the SAU2 link map, and are
@@ -237,48 +151,6 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network);
  * RINGLOG_$ROUTE_FORWARD at 0x00E878A0, belongs to ring/ringlog.h because
  * RINGLOG_$LOGIT is its consumer.
  */
-
-/* Send callback/data pointer (4 bytes of zeros at 0xE870D8) */
-
-/* Routing process state */
-#define ROUTE_$PID      (*(uint16_t *)0xE88216)
-#define ROUTE_$USER_CHECKSUM (*(int8_t *)0xE88218)
-#define ROUTE_$SERVICE_ID       (*(uint32_t *)0xE8821C)
-#define PTR_ROUTE_$CONTROL_EC   (*(ec_$eventcount_t **)0xE88220)
-#define ROUTE_$FWD_TIMEOUT      (*(uint16_t *)0xE88224)
-#define ROUTE_$PACKET_SEQ       (*(uint16_t *)0xE88226)
-
-/* Time of the last routing update (A5 base of the wired data) */
-#define ROUTE_$LAST_UPDATE_TIME (*(uint32_t *)0xE825DC)
-
-/*
- * ROUTE_$ANNOUNCE_TEMPLATE - the two-byte RIP template ROUTE_$ANNOUNCE_NET
- * sends (the constant word 2, i.e. a RIP response with no entries).
- * ROUTE_$ANNOUNCE_NET reaches it as "pea (0x4,A5)" at 0x00E69FF2 with A5 left
- * at 0x00E825DC by ROUTE_$SERVICE (0x00E6A038) - the function never loads A5
- * of its own.
- */
-#define ROUTE_$ANNOUNCE_TEMPLATE (*(const uint16_t *)0xE825E0)
-#else
-extern char ROUTE_$WIRED_AREA_START_SYM[];
-extern char ROUTE_$WIRED_AREA_END_SYM[];
-#define ROUTE_$WIRED_AREA_START ((void *)ROUTE_$WIRED_AREA_START_SYM)
-#define ROUTE_$WIRED_AREA_END   ((void *)ROUTE_$WIRED_AREA_END_SYM)
-
-extern const status_$t ROUTE_$UNKNOWN_PORT_STATUS;
-extern uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-/* The forwarding counters and ROUTE_$Q_DEPTH are declared in route/route.h. */
-extern int16_t ROUTE_$N_WIRED_PAGES;
-extern int16_t ROUTE_$N_USER_PORTS;
-extern uint16_t ROUTE_$PID;
-extern int8_t ROUTE_$USER_CHECKSUM;
-extern uint32_t ROUTE_$SERVICE_ID;
-extern ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
-extern uint16_t ROUTE_$FWD_TIMEOUT;
-extern uint16_t ROUTE_$PACKET_SEQ;
-extern uint32_t ROUTE_$LAST_UPDATE_TIME;
-extern const uint16_t ROUTE_$ANNOUNCE_TEMPLATE;
-#endif
 
 /*
  * ROUTE_$USER_STAT / route_$user_stat_t: see route/route.h.  Its allocator is
@@ -329,14 +201,12 @@ typedef struct route_$internet_hdr_t {
                                  *       (lea (0x28,A4),A2 at 0xE87508) */
 } route_$internet_hdr_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(route_$internet_hdr_t, src_node)     == 0x08, "internet_hdr.src_node");
 _Static_assert(offsetof(route_$internet_hdr_t, routing_type) == 0x0C, "internet_hdr.routing_type");
 _Static_assert(offsetof(route_$internet_hdr_t, hdr_len)      == 0x10, "internet_hdr.hdr_len");
 _Static_assert(offsetof(route_$internet_hdr_t, data_len)     == 0x14, "internet_hdr.data_len");
 _Static_assert(offsetof(route_$internet_hdr_t, hdr_size)     == 0x18, "internet_hdr.hdr_size");
 _Static_assert(offsetof(route_$internet_hdr_t, idp)          == 0x28, "internet_hdr.idp");
-#endif
 
 /*
  * The 0x4C-byte descriptor ROUTE_$PROCESS builds for MAC_OS_$SEND is

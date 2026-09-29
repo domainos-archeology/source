@@ -141,7 +141,7 @@ void XNS_IDP_$INIT(void)
         xns_$port_state_t *p = &d->ports[port];
 
         /* move.l (A1)+,(0x44,A0): the ROUTE_$PORTP entry, a VA */
-        p->net_addr_ptr = ARCH_PTR_TO_VA(ROUTE_$PORTP[port]);
+        p->net_addr_ptr = ARCH_PTR_TO_VA(ROUTE_$WIRED_DATA.portp[port]);
 
         /* move.l #-0x10000,(0x48,A0): mac_socket = 0xFFFF, refcount = 0 */
         p->mac_socket = 0xFFFF;

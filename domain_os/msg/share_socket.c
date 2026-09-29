@@ -38,8 +38,8 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
     uint8_t     new_owners[8];
     int         i;
 
-    /* 0x00E5A042: ML_$EXCLUSION_START(MSG_$SOCK_LOCK) */
-    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
+    /* 0x00E5A042: ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock) */
+    ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock);
 
     /* 0x00E5A050-0x00E5A062: 1 <= socket <= 0xE0 */
     sock_num = *socket;
@@ -48,7 +48,7 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
         goto done;
     }
 
-    owners = MSG_$SOCK_OWNERS[sock_num];
+    owners = MSG_$UNWIRED_DATA.ownership[sock_num];
 
     /*
      * 0x00E5A06A-0x00E5A07E: the caller's address space must already own the
@@ -111,6 +111,6 @@ void MSG_$SHARE_SOCKET(msg_$socket_t *socket, uid_t *uid, int16_t *add_remove,
     }
 
 done:
-    /* 0x00E5A110: ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK) */
-    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+    /* 0x00E5A110: ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock) */
+    ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
 }

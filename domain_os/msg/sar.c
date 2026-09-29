@@ -194,7 +194,7 @@ void MSG_$SARI(int16_t *timeout,
  *   00e59dc0  movea.l (0x2c,A6),A0 / move.w (-0x20,A6),(A0)
  *
  * Exactly MSG_$SEND's packet-info idiom: the 30-byte template is copied out
- * of msg_$data_t and the caller's flags word overwrites its first word.  Of
+ * of msg_$unwired_data_t and the caller's flags word overwrites its first word.  Of
  * the msg_$hw_addr_t the receive fills in, only proto_family is handed back.
  */
 void MSG_$SAR(int16_t *timeout,
@@ -219,11 +219,12 @@ void MSG_$SAR(int16_t *timeout,
     msg_$hw_addr_t hw_addr;         /* A6-0x20 */
     int i;
 
-    /* 0xE59D5E: 7 longwords then a word out of msg_$data_t.send_template
+    /* 0xE59D5E: 7 longwords then a word out of msg_$unwired_data_t.send_template
      * (0x1E bytes; the record's last word is never copied and is left
      * whatever the stack held). */
     for (i = 0; i < 0x1E; i++) {
-        ((uint8_t *)&pkt_info)[i] = MSG_$DATA->send_template[i];
+        ((uint8_t *)&pkt_info)[i] =
+            ((const uint8_t *)&MSG_$UNWIRED_DATA.send_template)[i];
     }
 
     /* 0xE59D6E-0xE59D72: the caller's flags word overwrites the template's

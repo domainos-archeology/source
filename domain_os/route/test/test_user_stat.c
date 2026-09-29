@@ -5,7 +5,7 @@
  * uses (0x00E5A5C2 - 0x00E5A682) and that ROUTE_$CLOSE_PORT undoes
  * (0x00E69F9A).  Nothing here calls kernel code; the point is that the record
  * stride, the record body and the array span keep matching the SAU2 link map
- * and the instructions quoted in route/route_internal.h.
+ * and the instructions quoted in route/route.h.
  */
 
 #include <stdio.h>

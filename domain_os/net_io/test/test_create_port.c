@@ -48,9 +48,9 @@ static int tests_failed = 0;
 /* ------------------------------------------------------------------ */
 
 net_io_unwired_t     NET_IO_UNWIRED;
-route_$port_t       *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 route_$port_t        ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
-route_$user_stat_t   ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 uint8_t              sock_table_base[SOCK_TABLE_SIZE];
 uint32_t             TIME_$CURRENT_CLOCKH;
 uint16_t             PROC1_$AS_ID;
@@ -119,7 +119,7 @@ static void reset_world(void)
 
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
     for (i = 0; i < ROUTE_$MAX_PORTS; i++) {
-        ROUTE_$PORTP[i] = &ROUTE_$PORT_ARRAY[i];
+        ROUTE_$WIRED_DATA.portp[i] = &ROUTE_$PORT_ARRAY[i];
     }
 
     /*
@@ -128,9 +128,9 @@ static void reset_world(void)
      * 0x1000 bias keeps record 1 off virtual address zero, which
      * ARCH_VA_TO_PTR maps to nil.
      */
-    ARCH_HOST_VA_BASE = (uintptr_t)ROUTE_$USER_STAT - 0x1000;
+    ARCH_HOST_VA_BASE = (uintptr_t)ROUTE_$RTWIRED_DATA.user_stat - 0x1000;
 
-    memset(ROUTE_$USER_STAT, 0, sizeof(ROUTE_$USER_STAT));
+    memset(ROUTE_$RTWIRED_DATA.user_stat, 0, sizeof(ROUTE_$RTWIRED_DATA.user_stat));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(&test_sock, 0, sizeof(test_sock));
     SOCK_$EVENT_COUNTERS[TEST_SOCKET - 1] = (ec_$eventcount_t *)&test_sock;
@@ -281,7 +281,7 @@ static int test_user_port(void)
 {
     status_$t status = status_$ok;
     int16_t   index;
-    uint8_t  *recs = (uint8_t *)ROUTE_$USER_STAT;
+    uint8_t  *recs = (uint8_t *)ROUTE_$RTWIRED_DATA.user_stat;
 
     reset_world();
     test_sock.flags = 0xFFFF;
@@ -341,7 +341,7 @@ static int test_user_port_no_free_stat_record(void)
 {
     status_$t status = status_$ok;
     int16_t   index;
-    uint8_t  *recs = (uint8_t *)ROUTE_$USER_STAT;
+    uint8_t  *recs = (uint8_t *)ROUTE_$RTWIRED_DATA.user_stat;
     int       n;
 
     reset_world();
@@ -368,7 +368,7 @@ static int test_clear_loop_overruns_into_next_record(void)
 {
     status_$t status = status_$ok;
     int16_t   index;
-    uint8_t  *recs = (uint8_t *)ROUTE_$USER_STAT;
+    uint8_t  *recs = (uint8_t *)ROUTE_$RTWIRED_DATA.user_stat;
 
     reset_world();
     recs[0 * 0x90] = 0xFF;

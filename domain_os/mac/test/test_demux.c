@@ -41,7 +41,7 @@ static int tests_failed = 0;
 #include "mac/mac_internal.h"
 
 mac_os_$channel_t MAC_OS_$CHANNEL_TABLE[MAC_OS_CHANNEL_TABLE_SLOTS];
-route_$port_t    *ROUTE_$PORTP[MAC_OS_MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 
 /* What SOCK_$PUT was handed on the last call */
 static uint16_t          put_sock;
@@ -82,7 +82,7 @@ static void reset_all(void)
     memset(&pkt, 0, sizeof(pkt));
     memset(&port0, 0, sizeof(port0));
     memset(&put_desc, 0, sizeof(put_desc));
-    ROUTE_$PORTP[0] = &port0;
+    ROUTE_$WIRED_DATA.portp[0] = &port0;
 
     /*
      * pkt.channel is a 32-bit target VA, so point the host VA arena at the

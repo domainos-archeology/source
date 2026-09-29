@@ -7,7 +7,7 @@
  * Original address: 0x00E59CDA (120 bytes)
  *
  * Assembly:
- *   00e59ce2  lea (0xe80d84).l,A5       ; MSG_$DATA
+ *   00e59ce2  lea (0xe80d84).l,A5       ; MSG_$UNWIRED_DATA
  *   00e59ce8  movea.l (0x8,A6),A2       ; socket
  *   00e59cec  movea.l (0x10,A6),A3      ; status_ret
  *   00e59cf0  move.w (A2),D0w / ble / cmpi.w #0xe0,D0w / ble
@@ -45,7 +45,7 @@ void MSG_$GET_EC(msg_$socket_t *socket, uint32_t *ec, status_$t *status_ret)
 
     /* 0xE59D02 - 0xE59D18 */
     asid = PROC1_$AS_ID;
-    bitmap = MSG_$SOCK_OWNERS[sock_num];
+    bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
     byte_index = (uint16_t)((0x3Fu - asid) >> 3);
 
     if ((bitmap[byte_index] & (1u << (asid & 7))) == 0) {

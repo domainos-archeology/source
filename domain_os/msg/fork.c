@@ -28,7 +28,7 @@ boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
     boolean shared_any = false; /* D2b, 0x00E73F10 "clr.b D2b" */
     int i;
 
-    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);        /* 0x00E73F12 */
+    ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock);        /* 0x00E73F12 */
 
     /*
      * 0x00E73F20 - 0x00E73F72
@@ -38,7 +38,7 @@ boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
      * so the sockets visited are 1..0xE0 inclusive.
      */
     for (sock_num = 1; sock_num <= MSG_MAX_SOCKET; sock_num++) {
-        bitmap = MSG_$SOCK_OWNERS[sock_num];
+        bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
 
         /*
          * 0x00E73F30  moveq #0x3f,D1 / move.w (A2),D5w / sub.w D5w,D1w /
@@ -70,6 +70,6 @@ boolean MSG_$FORK(uint16_t *parent_asid, uint16_t *child_asid)
         }
     }
 
-    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);         /* 0x00E73F76 */
+    ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);         /* 0x00E73F76 */
     return shared_any;
 }

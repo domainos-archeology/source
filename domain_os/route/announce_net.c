@@ -102,7 +102,7 @@ void ROUTE_$ANNOUNCE_NET(uint32_t network)
         8,                              /* 6  src_sock                       */
         control_packet,                 /* 7  pkt_info      A6-0x28          */
         packet_id,                      /* 8  request_id                     */
-        (void *)&ROUTE_$ANNOUNCE_TEMPLATE, /* 9  template   pea (0x4,A5)      */
+        (void *)&ROUTE_$UNWIRED_DATA.announce_template, /* 9  template   pea (0x4,A5)      */
         2,                              /* 10 template_len                   */
         (void *)route_$null_service_rec, /* 11 data  pea (0x40,PC) = 0xE6A02C */
         0,                              /* 12 data_len                       */

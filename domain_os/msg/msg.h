@@ -235,7 +235,7 @@ void MSG_$RCV_HW(msg_$socket_t *socket,
  * MSG_$SEND - send a message to a socket on another node (0x00E599FC)
  *
  * Eleven arguments, every one of them a pointer; the routine copies the
- * 30-byte packet-info template out of MSG_$DATA, drops the caller's flags
+ * 30-byte packet-info template out of MSG_$UNWIRED_DATA, drops the caller's flags
  * word into it (0x00E59A50) and hands the whole thing to MSG_$$SEND with
  * port -1, routing key 0 and both source addresses set to NODE_$ME
  * (0x00E59A54-0x00E59A8E).
@@ -321,7 +321,7 @@ void MSG_$SEND_HW(msg_$hw_addr_t *hw_addr,
  *
  * Seventeen arguments at 0x08..0x48.  MSG_$SAR owns neither socket nor
  * packet-info record: it allocates a temporary user socket inside
- * MSG_$SARI and builds the 30-byte packet info from msg_$data_t's template
+ * MSG_$SARI and builds the 30-byte packet info from msg_$unwired_data_t's template
  * with the caller's flags word on top (0x00E59D5E-0x00E59D72).
  *
  * @param timeout   a tick count added to TIME_$CLOCKH, SIGN extended

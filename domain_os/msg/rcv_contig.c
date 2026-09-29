@@ -24,7 +24,7 @@
  * MSG_$RCV_CONTIGI
  *
  * Assembly:
- *   00e597ae  lea (0xe80d84).l,A5       ; MSG_$DATA
+ *   00e597ae  lea (0xe80d84).l,A5       ; MSG_$UNWIRED_DATA
  *   00e597b4  movea.l (0x8,A6),A4       ; socket
  *   00e597b8  movea.l (0x24,A6),A3      ; hw_addr
  *   00e597bc  move.l (0x30,A6),D3       ; max_len
@@ -93,7 +93,7 @@ void MSG_$RCV_CONTIGI(msg_$socket_t *socket,
 
     /* 0xE597DC - 0xE597F2 */
     asid = PROC1_$AS_ID;
-    bitmap = MSG_$SOCK_OWNERS[sock_num];
+    bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
     byte_index = (uint16_t)((0x3Fu - asid) >> 3);
 
     if ((bitmap[byte_index] & (1u << (asid & 7))) == 0) {

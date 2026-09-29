@@ -87,7 +87,7 @@ void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token)
 
 static void reset(uint16_t start)
 {
-    PKT_$DATA->short_id = start;
+    PKT_$DATA.short_id = start;
     lock_calls = 0;
     unlock_calls = 0;
 }
@@ -101,13 +101,13 @@ TEST(returns_the_previous_value_and_bumps)
     id = PKT_$NEXT_ID();
 
     ASSERT_EQ(7, id);
-    ASSERT_EQ(8, PKT_$DATA->short_id);
+    ASSERT_EQ(8, PKT_$DATA.short_id);
     ASSERT_EQ(1, lock_calls);
     ASSERT_EQ(1, unlock_calls);
     ASSERT_EQ(0x1357, unlock_token_seen);
     /* both sides address the same cell, PKT_$DATA + 0x50 */
     ASSERT_EQ((long long)(size_t)lock_seen, (long long)(size_t)unlock_seen);
-    ASSERT_EQ((long long)(size_t)&PKT_$DATA->spin_lock,
+    ASSERT_EQ((long long)(size_t)&PKT_$DATA.spin_lock,
               (long long)(size_t)lock_seen);
 }
 
@@ -120,7 +120,7 @@ TEST(sixty_four_thousand_is_not_wrapped)
     id = PKT_$NEXT_ID();
 
     ASSERT_EQ((int16_t)63999, id);
-    ASSERT_EQ(64000u, PKT_$DATA->short_id);
+    ASSERT_EQ(64000u, PKT_$DATA.short_id);
 }
 
 /* One past 64000 resets to 1 (0x00E124BC move.w #0x1). */
@@ -132,7 +132,7 @@ TEST(sixty_four_thousand_and_one_wraps_to_one)
     id = PKT_$NEXT_ID();
 
     ASSERT_EQ((int16_t)64000, id);
-    ASSERT_EQ(1u, PKT_$DATA->short_id);
+    ASSERT_EQ(1u, PKT_$DATA.short_id);
 }
 
 /*
@@ -148,13 +148,13 @@ TEST(crossing_the_signed_word_boundary_does_not_wrap)
     id = PKT_$NEXT_ID();
 
     ASSERT_EQ((int16_t)0x7FFF, id);
-    ASSERT_EQ(0x8000u, PKT_$DATA->short_id);
+    ASSERT_EQ(0x8000u, PKT_$DATA.short_id);
 
     /* and it keeps going through the whole 0x8000..0xFA00 range */
     reset(0xF9FF);
     id = PKT_$NEXT_ID();
     ASSERT_EQ((int16_t)0xF9FF, id);
-    ASSERT_EQ(0xFA00u, PKT_$DATA->short_id);
+    ASSERT_EQ(0xFA00u, PKT_$DATA.short_id);
 }
 
 /* A value already past the limit is pulled back on the next call. */
@@ -162,7 +162,7 @@ TEST(a_value_past_the_limit_is_reset)
 {
     reset(0xFFFE);
     (void)PKT_$NEXT_ID();
-    ASSERT_EQ(1u, PKT_$DATA->short_id);
+    ASSERT_EQ(1u, PKT_$DATA.short_id);
 }
 
 int main(void)

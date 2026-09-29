@@ -42,17 +42,17 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     }
 
     /* 0x00E59410-0x00E5941C: ML_$EXCLUSION_START(0xE242E4). */
-    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock);
 
     /* 0x00E5941E-0x00E5943A: bitmap = base + socket*8 + 0x1D8; test bit
      * (asid & 7) of byte (0x3F - asid) >> 3. */
-    bitmap     = MSG_$SOCK_OWNERS[*socket];
+    bitmap     = MSG_$UNWIRED_DATA.ownership[*socket];
     asid       = PROC1_$AS_ID;
     byte_index = (uint16_t)((uint16_t)(0x3F - asid) >> 3);
     if ((bitmap[byte_index] & (uint8_t)(1 << (asid & 7))) == 0) {
         /* 0x00E5943C-0x00E59450: not an owner - status, unlock, out. */
         *status_ret = status_$msg_no_owner;                    /* 0x290005 */
-        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
         return;
     }
 
@@ -76,14 +76,14 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     if ((bitmap[0] | bitmap[1] | bitmap[2] | bitmap[3]) == 0
         && (bitmap[4] | bitmap[5] | bitmap[6] | bitmap[7]) == 0) {
         /* 0x00E5949E: open_count-- */
-        MSG_$DATA->open_count--;
+        MSG_$UNWIRED_DATA.open_count--;
 
         /* 0x00E594A2-0x00E594AC: SOCK_$CLOSE(*socket) (word, with a
          * spare result slot). */
         SOCK_$CLOSE(*socket);
 
         /* 0x00E594AE-0x00E594B2: last one out? */
-        if (MSG_$DATA->open_count == 0) {
+        if (MSG_$UNWIRED_DATA.open_count == 0) {
             /* 0x00E594B4: clr.b NETWORK_$USER_SOCK_OPEN */
             NETWORK_$USER_SOCK_OPEN = 0;
 
@@ -97,7 +97,7 @@ void MSG_$CLOSEI(msg_$socket_t *socket, status_$t *status_ret)
     }
 
     /* 0x00E594D8-0x00E594E6: ML_$EXCLUSION_STOP(0xE242E4); status ok. */
-    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
     *status_ret = status_$ok;
 
     /* 0x00E594E8-0x00E594F0 */

@@ -25,7 +25,7 @@
  *
  * Sixteen arguments at (0x8,A6)..(0x44,A6).
  *
- *   0x00E596BA  lea (0xe80d84).l,A5       ; MSG_$DATA
+ *   0x00E596BA  lea (0xe80d84).l,A5       ; MSG_$UNWIRED_DATA
  *   0x00E596C0  movea.l (0x8,A6),A2       ; socket
  *   0x00E596C4  movea.l (0x44,A6),A3      ; status_ret
  *   0x00E596C8  move.w (A2),D0w / ble / cmpi.w #0xe0,D0w / ble
@@ -73,11 +73,11 @@ void MSG_$RCVI(msg_$socket_t *socket,
     }
 
     /* 0x00E596DA-0x00E596F4: the ownership bitmap is the 1-based table at
-     * MSG_$DATA + 0x1D8 + socket*8; the byte index is (0x3F - asid) >> 3
+     * &MSG_$UNWIRED_DATA + 0x1D8 + socket*8; the byte index is (0x3F - asid) >> 3
      * in word arithmetic with a logical shift, and btst.b numbers bits
      * mod 8. */
     asid       = PROC1_$AS_ID;
-    bitmap     = MSG_$SOCK_OWNERS[sock_num];
+    bitmap     = MSG_$UNWIRED_DATA.ownership[sock_num];
     byte_index = (uint16_t)((uint16_t)(0x3F - asid) >> 3);
     if ((bitmap[byte_index] & (uint8_t)(1 << (asid & 7))) == 0) {
         /* 0x00E596F6-0x00E596FC */

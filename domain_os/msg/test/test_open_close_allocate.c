@@ -151,7 +151,7 @@ void NETWORK_$SET_SERVICE(int16_t *op_ptr, uint32_t *value_ptr, status_$t *statu
 
 static void reset(void)
 {
-    memset(&MSG_$DATA_STRUCT, 0, sizeof(MSG_$DATA_STRUCT));
+    memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
     PROC1_$AS_ID = 5;
     NETWORK_$USER_SOCK_OPEN = 0;
     excl_start_calls = excl_stop_calls = excl_depth = 0;
@@ -187,10 +187,10 @@ TEST(openi_opens_and_records_ownership)
     ASSERT_EQ(sock_open_num, 0x10);
     ASSERT_EQ(sock_open_bufpages, 0x00040004);
     ASSERT_EQ(sock_open_max_queue, 0x00040400);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][ASID5_BYTE], ASID5_BIT);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][0], 0);
-    ASSERT_EQ(MSG_$DATA->depth[0x10], 4);
-    ASSERT_EQ(MSG_$DATA->open_count, 1);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][ASID5_BYTE], ASID5_BIT);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][0], 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.depth[0x10], 4);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 1);
     ASSERT_EQ(set_cleanup_calls, 1);
     ASSERT_EQ(set_cleanup_bit, 7);
     ASSERT_EQ(set_service_calls, 1);
@@ -200,7 +200,7 @@ TEST(openi_opens_and_records_ownership)
     ASSERT_EQ(excl_start_calls, 1);
     ASSERT_EQ(excl_stop_calls, 1);
     ASSERT_EQ(excl_depth, 0);
-    ASSERT_TRUE(excl_last == MSG_$SOCK_LOCK);
+    ASSERT_TRUE(excl_last == &MSG_$WIRED_DATA.sock_lock);
 }
 
 TEST(openi_rejects_range_and_depth_without_locking)
@@ -233,18 +233,18 @@ TEST(openi_in_use_when_owned_or_sock_open_fails)
     status_$t status = -1;
     reset();
 
-    MSG_$SOCK_OWNERS[0x20][3] = 0x01;
+    MSG_$UNWIRED_DATA.ownership[0x20][3] = 0x01;
     MSG_$OPENI(&sock, &depth, &status);
     ASSERT_EQ(status, status_$msg_socket_in_use);
     ASSERT_EQ(sock_open_calls, 0);
     ASSERT_EQ(excl_depth, 0);
 
-    MSG_$SOCK_OWNERS[0x20][3] = 0;
+    MSG_$UNWIRED_DATA.ownership[0x20][3] = 0;
     sock_open_result = 0;
     MSG_$OPENI(&sock, &depth, &status);
     ASSERT_EQ(status, status_$msg_socket_in_use);
     ASSERT_EQ(sock_open_calls, 1);
-    ASSERT_EQ(MSG_$DATA->open_count, 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 0);
     ASSERT_EQ(excl_depth, 0);
 }
 
@@ -279,9 +279,9 @@ TEST(allocatei_takes_the_socket_sock_allocate_user_returns)
     ASSERT_EQ(alloc_user_args[1], 3);
     ASSERT_EQ(alloc_user_args[2], 3);
     ASSERT_EQ(alloc_user_args[3], 0x400);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x33][ASID5_BYTE], ASID5_BIT);
-    ASSERT_EQ(MSG_$DATA->depth[0x33], 3);
-    ASSERT_EQ(MSG_$DATA->open_count, 1);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x33][ASID5_BYTE], ASID5_BIT);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.depth[0x33], 3);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 1);
     ASSERT_EQ(set_cleanup_bit, 7);
     ASSERT_EQ(set_service_op, 0);
     ASSERT_EQ(set_service_value, 0x80000);
@@ -306,7 +306,7 @@ TEST(allocatei_too_deep_and_no_sockets)
     ASSERT_EQ(status, status_$msg_no_more_sockets);
     ASSERT_EQ(excl_start_calls, 1);
     ASSERT_EQ(excl_stop_calls, 1);
-    ASSERT_EQ(MSG_$DATA->open_count, 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 0);
 }
 
 TEST(allocate_returns_boolean_of_the_local_status)
@@ -335,8 +335,8 @@ TEST(closei_last_owner_closes_and_drops_the_service)
 
     MSG_$CLOSEI(&sock, &status);
     ASSERT_EQ(status, status_$ok);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][ASID5_BYTE], 0);
-    ASSERT_EQ(MSG_$DATA->open_count, 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][ASID5_BYTE], 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 0);
     ASSERT_EQ(sock_close_calls, 1);
     ASSERT_EQ(sock_close_num, 0x10);
     ASSERT_EQ(NETWORK_$USER_SOCK_OPEN, 0);
@@ -355,12 +355,12 @@ TEST(closei_keeps_the_service_while_other_sockets_are_open)
     status_$t status = -1;
     reset();
     MSG_$OPENI(&sock, &depth, &status);
-    MSG_$DATA->open_count = 2;
+    MSG_$UNWIRED_DATA.open_count = 2;
     set_service_calls = 0;
 
     MSG_$CLOSEI(&sock, &status);
     ASSERT_EQ(status, status_$ok);
-    ASSERT_EQ(MSG_$DATA->open_count, 1);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 1);
     ASSERT_EQ(sock_close_calls, 1);
     ASSERT_EQ((uint8_t)NETWORK_$USER_SOCK_OPEN, 0xFF);
     ASSERT_EQ(set_service_calls, 0);
@@ -373,13 +373,13 @@ TEST(closei_other_owners_keep_the_socket)
     status_$t status = -1;
     reset();
     MSG_$OPENI(&sock, &depth, &status);
-    MSG_$SOCK_OWNERS[0x10][2] = 0x81;    /* two other address spaces */
+    MSG_$UNWIRED_DATA.ownership[0x10][2] = 0x81;    /* two other address spaces */
 
     MSG_$CLOSEI(&sock, &status);
     ASSERT_EQ(status, status_$ok);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][ASID5_BYTE], 0);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][2], 0x81);
-    ASSERT_EQ(MSG_$DATA->open_count, 1);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][ASID5_BYTE], 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][2], 0x81);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 1);
     ASSERT_EQ(sock_close_calls, 0);
 }
 
@@ -390,12 +390,12 @@ TEST(closei_not_owner_and_out_of_range)
     reset();
 
     sock = 0x10; status = -1;
-    MSG_$SOCK_OWNERS[0x10][2] = 0x81;
+    MSG_$UNWIRED_DATA.ownership[0x10][2] = 0x81;
     MSG_$CLOSEI(&sock, &status);
     ASSERT_EQ(status, status_$msg_no_owner);
     ASSERT_EQ(excl_start_calls, 1);
     ASSERT_EQ(excl_stop_calls, 1);
-    ASSERT_EQ(MSG_$SOCK_OWNERS[0x10][2], 0x81);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.ownership[0x10][2], 0x81);
 
     sock = 0;
     MSG_$CLOSEI(&sock, &status);
@@ -420,7 +420,7 @@ TEST(close_takes_one_argument_and_reports_nothing)
     reset();
     MSG_$OPENI(&sock, &depth, &status);
     MSG_$CLOSE(&sock);
-    ASSERT_EQ(MSG_$DATA->open_count, 0);
+    ASSERT_EQ(MSG_$UNWIRED_DATA.open_count, 0);
     ASSERT_EQ(sock_close_calls, 1);
     ASSERT_EQ(excl_depth, 0);
 }

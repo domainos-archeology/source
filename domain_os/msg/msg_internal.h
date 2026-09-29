@@ -2,11 +2,15 @@
  * MSG_$ Internal Definitions
  *
  * Internal data structures and helper functions for the MSG subsystem.
+ *
+ * Module data blocks MSG_$WIRED_DATA and MSG_$UNWIRED_DATA: Claude Opus 5.5
+ * (source-3llq).
  */
 
 #ifndef MSG_MSG_INTERNAL_H
 #define MSG_MSG_INTERNAL_H
 
+#include "arch/arch.h"
 #include "ec/ec.h"
 #include "net_io/net_io.h"
 #include "netbuf/netbuf.h"
@@ -22,134 +26,150 @@
 #include "sock/sock.h"
 
 /*
- * MSG data base address
- * All MSG data structures are relative to this address.
- */
-#define MSG_$DATA_BASE 0xE80D84
-
-/*
- * MSG network-send record, base 0xE242E4
+ * ============================================================================
+ * MSG_$WIRED_DATA - the MSG_WIRED segment, 0x00E242E4..0x00E24303
+ * ============================================================================
+ *
+ * SAU2 map: "D E242E4 MSG_WIRED size = 20", interior symbols MSG_$SOCK_LOCK
+ * (0xE242E4, +0x00), DPAGE_VA (0xE242F8, +0x14), DPAGE_PA (0xE242FC, +0x18)
+ * and DPAGE_LOCK (0xE24300, +0x1C).  It follows CACHE_$FLUSH_VIRTUAL and
+ * precedes MST_WIRED (0xE24304).
  *
  * MSG_$$SEND establishes it as its module base ("lea (0xe242e4).l,A5" at
- * 0x00E0D9F4) and reaches the data page through it: (0x14,A5) is the page's
- * virtual address, (0x18,A5) its physical address and (0x1C,A5) the in-use
- * counter it bumps and drops (0x00E0DBE6, 0x00E0DC1E, 0x00E0DCA6).
+ * 0x00E0D9F4) and reaches the bounce page through it: (0x14,A5) is the
+ * page's virtual address, (0x18,A5) its physical address and (0x1C,A5) the
+ * claim counter it bumps and drops (0x00E0DBE6, 0x00E0DC1E, 0x00E0DCA6).
  * MSG_$OPENI, MSG_$ALLOCATEI, MSG_$CLOSEI, MSG_$SHARE_SOCKET and MSG_$FORK
  * pass the base itself to ML_$EXCLUSION_START / ML_$EXCLUSION_STOP
- * (0x00E591F2, 0x00E59410, 0x00E73F12), so the first 0x14 bytes are an
- * ml_$exclusion_t.
+ * (0x00E591F2, 0x00E59410, 0x00E73F12), so the first 0x12 bytes are an
+ * ml_$exclusion_t; MSG_$INIT fills the page cells ("move.l #0xe242fc,-(SP)"
+ * to NETBUF_$GET_DAT at 0x00E31B88).
  *
- * The lock and the data page are declared separately rather than as one
- * record because sizeof(ml_$exclusion_t) is 0x12 on m68k but 0x20 on a
- * 64-bit host, which would move every following field.
+ * The address is the block's image address - the ordering key of
+ * tools/gen_layout_ld.py and documentation, not where the block is linked
+ * (docs/design-per-process-data.md).
+ *
+ * ml_$exclusion_t holds host pointers (0x12 bytes on the target, larger on a
+ * 64-bit host), so the offsets past it and the size are asserted on the
+ * target only.  Image contents (`gsk read 0xE242E4 0x20`): all zero except
+ * DPAGE_LOCK = 0xFFFF (msg/msg_data.c).
  */
-#define MSG_$SOCK_LOCK_ADDR 0xE242E4    /* ml_$exclusion_t */
-#define MSG_$DPAGE_ADDR     0xE242F8    /* msg_$dpage_t (= lock base + 0x14) */
+#define MSG_$WIRED_DATA_SIZE 0x20       /* map: MSG_WIRED size = 20 */
 
-/*
- * msg_$dpage_t - the single bounce page MSG_$$SEND uses for short remote
- * payloads instead of allocating netbuf pages.
- */
-typedef struct msg_$dpage_t {
-  uint32_t va;   /* 0x00 (0xE242F8): virtual address  (0x00E0DBF8) */
-  uint32_t pa;   /* 0x04 (0xE242FC): physical address (0x00E0DBFE) */
-  int16_t in_use;/* 0x08 (0xE24300): pre-increment claim counter; 0 after the
-                  *      increment means the caller owns the page
-                  *      (0x00E0DBE6 "addq.w #0x1,(0x1c,A5)" /
-                  *       0x00E0DBEA "tst.w (0x1c,A5) / bne") */
-} msg_$dpage_t;
+typedef struct msg_$wired_data_t {
+  ml_$exclusion_t sock_lock;  /* +0x00 map MSG_$SOCK_LOCK */
+  uint16_t _unknown_12;       /* +0x12: not referenced */
+  uint32_t dpage_va;          /* +0x14 map DPAGE_VA: bounce page virtual
+                               * address (0x00E0DBF8) */
+  uint32_t dpage_pa;          /* +0x18 map DPAGE_PA: bounce page physical
+                               * address (0x00E0DBFE) */
+  /*
+   * +0x1C map DPAGE_LOCK: pre-increment claim counter; 0 after the increment
+   * means the caller owns the page (0x00E0DBE6 "addq.w #0x1,(0x1c,A5)" /
+   * 0x00E0DBEA "tst.w (0x1c,A5) / bne").  -1 (free) in the image.
+   */
+  int16_t dpage_lock;
+  uint16_t _unknown_1e;       /* +0x1E: not referenced */
+} msg_$wired_data_t;
 
+_Static_assert(offsetof(msg_$wired_data_t, sock_lock) == 0x00, "MSG_$SOCK_LOCK");
 #if defined(ARCH_M68K)
-_Static_assert(offsetof(msg_$dpage_t, pa) == 0x04, "msg_$dpage_t.pa");
-_Static_assert(offsetof(msg_$dpage_t, in_use) == 0x08, "msg_$dpage_t.in_use");
+/* Pointer-bearing record in front: target-only (design section 3). */
+_Static_assert(sizeof(ml_$exclusion_t) == 0x12, "ml_$exclusion_t size");
+_Static_assert(offsetof(msg_$wired_data_t, dpage_va) == 0x14, "DPAGE_VA (0xE242F8)");
+_Static_assert(offsetof(msg_$wired_data_t, dpage_pa) == 0x18, "DPAGE_PA (0xE242FC)");
+_Static_assert(offsetof(msg_$wired_data_t, dpage_lock) == 0x1C, "DPAGE_LOCK (0xE24300)");
+_Static_assert(sizeof(msg_$wired_data_t) == MSG_$WIRED_DATA_SIZE, "MSG_WIRED: map size 0x20");
 #endif
 
-#if defined(ARCH_M68K)
-#define MSG_$SOCK_LOCK ((ml_$exclusion_t *)MSG_$SOCK_LOCK_ADDR)
-#define MSG_$DPAGE     ((msg_$dpage_t *)MSG_$DPAGE_ADDR)
-#else
-extern ml_$exclusion_t MSG_$SOCK_LOCK_STRUCT;
-extern msg_$dpage_t MSG_$DPAGE_STRUCT;
-#define MSG_$SOCK_LOCK (&MSG_$SOCK_LOCK_STRUCT)
-#define MSG_$DPAGE     (&MSG_$DPAGE_STRUCT)
-#endif
+MODULE_DATA_DECLARE(msg_$wired_data_t, MSG_$WIRED_DATA, 0x00E242E4);
 
 /*
- * Offsets from MSG_$DATA_BASE
- */
-#define MSG_OFF_DEPTH_TABLE 0x1E /* Socket depth table (2 bytes per socket) */
-#define MSG_OFF_OWNERSHIP                                                      \
-  0x1D8 /* Socket ownership bitmaps (8 bytes per socket) */
-#define MSG_OFF_OPEN_COUNT 0x8E0 /* Count of open sockets */
-
-/*
- * msg_$data_t - the MSG subsystem's global record at MSG_$DATA_BASE
+ * ============================================================================
+ * MSG_$UNWIRED_DATA - the MSG_UNWIRED segment, 0x00E80D84..0x00E81667
+ * ============================================================================
  *
+ * SAU2 map: "D E80D84 MSG_UNWIRED size = 8E4", no interior symbols; it
+ * follows NAME_'s NAME_$WDIR_UID and precedes NET_IO_UNWIRED (0xE81668).
  * Recovered from MSG_$OPENI (0x00E591B4), MSG_$ALLOCATEI (0x00E592E6),
- * MSG_$CLOSEI (0x00E593E4) and MSG_$WAITI (0x00E59BC0), which are the only
- * writers.  All four establish A5 with "lea (0xe80d84).l,A5".
+ * MSG_$CLOSEI (0x00E593E4), MSG_$WAITI (0x00E59BC0), MSG_$SEND and MSG_$SARI,
+ * which all establish A5 with "lea (0xe80d84).l,A5".
  *
- *   +0x1E   depth[]      "move.w (A3),(0x1e,A5,D1w*0x1)" with D1 = socket*2
- *                        (0x00E59276, 0x00E5936C).  Indexed by the socket
- *                        number itself, so slot 0 exists but is never used.
- *   +0x1D8  ownership    "lsl.w #0x3,D2w / lea (0x0,A5,D2w),A0 /
- *                        lea (0x1d8,A0),A1" (0x00E59202-0x00E5920A,
- *                        0x00E5935A-0x00E59360, 0x00E59420-0x00E59432,
- *                        0x00E59BEA-0x00E59BFC).  base + 0x1D8 + socket*8 is
- *                        a ONE-based array: the lowest address any caller can
- *                        reach is socket 1 at +0x1E0, which is exactly where
- *                        the depth table ends.
- *   +0x8E0  open_count   "addq.w #0x1,(0x8e0,A5)" (0x00E5927A, 0x00E59370),
- *                        "subq.w #0x1,(0x8e0,A5)" (0x00E5949E).
+ *   +0x000  send_template  the pkt_$info_t template MSG_$SEND and MSG_$SARI
+ *                          copy onto their stacks before overwriting the
+ *                          flags word ("lea (A5),A2 / lea (-0x20,A6),A3 /
+ *                          moveq #0x6 / move.l (A2)+,(A3)+ / dbf /
+ *                          move.w (A2)+,(A3)+" at 0x00E59A40-0x00E59A4E).
+ *                          Only its first 30 bytes are ever copied.
+ *   +0x01E  depth[]        "move.w (A3),(0x1e,A5,D1w*0x1)" with D1 = socket*2
+ *                          (0x00E59276, 0x00E5936C): element k at
+ *                          +0x1E + k*2, so the table is declared from the
+ *                          bias slot element 0, which overlays the template's
+ *                          last word (never copied, never indexed).
+ *   +0x1D8  ownership[]    "lsl.w #0x3,D2w / lea (0x0,A5,D2w),A0 /
+ *                          lea (0x1d8,A0),A1" (0x00E59202-0x00E5920A,
+ *                          0x00E5935A-0x00E59360, 0x00E59420-0x00E59432,
+ *                          0x00E59BEA-0x00E59BFC): element k at
+ *                          +0x1D8 + k*8, declared from element 0, whose eight
+ *                          bytes overlay depth[0xDC..0xDF].  Socket 1 starts
+ *                          at +0x1E0, exactly where depth ends.
+ *   +0x8E0  open_count     "addq.w #0x1,(0x8e0,A5)" (0x00E5927A, 0x00E59370),
+ *                          "subq.w #0x1,(0x8e0,A5)" (0x00E5949E).
  *
  * Socket numbers run 1..0xE0: MSG_$OPENI rejects >= 0xE0 (0x00E591D2
  * "cmpi.w #0xe0,D0w / blt") while MSG_$CLOSEI and MSG_$WAITI accept 0xE0
- * (0x00E593FE / 0x00E59BDA "cmpi.w #0xe0,D0w / ble"), so the tables are sized
- * for socket 0xE0 as well.  depth therefore holds 0xE1 words (0x1E..0x1DF)
- * and ownership 0xE0 bitmaps (0x1E0..0x8DF).
- */
-typedef struct msg_$data_t {
-  /*
-   * 0x000: the 30-byte pkt_$info_t template MSG_$SEND copies onto its stack
-   * before overwriting the flags word ("lea (A5),A2 / lea (-0x20,A6),A3 /
-   * moveq #0x6 / move.l (A2)+,(A3)+ / dbf / move.w (A2)+,(A3)+" at
-   * 0x00E59A40-0x00E59A4E).  Only 30 of pkt_$info_t's 32 bytes are copied.
-   */
-  uint8_t send_template[0x1E];           /* 0x000 */
-  int16_t depth[MSG_MAX_SOCKET + 1];     /* 0x01E: indexed by socket */
-  uint8_t ownership[MSG_MAX_SOCKET][8];  /* 0x1E0: indexed by socket - 1 */
-  int16_t open_count;                    /* 0x8E0 */
-} msg_$data_t;
-
-#if defined(ARCH_M68K)
-_Static_assert(offsetof(msg_$data_t, send_template) == 0, "msg send_template");
-_Static_assert(offsetof(msg_$data_t, depth) == MSG_OFF_DEPTH_TABLE, "msg depth");
-_Static_assert(offsetof(msg_$data_t, ownership) == MSG_OFF_OWNERSHIP + 8,
-               "msg ownership starts one slot past the 1-based base");
-_Static_assert(offsetof(msg_$data_t, open_count) == MSG_OFF_OPEN_COUNT,
-               "msg open_count");
-_Static_assert(sizeof(msg_$data_t) == 0x8E2, "msg_$data_t must be 0x8E2 bytes");
-#endif
-
-#if defined(ARCH_M68K)
-#define MSG_$DATA ((msg_$data_t *)MSG_$DATA_BASE)
-#else
-extern msg_$data_t MSG_$DATA_STRUCT;
-#define MSG_$DATA (&MSG_$DATA_STRUCT)
-#endif
-
-/*
- * MSG_$SOCK_OWNERS - the ONE-based spelling of msg_$data_t.ownership that the
- * original uses everywhere: base + 0x1D8 + socket*8, so MSG_$SOCK_OWNERS[n] is
- * socket n's 8-byte bitmap and slot 0 is never dereferenced.  It is the same
- * storage as MSG_$DATA->ownership[n - 1].
+ * (0x00E593FE / 0x00E59BDA "cmpi.w #0xe0,D0w / ble"), so both tables are
+ * sized for socket 0xE0, and ownership[0xE0] ends at open_count.
  *
  * Within a bitmap the byte index is (0x3F - asid) >> 3 in *word* arithmetic
  * with a logical shift, and the bit is asid & 7 - "btst.b D1,(0x0,A1,D0w*0x1)"
  * numbers bits modulo 8 (0x00E59C00, 0x00E59436).
+ *
+ * The bias slots overlay other objects, so the block is a union of one arm
+ * per table (as name/name.h and netlog/netlog_internal.h do); every use
+ * indexes with the socket number itself.  Every field is pointer-free, so
+ * every assert is unconditional.  Image contents (`gsk read 0xE80D84
+ * 0x8E4`): the template's first 16 bytes, 00 00 00 02 00 02 80 31 ff ff 00 00
+ * ff ff 00 00; every other byte zero (msg/msg_data.c).
  */
-#define MSG_$SOCK_OWNERS                                                       \
-  ((uint8_t(*)[8])((uint8_t *)MSG_$DATA + MSG_OFF_OWNERSHIP))
+#define MSG_$UNWIRED_DATA_SIZE 0x8E4    /* map: MSG_UNWIRED size = 8E4 */
+
+typedef struct msg_$unwired_data_t {
+  union {
+    struct {
+      pkt_$info_t send_template;                /* +0x000 */
+    };
+    struct {
+      uint8_t _depth_bias[0x1E];
+      /* +0x01E: indexed by socket; element 0 overlays send_template's last
+       * word */
+      int16_t depth[MSG_MAX_SOCKET + 1];
+    };
+    struct {
+      uint8_t _ownership_bias[0x1D8];
+      /* +0x1D8: indexed by socket; element 0 overlays depth[0xDC..0xDF] */
+      uint8_t ownership[MSG_MAX_SOCKET + 1][8];
+      int16_t open_count;                       /* +0x8E0 */
+      uint16_t _unknown_8e2;                    /* +0x8E2: not referenced */
+    };
+  };
+} msg_$unwired_data_t;
+
+_Static_assert(offsetof(msg_$unwired_data_t, send_template) == 0x000, "msg send_template (lea (A5),A2)");
+_Static_assert(offsetof(msg_$unwired_data_t, depth) == 0x01E, "msg depth bias base (0x1e,A5,D1w)");
+_Static_assert(offsetof(msg_$unwired_data_t, depth[1]) == 0x020, "msg depth[1]");
+_Static_assert(sizeof(((msg_$unwired_data_t *)0)->depth[0]) == 2, "msg depth stride (socket*2)");
+_Static_assert(offsetof(msg_$unwired_data_t, depth[MSG_MAX_SOCKET + 1]) == 0x1E0,
+               "msg depth[0xE0] ends at ownership[1]");
+_Static_assert(offsetof(msg_$unwired_data_t, ownership) == 0x1D8, "msg ownership bias base (0x1d8)");
+_Static_assert(offsetof(msg_$unwired_data_t, ownership[1]) == 0x1E0, "msg ownership[1]");
+_Static_assert(sizeof(((msg_$unwired_data_t *)0)->ownership[0]) == 8, "msg ownership stride (lsl.w #0x3)");
+_Static_assert(offsetof(msg_$unwired_data_t, ownership[MSG_MAX_SOCKET + 1]) == 0x8E0,
+               "msg ownership[0xE0] ends at open_count");
+_Static_assert(offsetof(msg_$unwired_data_t, open_count) == 0x8E0, "msg open_count");
+_Static_assert(sizeof(msg_$unwired_data_t) == MSG_$UNWIRED_DATA_SIZE, "MSG_UNWIRED: map size 0x8E4");
+
+MODULE_DATA_DECLARE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
 
 /*
  * MSG_$$SEND - the shared body behind MSG_$SEND and MSG_$SENDI (0x00E0D9EC).

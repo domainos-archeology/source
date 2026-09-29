@@ -13,7 +13,7 @@
  * "unknown request type" arm.  The compare is unsigned, so any value at or
  * above 0x5C - including a negative word - takes the default arm.
  *
- * A5 in the original is 0x00E82408, the PKT_$DEFAULT_INFO template.
+ * A5 in the original is 0x00E82408, ASKNODE_$DATA (its pkt_info template).
  *
  * Original address: 0x00E6597A (1114 bytes)
  */
@@ -411,9 +411,9 @@ void ASKNODE_$SERVER(asknode_$server_ctx_t *ctx, int32_t *routing_info)
         /* 0x00E65DCC: the time-sync answer travels in the context record */
         status = status_$ok;
     } else {
-        /* 0x00E65DD2: copy the 30-byte PKT_$DEFAULT_INFO template */
+        /* 0x00E65DD2: copy the 30-byte ASKNODE_$DATA.pkt_info template */
         {
-            uint32_t *src = PKT_$DEFAULT_INFO;
+            const uint32_t *src = (const uint32_t *)&ASKNODE_$DATA.pkt_info;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) {

@@ -78,7 +78,7 @@ static int tests_passed = 0;
 #include "../xns_data.c"
 
 route_$port_t  ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 
 void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params,
                   status_$t *status_ret)

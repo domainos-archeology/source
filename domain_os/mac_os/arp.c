@@ -52,7 +52,7 @@ void MAC_OS_$ARP(void *addr_info, int16_t port_num, uint16_t *mac_addr,
     *status_ret = status_$ok;
 
     /* 0x00E0C0EE-0x00E0C10C: ROUTE_$PORTP[port_num] */
-    route_port = ROUTE_$PORTP[port_num];
+    route_port = ROUTE_$WIRED_DATA.portp[port_num];
     if (route_port == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
         return;

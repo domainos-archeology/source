@@ -29,7 +29,7 @@
  * TIME_$CLOCKH to form the deadline handed to EC_$WAIT.
  *
  * 0x00E59BC0  link.w A6,-0xc          locals: -0x8 sock_target, -0x4 quit_target
- * 0x00E59BC8  lea (0xe80d84).l,A5     A5 = MSG_$DATA_BASE
+ * 0x00E59BC8  lea (0xe80d84).l,A5     A5 = &MSG_$UNWIRED_DATA
  * 0x00E59BCE  movea.l (0x8,A6),A0     socket
  * 0x00E59BD2  movea.l (0x10,A6),A2    status_ret
  */
@@ -71,7 +71,7 @@ void MSG_$WAITI(msg_$socket_t *socket, int16_t *timeout, status_$t *status_ret)
     asid = PROC1_$AS_ID;
     byte_index = (int16_t)((uint16_t)(0x3F - asid) >> 3);
 
-    if ((MSG_$SOCK_OWNERS[sock_num][byte_index] & (1 << (asid & 7))) == 0) {
+    if ((MSG_$UNWIRED_DATA.ownership[sock_num][byte_index] & (1 << (asid & 7))) == 0) {
         *status_ret = status_$msg_no_owner;
         return;
     }

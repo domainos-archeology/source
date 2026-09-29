@@ -38,7 +38,7 @@ static int tests_run = 0;
 #include "app/app.h"
 
 /* Globals the code under test links against. */
-msg_$data_t MSG_$DATA_STRUCT;
+MODULE_DATA_DEFINE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
 uint16_t PROC1_$AS_ID;
 
 /*
@@ -131,15 +131,15 @@ static char data_out[64];
 
 static void setup(void)
 {
-    memset(&MSG_$DATA_STRUCT, 0, sizeof(MSG_$DATA_STRUCT));
+    memset(&MSG_$UNWIRED_DATA, 0, sizeof(MSG_$UNWIRED_DATA));
     memset(arena, 0, sizeof(arena));
     memset(template_out, 0, sizeof(template_out));
     memset(data_out, 0, sizeof(data_out));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
 
     PROC1_$AS_ID = TEST_ASID;
-    /* MSG_$SOCK_OWNERS[n] is MSG_$DATA->ownership[n - 1] */
-    MSG_$SOCK_OWNERS[TEST_SOCK][(0x3F - TEST_ASID) >> 3] |= 1u << (TEST_ASID & 7);
+    /* MSG_$UNWIRED_DATA.ownership[n] is MSG_$UNWIRED_DATA.ownership[n - 1] */
+    MSG_$UNWIRED_DATA.ownership[TEST_SOCK][(0x3F - TEST_ASID) >> 3] |= 1u << (TEST_ASID & 7);
 
     reply_hdr()->prefix.template_len = 8;
     reply_hdr()->prefix.data_len = 0x20;

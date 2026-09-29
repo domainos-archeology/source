@@ -3,11 +3,14 @@
  *
  * Internal types and helper functions for the ASKNODE subsystem.
  * This header should only be included by ASKNODE implementation files.
+ *
+ * Module data block ASKNODE_$DATA: Claude Opus 5.5 (source-esg8).
  */
 
 #ifndef ASKNODE_INTERNAL_H
 #define ASKNODE_INTERNAL_H
 
+#include "arch/arch.h"
 #include "app/app.h"
 #include "asknode/asknode.h"
 #include "cal/cal.h"
@@ -105,13 +108,10 @@ typedef struct asknode_request_t {
 } asknode_request_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(asknode_request_t, version) == 0x00, "asknode_request_t.version");
 _Static_assert(__builtin_offsetof(asknode_request_t, request_type) == 0x02, "asknode_request_t.request_type");
 _Static_assert(__builtin_offsetof(asknode_request_t, _pad_11) == 0x11, "asknode_request_t._pad_11");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_request_t, node_id)   == 0x04, "asknode_request_t.node_id");
 _Static_assert(offsetof(asknode_request_t, param1)    == 0x08, "asknode_request_t.param1");
 _Static_assert(offsetof(asknode_request_t, param2)    == 0x0C, "asknode_request_t.param2");
@@ -120,7 +120,6 @@ _Static_assert(offsetof(asknode_request_t, forwarded) == 0x10, "asknode_request_
 _Static_assert(offsetof(asknode_request_t, count)     == 0x12, "asknode_request_t.count");
 _Static_assert(offsetof(asknode_request_t, param3)    == 0x14, "asknode_request_t.param3");
 _Static_assert(sizeof(asknode_request_t) == 0x18, "asknode_request_t must be 0x18 bytes");
-#endif
 
 /*
  * A Domain boolean built the way the m68k `sXX` instructions build one:
@@ -151,18 +150,14 @@ typedef struct asknode_response_t {
 } asknode_response_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(asknode_response_t, version) == 0x00, "asknode_response_t.version");
 _Static_assert(__builtin_offsetof(asknode_response_t, response_type) == 0x02, "asknode_response_t.response_type");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_response_t, status)  == 0x04, "asknode_response_t.status");
 _Static_assert(offsetof(asknode_response_t, node_id) == 0x08, "asknode_response_t.node_id");
 _Static_assert(offsetof(asknode_response_t, flags)   == 0x0C, "asknode_response_t.flags");
 _Static_assert(offsetof(asknode_response_t, count)   == 0x0E, "asknode_response_t.count");
 _Static_assert(sizeof(asknode_response_t) == 0x10, "asknode_response_t must be 16 bytes");
-#endif
 
 /*
  * asknode_$reply_hdr_t - what app_$receive_rec_t.reply points at
@@ -197,13 +192,11 @@ typedef struct asknode_$reply_hdr_t {
   uint8_t  _pad_15;       /* 0x15 */
 } __attribute__((packed)) asknode_$reply_hdr_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_$reply_hdr_t, prefix)      == 0x00, "reply_hdr.prefix");
 _Static_assert(offsetof(asknode_$reply_hdr_t, sender_node) == 0x08, "reply_hdr.sender_node");
 _Static_assert(offsetof(asknode_$reply_hdr_t, node_id)     == 0x0E, "reply_hdr.node_id");
 _Static_assert(offsetof(asknode_$reply_hdr_t, src_socket)  == 0x12, "reply_hdr.src_socket");
 _Static_assert(offsetof(asknode_$reply_hdr_t, f14)         == 0x14, "reply_hdr.f14");
-#endif
 
 /*
  * asknode_$server_ctx_t - the record ASKNODE_$SERVER's caller passes as its
@@ -245,14 +238,12 @@ typedef struct asknode_$server_ctx_t {
   uint32_t clock_lo;      /* 0x1E */
 } __attribute__((packed)) asknode_$server_ctx_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_$server_ctx_t, param3)     == 0x14, "server_ctx.param3");
 _Static_assert(offsetof(asknode_$server_ctx_t, request_id) == 0x18, "server_ctx.request_id");
 _Static_assert(offsetof(asknode_$server_ctx_t, socket)     == 0x1A, "server_ctx.socket");
 _Static_assert(offsetof(asknode_$server_ctx_t, clock_hi)   == 0x1C, "server_ctx.clock_hi");
 _Static_assert(offsetof(asknode_$server_ctx_t, clock_lo)   == 0x1E, "server_ctx.clock_lo");
 _Static_assert(sizeof(asknode_$server_ctx_t) == 0x22, "asknode_$server_ctx_t must be 0x22 bytes");
-#endif
 
 /*
  * asknode_who_response_t - WHO response structure
@@ -271,19 +262,15 @@ typedef struct asknode_who_response_t {
 } asknode_who_response_t;
 
 /* Remaining documented offsets (bead source-pewa). */
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(asknode_who_response_t, version) == 0x00, "asknode_who_response_t.version");
 _Static_assert(__builtin_offsetof(asknode_who_response_t, response_type) == 0x02, "asknode_who_response_t.response_type");
 _Static_assert(__builtin_offsetof(asknode_who_response_t, flags) == 0x0C, "asknode_who_response_t.flags");
 _Static_assert(__builtin_offsetof(asknode_who_response_t, count) == 0x0E, "asknode_who_response_t.count");
 _Static_assert(__builtin_offsetof(asknode_who_response_t, time_high) == 0x10, "asknode_who_response_t.time_high");
 _Static_assert(__builtin_offsetof(asknode_who_response_t, time_low) == 0x14, "asknode_who_response_t.time_low");
-#endif
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(asknode_who_response_t, status)  == 0x04, "who_response.status");
 _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.node_id");
-#endif
 
 /*
  * ============================================================================
@@ -298,14 +285,59 @@ _Static_assert(offsetof(asknode_who_response_t, node_id) == 0x08, "who_response.
  * RING_$CTL from ring/ring.h.
  */
 
-/* Packet info template at 0x00E82408 - default values for PKT_$SEND_INTERNET */
-/* PKT_$DEFAULT_INFO is exported from pkt/pkt.h (bead source-3uo). */
-
 /*
- * Protocol version at 0x00E82426 - determines WHO request version
- * When == 3, use protocol version 2; otherwise use version 3
+ * ============================================================================
+ * ASKNODE_$DATA - the ASKNODE module block, 0x00E82408..0x00E82427
+ * ============================================================================
+ *
+ * SAU2 map: "D E82408 ASKNODE size = 20", no interior symbols; it follows
+ * REM_FILE (REM_FILE_$COMPLETION_TIME 0xE82404) and precedes OS_TERM
+ * (0xE82428).  ASKNODE_$INTERNET_INFO (0x00E645F2), ASKNODE_$READ_FAILURE_REC
+ * (0x00E658D6), ASKNODE_$SERVER (0x00E65982), ASKNODE_$WHO_NOTOPO
+ * (0x00E65FE4) and ASKNODE_$WHO_REMOTE (0x00E6633C) all load
+ * "lea (0xe82408).l,A5"; ASKNODE_$PROPAGATE_WHO inherits it.  The address is
+ * the block's image address - the ordering key of tools/gen_layout_ld.py and
+ * documentation, not where the block is linked
+ * (docs/design-per-process-data.md).
+ *
+ *   +0x00  pkt_info          the packet-info template every ASKNODE sender
+ *                            copies onto its stack before filling in its own
+ *                            words: "lea (A5),A0 / moveq #6 / move.l
+ *                            (A0)+,(A1)+ / dbf / move.w (A0)+,(A1)+", 30
+ *                            bytes (0x00E656DC, 0x00E65DD2, 0x00E65EAC,
+ *                            0x00E66148, 0x00E664D2).  Its last word is
+ *                            never copied: it is protocol_version.
+ *   +0x1E  protocol_version  "cmpi.w #0x3,(0x1e,A5)" (0x00E657BC,
+ *                            0x00E663BC): when 3, WHO requests go out as
+ *                            version 2, otherwise as version 3.
+ *
+ * (The tree used to call the template PKT_$DEFAULT_INFO and the word
+ * ASKNODE_$PROTOCOL_VERSION; the map names neither, so they are fields.)
+ * The word overlays the template's pad_1e, so the block is a union of one
+ * arm per object.  Pointer-free: every assert is unconditional.  Image
+ * contents (`gsk read 0xE82408 0x20`): asknode/asknode_data.c.
  */
-extern uint16_t ASKNODE_$PROTOCOL_VERSION;
+#define ASKNODE_$DATA_SIZE 0x20         /* map: ASKNODE size = 20 */
+
+typedef struct asknode_$data_t {
+  union {
+    struct {
+      pkt_$info_t pkt_info;             /* +0x00 */
+    };
+    struct {
+      uint8_t  _version_overlay[0x1E];
+      uint16_t protocol_version;        /* +0x1E: = pkt_info.pad_1e */
+    };
+  };
+} asknode_$data_t;
+
+_Static_assert(offsetof(asknode_$data_t, pkt_info) == 0x00, "ASKNODE pkt_info (lea (A5),A0)");
+_Static_assert(offsetof(asknode_$data_t, protocol_version) == 0x1E,
+               "ASKNODE protocol_version (cmpi.w #0x3,(0x1e,A5))");
+_Static_assert(offsetof(pkt_$info_t, pad_1e) == 0x1E, "protocol_version overlays pkt_info.pad_1e");
+_Static_assert(sizeof(asknode_$data_t) == ASKNODE_$DATA_SIZE, "ASKNODE block: map size 0x20");
+
+MODULE_DATA_DECLARE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 
 /*
  * Empty data placeholder at 0x00E658CC (a zero longword in the code segment)

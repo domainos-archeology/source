@@ -50,8 +50,8 @@ static int tests_run = 0;
  * ========================================================================== */
 
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
-int8_t ROUTE_$USER_CHECKSUM;
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
 static int16_t find_port_result;
 static uint16_t find_port_net_seen;
@@ -190,7 +190,7 @@ static void reset(void)
     dump_data_calls = 0;
     dump_data_len = 0;
     data_copy_calls = 0;
-    ROUTE_$USER_CHECKSUM = 0;
+    ROUTE_$RTWIRED_DATA.user_checksum = 0;
 
     /* A type-2 port whose status is outside the 0x03 mask. */
     ROUTE_$PORT_ARRAY[1].active = 4;
@@ -375,7 +375,7 @@ TEST(no_data_pages_skips_the_payload)
 TEST(checksum_covers_the_body_only)
 {
     reset();
-    ROUTE_$USER_CHECKSUM = (int8_t)0xFF;
+    ROUTE_$RTWIRED_DATA.user_checksum = (int8_t)0xFF;
     pkt_hdr.hdr_len = 4;
     pkt_hdr.data_len = 0;
     call();

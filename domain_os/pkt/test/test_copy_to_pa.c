@@ -46,7 +46,7 @@ static int tests_run = 0;
 
 #include "pkt/pkt_internal.h"
 
-pkt_$data_t PKT_$DATA_STRUCT;
+MODULE_DATA_DEFINE(pkt_$data_t, PKT_$DATA, 0x00E24C9C);
 int8_t NETWORK_$LOOPBACK_FLAG;
 
 /* The buffer addresses NETBUF_$GET_DAT hands out, in order. */

@@ -50,7 +50,7 @@ int16_t ROUTE_$FIND_PORT(uint16_t network, int32_t socket)
      * The original code uses ROUTE_$SOCK_ECVAL+4 as base for the pointer array.
      */
     for (i = 0; i < ROUTE_MAX_PORTS; i++) {
-        port = ROUTE_$PORTP[i];
+        port = ROUTE_$WIRED_DATA.portp[i];
         
         /* Check if port is active */
         if (port->active == 0) {

@@ -234,7 +234,7 @@ void RIP_$SEND_UPDATES(boolean is_std)
 
     if (is_std < 0) {
         /* 0x00E68884-0x00E6889E */
-        if (ROUTE_$STD_N_ROUTING_PORTS <= 1) {
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports <= 1) {
             return;
         }
         if (RIP_$STD_RECENT_CHANGES >= 0) {
@@ -244,7 +244,7 @@ void RIP_$SEND_UPDATES(boolean is_std)
         flags = true;
     } else {
         /* 0x00E688A2-0x00E688BC */
-        if (ROUTE_$N_ROUTING_PORTS <= 1) {
+        if (ROUTE_$WIRED_DATA.n_routing_ports <= 1) {
             return;
         }
         if (RIP_$RECENT_CHANGES >= 0) {
@@ -566,7 +566,7 @@ arm_request:
          * header + 0x0A, +0x0C and +0x0E - the DESTINATION host - and their
          * "seq" results are ANDed, so "bmi" fires only when all three match.
          */
-        if (ROUTE_$STD_N_ROUTING_PORTS <= 1) {           /* 0x00E68B82 */
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports <= 1) {           /* 0x00E68B82 */
             boolean all_ones =
                 (boolean)(-(int)(((f.header.dest_host[0] << 8) | f.header.dest_host[1]) == 0xFFFF)
                         & -(int)(((f.header.dest_host[2] << 8) | f.header.dest_host[3]) == 0xFFFF)
@@ -617,7 +617,7 @@ arm_request:
      * word of PKT_$BRK_INTERNET_HDR's info record (header byte 0x0E) is
      * negative - "tst.b (-0x2af,A6) / bmi" drops the packet when it is.
      */
-    if (ROUTE_$N_ROUTING_PORTS <= 1) {                   /* 0x00E68C16 */
+    if (ROUTE_$WIRED_DATA.n_routing_ports <= 1) {                   /* 0x00E68C16 */
         if ((int8_t)(f.info_out[0] & 0xFF) < 0) {        /* 0x00E68C20 */
             return;
         }
@@ -658,7 +658,7 @@ arm_request:
 /* ------------------------------------------------------------------------- */
 arm_response:
     /* 0x00E68C88-0x00E68C98: ROUTE_$PORTP is indexed from 0 here */
-    port = ROUTE_$PORTP[port_index];
+    port = ROUTE_$WIRED_DATA.portp[port_index];
 
     if (is_std < 0) {
         /* 0x00E68C9E: the network this XNS packet was addressed to */
@@ -706,7 +706,7 @@ arm_response:
      * so it always branches; it is emitted because the original does.
      */
     if (is_std < 0) {                                    /* 0x00E68D18 */
-        n = ROUTE_$STD_N_ROUTING_PORTS;                  /* 0x00E68D1C */
+        n = ROUTE_$WIRED_DATA.std_n_routing_ports;                  /* 0x00E68D1C */
         if (n < 2) {
             goto process_routes;                         /* 0x00E68D26 */
         }
@@ -719,7 +719,7 @@ arm_response:
             goto send_updates;
         }
     }
-    n = ROUTE_$N_ROUTING_PORTS;                          /* 0x00E68D3E */
+    n = ROUTE_$WIRED_DATA.n_routing_ports;                          /* 0x00E68D3E */
     if (n < 2) {
         goto process_routes;                             /* 0x00E68D48 */
     }

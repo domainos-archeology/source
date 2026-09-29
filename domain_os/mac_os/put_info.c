@@ -80,8 +80,8 @@ void MAC_OS_$PUT_INFO(mac_os_$port_info_t *info, int16_t *port_num,
          * unconditionally; the image makes no null test here (bead
          * source-ht0n).
          */
-        port_rec  = (const uint8_t *)ROUTE_$PORTP[port];
-        other_rec = (const uint8_t *)ROUTE_$PORTP[other_port];
+        port_rec  = (const uint8_t *)ROUTE_$WIRED_DATA.portp[port];
+        other_rec = (const uint8_t *)ROUTE_$WIRED_DATA.portp[other_port];
 
         /* 0x00E0C28E: the outer count comes from the port being configured */
         port_count = *(const int16_t *)(port_rec + MAC_OS_PORT_ADDR_COUNT_OFFSET);

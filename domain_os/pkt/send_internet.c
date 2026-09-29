@@ -151,7 +151,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
          * "lea (0x20,SP),SP".  Pushed right to left:
          *   0x00E1272A  pea (-0x28,A6)          &status
          *   0x00E1272E  pea (-0x14,A6)          &send_info
-         *   0x00E12732  move.w (0x64,A5),-(SP)  PKT_$DATA->default_flags
+         *   0x00E12732  move.w (0x64,A5),-(SP)  PKT_$DATA.default_flags
          *   0x00E12736  move.w D6w,-(SP)        data_len
          *   0x00E12738  pea (-0x10,A6)          data_pages
          *   0x00E1273C  clr.l -(SP)             data_va = 0
@@ -161,7 +161,7 @@ void PKT_$SEND_INTERNET(uint32_t routing_key, uint32_t dest_node, uint16_t dest_
          *   0x00E1274A  move.w (-0x32,A6),-(SP) port
          */
         NET_IO_$SEND(port, &hdr_va, hdr_pa, total_len, 0,
-                     data_pages, data_len, PKT_$DATA->default_flags,
+                     data_pages, data_len, PKT_$DATA.default_flags,
                      &send_info, &status);
 
         /*

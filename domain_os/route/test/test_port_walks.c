@@ -59,11 +59,8 @@ static int tests_failed = 0;
 
 #include "route/route_internal.h"
 
-boolean ROUTE_$ROUTING;
-int16_t ROUTE_$N_USER_PORTS;
-int16_t ROUTE_$N_WIRED_PAGES;
-uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
 #define MAX_UNWIRES 16
 static uint32_t unwired[MAX_UNWIRES];
@@ -90,17 +87,17 @@ static void reset_wired(void)
 
     unwire_count = 0;
     memset(unwired, 0, sizeof unwired);
-    ROUTE_$ROUTING = 0;
-    ROUTE_$N_USER_PORTS = 0;
+    ROUTE_$WIRED_DATA.routing = 0;
+    ROUTE_$RTWIRED_DATA.n_user_ports = 0;
     for (i = 0; i < ROUTE_$MAX_WIRED_PAGES; i++) {
-        ROUTE_$WIRED_PAGES[i] = 0x00B00000u + i;
+        ROUTE_$RTWIRED_DATA.wired_pages[i] = 0x00B00000u + i;
     }
 }
 
 TEST(cleanup_wired_walks_up_from_element_zero)
 {
     reset_wired();
-    ROUTE_$N_WIRED_PAGES = 4;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 4;
 
     ROUTE_$CLEANUP_WIRED();
 
@@ -109,37 +106,37 @@ TEST(cleanup_wired_walks_up_from_element_zero)
     ASSERT_EQ(0x00B00001u, unwired[1]);
     ASSERT_EQ(0x00B00002u, unwired[2]);
     ASSERT_EQ(0x00B00003u, unwired[3]);
-    ASSERT_EQ(0, ROUTE_$N_WIRED_PAGES);     /* 0x00E69BBE */
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.n_wired_pages);     /* 0x00E69BBE */
 }
 
 /* 0x00E69B9A subq.w / bmi: a zero count still clears the counter. */
 TEST(cleanup_wired_with_no_pages)
 {
     reset_wired();
-    ROUTE_$N_WIRED_PAGES = 0;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 0;
 
     ROUTE_$CLEANUP_WIRED();
 
     ASSERT_EQ(0, unwire_count);
-    ASSERT_EQ(0, ROUTE_$N_WIRED_PAGES);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.n_wired_pages);
 }
 
 /* 0x00E69B84 / 0x00E69B8C: either guard aborts before any unwiring. */
 TEST(cleanup_wired_is_gated)
 {
     reset_wired();
-    ROUTE_$N_WIRED_PAGES = 3;
-    ROUTE_$N_USER_PORTS = 1;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 3;
+    ROUTE_$RTWIRED_DATA.n_user_ports = 1;
     ROUTE_$CLEANUP_WIRED();
     ASSERT_EQ(0, unwire_count);
-    ASSERT_EQ(3, ROUTE_$N_WIRED_PAGES);
+    ASSERT_EQ(3, ROUTE_$RTWIRED_DATA.n_wired_pages);
 
     reset_wired();
-    ROUTE_$N_WIRED_PAGES = 3;
-    ROUTE_$ROUTING = (boolean)0xFF;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 3;
+    ROUTE_$WIRED_DATA.routing = (boolean)0xFF;
     ROUTE_$CLEANUP_WIRED();
     ASSERT_EQ(0, unwire_count);
-    ASSERT_EQ(3, ROUTE_$N_WIRED_PAGES);
+    ASSERT_EQ(3, ROUTE_$RTWIRED_DATA.n_wired_pages);
 }
 
 /* ============================================================================
@@ -162,7 +159,7 @@ static void reset_ports(void)
      */
     ARCH_HOST_VA_BASE = (uintptr_t)drivers - 0x1000u;
     for (i = 0; i < ROUTE_$MAX_PORTS; i++) {
-        ROUTE_$PORTP[i] = &ports[i];
+        ROUTE_$WIRED_DATA.portp[i] = &ports[i];
         ports[i].driver_info = ARCH_PTR_TO_VA(&drivers[i]);
     }
 }

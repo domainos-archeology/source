@@ -8,7 +8,7 @@
  * Original address: 0x00E59950 (172 bytes)
  *
  * Assembly:
- *   00e59958  lea (0xe80d84).l,A5       ; MSG_$DATA
+ *   00e59958  lea (0xe80d84).l,A5       ; MSG_$UNWIRED_DATA
  *   00e5995e  movea.l (0x8,A6),A2       ; socket
  *   00e59962  movea.l (0x3c,A6),A3      ; status_ret
  *   00e59966  move.w (A2),D0w / ble / cmpi.w #0xe0,D0w / ble
@@ -62,7 +62,7 @@ void MSG_$RCV_HW(msg_$socket_t *socket,
 
     /* 0xE59978 - 0xE5998E */
     asid = PROC1_$AS_ID;
-    bitmap = MSG_$SOCK_OWNERS[sock_num];
+    bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
     byte_index = (uint16_t)((0x3Fu - asid) >> 3);
 
     if ((bitmap[byte_index] & (1u << (asid & 7))) == 0) {

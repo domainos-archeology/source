@@ -47,7 +47,7 @@ mac_os_$port_pkt_table_t MAC_OS_$PORT_PKT_TABLES[MAC_OS_MAX_PORTS];
 mac_os_$port_info_t     *MAC_OS_$PORTP_TABLE[MAC_OS_MAX_PORTS];
 mac_os_$port_info_t      MAC_OS_$PORT_TABLE[MAC_OS_MAX_PORTS];
 ml_$exclusion_t          MAC_OS_$EXCLUSION;
-route_$port_t           *ROUTE_$PORTP[MAC_OS_MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t                 NODE_$ME;
 
 static int excl_init_calls;
@@ -71,7 +71,7 @@ static void reset_all(void)
     memset(MAC_OS_$PORT_PKT_TABLES, 0, sizeof(MAC_OS_$PORT_PKT_TABLES));
     memset(MAC_OS_$PORTP_TABLE, 0, sizeof(MAC_OS_$PORTP_TABLE));
     memset(MAC_OS_$PORT_TABLE, 0, sizeof(MAC_OS_$PORT_TABLE));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(&port0, 0, sizeof(port0));
     memset(driver_info, 0, sizeof(driver_info));
     excl_init_calls = 0;
@@ -187,7 +187,7 @@ TEST(port_tables_and_pointers) {
 
 TEST(configured_port_gets_its_addresses) {
     reset_all();
-    ROUTE_$PORTP[0] = &port0;
+    ROUTE_$WIRED_DATA.portp[0] = &port0;
     port0.driver_info = ARCH_PTR_TO_VA(driver_info);
     port0.network = 0xFEEDFACEu;
     *(uint16_t *)&driver_info[MAC_OS_DRIVER_MTU_OFFSET] = 0x0400;
@@ -220,7 +220,7 @@ TEST(configured_port_gets_its_addresses) {
 
 TEST(node_id_high_nibble_is_masked_to_four_bits) {
     reset_all();
-    ROUTE_$PORTP[0] = &port0;
+    ROUTE_$WIRED_DATA.portp[0] = &port0;
     port0.driver_info = ARCH_PTR_TO_VA(driver_info);
     NODE_$ME = 0xFFFF1234u;         /* only the low nibble of the high word */
 
@@ -231,7 +231,7 @@ TEST(node_id_high_nibble_is_masked_to_four_bits) {
 
 TEST(port_without_a_driver_is_skipped) {
     reset_all();
-    ROUTE_$PORTP[0] = &port0;
+    ROUTE_$WIRED_DATA.portp[0] = &port0;
     port0.driver_info = 0;          /* no driver record */
     port0.network = 0xFEEDFACEu;
 

@@ -27,11 +27,11 @@ void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible)
     pkt_$missing_entry_t *entry;
 
     oldest_idx = 1;  /* Index of entry with lowest sequence (LRU) */
-    count = PKT_$N_MISSING - 1;
+    count = PKT_$DATA.n_missing - 1;
 
     if (count >= 0) {
         search_idx = 1;
-        entry = &PKT_$DATA->missing_nodes[0];
+        entry = &PKT_MISSING_ENTRY(1);
 
         for (i = count; i >= 0; i--) {
             if (node_id == entry->node_id) {
@@ -41,24 +41,24 @@ void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible)
                      * Node is now unreachable - remove from list.
                      * Swap with last entry and decrement count.
                      */
-                    pkt_$missing_entry_t *last = &PKT_$DATA->missing_nodes[PKT_$N_MISSING - 1];
+                    pkt_$missing_entry_t *last = &PKT_MISSING_ENTRY(PKT_$DATA.n_missing);
                     entry->node_id = last->node_id;
                     entry->seq_number = last->seq_number;
-                    PKT_$N_MISSING = count;
+                    PKT_$DATA.n_missing = count;
                     return;
                 } else {
                     /*
                      * Node responded - update its sequence number
                      * to mark it as recently seen.
                      */
-                    PKT_$DATA->visibility_seq++;
-                    entry->seq_number = PKT_$DATA->visibility_seq;
+                    PKT_$DATA.visibility_seq++;
+                    entry->seq_number = PKT_$DATA.visibility_seq;
                     return;
                 }
             }
 
             /* Track oldest entry for LRU replacement */
-            if (entry->seq_number < PKT_$DATA->missing_nodes[oldest_idx - 1].seq_number) {
+            if (entry->seq_number < PKT_MISSING_ENTRY(oldest_idx).seq_number) {
                 oldest_idx = search_idx;
             }
 
@@ -77,13 +77,13 @@ void PKT_$NOTE_VISIBLE(uint32_t node_id, boolean is_visible)
      * Node responded but wasn't in list - add it.
      * If list is not full, append. Otherwise, replace oldest.
      */
-    if (PKT_$N_MISSING < PKT_MAX_MISSING_NODES) {
-        oldest_idx = PKT_$N_MISSING + 1;
-        PKT_$N_MISSING = oldest_idx;
+    if (PKT_$DATA.n_missing < PKT_MAX_MISSING_NODES) {
+        oldest_idx = PKT_$DATA.n_missing + 1;
+        PKT_$DATA.n_missing = oldest_idx;
     }
 
     /* Add/replace at oldest_idx position */
-    PKT_$DATA->missing_nodes[oldest_idx - 1].node_id = node_id;
-    PKT_$DATA->visibility_seq++;
-    PKT_$DATA->missing_nodes[oldest_idx - 1].seq_number = PKT_$DATA->visibility_seq;
+    PKT_MISSING_ENTRY(oldest_idx).node_id = node_id;
+    PKT_$DATA.visibility_seq++;
+    PKT_MISSING_ENTRY(oldest_idx).seq_number = PKT_$DATA.visibility_seq;
 }

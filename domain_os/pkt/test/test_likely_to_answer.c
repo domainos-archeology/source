@@ -50,7 +50,7 @@ static int tests_run = 0;
 uint32_t NODE_$ME;
 uint32_t TIME_$CLOCKH;
 uint8_t sock_table_base[SOCK_TABLE_SIZE];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 int8_t NETWORK_$LOOPBACK_FLAG;
 
 /* --- RIP_$FIND_NEXTHOP ---------------------------------------------------- */
@@ -233,7 +233,7 @@ static sock_$sock_t test_socket_desc;
 static void reset_state(void)
 {
     memset(&test_port, 0, sizeof(test_port));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(&test_socket_desc, 0, sizeof(test_socket_desc));
     memset(&recv_hdr, 0, sizeof(recv_hdr));
@@ -250,7 +250,7 @@ static void reset_state(void)
     rip_result = 0;
     rip_status = status_$ok;
     rip_port = 3;
-    ROUTE_$PORTP[3] = &test_port;
+    ROUTE_$WIRED_DATA.portp[3] = &test_port;
     test_port.port_type = 4;
 
     recently_missing = false;
@@ -394,9 +394,9 @@ TEST(send_internet_argument_list)
     ASSERT_EQ(-1, last_send.src_node_or);
     ASSERT_EQ(NODE_$ME, last_send.src_node);
     ASSERT_EQ(TEST_SOCK, last_send.src_sock);
-    ASSERT_EQ((uintptr_t)&PKT_$DATA->ping_template, (uintptr_t)last_send.pkt_info);
+    ASSERT_EQ((uintptr_t)&PKT_$DATA.ping_template, (uintptr_t)last_send.pkt_info);
     ASSERT_EQ(TEST_REQ_ID, last_send.request_id);
-    ASSERT_EQ((uintptr_t)&PKT_$DATA->ping_req_hdr, (uintptr_t)last_send.template);
+    ASSERT_EQ((uintptr_t)&PKT_$DATA.ping_req_hdr, (uintptr_t)last_send.template);
     ASSERT_EQ(2, last_send.template_len);
     ASSERT_EQ((uintptr_t)&pkt_$no_data, (uintptr_t)last_send.data);
     ASSERT_EQ(0, last_send.data_len);

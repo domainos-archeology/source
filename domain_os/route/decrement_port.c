@@ -34,9 +34,9 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
 
     if (port_type_flag < 0) {
         /* STD port - decrement STD counter */
-        ROUTE_$STD_N_ROUTING_PORTS--;
+        ROUTE_$WIRED_DATA.std_n_routing_ports--;
 
-        if (ROUTE_$STD_N_ROUTING_PORTS == 1) {
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports == 1) {
             /*
              * Only one STD port left - halt the router.
              * Pass 0xFFFF to indicate STD port halt.
@@ -45,9 +45,9 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
         }
     } else {
         /* Normal port - decrement normal counter */
-        ROUTE_$N_ROUTING_PORTS--;
+        ROUTE_$WIRED_DATA.n_routing_ports--;
 
-        if (ROUTE_$N_ROUTING_PORTS == 1) {
+        if (ROUTE_$WIRED_DATA.n_routing_ports == 1) {
             /*
              * Only one normal port left - halt the router.
              * Pass 0 to indicate normal port halt.
@@ -65,9 +65,9 @@ void ROUTE_$DECREMENT_PORT(int8_t delete_flag, int16_t port_index, int8_t port_t
      *
      * 0x00E69E94: tst.b (0x00E26F1E).l / bpl - ROUTE_$ROUTING is a byte.
      */
-    if (ROUTE_$ROUTING < 0 &&
-        ROUTE_$N_ROUTING_PORTS < 2 &&
-        ROUTE_$STD_N_ROUTING_PORTS < 2) {
-        EC_$ADVANCE((ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
+    if (ROUTE_$WIRED_DATA.routing < 0 &&
+        ROUTE_$WIRED_DATA.n_routing_ports < 2 &&
+        ROUTE_$WIRED_DATA.std_n_routing_ports < 2) {
+        EC_$ADVANCE(&ROUTE_$WIRED_DATA.control_ec);
     }
 }

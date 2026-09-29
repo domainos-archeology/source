@@ -64,7 +64,7 @@ uid_t          HINT_$HINTFILE_UID;
 uint32_t       NODE_$ME;
 uint32_t       ROUTE_$PORT;
 route_$port_t  ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 
 static int      truncate_calls;
 static uid_t   *truncate_uid;
@@ -103,7 +103,7 @@ static void fill(void)
 {
     memset(&image, 0xA5, sizeof(image));
     HINT_$HINTFILE_PTR = &image.file;
-    ROUTE_$PORTP[0] = &ROUTE_$PORT_ARRAY[0];
+    ROUTE_$WIRED_DATA.portp[0] = &ROUTE_$PORT_ARRAY[0];
     ROUTE_$PORT_ARRAY[0].active    = 0x1111;   /* +0x2C */
     ROUTE_$PORT_ARRAY[0].port_type = 0x2222;   /* +0x2E */
     ROUTE_$PORT_ARRAY[0].socket    = 0x3333;   /* +0x30 */

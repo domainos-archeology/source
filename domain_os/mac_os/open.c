@@ -55,7 +55,7 @@ void MAC_OS_$OPEN(int16_t *port_num, mac_os_$open_params_t *params, status_$t *s
     port = *port_num;
 
     /* 0x00E0B262-0x00E0B274: ROUTE_$PORTP[port] */
-    route_port = ROUTE_$PORTP[port];
+    route_port = ROUTE_$WIRED_DATA.portp[port];
     if (route_port == NULL) {
         *status_ret = status_$mac_port_op_not_implemented;
         return;

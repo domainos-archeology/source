@@ -18,10 +18,18 @@
 #include "arch/arch.h"
 
 /*
- * ROUTE_$PACKET_SEQ (0xE88226) is declared in route/route_internal.h,
- * SOCK_$EVENT_COUNTERS (0xE28DB4) in sock/sock.h and
+ * The sequence counter (0xE88226) is ROUTE_$RTWIRED_DATA.packet_seq
+ * (route/route.h), SOCK_$EVENT_COUNTERS (0xE28DB4) is in sock/sock.h and
  * status_$network_data_length_too_large in network/network.h.
  */
+
+/*
+ * route_$unknown_port_status - the status_$internet_unknown_network_port
+ * constant cell at 0x00E87D64, after this routine's rts (`gsk read
+ * 0xE87D60 8`: 4e 5e 4e 75 00 2b 00 03), passed by reference to
+ * CRASH_SYSTEM ("pea (0xd4,PC)" at 0x00E87C8E).
+ */
+static const status_$t route_$unknown_port_status = status_$internet_unknown_network_port;
 
 /* Maximum packet length */
 #define ROUTE_$MAX_SEND_LENGTH      0x400   /* 1024 bytes */
@@ -93,7 +101,7 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
     /* 0x00E87C72: ROUTE_$FIND_PORT(2, *socket_ptr) */
     port_index = ROUTE_$FIND_PORT(2, (uint32_t)*socket_ptr);
     if (port_index == -1) {
-        CRASH_SYSTEM(&ROUTE_$UNKNOWN_PORT_STATUS);
+        CRASH_SYSTEM(&route_$unknown_port_status);
     }
 
     /*
@@ -134,7 +142,7 @@ void ROUTE_$SEND_USER_PORT(uint16_t *socket_ptr, uint32_t src_addr, uint32_t hdr
 
     if (put_result < 0) {
         /* 0x00E87D00: success - packet queued */
-        *seq_ret = ROUTE_$PACKET_SEQ;
+        *seq_ret = ROUTE_$RTWIRED_DATA.packet_seq;
 
         /*
          * Update statistics based on socket queue depth.

@@ -48,7 +48,7 @@ void HINT_$clear_hintfile(void)
      * value is the m68k one on a little-endian host too.
      */
     hintfile->header.net_info =
-        ((uint32_t)ROUTE_$PORTP[0]->port_type << 16) | ROUTE_$PORTP[0]->socket;
+        ((uint32_t)ROUTE_$WIRED_DATA.portp[0]->port_type << 16) | ROUTE_$WIRED_DATA.portp[0]->socket;
 
     /*
      * Clear all hash buckets.  0x00E311E0 `moveq #0x40,D0` / 0x00E3121E

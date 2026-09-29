@@ -8,7 +8,7 @@
  * Original address: 0x00E59140 (88 bytes)
  *
  * Assembly:
- *   00e59148  lea (0xe80d84).l,A5       ; MSG_$DATA
+ *   00e59148  lea (0xe80d84).l,A5       ; MSG_$UNWIRED_DATA
  *   00e5914e  movea.l (0x8,A6),A0       ; socket
  *   00e59152  movea.l (0x10,A6),A1      ; status_ret - the THIRD argument,
  *                                       ; so 0x0C is read by nothing
@@ -40,7 +40,7 @@ void MSG_$SET_HPIPC(msg_$socket_t *socket, void *param2, status_$t *status_ret)
 
     /* 0xE59168 - 0xE5917E */
     asid = PROC1_$AS_ID;
-    bitmap = MSG_$SOCK_OWNERS[sock_num];
+    bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
     byte_index = (uint16_t)((0x3Fu - asid) >> 3);
 
     if ((bitmap[byte_index] & (1u << (asid & 7))) == 0) {

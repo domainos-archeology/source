@@ -94,7 +94,7 @@ void RIP_$TABLE_D(boolean *op_flag, boolean *route_type, uint16_t *index,
         if ((uint16_t)route->port <= 7) {
             /* 0x00E68EBA-0x00E68ED0: ROUTE_$PORTP[port] (0xE26EE8 + port*4),
              * then the port record's type word (+0x2E) and socket (+0x30). */
-            port = ROUTE_$PORTP[route->port];
+            port = ROUTE_$WIRED_DATA.portp[route->port];
             buffer->port_network = port->port_type;
             buffer->port_socket  = port->socket;
         } else {

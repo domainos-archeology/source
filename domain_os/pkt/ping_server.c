@@ -135,7 +135,7 @@ void PKT_$PING_SERVER(void)
          * payload into a stack buffer whose address was cached at
          * 0x00E12C22 ("lea (-0x60,A6),A1 / move.l A1,(-0x6c,A6)").  Nothing
          * ever reads template_buf back - the reply template comes from
-         * PKT_$DATA->ping_req_hdr - but the copy is part of the original.
+         * PKT_$DATA.ping_req_hdr - but the copy is part of the original.
          */
         OS_$DATA_COPY(ARCH_VA_TO_PTR(recv.data), template_buf,
                       (uint32_t)tpl_len);
@@ -159,7 +159,7 @@ void PKT_$PING_SERVER(void)
          * 0x00E12CE6  move.w D4w,(0x88,A5)
          */
         reply_flags = (uint16_t)((reply_flags & 0xFF6F) | 0x20);
-        PKT_$DATA->ping_reply_info.flags = reply_flags;
+        PKT_$DATA.ping_reply_info.flags = reply_flags;
 
         /*
          * 0x00E12CEA - 0x00E12D28: fifteen arguments plus the word result
@@ -170,9 +170,9 @@ void PKT_$PING_SERVER(void)
          *   0x00E12CF8  clr.w -(SP)             data_len = 0
          *   0x00E12CFA  pea (-0x148,PC)         &pkt_$no_data
          *   0x00E12CFE  move.w #0x2,-(SP)       template_len = 2
-         *   0x00E12D02  pea (0x5a,A5)           &PKT_$DATA->ping_req_hdr
+         *   0x00E12D02  pea (0x5a,A5)           &PKT_$DATA.ping_req_hdr
          *   0x00E12D06  move.w (-0x62,A6),-(SP) request_id
-         *   0x00E12D0A  pea (0x88,A5)           &PKT_$DATA->ping_reply_info
+         *   0x00E12D0A  pea (0x88,A5)           &PKT_$DATA.ping_reply_info
          *   0x00E12D0E  move.w #0xd,-(SP)       src_sock = the ping socket
          *   0x00E12D12  move.l (A3),-(SP)       NODE_$ME
          *   0x00E12D14  pea (-0x1).w            src_node_or = -1
@@ -184,8 +184,8 @@ void PKT_$PING_SERVER(void)
          */
         PKT_$SEND_INTERNET(routing_key, dest_node, dest_sock,
                            -1, NODE_$ME, PKT_PING_SOCKET,
-                           &PKT_$DATA->ping_reply_info, (uint16_t)request_id,
-                           &PKT_$DATA->ping_req_hdr, 2,
+                           &PKT_$DATA.ping_reply_info, (uint16_t)request_id,
+                           &PKT_$DATA.ping_req_hdr, 2,
                            (void *)&pkt_$no_data, 0,
                            &retry_hint, &resp_timeout,
                            &status);

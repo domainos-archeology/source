@@ -50,7 +50,7 @@ static int tests_run = 0;
 
 uint32_t NODE_$ME;
 int8_t NETWORK_$LOOPBACK_FLAG;
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 
 /* --- RIP_$FIND_NEXTHOP ---------------------------------------------------- */
@@ -141,7 +141,7 @@ static void reset_state(void)
     memset(&test_port, 0, sizeof(test_port));
     memset(va_arena, 0, sizeof(va_arena));
     ARCH_HOST_VA_BASE = (uintptr_t)va_arena;
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
 
     for (i = 0; i < (int)sizeof(template_buf); i++) {
@@ -166,7 +166,7 @@ static void reset_state(void)
     test_port.active = 2;               /* neither 0 nor 1: routable */
     test_port.port_type = 7;
     test_port.driver_info = TEST_DRV_VA;
-    ROUTE_$PORTP[TEST_PORT] = &test_port;
+    ROUTE_$WIRED_DATA.portp[TEST_PORT] = &test_port;
     ROUTE_$PORT_ARRAY[TEST_PORT].network = 0xDEADBEEFu;
 
     rip_result = 0;

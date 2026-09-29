@@ -149,7 +149,7 @@ void HINT_$INIT(void)
          * net_info against port 0's port_type/socket.  ROUTE_$PORTP is read
          * as a single longword ("movea.l (0x00e26ee8).l,A2"), i.e. entry 0.
          */
-        port0 = ROUTE_$PORTP[0];
+        port0 = ROUTE_$WIRED_DATA.portp[0];
         mapped_ptr = ARCH_VA_TO_PTR(HINT_$GLOBALS->hintfile_ptr);
         net_info_hi = (uint16_t)(mapped_ptr->header.net_info >> 16);
         net_info_lo = (uint16_t)(mapped_ptr->header.net_info);

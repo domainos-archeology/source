@@ -1,3 +1,10 @@
+/*
+ * ROUTE Data - global data of the ROUTE subsystem
+ *
+ * Module data blocks ROUTE_$WIRED_DATA, ROUTE_$UNWIRED_DATA and
+ * ROUTE_$RTWIRED_DATA: Claude Opus 5.5 (source-ybch).
+ */
+
 #include "route/route_internal.h"
 
 /*
@@ -43,141 +50,96 @@ uint32_t ROUTE_$PORT;
 #endif
 
 /*
- * ROUTE_$SOCK_ECVAL - Socket event count value
- *
- * First 4 bytes contain a socket EC value.
- * Following 8 uint32_t pointers (at offset 0x04) point to port structures.
- *
- * Layout:
- *   +0x00: Socket EC value (4 bytes)
- *   +0x04: Pointer to port[0] structure
- *   +0x08: Pointer to port[1] structure
- *   ...
- *   +0x20: Pointer to port[7] structure
- *
- * Original address: 0xE26EE4
- */
-uint32_t ROUTE_$SOCK_ECVAL;
-
-/*
  * ROUTE_$SERVICE_MUTEX - Mutex for route service operations
  *
  * ROUTE_$SERVICE passes its address to ML_$EXCLUSION_START as a literal:
  * "move.l #0xe26280,-(SP) / jsr 0x00e20df8" at 0x00E6A048, so the cell is a
- * whole ml_$exclusion_t (0x12 bytes), not a longword.
+ * whole ml_$exclusion_t (0x12 bytes), not a longword.  It lives in the
+ * RIP_WIRED segment (map 0xE26280), whose block is rip's (bead source-thww).
  *
  * Original address: 0xE26280
  */
 ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
 
 /*
- * ROUTE_$CONTROL_ECVAL - Control event count value
+ * =============================================================================
+ * The ROUTE module data blocks (layouts and asserts in route/route.h)
+ * =============================================================================
  *
- * Original address: 0xE26F08
+ * MODULE_DATA blocks linked in the SAU2 map's order; the address is the
+ * ordering key, not the link address.  Module data blocks: Claude Opus 5.5
+ * (source-ybch).
  */
-uint32_t ROUTE_$CONTROL_ECVAL;
 
 /*
- * ROUTE_$CONTROL_EC - Control event count
+ * ROUTE_$WIRED_DATA, map "D E26EE4 ROUTE_WIRED size = 3C"
+ * (`gsk read 0xE26EE4 0x3C`):
  *
- * Original address: 0xE26F0C
+ *   +0x00  00 00 00 00                       sock_ecval
+ *   +0x04  00 e2 e0 a0  00 e2 e0 fc  00 e2 e1 58  00 e2 e1 b4
+ *   +0x14  00 e2 e2 10  00 e2 e2 6c  00 e2 e2 c8  00 e2 e3 24
+ *                                            portp[0..7] = 0xE2E0A0 + i*0x5C
+ *   +0x24  00 00 00 00                       control_ecval
+ *   +0x28  12 zero bytes                     control_ec (EC_$INIT'd at run time)
+ *   +0x34  ff ff                             sock = 0xFFFF (closed)
+ *   +0x36  00 00 00 00 00 00                 the port counts, routing, pad
+ *
+ * portp[i] is the address of ROUTE_$PORT_ARRAY[i] (NET_PORT_TABLE at
+ * 0xE2E0A0, stride 0x5C), a linked object, so the pointers name it.
  */
-uint32_t ROUTE_$CONTROL_EC;
+MODULE_DATA_DEFINE_INIT(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4, {
+    .portp = {
+        &ROUTE_$PORT_ARRAY[0], &ROUTE_$PORT_ARRAY[1],
+        &ROUTE_$PORT_ARRAY[2], &ROUTE_$PORT_ARRAY[3],
+        &ROUTE_$PORT_ARRAY[4], &ROUTE_$PORT_ARRAY[5],
+        &ROUTE_$PORT_ARRAY[6], &ROUTE_$PORT_ARRAY[7],
+    },
+    .sock = 0xFFFF,
+});
 
 /*
- * ROUTE_$SOCK - Socket reference
- *
- * Original address: 0xE26F18
+ * ROUTE_$UNWIRED_DATA, map "D E825DC ROUTE_UNWIRED size = 8"
+ * (`gsk read 0xE825DC 8`: 00 00 00 00 00 02 00 00): start_time 0 and the
+ * announce template word 2.
  */
-uint16_t ROUTE_$SOCK;
+MODULE_DATA_DEFINE_INIT(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC, {
+    .announce_template = 2,
+});
 
 /*
- * ROUTE_$STD_N_ROUTING_PORTS - Standard number of routing ports
+ * ROUTE_$RTWIRED_DATA, map "D E87D80 ROUTE_RTWIRED size = 4A8"
+ * (`gsk read 0xE87D80 1192`): every byte zero except the last eight,
  *
- * Original address: 0xE26F1A
+ *   +0x4A0  00 e2 6f 0c  00 01  80 00
+ *
+ * ptr_control_ec = 0xE26F0C, the address of ROUTE_$WIRED_DATA.control_ec
+ * (a linked object, so the pointer names it), fwd_timeout = 1 and
+ * packet_seq = 0x8000.
  */
-int16_t ROUTE_$STD_N_ROUTING_PORTS;
+MODULE_DATA_DEFINE_INIT(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80, {
+    .ptr_control_ec = &ROUTE_$WIRED_DATA.control_ec,
+    .fwd_timeout    = 1,
+    .packet_seq     = 0x8000,
+});
 
 /*
- * ROUTE_$N_ROUTING_PORTS - Current number of routing ports
- *
- * Original address: 0xE26F1C
- */
-int16_t ROUTE_$N_ROUTING_PORTS;
-
-/*
- * ROUTE_$ROUTING - Routing table/flag
- *
- * Original address: 0xE26F1E
- */
-boolean ROUTE_$ROUTING;   /* one byte; see route/route_internal.h */
-
-/*
- * ROUTE_$PORTP - Array of pointers to port structures
- *
- * Array of 8 pointers to route_$port_t structures, one for each
- * possible network port. Used by ROUTE_$FIND_PORT to look up
- * port info by index.
- *
- * Original address: 0xE26EE8
- */
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
-
-/*
- * Wired routing area data (0xE87D68 - 0xE88228).
- *
- * On m68k these are accessed at their absolute addresses (see
- * route_internal.h); on other architectures they are plain variables.
+ * Wired routing area data owned by RIP and RING (RIP_RTWIRED 0xE87D68,
+ * RIP_RTWIRED code 0xE870D8, ROUTE_ code 0xE878A0).  Their m68k spellings
+ * are still absolute-address macros in rip/rip.h and ring/ringlog.h, so the
+ * host objects stay here, host-only, until those modules' blocks land
+ * (beads source-thww, source-vulx).
  */
 #if !defined(ARCH_M68K)
-char ROUTE_$WIRED_AREA_START_SYM[1];
-char ROUTE_$WIRED_AREA_END_SYM[1];
-/* Contents of 0xE87D64 */
-const status_$t ROUTE_$UNKNOWN_PORT_STATUS = status_$internet_unknown_network_port;
 /* RIP halt packet: 16 byte header (zeros) + RIP response {cmd=2, net=-1, metric=16} */
 uint8_t RIP_$HALT_PACKET[24] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0x00, 0x02, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x10
 };
 uint16_t RTWIRED_$SEND_FLAGS;
-uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-uint32_t ROUTE_$Q_DEPTH[0x81];
-uint32_t ROUTE_$STD_DLEN_ERR;
-uint32_t ROUTE_$STD_TOO_FAR;
-uint32_t ROUTE_$STD_MISROUTE;
-uint32_t ROUTE_$STD_PKTS_ROUTED;
-uint32_t ROUTE_$DLEN_ERR;
-uint32_t ROUTE_$TOO_FAR;
-uint32_t ROUTE_$MISROUTE;
-uint32_t ROUTE_$PKTS_ROUTED;
-uint32_t ROUTE_$Q_OFLO;
-uint16_t ROUTE_$NETBUF_ALLOC;
-uint32_t ROUTE_$START_TIME;
-int16_t ROUTE_$N_WIRED_PAGES;
-int16_t ROUTE_$N_USER_PORTS;
-/* Four 0x90-byte records at 0xE87FD6..0xE88216; see route_internal.h. */
-route_$user_stat_t ROUTE_$USER_STAT[ROUTE_$MAX_USER_STATS];
 /*
- * The three ROUTE_$PROCESS constant cells that used to be defined here
- * (0x00E8789C, 0x00E8789E, 0x00E878A4) are file statics in route/process.c:
- * they live in the CODE segment and only that routine reaches them.
- *
  * Contents of 0x00E878A0: 00 00 20 48.  RINGLOG_$LOGIT reads only byte 0
  * (its bit 7 is the log entry's "inbound" flag).
  */
 uint8_t RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
 uint32_t RTWIRED_$CALLBACK_DATA = 0;
-uint16_t ROUTE_$PID;
-int8_t ROUTE_$USER_CHECKSUM;
-uint32_t ROUTE_$SERVICE_ID;
-ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC;
-uint16_t ROUTE_$FWD_TIMEOUT = 1;
-uint16_t ROUTE_$PACKET_SEQ = 0x8000;
-uint32_t ROUTE_$LAST_UPDATE_TIME;
-
-/*
- * ROUTE_$ANNOUNCE_TEMPLATE (0xE825E0) - the constant word 2 that
- * ROUTE_$ANNOUNCE_NET sends as its RIP template.
- */
-const uint16_t ROUTE_$ANNOUNCE_TEMPLATE = 2;
 #endif

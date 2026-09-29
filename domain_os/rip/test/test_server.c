@@ -94,9 +94,7 @@ rip_$data_t     RIP_$DATA;
 rip_$stats_t    RIP_$STATS;
 int8_t          RIP_$STD_RECENT_CHANGES;
 int8_t          RIP_$RECENT_CHANGES;
-int16_t         ROUTE_$STD_N_ROUTING_PORTS;
-int16_t         ROUTE_$N_ROUTING_PORTS;
-route_$port_t  *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t        NODE_$ME;
 uint8_t         RIP_$ANNOUNCE_EXTRA[4];
 
@@ -360,11 +358,11 @@ static void reset_mocks(void)
 {
     memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
     memset(&RIP_$STATS, 0, sizeof(RIP_$STATS));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     RIP_$STD_RECENT_CHANGES = 0;
     RIP_$RECENT_CHANGES = 0;
-    ROUTE_$STD_N_ROUTING_PORTS = 2;
-    ROUTE_$N_ROUTING_PORTS = 2;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
+    ROUTE_$WIRED_DATA.n_routing_ports = 2;
     NODE_$ME = 0xABCDE;
 
     memset(netbuf_page, 0, 1024);
@@ -472,7 +470,7 @@ TEST(packet_length)
 
 TEST(send_updates_std_broadcasts_and_clears)
 {
-    ROUTE_$STD_N_ROUTING_PORTS = 2;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
     RIP_$STD_RECENT_CHANGES = -1;
 
     RIP_$SEND_UPDATES(true);
@@ -484,7 +482,7 @@ TEST(send_updates_std_broadcasts_and_clears)
 
 TEST(send_updates_internet_broadcasts_and_clears)
 {
-    ROUTE_$N_ROUTING_PORTS = 2;
+    ROUTE_$WIRED_DATA.n_routing_ports = 2;
     RIP_$RECENT_CHANGES = -1;
 
     RIP_$SEND_UPDATES(false);
@@ -497,13 +495,13 @@ TEST(send_updates_internet_broadcasts_and_clears)
 TEST(send_updates_needs_two_ports)
 {
     /* "cmpi.w #0x1,... / ble" at 0x00E68884 and 0x00E688A2 */
-    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
     RIP_$STD_RECENT_CHANGES = -1;
     RIP_$SEND_UPDATES(true);
     ASSERT_EQ(0, broadcast_calls);
     ASSERT_EQ(-1, RIP_$STD_RECENT_CHANGES);
 
-    ROUTE_$N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.n_routing_ports = 1;
     RIP_$RECENT_CHANGES = -1;
     RIP_$SEND_UPDATES(false);
     ASSERT_EQ(0, broadcast_calls);
@@ -598,7 +596,7 @@ TEST(request_std_broadcast_dropped_with_one_port)
     arm_xns_packet(RIP_CMD_REQUEST, 1);
     h = hdr_in_page();
     memset(h->dest_host, 0xFF, 6);
-    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
 
     RIP_$SERVER();
 
@@ -613,7 +611,7 @@ TEST(request_std_non_broadcast_answered_with_one_port)
     h = hdr_in_page();
     memset(h->dest_host, 0xFF, 6);
     h->dest_host[5] = 0xFE;
-    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
 
     RIP_$SERVER();
 
@@ -771,7 +769,7 @@ TEST(request_internet_dropped_on_a_negative_info_byte)
 {
     /* "tst.b (-0x2af,A6) / bmi" at 0x00E68C20 */
     arm_internet_packet(RIP_CMD_REQUEST, 0);
-    ROUTE_$N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.n_routing_ports = 1;
     brk_info0 = 0x0080;                         /* low byte 0x80 -> negative */
 
     RIP_$SERVER();
@@ -888,7 +886,7 @@ TEST(response_std_updates_every_entry)
 
     memset(&port, 0, sizeof(port));
     port.network = 0x0000BEEF;
-    ROUTE_$PORTP[2] = &port;
+    ROUTE_$WIRED_DATA.portp[2] = &port;
     find_port_result = 2;
 
     p = arm_xns_packet(RIP_CMD_RESPONSE, 3);
@@ -901,7 +899,7 @@ TEST(response_std_updates_every_entry)
     h->src_host[0] = 0x01; h->src_host[1] = 0x02; h->src_host[2] = 0x03;
     h->src_host[3] = 0x04; h->src_host[4] = 0x05; h->src_host[5] = 0x06;
 
-    ROUTE_$STD_N_ROUTING_PORTS = 1;             /* < 2 -> process the routes */
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;             /* < 2 -> process the routes */
     RIP_$STD_RECENT_CHANGES = 0;
 
     RIP_$SERVER();
@@ -929,7 +927,7 @@ TEST(response_std_moves_the_port_to_a_new_network)
     memset(&port, 0, sizeof(port));
     port.network = 0x0000AAAA;
     port.active  = 0;                           /* bit 0 is not in {3,4,5} */
-    ROUTE_$PORTP[0] = &port;
+    ROUTE_$WIRED_DATA.portp[0] = &port;
     find_port_result = 0;
 
     p = arm_xns_packet(RIP_CMD_RESPONSE, 0);
@@ -937,7 +935,7 @@ TEST(response_std_moves_the_port_to_a_new_network)
     h->dest_network = 0x0000CCCC;               /* the packet came in on CCCC */
     (void)p;
 
-    ROUTE_$STD_N_ROUTING_PORTS = 3;             /* >= 2, active bit 0 not set */
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 3;             /* >= 2, active bit 0 not set */
 
     RIP_$SERVER();
 
@@ -965,13 +963,13 @@ TEST(response_std_leaves_ports_with_a_protected_active_bit_alone)
     memset(&port, 0, sizeof(port));
     port.network = 0x0000AAAA;
     port.active  = 4;                           /* bit 4 is in 0x38 */
-    ROUTE_$PORTP[0] = &port;
+    ROUTE_$WIRED_DATA.portp[0] = &port;
     find_port_result = 0;
 
     arm_xns_packet(RIP_CMD_RESPONSE, 0);
     h = hdr_in_page();
     h->dest_network = 0x0000CCCC;
-    ROUTE_$STD_N_ROUTING_PORTS = 3;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 3;
 
     RIP_$SERVER();
 
@@ -994,7 +992,7 @@ TEST(response_internet_masks_the_node_into_the_source_host)
     memset(&port, 0, sizeof(port));
     port.network = 0x00000011;
     port.active  = 0;
-    ROUTE_$PORTP[0] = &port;
+    ROUTE_$WIRED_DATA.portp[0] = &port;
     find_port_result = 0;
 
     p = arm_internet_packet(RIP_CMD_RESPONSE, 1);
@@ -1002,7 +1000,7 @@ TEST(response_internet_masks_the_node_into_the_source_host)
     p->entries[0].metric = 7;
     brk_network  = 0x00000042;
     brk_src_node = 0x000ABCDE;
-    ROUTE_$N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.n_routing_ports = 1;
 
     RIP_$SERVER();
 
@@ -1024,12 +1022,12 @@ TEST(response_sends_updates_at_the_end)
 
     memset(&port, 0, sizeof(port));
     port.network = 0x0000BEEF;
-    ROUTE_$PORTP[0] = &port;
+    ROUTE_$WIRED_DATA.portp[0] = &port;
     find_port_result = 0;
 
     arm_xns_packet(RIP_CMD_RESPONSE, 0);
     hdr_in_page()->dest_network = 0x0000BEEF;
-    ROUTE_$STD_N_ROUTING_PORTS = 2;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
     RIP_$STD_RECENT_CHANGES = -1;
 
     RIP_$SERVER();

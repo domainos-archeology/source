@@ -56,7 +56,7 @@ void MAC_OS_$INIT(void)
         MAC_OS_$PORT_TABLE[port].config  = 0;
 
         /* 0x00E2F56A-0x00E2F572: ROUTE_$PORTP[port] */
-        route_port = ROUTE_$PORTP[port];
+        route_port = ROUTE_$WIRED_DATA.portp[port];
         if (route_port == NULL) {
             continue;
         }

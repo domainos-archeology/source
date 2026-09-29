@@ -73,11 +73,8 @@ static int current_failed;
 MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 static route_$port_t    port0;
-route_$port_t          *ROUTE_$PORTP[8];
-uint16_t                ROUTE_$SOCK;
-int16_t                 ROUTE_$STD_N_ROUTING_PORTS;
-uint32_t                ROUTE_$STD_TOO_FAR;
-uint32_t                ROUTE_$STD_MISROUTE;
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
 /* ============================================================================
  * Recorded call state
@@ -219,17 +216,17 @@ static void setup(void)
     memset(&pkt, 0, sizeof(pkt));
     memset(&header, 0, sizeof(header));
     memset(&port0, 0, sizeof(port0));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(&sock_put_copy, 0xAA, sizeof(sock_put_copy));
     memset(&demux_rec_copy, 0xAA, sizeof(demux_rec_copy));
 
-    ROUTE_$PORTP[0] = &port0;
+    ROUTE_$WIRED_DATA.portp[0] = &port0;
     port0.port_type = 0x1111;
     port0.socket = 0x2222;
-    ROUTE_$SOCK = 0x0077;
-    ROUTE_$STD_N_ROUTING_PORTS = 2;
-    ROUTE_$STD_TOO_FAR = 0;
-    ROUTE_$STD_MISROUTE = 0;
+    ROUTE_$WIRED_DATA.sock = 0x0077;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 2;
+    ROUTE_$RTWIRED_DATA.std_too_far = 0;
+    ROUTE_$RTWIRED_DATA.std_misroute = 0;
 
     chksum_calls = 0; chksum_arg = NULL; chksum_result = 0x1234;
     is_bcast_calls = 0; is_bcast_arg = NULL; is_bcast_result = -1;
@@ -462,10 +459,10 @@ static void test_channel_without_vector(void)
 static void test_forward_not_routing(void)
 {
     is_bcast_result = 0;
-    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
     run();
-    ASSERT_EQ(1, ROUTE_$STD_MISROUTE);
-    ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_misroute);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_too_far);
     ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_no_client_for_packet, st);
     ASSERT_EQ(0, sock_put_calls);
@@ -477,8 +474,8 @@ static void test_forward_hop_limit(void)
     is_bcast_result = 0;
     header.transport_ctl = 15;
     run();
-    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
-    ASSERT_EQ(0, ROUTE_$STD_MISROUTE);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_too_far);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_misroute);
     ASSERT_EQ(1, XNS_IDP_$DATA.packets_dropped);
     ASSERT_EQ(status_$xns_hop_count_exceeded, st);
     ASSERT_EQ(0, sock_put_calls);
@@ -490,7 +487,7 @@ static void test_forward_hop_limit_unsigned(void)
     is_bcast_result = 0;
     header.transport_ctl = 0x80;    /* negative as a signed byte, but >= 15 */
     run();
-    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_too_far);
     ASSERT_EQ(status_$xns_hop_count_exceeded, st);
 }
 

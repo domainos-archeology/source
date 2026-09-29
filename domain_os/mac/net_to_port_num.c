@@ -42,7 +42,7 @@ void MAC_$NET_TO_PORT_NUM(int32_t *net_id, int16_t *port_ret)
      * would fault, exactly as in the original.
      */
     for (i = 0; i <= 7; i++) {
-        port_net_id = (int32_t)ROUTE_$PORTP[i]->network;
+        port_net_id = (int32_t)ROUTE_$WIRED_DATA.portp[i]->network;
 
         if (network == port_net_id) {
             *port_ret = i;

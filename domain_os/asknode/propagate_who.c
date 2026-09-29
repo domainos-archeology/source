@@ -23,7 +23,7 @@
 
 void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 {
-    uint32_t    pkt_info[8];    /* A6-0x220, the 30-byte PKT_$DEFAULT_INFO copy */
+    uint32_t    pkt_info[8];    /* A6-0x220, the 30-byte ASKNODE_$DATA.pkt_info copy */
     uint16_t    retry_hint;     /* A6-0x230 */
     uint16_t    timeout_out;    /* A6-0x22E */
     status_$t   status;         /* A6-0x22C */
@@ -38,16 +38,23 @@ void ASKNODE_$PROPAGATE_WHO(int16_t *response, uint32_t *routing_info)
 
     /* Copy packet info block from global template */
     {
-        uint32_t *src = PKT_$DEFAULT_INFO;
+        const uint32_t *src = (const uint32_t *)&ASKNODE_$DATA.pkt_info;
         uint32_t *dst = pkt_info;
         int i;
         for (i = 0; i < 7; i++) *dst++ = *src++;
         *(uint16_t *)dst = *(uint16_t *)src;
     }
 
-    /* Set version and flags */
-    pkt_info[1] = 0x100BE;  /* Magic constant */
-    *(uint16_t *)((char *)pkt_info + 8) = 0;  /* Clear flags */
+    /*
+     * 0x00E65EBC "move.l #0x100be,(-0x21c,A6)": the longword at pkt_info+4
+     * spans two pkt_$info_t words, addr_type (+4) = 1 and protocol (+6) =
+     * 0xBE.  Stored as the two big-endian words it is, so the record reads
+     * the same on a little-endian host (review fix, source-esg8).
+     */
+    *(uint16_t *)((char *)pkt_info + 4) = 1;      /* addr_type */
+    *(uint16_t *)((char *)pkt_info + 6) = 0xBE;   /* protocol */
+    /* 0x00E65EC4 "clr.w (-0x218,A6)": retry_limit (+8) = 0 */
+    *(uint16_t *)((char *)pkt_info + 8) = 0;
 
     /* Check response type */
     if (response[1] == 0x46) {

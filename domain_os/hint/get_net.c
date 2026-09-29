@@ -32,7 +32,7 @@ void HINT_$GET_NET(uint32_t *port_ret)
 
     /* Check if network info matches current node */
     net_info = (uint16_t *)&hintfile->header.net_info;
-    route_info = (uint16_t *)((uint8_t *)ROUTE_$PORTP[0] + 0x2E);
+    route_info = (uint16_t *)((uint8_t *)ROUTE_$WIRED_DATA.portp[0] + 0x2E);
 
     if (net_info[0] != route_info[0]) {
         return;

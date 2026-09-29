@@ -22,14 +22,14 @@ int32_t PKT_$NEXT_LONG_ID(void)
     ml_$spin_token_t token;
 
     /* Acquire spin lock */
-    token = ML_$SPIN_LOCK(&PKT_$DATA->spin_lock);
+    token = ML_$SPIN_LOCK(&PKT_$DATA.spin_lock);
 
     /* Get current ID and increment */
-    result = PKT_$DATA->long_id;
-    PKT_$DATA->long_id++;
+    result = PKT_$DATA.long_id;
+    PKT_$DATA.long_id++;
 
     /* Release spin lock */
-    ML_$SPIN_UNLOCK(&PKT_$DATA->spin_lock, token);
+    ML_$SPIN_UNLOCK(&PKT_$DATA.spin_lock, token);
 
     return result;
 }

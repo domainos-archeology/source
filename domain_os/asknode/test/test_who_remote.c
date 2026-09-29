@@ -76,9 +76,8 @@ uint32_t ROUTE_$PORT;
 uint32_t TIME_$CLOCKH;
 uint16_t PROC1_$AS_ID;
 uint32_t NETWORK_$ALLOWED_SERVICE;
-uint16_t ASKNODE_$PROTOCOL_VERSION;
 uint32_t ASKNODE_$EMPTY_DATA;
-uint32_t PKT_$DEFAULT_INFO[8];
+MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 uint8_t  sock_table_base[SOCK_TABLE_SIZE];
 ec_$eventcount_t FIM_$QUIT_EC[8];
 uint32_t FIM_$QUIT_VALUE[8];
@@ -121,7 +120,7 @@ static void reset_mocks(void)
     memset(&mock_socket_ec, 0, sizeof(mock_socket_ec));
     memset(&mock_reply_hdr, 0, sizeof(mock_reply_hdr));
     memset(&mock_payload, 0, sizeof(mock_payload));
-    memset(PKT_$DEFAULT_INFO, 0, sizeof(PKT_$DEFAULT_INFO));
+    memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
     memset(sock_table_base, 0, sizeof(sock_table_base));
     memset(FIM_$QUIT_EC, 0, sizeof(FIM_$QUIT_EC));
     memset(FIM_$QUIT_VALUE, 0, sizeof(FIM_$QUIT_VALUE));
@@ -132,7 +131,7 @@ static void reset_mocks(void)
     ROUTE_$PORT = 0x00000011;
     TIME_$CLOCKH = 0x1000;
     PROC1_$AS_ID = 1;
-    ASKNODE_$PROTOCOL_VERSION = 0;
+    ASKNODE_$DATA.protocol_version = 0;
     ASKNODE_$EMPTY_DATA = 0;
     /* NETWORK_$CAPABLE_FLAGS bit 0 must be set for the function to proceed */
     NETWORK_$ALLOWED_SERVICE = 0x00010000;
@@ -400,7 +399,7 @@ TEST(remote_request_record_field_offsets)
 /* 0x00E663BC: the protocol version word is 2 when the global reads 3. */
 TEST(protocol_version_word)
 {
-    ASKNODE_$PROTOCOL_VERSION = 3;
+    ASKNODE_$DATA.protocol_version = 3;
     run(0x00099999, 0x00000077, 5);
     ASSERT_EQ(2, tpl_w(0x00));
 }

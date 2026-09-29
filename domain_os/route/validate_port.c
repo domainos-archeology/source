@@ -31,7 +31,7 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local)
          * 0x00E6591A-0x00E6592E: no key, so port 0 is the answer if it is
          * active at all.
          */
-        if (ROUTE_$PORTP[0]->active == 0) {
+        if (ROUTE_$WIRED_DATA.portp[0]->active == 0) {
             /*
              * 0x00E65926 `clr.w D0w`: only the LOW WORD of the result
              * register is cleared here, which is why this routine's result
@@ -39,7 +39,7 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local)
              */
             return 0;  /* Unknown network */
         }
-        port = ROUTE_$PORTP[0];
+        port = ROUTE_$WIRED_DATA.portp[0];
     } else {
         /*
          * 0x00E65930-0x00E6594C: scan ROUTE_$PORTP[0..7] ASCENDING for the
@@ -57,7 +57,7 @@ int16_t ROUTE_$VALIDATE_PORT(int32_t routing_key, int8_t is_local)
          * the same network the LOWER index wins.
          */
         for (i = 0; i <= 7; i++) {
-            route_$port_t *p = ROUTE_$PORTP[i];
+            route_$port_t *p = ROUTE_$WIRED_DATA.portp[i];
 
             if (p->active != 0 && (int32_t)p->network == routing_key) {
                 port = p;

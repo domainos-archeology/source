@@ -765,7 +765,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
             reply_put_w(result, 0x08, 0);
 
             for (i = 0; i < 8; i++) {
-                route_$port_t *port = ROUTE_$PORTP[i];
+                route_$port_t *port = ROUTE_$WIRED_DATA.portp[i];
                 if (port->active == 0) {
                     continue;
                 }
@@ -780,7 +780,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
             count = reply_get_w(result, 0x08);
             tail = 0x08 + (unsigned)count * 6;
             for (i = 0; i < 8; i++) {
-                route_$port_t *port = ROUTE_$PORTP[i];
+                route_$port_t *port = ROUTE_$WIRED_DATA.portp[i];
                 const uint8_t *driver;
                 if (port->active == 0) {
                     continue;
@@ -801,7 +801,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 *local_status = status_$internet_unknown_network_port;
                 break;
             }
-            ROUTE_$SHORT_PORT(ROUTE_$PORTP[port_index],
+            ROUTE_$SHORT_PORT(ROUTE_$WIRED_DATA.portp[port_index],
                               (route_$short_port_t *)((uint8_t *)result + 0x08));
         }
         break;
@@ -814,8 +814,8 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
          * 0x00E650E8).
          */
         {
-            int8_t routing     = (ROUTE_$N_ROUTING_PORTS > 1) ? (int8_t)0xFF : 0;
-            int8_t std_routing = (ROUTE_$STD_N_ROUTING_PORTS > 1) ? (int8_t)0xFF : 0;
+            int8_t routing     = (ROUTE_$WIRED_DATA.n_routing_ports > 1) ? (int8_t)0xFF : 0;
+            int8_t std_routing = (ROUTE_$WIRED_DATA.std_n_routing_ports > 1) ? (int8_t)0xFF : 0;
 
             reply_put_w(result, 0x08, 3);
             reply_put_b(result, 0x0A, (uint8_t)routing);
@@ -823,17 +823,17 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
             if ((int8_t)(routing | std_routing) >= 0) {
                 break;
             }
-            reply_put_l(result, 0x0C, ROUTE_$START_TIME);
-            reply_put_w(result, 0x10, ROUTE_$NETBUF_ALLOC);
-            reply_put_l(result, 0x1E, ROUTE_$PKTS_ROUTED);
-            reply_put_l(result, 0x12, ROUTE_$Q_OFLO);
-            reply_put_l(result, 0x16, ROUTE_$MISROUTE);
-            reply_put_l(result, 0x1A, ROUTE_$TOO_FAR);
-            reply_put_l(result, 0x22, ROUTE_$DLEN_ERR);
-            reply_put_l(result, 0x2E, ROUTE_$STD_PKTS_ROUTED);
-            reply_put_l(result, 0x26, ROUTE_$STD_MISROUTE);
-            reply_put_l(result, 0x2A, ROUTE_$STD_TOO_FAR);
-            reply_put_l(result, 0x32, ROUTE_$STD_DLEN_ERR);
+            reply_put_l(result, 0x0C, ROUTE_$UNWIRED_DATA.start_time);
+            reply_put_w(result, 0x10, ROUTE_$RTWIRED_DATA.netbuf_alloc);
+            reply_put_l(result, 0x1E, ROUTE_$RTWIRED_DATA.pkts_routed);
+            reply_put_l(result, 0x12, ROUTE_$RTWIRED_DATA.q_oflo);
+            reply_put_l(result, 0x16, ROUTE_$RTWIRED_DATA.misroute);
+            reply_put_l(result, 0x1A, ROUTE_$RTWIRED_DATA.too_far);
+            reply_put_l(result, 0x22, ROUTE_$RTWIRED_DATA.dlen_err);
+            reply_put_l(result, 0x2E, ROUTE_$RTWIRED_DATA.std_pkts_routed);
+            reply_put_l(result, 0x26, ROUTE_$RTWIRED_DATA.std_misroute);
+            reply_put_l(result, 0x2A, ROUTE_$RTWIRED_DATA.std_too_far);
+            reply_put_l(result, 0x32, ROUTE_$RTWIRED_DATA.std_dlen_err);
         }
         break;
 
@@ -851,7 +851,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 *local_status = status_$internet_unknown_network_port;
                 break;
             }
-            port = ROUTE_$PORTP[port_index];
+            port = ROUTE_$WIRED_DATA.portp[port_index];
 
             /*
              * 0x00E65184-0x00E65198: the port's own statistics window.  The
@@ -923,7 +923,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 reply_put_l(result, 0x10, asknode_$c_local_route_expiration);
                 reply_put_w(result, 0x14, asknode_$c_local_route_metric);
                 reply_put_l(result, 0x16, RIP_$STATS.local_net_pkts);
-                ROUTE_$SHORT_PORT(ROUTE_$PORTP[0],
+                ROUTE_$SHORT_PORT(ROUTE_$WIRED_DATA.portp[0],
                                   (route_$short_port_t *)
                                       ((uint8_t *)result + 0x1C));
                 reply_put_w(result, 0x1A, 1);
@@ -959,7 +959,7 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
                 reply_put_w(result, 0x14, entry->routes[0].metric);
                 reply_put_w(result, 0x1A, state);
                 reply_put_l(result, 0x16, RIP_$STATS.net_pkts[i]);
-                ROUTE_$SHORT_PORT(ROUTE_$PORTP[entry->routes[0].port],
+                ROUTE_$SHORT_PORT(ROUTE_$WIRED_DATA.portp[entry->routes[0].port],
                                   (route_$short_port_t *)
                                       ((uint8_t *)result + 0x1C));
                 *local_status = 0;      /* 0x00E65316 -> 0x00E64F86 */
@@ -977,13 +977,13 @@ static uint32_t handle_local_request(uint16_t req_type, uid_t *param,
          * the reply.
          */
         {
-            uint16_t buckets = ROUTE_$NETBUF_ALLOC;
+            uint16_t buckets = ROUTE_$RTWIRED_DATA.netbuf_alloc;
             uint32_t i;
 
             reply_put_w(result, 0x08, buckets);
-            reply_put_l(result, 0x0A, ROUTE_$Q_OFLO);
+            reply_put_l(result, 0x0A, ROUTE_$RTWIRED_DATA.q_oflo);
             for (i = 0; i <= (uint32_t)buckets; i++) {
-                reply_put_l(result, 0x0E + i * 4, ROUTE_$Q_DEPTH[i]);
+                reply_put_l(result, 0x0E + i * 4, ROUTE_$RTWIRED_DATA.q_depth[i]);
             }
         }
         break;
@@ -1277,7 +1277,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
     {
         /* Build request packet */
         uint16_t req_buf[12];   /* Request buffer (0x18 bytes) */
-        uint32_t pkt_info[8];   /* A6-0xB8: the 30-byte PKT_$DEFAULT_INFO copy */
+        uint32_t pkt_info[8];   /* A6-0xB8: the 30-byte ASKNODE_$DATA.pkt_info copy */
         /*
          * A6-0xD8: PKT_$SAR_INTERNET's tenth argument, a pkt_$sar_result_t
          * the callee WRITES.  When a request
@@ -1383,7 +1383,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
 
         /* Copy packet info block */
         {
-            uint32_t *src = PKT_$DEFAULT_INFO;
+            const uint32_t *src = (const uint32_t *)&ASKNODE_$DATA.pkt_info;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) *dst++ = *src++;
@@ -1398,7 +1398,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
              *    1  (-0xE8,A6)          the routing key
              *    2  *node_id            "movea.l D4,A0 / move.l (A0),-(SP)"
              *    3  #4                  the ASKNODE socket
-             *    4  &(-0xB8,A6)         the PKT_$DEFAULT_INFO copy
+             *    4  &(-0xB8,A6)         the ASKNODE_$DATA.pkt_info copy
              *    5  #6                  timeout
              *    6  &(-0x100,A6)        the request template
              *    7  #0x18               its length
@@ -1455,7 +1455,7 @@ uint32_t ASKNODE_$INTERNET_INFO(uint16_t *req_type, uint32_t *node_id,
         }
 
         /* Validate protocol version (0x00E657AE - 0x00E657CA): 0x110015 */
-        if (*(uint16_t *)result != 3 && *(uint16_t *)result != 2 && ASKNODE_$PROTOCOL_VERSION != 3) {
+        if (*(uint16_t *)result != 3 && *(uint16_t *)result != 2 && ASKNODE_$DATA.protocol_version != 3) {
             *status = status_$network_bad_asknode_version_number;
             return (uint16_t)*result;
         }

@@ -95,9 +95,8 @@ uint16_t NETWORK_$WRITE_CALL_CNT;
 uint16_t NETWORK_$READ_VIOL_CNT;
 uint16_t NETWORK_$WRITE_VIOL_CNT;
 uint16_t NETWORK_$BAD_CHKSUM_CNT;
-uint16_t ASKNODE_$PROTOCOL_VERSION;
 uint32_t ASKNODE_$EMPTY_DATA;
-uint32_t PKT_$DEFAULT_INFO[8];
+MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 
 /* Data the arms recovered in bead source-yjtx read. */
 uint32_t NETWORK_$PAGING_BACKLOG[NETWORK_PAGING_BACKLOG_BUCKETS];
@@ -124,21 +123,9 @@ uint16_t RING_$OVERFLOW_OVERFLOW;
 uint16_t RING_$DELIVERY_FAILED;
 
 route_$port_t  route_ports[8];
-route_$port_t *ROUTE_$PORTP[8];
-int16_t  ROUTE_$N_ROUTING_PORTS;
-int16_t  ROUTE_$STD_N_ROUTING_PORTS;
-uint32_t ROUTE_$START_TIME;
-uint16_t ROUTE_$NETBUF_ALLOC;
-uint32_t ROUTE_$Q_OFLO;
-uint32_t ROUTE_$Q_DEPTH[0x81];
-uint32_t ROUTE_$PKTS_ROUTED;
-uint32_t ROUTE_$MISROUTE;
-uint32_t ROUTE_$TOO_FAR;
-uint32_t ROUTE_$DLEN_ERR;
-uint32_t ROUTE_$STD_PKTS_ROUTED;
-uint32_t ROUTE_$STD_MISROUTE;
-uint32_t ROUTE_$STD_TOO_FAR;
-uint32_t ROUTE_$STD_DLEN_ERR;
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
+MODULE_DATA_DEFINE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
 rip_$data_t  RIP_$DATA;
 rip_$stats_t RIP_$STATS;
@@ -232,22 +219,22 @@ static void reset_mocks(void)
     memset(NETWORK_$FILE_BACKLOG, 0, sizeof(NETWORK_$FILE_BACKLOG));
     memset(&NETWORK_$FAILURE_REC, 0, sizeof(NETWORK_$FAILURE_REC));
     memset(&RING_$SWDIAG_DATA, 0, sizeof(RING_$SWDIAG_DATA));
-    memset(ROUTE_$Q_DEPTH, 0, sizeof(ROUTE_$Q_DEPTH));
+    memset(ROUTE_$RTWIRED_DATA.q_depth, 0, sizeof(ROUTE_$RTWIRED_DATA.q_depth));
     memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
     memset(&RIP_$STATS, 0, sizeof(RIP_$STATS));
     memset(route_ports, 0, sizeof(route_ports));
     {
         int i;
         for (i = 0; i < 8; i++) {
-            ROUTE_$PORTP[i] = &route_ports[i];
+            ROUTE_$WIRED_DATA.portp[i] = &route_ports[i];
         }
     }
     NETWORK_$ACTIVITY_FLAG = 0;
-    ROUTE_$NETBUF_ALLOC = 0;
-    ROUTE_$Q_OFLO = 0;
-    ROUTE_$N_ROUTING_PORTS = 0;
-    ROUTE_$STD_N_ROUTING_PORTS = 0;
-    ROUTE_$START_TIME = 0;
+    ROUTE_$RTWIRED_DATA.netbuf_alloc = 0;
+    ROUTE_$RTWIRED_DATA.q_oflo = 0;
+    ROUTE_$WIRED_DATA.n_routing_ports = 0;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 0;
+    ROUTE_$UNWIRED_DATA.start_time = 0;
 }
 
 /* ==========================================================================
@@ -773,10 +760,10 @@ TEST(request_0x43_copies_netbuf_alloc_plus_one_buckets)
 {
     unsigned i;
 
-    ROUTE_$NETBUF_ALLOC = 5;
-    ROUTE_$Q_OFLO = 0x11223344u;
+    ROUTE_$RTWIRED_DATA.netbuf_alloc = 5;
+    ROUTE_$RTWIRED_DATA.q_oflo = 0x11223344u;
     for (i = 0; i < 8; i++) {
-        ROUTE_$Q_DEPTH[i] = 0xD0000000u + i;
+        ROUTE_$RTWIRED_DATA.q_depth[i] = 0xD0000000u + i;
     }
     memset(reply_bytes, 0x5A, sizeof(reply));
 

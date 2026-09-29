@@ -100,7 +100,7 @@ void PKT_$BLD_INTERNET_HDR(uint32_t routing_key, uint32_t dest_node, uint16_t de
                  * indexes ROUTE_$PORTP with the port number the RIP lookup
                  * just stored, in WORD arithmetic.
                  */
-                route_$port_t *port = ROUTE_$PORTP[*port_out];
+                route_$port_t *port = ROUTE_$WIRED_DATA.portp[*port_out];
                 int16_t port_state = (int16_t)port->active;
 
                 if (port_state == 1 || port_state == 0) {

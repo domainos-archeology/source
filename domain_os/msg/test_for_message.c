@@ -36,7 +36,7 @@ boolean MSG_$TEST_FOR_MESSAGE(msg_$socket_t *socket, uint32_t *ec_value,
      * 0x00E59FDA  lsl.w #0x3,D0w / lea (0x0,A5,D0w*0x1),A2 / lea (0x1d8,A2),A2
      * i.e. the one-based ownership table.
      */
-    bitmap = MSG_$SOCK_OWNERS[sock_num];
+    bitmap = MSG_$UNWIRED_DATA.ownership[sock_num];
 
     /*
      * 0x00E59FE0  moveq #0x3f,D0 / move.w PROC1_$AS_ID,D1w / sub.w D1w,D0w /

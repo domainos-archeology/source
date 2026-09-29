@@ -88,7 +88,7 @@ void MAC_$DEMUX(void *pkt_info, int16_t *port_num, int8_t *demux_flag,
 
     /* 0x00E0BCD2-0x00E0BCE6: A2 is reloaded with the resolved channel */
     chan       = (mac_os_$channel_t *)ARCH_VA_TO_PTR(pkt->channel);
-    route_port = ROUTE_$PORTP[*port_num];
+    route_port = ROUTE_$WIRED_DATA.portp[*port_num];
 
     /* 0x00E0BCE8-0x00E0BCF8 */
     if (chan->socket == MAC_NO_SOCKET) {

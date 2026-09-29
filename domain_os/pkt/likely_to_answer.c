@@ -90,7 +90,7 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
      */
     need_ping = false;
     if (route_result == 0) {
-        if (ROUTE_$PORTP[port]->port_type == 4) {
+        if (ROUTE_$WIRED_DATA.portp[port]->port_type == 4) {
             need_ping = result;
         }
     }
@@ -147,9 +147,9 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
          *   0x00E12AAC  pea (-0x1).w               src_node_or = -1
          *   0x00E12AA6  move.l (0x00e245a4).l,-(SP) NODE_$ME
          *   0x00E12AA4  move.w D4w,-(SP)           src_sock = our socket
-         *   0x00E12AA0  pea (0x68,A5)              &PKT_$DATA->ping_template
+         *   0x00E12AA0  pea (0x68,A5)              &PKT_$DATA.ping_template
          *   0x00E12A9E  move.w D3w,-(SP)           request_id
-         *   0x00E12A9A  pea (0x5a,A5)              &PKT_$DATA->ping_req_hdr
+         *   0x00E12A9A  pea (0x5a,A5)              &PKT_$DATA.ping_req_hdr
          *   0x00E12A96  move.w #0x2,-(SP)          template_len = 2
          *   0x00E12A92  pea (0x120,PC)             &pkt_$no_data
          *   0x00E12A90  clr.w -(SP)                data_len = 0
@@ -159,8 +159,8 @@ boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret)
          */
         PKT_$SEND_INTERNET(addr->network, addr->node, PKT_PING_SOCKET,
                            -1, NODE_$ME, sock_num,
-                           &PKT_$DATA->ping_template, (uint16_t)request_id,
-                           &PKT_$DATA->ping_req_hdr, 2,
+                           &PKT_$DATA.ping_template, (uint16_t)request_id,
+                           &PKT_$DATA.ping_req_hdr, 2,
                            (void *)&pkt_$no_data, 0,
                            &retry_hint, &resp_timeout,
                            status_ret);

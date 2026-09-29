@@ -101,46 +101,17 @@ ringlog_ctl_t RINGLOG_$CTL;
 MODULE_DATA_DEFINE(xns_$idp_data_t, XNS_IDP_$DATA, 0x00E2B314);
 
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 uint32_t ROUTE_$PORT;
-uint32_t ROUTE_$SOCK_ECVAL;
 ml_$exclusion_t ROUTE_$SERVICE_MUTEX;
-uint32_t ROUTE_$CONTROL_ECVAL;
-uint32_t ROUTE_$CONTROL_EC;
-uint16_t ROUTE_$SOCK;
-int16_t  ROUTE_$STD_N_ROUTING_PORTS;
-int16_t  ROUTE_$N_ROUTING_PORTS;
-boolean  ROUTE_$ROUTING;
 
-char ROUTE_$WIRED_AREA_START_SYM[1];
-char ROUTE_$WIRED_AREA_END_SYM[1];
-const status_$t ROUTE_$UNKNOWN_PORT_STATUS = status_$internet_unknown_network_port;
 uint8_t  RIP_$HALT_PACKET[24];
 uint16_t RTWIRED_$SEND_FLAGS;
-uint32_t ROUTE_$WIRED_PAGES[ROUTE_$MAX_WIRED_PAGES];
-uint32_t ROUTE_$Q_DEPTH[0x81];
-uint32_t ROUTE_$STD_DLEN_ERR;
-uint32_t ROUTE_$STD_TOO_FAR;
-uint32_t ROUTE_$STD_MISROUTE;
-uint32_t ROUTE_$STD_PKTS_ROUTED;
-uint32_t ROUTE_$DLEN_ERR;
-uint32_t ROUTE_$TOO_FAR;
-uint32_t ROUTE_$MISROUTE;
-uint32_t ROUTE_$PKTS_ROUTED;
-uint32_t ROUTE_$Q_OFLO;
-uint16_t ROUTE_$NETBUF_ALLOC;
-int16_t  ROUTE_$N_WIRED_PAGES;
-int16_t  ROUTE_$N_USER_PORTS;
+MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 
 uint8_t  RINGLOG_$ROUTE_FORWARD[4] = { 0x00, 0x00, 0x20, 0x48 };
 uint32_t RTWIRED_$CALLBACK_DATA;
-uint16_t ROUTE_$PID;
-int8_t   ROUTE_$USER_CHECKSUM;
-uint32_t ROUTE_$SERVICE_ID;
-ec_$eventcount_t *PTR_ROUTE_$CONTROL_EC;
-uint16_t ROUTE_$FWD_TIMEOUT;
-uint16_t ROUTE_$PACKET_SEQ;
-uint32_t ROUTE_$LAST_UPDATE_TIME;
+MODULE_DATA_DEFINE(route_$unwired_data_t, ROUTE_$UNWIRED_DATA, 0x00E825DC);
 
 /* ==========================================================================
  * Mock state
@@ -403,8 +374,8 @@ static void reset_mocks(void)
     memset(mock_pkt_page, 0, sizeof(mock_pkt_page));
     memset(&mock_port_stats, 0, sizeof(mock_port_stats));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
-    memset(ROUTE_$Q_DEPTH, 0, sizeof(ROUTE_$Q_DEPTH));
-    memset(ROUTE_$WIRED_PAGES, 0, sizeof(ROUTE_$WIRED_PAGES));
+    memset(ROUTE_$RTWIRED_DATA.q_depth, 0, sizeof(ROUTE_$RTWIRED_DATA.q_depth));
+    memset(ROUTE_$RTWIRED_DATA.wired_pages, 0, sizeof(ROUTE_$RTWIRED_DATA.wired_pages));
     memset(&mock_rcv_template, 0, sizeof(mock_rcv_template));
     memset(&mock_mac_send_rec, 0, sizeof(mock_mac_send_rec));
     memset(mock_unwire_order, 0, sizeof(mock_unwire_order));
@@ -422,26 +393,26 @@ static void reset_mocks(void)
         (void *)(((uintptr_t)mock_pkt_page + MOCK_PKT_PAGE_SIZE - 1) &
                  ~(uintptr_t)(MOCK_PKT_PAGE_SIZE - 1));
 
-    ROUTE_$SOCK = MOCK_SOCK;
+    ROUTE_$WIRED_DATA.sock = MOCK_SOCK;
     SOCK_$EVENT_COUNTERS[MOCK_SOCK - 1] = (ec_$eventcount_t *)&mock_sock_desc;
 
-    ROUTE_$STD_DLEN_ERR = 0;
-    ROUTE_$STD_TOO_FAR = 0;
-    ROUTE_$STD_MISROUTE = 0;
-    ROUTE_$STD_PKTS_ROUTED = 0;
-    ROUTE_$DLEN_ERR = 0;
-    ROUTE_$TOO_FAR = 0;
-    ROUTE_$MISROUTE = 0;
-    ROUTE_$PKTS_ROUTED = 0;
-    ROUTE_$SOCK_ECVAL = 0;
-    ROUTE_$CONTROL_ECVAL = 0;
-    ROUTE_$N_ROUTING_PORTS = 0;
-    ROUTE_$STD_N_ROUTING_PORTS = 0;
-    ROUTE_$N_USER_PORTS = 1;    /* keep the unwire loop out of the way */
-    ROUTE_$N_WIRED_PAGES = 0;
-    ROUTE_$ROUTING = 0;
-    ROUTE_$FWD_TIMEOUT = 1;
-    ROUTE_$PID = 0x1234;
+    ROUTE_$RTWIRED_DATA.std_dlen_err = 0;
+    ROUTE_$RTWIRED_DATA.std_too_far = 0;
+    ROUTE_$RTWIRED_DATA.std_misroute = 0;
+    ROUTE_$RTWIRED_DATA.std_pkts_routed = 0;
+    ROUTE_$RTWIRED_DATA.dlen_err = 0;
+    ROUTE_$RTWIRED_DATA.too_far = 0;
+    ROUTE_$RTWIRED_DATA.misroute = 0;
+    ROUTE_$RTWIRED_DATA.pkts_routed = 0;
+    ROUTE_$WIRED_DATA.sock_ecval = 0;
+    ROUTE_$WIRED_DATA.control_ecval = 0;
+    ROUTE_$WIRED_DATA.n_routing_ports = 0;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 0;
+    ROUTE_$RTWIRED_DATA.n_user_ports = 1;    /* keep the unwire loop out of the way */
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 0;
+    ROUTE_$WIRED_DATA.routing = 0;
+    ROUTE_$RTWIRED_DATA.fwd_timeout = 1;
+    ROUTE_$RTWIRED_DATA.pid = 0x1234;
     TIME_$CLOCKH = 1000;
     NODE_$ME = 0xABCDE;
     RING_$LOGGING_NOW = 0;
@@ -537,14 +508,14 @@ TEST(startup_and_shutdown)
     /* 0x00E8789E, the "and not" opcode cell: the file static in
      * route/process.c, visible because the test includes that file. */
     ASSERT_EQ(net_service_and_not_bits, mock_last_service_op);
-    ASSERT_EQ(0, ROUTE_$ROUTING);                              /* cleared on exit */
-    ASSERT_EQ(0, ROUTE_$LAST_UPDATE_TIME);
-    ASSERT_EQ(0xFFFF, ROUTE_$SOCK);
+    ASSERT_EQ(0, ROUTE_$WIRED_DATA.routing);                              /* cleared on exit */
+    ASSERT_EQ(0, ROUTE_$UNWIRED_DATA.start_time);
+    ASSERT_EQ(0xFFFF, ROUTE_$WIRED_DATA.sock);
     ASSERT_EQ(1, mock_sock_close_calls);
     ASSERT_EQ(MOCK_SOCK, mock_sock_close_arg);
     ASSERT_EQ(1, mock_unbind_calls);
     /* One advance before the loop plus one on the way out (0xE87414/0xE877FE) */
-    ASSERT_EQ(2, ROUTE_$CONTROL_ECVAL);
+    ASSERT_EQ(2, ROUTE_$WIRED_DATA.control_ecval);
 }
 
 /*
@@ -553,8 +524,8 @@ TEST(startup_and_shutdown)
  */
 TEST(timer_broadcasts)
 {
-    ROUTE_$N_ROUTING_PORTS = 2;
-    ROUTE_$STD_N_ROUTING_PORTS = 1;
+    ROUTE_$WIRED_DATA.n_routing_ports = 2;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 1;
     mock_wait_script[0] = 0;
     mock_wait_script[1] = 2;
     mock_wait_len = 2;
@@ -569,8 +540,8 @@ TEST(timer_broadcasts)
 
 TEST(timer_broadcasts_both_modes)
 {
-    ROUTE_$N_ROUTING_PORTS = 2;
-    ROUTE_$STD_N_ROUTING_PORTS = 5;
+    ROUTE_$WIRED_DATA.n_routing_ports = 2;
+    ROUTE_$WIRED_DATA.std_n_routing_ports = 5;
     mock_wait_script[0] = 0;
     mock_wait_script[1] = 2;
     mock_wait_len = 2;
@@ -584,14 +555,14 @@ TEST(timer_broadcasts_both_modes)
 /* The three event counts and their values, 0x00E87460 - 0x00E87482. */
 TEST(wait_arrays)
 {
-    ROUTE_$SOCK_ECVAL = 0x40;
-    ROUTE_$CONTROL_ECVAL = 0x50;
+    ROUTE_$WIRED_DATA.sock_ecval = 0x40;
+    ROUTE_$WIRED_DATA.control_ecval = 0x50;
 
     ROUTE_$PROCESS();
 
     ASSERT_TRUE(mock_last_ecs.ec[0] == (ec_$eventcount_t *)&TIME_$CLOCKH);
     ASSERT_TRUE(mock_last_ecs.ec[1] == (ec_$eventcount_t *)&mock_sock_desc);
-    ASSERT_TRUE(mock_last_ecs.ec[2] == (ec_$eventcount_t *)&ROUTE_$CONTROL_EC);
+    ASSERT_TRUE(mock_last_ecs.ec[2] == &ROUTE_$WIRED_DATA.control_ec);
     ASSERT_EQ(1000, mock_last_vals.val[0]);
     ASSERT_EQ(0x40, mock_last_vals.val[1]);
     /* The pre-loop advance bumped the control value to 0x51 */
@@ -619,8 +590,8 @@ TEST(packet_stats_bucket)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$Q_DEPTH[5]);
-    ASSERT_EQ(0, ROUTE_$Q_DEPTH[0]);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.q_depth[5]);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.q_depth[0]);
 }
 
 TEST(packet_stats_bucket_capped)
@@ -631,7 +602,7 @@ TEST(packet_stats_bucket_capped)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$Q_DEPTH[0x80]);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.q_depth[0x80]);
 }
 
 /*
@@ -649,8 +620,8 @@ TEST(routing_type_below_two_is_not_forwarded)
     ASSERT_EQ(1, mock_rtn_hdr_calls);
     ASSERT_EQ(ARCH_PTR_TO_VA(mock_pkt), mock_rtn_hdr_value);
     ASSERT_EQ(1, mock_dump_data_calls);
-    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
-    ASSERT_EQ(1, ROUTE_$SOCK_ECVAL);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.pkts_routed);
+    ASSERT_EQ(1, ROUTE_$WIRED_DATA.sock_ecval);
 }
 
 /*
@@ -669,8 +640,8 @@ TEST(std_flag_forces_forward_candidate)
     ASSERT_EQ(1, mock_nexthop_calls);
     ASSERT_EQ(1, mock_arp_calls);
     ASSERT_EQ(1, mock_mac_send_calls);
-    ASSERT_EQ(1, ROUTE_$STD_PKTS_ROUTED);
-    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_pkts_routed);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.pkts_routed);
 }
 
 /* The IDP header base differs between the two routing modes - 0x00E87500. */
@@ -731,7 +702,7 @@ TEST(drop_when_no_data_pages)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$DLEN_ERR);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.dlen_err);
     ASSERT_EQ(0, mock_nexthop_calls);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
@@ -745,7 +716,7 @@ TEST(no_drop_when_data_pages_present)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$DLEN_ERR);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.dlen_err);
     ASSERT_EQ(1, mock_nexthop_calls);
 }
 
@@ -765,7 +736,7 @@ TEST(hop_limit_boundary)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$TOO_FAR);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.too_far);
     ASSERT_EQ(1, mock_nexthop_calls);
 
     reset_mocks();
@@ -777,8 +748,8 @@ TEST(hop_limit_boundary)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$TOO_FAR);
-    ASSERT_EQ(0, ROUTE_$STD_TOO_FAR);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.too_far);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_too_far);
     ASSERT_EQ(0, mock_nexthop_calls);
 }
 
@@ -793,8 +764,8 @@ TEST(hop_limit_counts_against_std_bucket)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STD_TOO_FAR);
-    ASSERT_EQ(0, ROUTE_$TOO_FAR);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_too_far);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.too_far);
 }
 
 /* A failed route lookup counts in the per-mode "dropped route" bucket. */
@@ -806,8 +777,8 @@ TEST(no_route_counts_dropped)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$MISROUTE);
-    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.misroute);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.pkts_routed);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
 
@@ -823,8 +794,8 @@ TEST(port_active_mask_normal)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$MISROUTE);
-    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.misroute);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.pkts_routed);
 }
 
 TEST(port_active_mask_std)
@@ -835,8 +806,8 @@ TEST(port_active_mask_std)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STD_MISROUTE);
-    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_misroute);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_pkts_routed);
 }
 
 /*
@@ -888,7 +859,7 @@ TEST(user_routing_port_uses_sock_put)
     ASSERT_EQ(1, mock_port_stats.queue_depth[4]);
     ASSERT_EQ(0, mock_port_stats.failed_puts);
     ASSERT_EQ(1, ROUTE_$PORT_ARRAY[1].forward_count);
-    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.pkts_routed);
     ASSERT_EQ(0, mock_rtn_hdr_calls);           /* the socket owns it now */
     ASSERT_EQ(0, mock_dump_data_calls);
 }
@@ -936,7 +907,7 @@ TEST(user_routing_port_put_failure)
 
     ASSERT_EQ(1, mock_port_stats.failed_puts);
     ASSERT_EQ(1, ROUTE_$PORT_ARRAY[1].forward_count);
-    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.pkts_routed);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
     ASSERT_EQ(1, mock_dump_data_calls);
 }
@@ -970,8 +941,8 @@ TEST(oversize_packet_counted)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$DLEN_ERR);
-    ASSERT_EQ(0, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.dlen_err);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.pkts_routed);
     ASSERT_EQ(0, mock_net_io_calls);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 
@@ -982,8 +953,8 @@ TEST(oversize_packet_counted)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(1, ROUTE_$STD_DLEN_ERR);
-    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_dlen_err);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_pkts_routed);
 }
 
 /* Exactly 0x400 still goes out. */
@@ -995,9 +966,9 @@ TEST(max_size_packet_still_sent)
 
     ROUTE_$PROCESS();
 
-    ASSERT_EQ(0, ROUTE_$DLEN_ERR);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.dlen_err);
     ASSERT_EQ(1, mock_net_io_calls);
-    ASSERT_EQ(1, ROUTE_$PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.pkts_routed);
 }
 
 /*
@@ -1052,7 +1023,7 @@ TEST(mac_send_descriptor)
     ASSERT_EQ(0x2000, mock_mac_send_rec.data_pages[0]);
     ASSERT_EQ(0x3000, mock_mac_send_rec.data_pages[1]);
     ASSERT_TRUE(mock_mac_send_channel == XNS_IDP_$PORT_MAC_CHANNEL(2));
-    ASSERT_EQ(1, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(1, ROUTE_$RTWIRED_DATA.std_pkts_routed);
 }
 
 /* An ARP failure clears should_forward, so nothing is counted - 0x00E876A0. */
@@ -1067,7 +1038,7 @@ TEST(arp_failure_stops_forward)
 
     ASSERT_EQ(1, mock_arp_calls);
     ASSERT_EQ(0, mock_mac_send_calls);
-    ASSERT_EQ(0, ROUTE_$STD_PKTS_ROUTED);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.std_pkts_routed);
     ASSERT_EQ(1, mock_rtn_hdr_calls);
 }
 
@@ -1077,11 +1048,11 @@ TEST(arp_failure_stops_forward)
  */
 TEST(shutdown_unwire_order)
 {
-    ROUTE_$N_USER_PORTS = 0;
-    ROUTE_$N_WIRED_PAGES = 3;
-    ROUTE_$WIRED_PAGES[0] = 0x1000;
-    ROUTE_$WIRED_PAGES[1] = 0x2000;
-    ROUTE_$WIRED_PAGES[2] = 0x3000;
+    ROUTE_$RTWIRED_DATA.n_user_ports = 0;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 3;
+    ROUTE_$RTWIRED_DATA.wired_pages[0] = 0x1000;
+    ROUTE_$RTWIRED_DATA.wired_pages[1] = 0x2000;
+    ROUTE_$RTWIRED_DATA.wired_pages[2] = 0x3000;
 
     ROUTE_$PROCESS();
 
@@ -1089,19 +1060,19 @@ TEST(shutdown_unwire_order)
     ASSERT_EQ(0x1000, mock_unwire_order[0]);
     ASSERT_EQ(0x2000, mock_unwire_order[1]);
     ASSERT_EQ(0x3000, mock_unwire_order[2]);
-    ASSERT_EQ(0, ROUTE_$N_WIRED_PAGES);
+    ASSERT_EQ(0, ROUTE_$RTWIRED_DATA.n_wired_pages);
 }
 
 TEST(shutdown_keeps_wired_pages_when_user_ports_remain)
 {
-    ROUTE_$N_USER_PORTS = 1;
-    ROUTE_$N_WIRED_PAGES = 3;
-    ROUTE_$WIRED_PAGES[0] = 0x1000;
+    ROUTE_$RTWIRED_DATA.n_user_ports = 1;
+    ROUTE_$RTWIRED_DATA.n_wired_pages = 3;
+    ROUTE_$RTWIRED_DATA.wired_pages[0] = 0x1000;
 
     ROUTE_$PROCESS();
 
     ASSERT_EQ(0, mock_unwire_calls);
-    ASSERT_EQ(3, ROUTE_$N_WIRED_PAGES);
+    ASSERT_EQ(3, ROUTE_$RTWIRED_DATA.n_wired_pages);
 }
 
 /* ==========================================================================

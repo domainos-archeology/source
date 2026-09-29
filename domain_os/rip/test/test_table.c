@@ -42,7 +42,7 @@ static int tests_passed = 0;
 #include "rip/rip_internal.h"
 #include "route/route.h"
 
-route_$port_t *ROUTE_$PORTP[ROUTE_$MAX_PORTS];
+MODULE_DATA_DEFINE(route_$wired_data_t, ROUTE_$WIRED_DATA, 0x00E26EE4);
 route_$port_t  ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 
 static int      find_port_calls;
@@ -66,14 +66,14 @@ static route_$port_t port2, port5;
 static void reset(void)
 {
     memset(&RIP_$DATA, 0, sizeof(RIP_$DATA));
-    memset(ROUTE_$PORTP, 0, sizeof(ROUTE_$PORTP));
+    memset(ROUTE_$WIRED_DATA.portp, 0, sizeof(ROUTE_$WIRED_DATA.portp));
     memset(ROUTE_$PORT_ARRAY, 0, sizeof(ROUTE_$PORT_ARRAY));
     memset(&port2, 0, sizeof(port2));
     memset(&port5, 0, sizeof(port5));
     port2.network = 0xAAAA0002; port2.port_type = 0x0002; port2.socket = 0x0102;
     port5.network = 0xAAAA0005; port5.port_type = 0x0001; port5.socket = 0x0105;
-    ROUTE_$PORTP[2] = &port2;
-    ROUTE_$PORTP[5] = &port5;
+    ROUTE_$WIRED_DATA.portp[2] = &port2;
+    ROUTE_$WIRED_DATA.portp[5] = &port5;
     find_port_calls = 0;
     find_port_result = 2;
 }

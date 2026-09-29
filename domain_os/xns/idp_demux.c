@@ -173,7 +173,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
     }
 
     /* 0x00E1857C..0x00E1858A: rport = ROUTE_$PORTP[*port_ptr] */
-    rport = ROUTE_$PORTP[*port_ptr];
+    rport = ROUTE_$WIRED_DATA.portp[*port_ptr];
 
     /* 0x00E1858E..0x00E1859A: is the IDP destination ours (or broadcast)? */
     if (xns_$is_broadcast_addr(&header->dest_network) < 0) {
@@ -254,8 +254,8 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * 0x00E1866E: this node must be configured for standard IDP
          * routing (at least two routing ports).
          */
-        if (ROUTE_$STD_N_ROUTING_PORTS < 2) {
-            ROUTE_$STD_MISROUTE += 1;     /* 0x00E18678 */
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports < 2) {
+            ROUTE_$RTWIRED_DATA.std_misroute += 1;     /* 0x00E18678 */
             goto drop_no_route;                     /* falls into 0x00E1867E */
         }
 
@@ -264,7 +264,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * *unsigned* against 15 (`bcs' = branch if lower).
          */
         if (header->transport_ctl >= 15) {
-            ROUTE_$STD_TOO_FAR += 1;               /* 0x00E1869A */
+            ROUTE_$RTWIRED_DATA.std_too_far += 1;               /* 0x00E1869A */
             XNS_IDP_$DATA.packets_dropped += 1;                        /* 0x00E186A0 */
             *status_ret = status_$xns_hop_count_exceeded;   /* 0x00E186A6 */
             goto done;                                      /* 0x00E186AC */
@@ -307,7 +307,7 @@ void XNS_IDP_$OS_DEMUX(xns_$mac_rcv_t *pkt, int16_t *port_ptr,
          * record, and XNS's is xns_$sock_pkt_t rather than sock's
          * sock_$pkt_info_t, so the argument is passed as an opaque record
          * address. */
-        put_ok = SOCK_$PUT(ROUTE_$SOCK, (void *)&fwd, 0,
+        put_ok = SOCK_$PUT(ROUTE_$WIRED_DATA.sock, (void *)&fwd, 0,
                            rport->port_type, rport->socket);
 
         /*

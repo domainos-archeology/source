@@ -30,7 +30,7 @@ void APP_$STD_OPEN(void)
      * ROUTE_$PORTP[0] is followed and its FIRST longword - route_$port_t's
      * network number - becomes the network to bind to.
      */
-    opt.network = ROUTE_$PORTP[0]->network;
+    opt.network = ROUTE_$WIRED_DATA.portp[0]->network;
 
     opt.demux = (uint32_t)(uintptr_t)&APP_$DEMUX;       /* 0x00E00BBA */
 

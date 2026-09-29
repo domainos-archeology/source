@@ -207,6 +207,22 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    Segments whose cells are exported globals addressed by name and never
    through A5 (`NETLOG_ASM` 0xE248E0) stay individual objects
    (ordering them is source-91vs).
+   Amended 2026-09-29 (pkt/msg/asknode/route step, source-r3tc,
+   source-3llq, source-esg8, source-ybch): blocks `PKT_$DATA` (0xE24C9C;
+   the missing-node table is Pascal `[1..10]` from +0, its bias slot falls
+   in PEB_PARITY, so `PKT_MISSING_ENTRY(k)` applies the bias once),
+   `MSG_$WIRED_DATA` (0xE242E4: `MSG_$SOCK_LOCK`, `DPAGE_*`) and
+   `MSG_$UNWIRED_DATA` (0xE80D84: the send template, and `depth` /
+   `ownership` declared from their bias slots as union arms and indexed
+   with the socket), `ASKNODE_$DATA` (0xE82408: the packet-info template
+   whose last word is the protocol version) and `ROUTE_$WIRED_DATA`
+   (0xE26EE4), `ROUTE_$UNWIRED_DATA` (0xE825DC) and `ROUTE_$RTWIRED_DATA`
+   (0xE87D80; its `user_stat` is Pascal `[1..4]` whose bias slot is never
+   addressed, so it is declared from record 1 and `ROUTE_USER_STAT_ENTRY(n)`
+   applies the bias once, as `PKT_MISSING_ENTRY` does).  The route blocks
+   are public (route/route.h); users in app, hint, mac, mac_os, msg,
+   net_io, network, pkt, rip and xns name the fields directly.  Two image values the old host objects had wrong
+   are now the image's: MSG's send template and `DPAGE_LOCK` = -1.
 4. **proc1/proc2/fim/acl per-process arrays** (`PROC1_$TYPE` bias,
    `FIM_$QUIT_EC/VALUE` 12- and 4-byte strides, `ACL_$SUPER_COUNT`,
    `PROC2_UID[58]`): declaration-side bias, use sites direct.

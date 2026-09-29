@@ -25,7 +25,7 @@
  *
  * Original address: 0xE88218
  */
-/* Declared in route/route_internal.h */
+/* ROUTE_$RTWIRED_DATA.user_checksum, route/route.h */
 
 /* Maximum packet data length (0x7FC = 2044 bytes) */
 #define ROUTE_$MAX_PACKET_DATA  0x7FC
@@ -235,7 +235,7 @@ void ROUTE_$OUTGOING(void *port_info, uint32_t *nexthop_ret, uint8_t *packet_buf
     /* Compute checksum if enabled */
     checksum = 0x0DEC0DED;  /* Magic initial value */
 
-    if (ROUTE_$USER_CHECKSUM < 0) {
+    if (ROUTE_$RTWIRED_DATA.user_checksum < 0) {
         /*
          * 0x00E87BEE - 0x00E87BF2: "subq.w #0x5,D2w" over the total length
          * already in D2, i.e. hdr_len + copy_len - 1, tested as a word.

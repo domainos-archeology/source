@@ -108,8 +108,8 @@ void ROUTE_$PROCESS(void)
      * 0x00E873FA - 0x00E87410: wait for ROUTE_$INIT_ROUTING to advance the
      * control event count, then consume that advance.
      */
-    EC_$WAITN(&PTR_ROUTE_$CONTROL_EC, (int32_t *)&ROUTE_$CONTROL_ECVAL, 1);
-    ROUTE_$CONTROL_ECVAL++;                                 /* 0x00E87414 */
+    EC_$WAITN(&ROUTE_$RTWIRED_DATA.ptr_control_ec, (int32_t *)&ROUTE_$WIRED_DATA.control_ecval, 1);
+    ROUTE_$WIRED_DATA.control_ecval++;                                 /* 0x00E87414 */
 
     /*
      * 0x00E8741A - 0x00E87428: the socket table is indexed from 0xE28DB4
@@ -117,14 +117,14 @@ void ROUTE_$PROCESS(void)
      * pointer is the socket descriptor, whose first field is its event
      * count.
      */
-    route_sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[ROUTE_$SOCK - 1];
+    route_sock = (sock_$sock_t *)SOCK_$EVENT_COUNTERS[ROUTE_$WIRED_DATA.sock - 1];
 
     /* 0x00E8742E: "st (0x00E26F1E).l" - ROUTE_$ROUTING is a byte */
-    ROUTE_$ROUTING = true;
+    ROUTE_$WIRED_DATA.routing = true;
 
     /* 0x00E87434 - 0x00E87446 */
     NETWORK_$SET_SERVICE((int16_t *)&net_service_or_bits,
-                         &ROUTE_$SERVICE_ID, &status);
+                         &ROUTE_$RTWIRED_DATA.service_id, &status);
 
     /* 0x00E8744A: the value of TIME_$CLOCKH, not its address */
     next_broadcast = TIME_$CLOCKH;
@@ -140,11 +140,11 @@ void ROUTE_$PROCESS(void)
          */
         ecs.ec[0] = (ec_$eventcount_t *)&TIME_$CLOCKH;
         ecs.ec[1] = &route_sock->ec;
-        ecs.ec[2] = (ec_$eventcount_t *)&ROUTE_$CONTROL_EC;
+        ecs.ec[2] = &ROUTE_$WIRED_DATA.control_ec;
 
         vals.val[0] = (int32_t)next_broadcast;
-        vals.val[1] = (int32_t)ROUTE_$SOCK_ECVAL;
-        vals.val[2] = (int32_t)ROUTE_$CONTROL_ECVAL;
+        vals.val[1] = (int32_t)ROUTE_$WIRED_DATA.sock_ecval;
+        vals.val[2] = (int32_t)ROUTE_$WIRED_DATA.control_ecval;
 
         wait_result = EC_$WAIT(ecs, vals);
 
@@ -164,10 +164,10 @@ void ROUTE_$PROCESS(void)
         continue;
 
     broadcast_timer:                                        /* 0x00E877C2 */
-        if (ROUTE_$N_ROUTING_PORTS > 1) {
+        if (ROUTE_$WIRED_DATA.n_routing_ports > 1) {
             RIP_$BROADCAST(false);                          /* 0x00E877CE: clr.w */
         }
-        if (ROUTE_$STD_N_ROUTING_PORTS > 1) {
+        if (ROUTE_$WIRED_DATA.std_n_routing_ports > 1) {
             RIP_$BROADCAST(true);                           /* 0x00E877E4: st */
         }
         /* 0x00E877EE: moveq #0x72,D1 / add.l TIME_$CLOCKH,D1 */
@@ -181,7 +181,7 @@ void ROUTE_$PROCESS(void)
          * hands CRASH_SYSTEM the constant cell at 0x00E878A4
          * (status_$network_buffer_queue_is_empty).
          */
-        if (SOCK_$GET(ROUTE_$SOCK, &rcv) >= 0) {            /* 0x00E874B8: bmi */
+        if (SOCK_$GET(ROUTE_$WIRED_DATA.sock, &rcv) >= 0) {            /* 0x00E874B8: bmi */
             CRASH_SYSTEM(&sock_empty_status);               /* 0x00E874BC */
         }
 
@@ -196,7 +196,7 @@ void ROUTE_$PROCESS(void)
         if (stat_index > 0x80) {
             stat_index = 0x80;
         }
-        ROUTE_$Q_DEPTH[stat_index]++;
+        ROUTE_$RTWIRED_DATA.q_depth[stat_index]++;
 
         /*
          * 0x00E874EA - 0x00E874FE: bit 1 of the flags byte at rcv+0x11
@@ -221,7 +221,7 @@ void ROUTE_$PROCESS(void)
          */
         if (should_forward < 0 && is_std_routing >= 0 &&
             rcv.data_pages[0] == 0 && pkt->data_len != 0) {
-            ROUTE_$DLEN_ERR++;                      /* 0xE87FBC */
+            ROUTE_$RTWIRED_DATA.dlen_err++;                      /* 0xE87FBC */
             should_forward = false;
         }
 
@@ -237,9 +237,9 @@ void ROUTE_$PROCESS(void)
             hop_count = (int16_t)idp->transport_ctl;
             if (hop_count >= ROUTE_$MAX_HOP_COUNT) {
                 if (is_std_routing < 0) {
-                    ROUTE_$STD_TOO_FAR++;
+                    ROUTE_$RTWIRED_DATA.std_too_far++;
                 } else {
-                    ROUTE_$TOO_FAR++;
+                    ROUTE_$RTWIRED_DATA.too_far++;
                 }
                 should_forward = false;
             }
@@ -265,9 +265,9 @@ void ROUTE_$PROCESS(void)
 
                 if (status != status_$ok) {                 /* 0x00E87594 */
                     if (is_std_routing < 0) {
-                        ROUTE_$STD_MISROUTE++;
+                        ROUTE_$RTWIRED_DATA.std_misroute++;
                     } else {
-                        ROUTE_$MISROUTE++;
+                        ROUTE_$RTWIRED_DATA.misroute++;
                     }
                     should_forward = false;
                 }
@@ -286,13 +286,13 @@ void ROUTE_$PROCESS(void)
                  * must select bit 4 or 5 for standard routing.
                  */
                 if (((1u << (port->active & 0x1F)) & 0x30) == 0) {
-                    ROUTE_$STD_MISROUTE++;
+                    ROUTE_$RTWIRED_DATA.std_misroute++;
                     should_forward = was_forwarded;         /* move.b D5b,D3b */
                 }
             } else {
                 /* 0x00E875D6: btst.l D0,#0x28 - bit 3 or 5 */
                 if (((1u << (port->active & 0x1F)) & 0x28) == 0) {
-                    ROUTE_$MISROUTE++;
+                    ROUTE_$RTWIRED_DATA.misroute++;
                     should_forward = was_forwarded;
                 }
                 /*
@@ -393,7 +393,7 @@ void ROUTE_$PROCESS(void)
                              0,                         /* data VA              */
                              rcv.data_pages,            /* payload page vector  */
                              pkt->data_len,             /* payload length       */
-                             ROUTE_$FWD_TIMEOUT,        /* send flags/timeout   */
+                             ROUTE_$RTWIRED_DATA.fwd_timeout,        /* send flags/timeout   */
                              &net_io_info,              /* out send_info        */
                              &status);
 
@@ -403,9 +403,9 @@ void ROUTE_$PROCESS(void)
 
             /* 0x00E87768 - 0x00E87776: too big to put on a real port */
             if (is_std_routing < 0) {
-                ROUTE_$STD_DLEN_ERR++;
+                ROUTE_$RTWIRED_DATA.std_dlen_err++;
             } else {
-                ROUTE_$DLEN_ERR++;
+                ROUTE_$RTWIRED_DATA.dlen_err++;
             }
             should_forward = was_forwarded;
         }
@@ -417,9 +417,9 @@ void ROUTE_$PROCESS(void)
          * simply: count a forward against the matching bucket.
          */
         if (is_std_routing < 0 && should_forward < 0) {
-            ROUTE_$STD_PKTS_ROUTED++;
+            ROUTE_$RTWIRED_DATA.std_pkts_routed++;
         } else if (should_forward < 0) {
-            ROUTE_$PKTS_ROUTED++;
+            ROUTE_$RTWIRED_DATA.pkts_routed++;
         }
 
         /*
@@ -433,25 +433,25 @@ void ROUTE_$PROCESS(void)
             PKT_$DUMP_DATA(rcv.data_pages, (int16_t)rcv.data_len);
         }
 
-        ROUTE_$SOCK_ECVAL++;                                /* 0x00E877B8 */
+        ROUTE_$WIRED_DATA.sock_ecval++;                                /* 0x00E877B8 */
         continue;
 
     shutdown:                                               /* 0x00E877FE */
-        ROUTE_$CONTROL_ECVAL++;
+        ROUTE_$WIRED_DATA.control_ecval++;
         PROC1_$CLR_LOCK(ROUTE_$PROC_LOCK_ID);
 
-        ROUTE_$ROUTING = false;                             /* clr.b, 0x00E87812 */
-        ROUTE_$LAST_UPDATE_TIME = 0;                        /* 0x00E87818 */
+        ROUTE_$WIRED_DATA.routing = false;                             /* clr.b, 0x00E87812 */
+        ROUTE_$UNWIRED_DATA.start_time = 0;                        /* 0x00E87818 */
 
         NETWORK_$SET_SERVICE((int16_t *)&net_service_and_not_bits,
-                             &ROUTE_$SERVICE_ID, &status);
+                             &ROUTE_$RTWIRED_DATA.service_id, &status);
 
         /* 0x00E87834 - 0x00E87850 */
-        closing_sock = ROUTE_$SOCK;
-        ROUTE_$SOCK = 0xFFFF;
+        closing_sock = ROUTE_$WIRED_DATA.sock;
+        ROUTE_$WIRED_DATA.sock = 0xFFFF;
         SOCK_$CLOSE(closing_sock);
 
-        ROUTE_$NETBUF_ALLOC = 0;                           /* 0x00E87852 */
+        ROUTE_$RTWIRED_DATA.netbuf_alloc = 0;                           /* 0x00E87852 */
 
         /*
          * 0x00E87856 - 0x00E8787E: with no user ports left, release the
@@ -459,15 +459,15 @@ void ROUTE_$PROCESS(void)
          * ... move.l (-0x4,A2) ... addq.l #4,A2; dbf" walks the array
          * upwards from index 0.
          */
-        if (ROUTE_$N_USER_PORTS == 0) {
-            for (i = 0; i < ROUTE_$N_WIRED_PAGES; i++) {
-                WP_$UNWIRE(ROUTE_$WIRED_PAGES[i]);
+        if (ROUTE_$RTWIRED_DATA.n_user_ports == 0) {
+            for (i = 0; i < ROUTE_$RTWIRED_DATA.n_wired_pages; i++) {
+                WP_$UNWIRE(ROUTE_$RTWIRED_DATA.wired_pages[i]);
             }
-            ROUTE_$N_WIRED_PAGES = 0;
+            ROUTE_$RTWIRED_DATA.n_wired_pages = 0;
         }
 
         /* 0x00E87882 - 0x00E8788C: the process does not return from here */
-        PROC1_$UNBIND(ROUTE_$PID, &status);
+        PROC1_$UNBIND(ROUTE_$RTWIRED_DATA.pid, &status);
         return;
     }
 }

@@ -49,16 +49,16 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     }
 
     /* 0x00E591F2-0x00E591FE: ML_$EXCLUSION_START(0xE242E4). */
-    ML_$EXCLUSION_START(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_START(&MSG_$WIRED_DATA.sock_lock);
 
     /* 0x00E59200-0x00E59216: bitmap = base + socket*8 + 0x1D8; both
      * longwords must be zero (`tst.l (A1)+` twice), else in use. */
-    bitmap = MSG_$SOCK_OWNERS[*socket];
+    bitmap = MSG_$UNWIRED_DATA.ownership[*socket];
     if ((bitmap[0] | bitmap[1] | bitmap[2] | bitmap[3]) != 0
         || (bitmap[4] | bitmap[5] | bitmap[6] | bitmap[7]) != 0) {
         /* 0x00E59234-0x00E59246 */
         *status_ret = status_$msg_socket_in_use;               /* 0x290008 */
-        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
         return;
     }
 
@@ -71,7 +71,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
                    ((uint32_t)(uint16_t)*depth << 16) | 0x0400) >= 0) {
         /* 0x00E59234-0x00E59246 */
         *status_ret = status_$msg_socket_in_use;               /* 0x290008 */
-        ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+        ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
         return;
     }
 
@@ -90,10 +90,10 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     bitmap[6] = ownership[6]; bitmap[7] = ownership[7];
 
     /* 0x00E59272-0x00E59276: depth[*socket] = *depth (word, stride 2). */
-    MSG_$DATA->depth[*socket] = *depth;
+    MSG_$UNWIRED_DATA.depth[*socket] = *depth;
 
     /* 0x00E5927A: open_count++ */
-    MSG_$DATA->open_count++;
+    MSG_$UNWIRED_DATA.open_count++;
 
     /* 0x00E5927E-0x00E5928A: PROC2_$SET_CLEANUP(7). */
     PROC2_$SET_CLEANUP(7);
@@ -108,7 +108,7 @@ void MSG_$OPENI(msg_$socket_t *socket, int16_t *depth, status_$t *status_ret)
     NETWORK_$USER_SOCK_OPEN = (int8_t)0xFF;
 
     /* 0x00E592B0-0x00E592BC: ML_$EXCLUSION_STOP(0xE242E4); status ok. */
-    ML_$EXCLUSION_STOP(MSG_$SOCK_LOCK);
+    ML_$EXCLUSION_STOP(&MSG_$WIRED_DATA.sock_lock);
     *status_ret = status_$ok;
 
     /* 0x00E592BE-0x00E592C6 */

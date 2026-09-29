@@ -63,7 +63,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
 
     /* Determine protocol version for request */
     uint16_t req_version;
-    if (ASKNODE_$PROTOCOL_VERSION == 3) {
+    if (ASKNODE_$DATA.protocol_version == 3) {
         req_version = 2;
     } else {
         req_version = 3;
@@ -121,7 +121,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
      * asknode_request_t (asknode_internal.h) and, like every Pascal variant
      * record here, the two forms overlay different shapes on the same words:
      *
-     *   +0x00 version        2 when ASKNODE_$PROTOCOL_VERSION == 3, else 3
+     *   +0x00 version        2 when ASKNODE_$DATA.protocol_version == 3, else 3
      *   +0x02 request_type   0 (simple WHO) or 0x2D (remote WHO)
      *   +0x04 node_id        NODE_$ME (0x00E663D2), overwritten with
      *                        *node_id in the remote form (0x00E664B8)
@@ -176,7 +176,7 @@ void ASKNODE_$WHO_REMOTE(int32_t *node_id, int32_t *port,
     /* Copy packet info block */
     uint32_t pkt_info[8];
     {
-        uint32_t *src = PKT_$DEFAULT_INFO;
+        const uint32_t *src = (const uint32_t *)&ASKNODE_$DATA.pkt_info;
         uint32_t *dst = pkt_info;
         int i;
         for (i = 0; i < 7; i++) *dst++ = *src++;

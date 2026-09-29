@@ -73,7 +73,7 @@ uint32_t NODE_$ME;
 uint32_t TIME_$CURRENT_CLOCKH;
 network_$failure_rec_t NETWORK_$FAILURE_REC;
 uint32_t ASKNODE_$EMPTY_DATA;
-uint32_t PKT_$DEFAULT_INFO[8];
+MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);
 
 /* ==========================================================================
  * Mock state
@@ -140,7 +140,7 @@ static void reset_mocks(void)
     memset(&mock_reply_hdr, 0, sizeof(mock_reply_hdr));
     memset(mock_payload, 0, sizeof(mock_payload));
     memset(&NETWORK_$FAILURE_REC, 0, sizeof(NETWORK_$FAILURE_REC));
-    memset(PKT_$DEFAULT_INFO, 0, sizeof(PKT_$DEFAULT_INFO));
+    memset(&ASKNODE_$DATA, 0, sizeof(ASKNODE_$DATA));
 
     NODE_$ME = 0x00012345;
     TIME_$CURRENT_CLOCKH = 0x11223344;

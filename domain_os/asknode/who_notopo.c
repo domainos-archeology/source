@@ -163,14 +163,14 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
          * 0x00E6611E - 0x00E66134: the network of the port RIP_$FIND_NEXTHOP
          * chose, ROUTE_$PORTP[port_idx]->network.
          */
-        request.param2 = ROUTE_$PORTP[port_idx]->network;
+        request.param2 = ROUTE_$WIRED_DATA.portp[port_idx]->network;
         request.param3 = 0x5B8D8;  /* Magic constant (timeout related) */
 
         pkt_id = PKT_$NEXT_ID();
 
         /* Copy packet info block */
         {
-            uint32_t *src = PKT_$DEFAULT_INFO;
+            const uint32_t *src = (const uint32_t *)&ASKNODE_$DATA.pkt_info;
             uint32_t *dst = pkt_info;
             int i;
             for (i = 0; i < 7; i++) *dst++ = *src++;
@@ -179,7 +179,7 @@ void ASKNODE_$WHO_NOTOPO(int32_t *node_id, int32_t *port,
         /*
          * 0x00E66158 is "clr.w (-0x68,A6)", a WORD at pkt_info+0x08 - not
          * the longword the tree used to clear.  The word above it, at +0x0A,
-         * keeps the value the PKT_$DEFAULT_INFO copy just put there.
+         * keeps the value the ASKNODE_$DATA.pkt_info copy just put there.
          */
         *(uint16_t *)((uint8_t *)pkt_info + 8) = 0;
         *(uint16_t *)pkt_info = 0x90;  /* Packet length */

@@ -115,7 +115,7 @@ uint16_t NETWORK_$GET_PKT_SIZE(uint32_t *dest_addr, uint16_t max_size)
      * "movea.l (0x48,A0),A0" at 0x00E0FAB6 loads the driver record into a
      * register that is then never used.
      */
-    port_ptr = ROUTE_$PORTP[port_num];
+    port_ptr = ROUTE_$WIRED_DATA.portp[port_num];
     if (port_ptr->active == 1) {
         status = status_$network_request_denied_by_local_node;
         goto clamp;

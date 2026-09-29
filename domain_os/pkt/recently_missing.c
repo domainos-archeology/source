@@ -20,13 +20,13 @@ boolean PKT_$RECENTLY_MISSING(uint32_t node_id)
     int16_t count;
     pkt_$missing_entry_t *entry;
 
-    count = PKT_$N_MISSING - 1;
+    count = PKT_$DATA.n_missing - 1;
     if (count < 0) {
         return false;
     }
 
     /* Search through the missing nodes list */
-    entry = &PKT_$DATA->missing_nodes[0];
+    entry = &PKT_MISSING_ENTRY(1);
     for (i = count; i >= 0; i--) {
         if (node_id == entry->node_id) {
             return true;  /* Found in missing list (0x00E128E2 "st D0b") */

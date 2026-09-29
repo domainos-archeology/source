@@ -115,7 +115,6 @@ typedef struct pkt_$info_t {
     uint16_t    pad_1e;         /* 0x1E */
 } pkt_$info_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(offsetof(pkt_$info_t, routing_type) == 0x02, "pkt_$info_t.routing_type");
 _Static_assert(offsetof(pkt_$info_t, addr_type)    == 0x04, "pkt_$info_t.addr_type");
 _Static_assert(offsetof(pkt_$info_t, protocol)     == 0x06, "pkt_$info_t.protocol");
@@ -123,7 +122,6 @@ _Static_assert(offsetof(pkt_$info_t, retry_limit)  == 0x08, "pkt_$info_t.retry_l
 _Static_assert(offsetof(pkt_$info_t, field_0c)     == 0x0C, "pkt_$info_t.field_0c");
 _Static_assert(offsetof(pkt_$info_t, addr)         == 0x0E, "pkt_$info_t.addr");
 _Static_assert(sizeof(pkt_$info_t) == 0x20, "pkt_$info_t must be 32 bytes");
-#endif
 
 /*
  * pkt_$sar_result_t - PKT_$SAR_INTERNET's TENTH argument.
@@ -605,12 +603,5 @@ typedef struct pkt_$net_addr_t {
  * Original address: 0x00E1299E
  */
 boolean PKT_$LIKELY_TO_ANSWER(void *addr_info, status_$t *status_ret);
-
-/*
- * PKT_$DEFAULT_INFO - the 30-byte packet-info template every sender copies
- * before filling in its own fields.  Declared here (bead source-3uo); the
- * definition currently lives in asknode/asknode_data.c.
- */
-extern uint32_t PKT_$DEFAULT_INFO[8];
 
 #endif /* PKT_H */

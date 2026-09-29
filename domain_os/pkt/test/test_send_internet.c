@@ -48,7 +48,7 @@ static int tests_run = 0;
 
 #include "pkt/pkt_internal.h"
 
-pkt_$data_t PKT_$DATA_STRUCT;
+MODULE_DATA_DEFINE(pkt_$data_t, PKT_$DATA, 0x00E24C9C);
 int8_t NETWORK_$LOOPBACK_FLAG;
 
 /* The fake header buffer NETWORK_$GETHDR hands out. */
@@ -209,7 +209,7 @@ static status_$t call_status;
 
 static void reset_state(void)
 {
-    memset(&PKT_$DATA_STRUCT, 0, sizeof(PKT_$DATA_STRUCT));
+    memset(&PKT_$DATA, 0, sizeof(PKT_$DATA));
 
     gethdr_calls = 0;
     gethdr_node_seen = 0;
@@ -245,13 +245,13 @@ static void reset_state(void)
     call_status = 0x5A5A5A5A;
 }
 
-/* One canned call; pkt_info is PKT_$DATA->ping_template unless overridden. */
+/* One canned call; pkt_info is PKT_$DATA.ping_template unless overridden. */
 static void call_send(uint16_t template_len, int16_t data_len, void *data)
 {
     PKT_$SEND_INTERNET(0x11223344u, 0x00055555u, 0x0D,
                        -1, 0x00066666u, 0x0E,
-                       &PKT_$DATA->ping_template, 0x1234,
-                       &PKT_$DATA->ping_req_hdr, template_len,
+                       &PKT_$DATA.ping_template, 0x1234,
+                       &PKT_$DATA.ping_req_hdr, template_len,
                        data, data_len,
                        &retry_hint_out, &timeout_out,
                        &call_status);
@@ -342,12 +342,12 @@ TEST(builder_gets_the_callers_out_params)
 /*
  * 0x00E1272A - 0x00E1274A: NET_IO_$SEND gets the port and the total length the
  * builder produced, the header VA by reference, the physical address from
- * NETWORK_$GETHDR, the data-page vector and PKT_$DATA->default_flags.
+ * NETWORK_$GETHDR, the data-page vector and PKT_$DATA.default_flags.
  */
 TEST(net_io_send_argument_build)
 {
     reset_state();
-    PKT_$DATA->default_flags = 0x00C3;
+    PKT_$DATA.default_flags = 0x00C3;
     bld_port = 7;
     bld_total_len = 0x0123;
 
@@ -456,7 +456,7 @@ TEST(retry_limit_selection)
 
     /* retry_limit == 0 -> five attempts. */
     reset_state();
-    PKT_$DATA->ping_template.retry_limit = 0;
+    PKT_$DATA.ping_template.retry_limit = 0;
     for (i = 0; i < 8; i++) {
         send_status[i] = 0x00110004;
         send_info_net[i] = 1;
@@ -468,7 +468,7 @@ TEST(retry_limit_selection)
 
     /* retry_limit == 0xFFFF -> the same, via the -1 test. */
     reset_state();
-    PKT_$DATA->ping_template.retry_limit = 0xFFFF;
+    PKT_$DATA.ping_template.retry_limit = 0xFFFF;
     for (i = 0; i < 8; i++) {
         send_status[i] = 0x00110004;
         send_info_net[i] = 1;
@@ -478,7 +478,7 @@ TEST(retry_limit_selection)
 
     /* An explicit ceiling of 2 wins over the hint of 5. */
     reset_state();
-    PKT_$DATA->ping_template.retry_limit = 2;
+    PKT_$DATA.ping_template.retry_limit = 2;
     for (i = 0; i < 8; i++) {
         send_status[i] = 0x00110004;
         send_info_net[i] = 1;
@@ -492,7 +492,7 @@ TEST(retry_limit_selection)
      * 0x00E127B0 "cmp.w D4w,D3w".
      */
     reset_state();
-    PKT_$DATA->ping_template.retry_limit = 1;
+    PKT_$DATA.ping_template.retry_limit = 1;
     for (i = 0; i < 8; i++) {
         send_status[i] = 0x00110004;
         send_info_net[i] = 1;
@@ -509,7 +509,7 @@ TEST(retry_limit_selection)
 TEST(quit_while_waiting_stops_the_loop)
 {
     reset_state();
-    PKT_$DATA->ping_template.retry_limit = 5;
+    PKT_$DATA.ping_template.retry_limit = 5;
     send_status[0] = 0x00110004;
     send_info_net[0] = 1;
     send_status[1] = 0x00110004;
