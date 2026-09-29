@@ -8,16 +8,16 @@
  *
  *   D E2126C FIM_         size = 134   FIM_$DATA (below): the A5 block of
  *                                      the Pascal FIM routines
- *   D E213A0 FIM_UNWIRED  size = 4F0   hand-written code (fim/sau2/fim.s)
- *                                      with two cells: FIM_$CLEANUP_STACK
- *                                      (defined in fim.s) and
+ *   D E213A0 FIM_UNWIRED  size = 4F0   hand-written code (fim/sau2/*.s,
+ *                                      one section per routine) with two
+ *                                      cells: FIM_$CLEANUP_STACK (defined
+ *                                      in fim/sau2/signal.s) and
  *                                      FIM_$INITIAL_STACK_SIZE (below)
- *   D E21890 FIM_WIRED    size = 1074  hand-written code (fim.s, bus_err.s,
- *                                      the fp/sau2 files) with its cells;
- *                                      the data run 0xE21FE6..0xE2277C is
+ *   D E21890 FIM_WIRED    size = 1074  hand-written code (fim/sau2/*.s and
+ *                                      fp/sau2/*.s) with its cells; the
+ *                                      data run 0xE21FE6..0xE2277C is
  *                                      FIM_$WIRED_DATA (below), the rest
- *                                      stays with the assembly, except
- *                                      FIM_$SPUR_CNT (below)
+ *                                      stays with the assembly
  *   D E35004 FIM_WIRED    size = 24    FIM_$COLD_BUS_ERR, code in the
  *                                      OS_INIT_DATA region
  *
@@ -103,16 +103,13 @@ MODULE_DATA_DEFINE_INIT(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6, {
  * FIM_$INITIAL_STACK_SIZE - Bytes reserved above a new process's startup
  * context on its initial stack (used by PROC2_$CREATE / PROC2_$FORK).
  * Original address: 0x00E21824 (4 bytes; image value 0x00000008), a cell of
- * the FIM_UNWIRED code segment (see fim/fim.h).
+ * the FIM_UNWIRED code segment (see fim/fim.h); its own `.text.' section
+ * (fim/fim_internal.h) links it there, between fim/sau2/single_step.s and
+ * fim/sau2/fault_return.s.
  */
-uint32_t FIM_$INITIAL_STACK_SIZE = 8;
+uint32_t FIM_$INITIAL_STACK_SIZE FIM_INITIAL_STACK_SIZE_SECTION = 8;
 
 /*
- * FIM_$SPUR_CNT - Spurious interrupt count
- *
- * Address: 0x00E21F7E, a cell of the FIM_WIRED code between
- * FIM_$SPURIOUS_INT and FIM_$PARITY_TRAP, read and written PC-relative by
- * FIM_$SPURIOUS_INT alone (0x00E21F28); fim/sau2/fim.s does not reproduce
- * that routine's data yet, so this object has no users.
+ * FIM_$SPUR_CNT (0x00E21F7E) is defined with FIM_$SPURIOUS_INT, which
+ * reaches it off its module base, in fim/sau2/spurious_int.s (source-kt66).
  */
-uint32_t FIM_$SPUR_CNT;

@@ -41,12 +41,12 @@ a displacement off an image-address base cannot name a relinked object.
 every code section of every sau2 object run by run with the image bytes and
 resolves every relocation and widened operand in the image's address space
 against the operand the image instruction has (see the script header for the
-rules).  The image bytes are in the checked-in `tools/asm_image_ref.txt` (112
-runs, one line each: address, length, bytes), extracted once from Ghidra with
+rules).  The image bytes are in the checked-in `tools/asm_image_ref.txt` (117
+runs since source-kt66, one line each: address, length, bytes), extracted once from Ghidra with
 `asm_compare.py --extract`; `make check` needs neither Ghidra nor the image.
 Regenerate it only when a run is added or grows.  The gate also prints a
 note for every pair of consecutive runs that are not contiguous in the
-image (the bytes between them are compared with nothing): 14 today, all
+image (the bytes between them are compared with nothing): 12 today, all
 explained by routines the image keeps elsewhere, data cells between
 routines, the C neighbours of a run, or trampolines whose bodies are in the
 SMD code segment; the count is in the summary line, so a new one shows.
@@ -111,7 +111,7 @@ Per subsystem (class: count):
 
 | bead | addresses | files |
 |---|---|---|
-| source-k79b | 0xE213A0 FIM_UNWIRED common fault, 0xE213A4 FIM_$COM, 0xE21458 FIM_$SOFT_FAULT+0xC | fim/sau2/fim.s, fim/sau2/bus_err.s |
+| source-k79b | 0xE213A0 FIM_UNWIRED common fault, 0xE213A4 FIM_$COM, 0xE21458 FIM_$SOFT_FAULT+0xC | fim/sau2/uii.s, priv_viol.s, illegal_usp.s, generate.s, frestore.s, parity_trap.s, bus_err.s (fim/sau2/fim.s until source-kt66) |
 | source-nojc | 0xE0DD40 MST_$TOUCH | fim/sau2/bus_err.s |
 | source-o56c (closed 2026-09-29) | 0xE23D2C MMU_$PID_PRIV, 0xE23D2E M68020, 0xE23D30 VA_TO_PTT_OFFSET_MASK, 0xE23D34 MMU_$VA_SHIFT, 0xE23D36 MMU_$PTT_SHIFT: now `MMU_$GLOBALS + 0x0 .. + 0xA`; 0xEC2800 MMU_$PTTX: now the `MMU_$PTTX` block (mmu/mmu.h) | mmu/sau2/*.s (15 files) |
 | source-alpj (closed 2026-09-29) | 0xE23C8C MMAP_$HPPN, 0xE23C90 MMAP_$LPPN: now `MMAP_$DATA + 0xA08 / + 0xA0C` (source-702z) | mmu/sau2/remove_asid.s |
@@ -119,8 +119,38 @@ Per subsystem (class: count):
 | source-i1uu (closed 2026-09-29) | 0xE24C8E PEB owner ASID byte: now `PEB_$INFO + 0x16` (source-702z) | peb/sau2/int.s |
 
 Structural deviations the gate reports instead of failing (not address
-operands): source-kt66 (fim/sau2/fim.s, 18 of 23 runs), source-9jiy
-(proc1/sau2/clr_lock.s shared tail).
+operands): source-9jiy (proc1/sau2/clr_lock.s shared tail).  source-kt66
+(fim/sau2/fim.s, 18 of 23 runs) is gone: see "fim/sau2 re-transcription"
+below.
+
+## fim/sau2 re-transcription (source-kt66, source-c573, 2026-09-29)
+
+fim/sau2/fim.s is gone: its routines were re-transcribed from the image, one
+section per map symbol, into fim/sau2/{crash,uii,generate,priv_viol,
+illegal_usp,cleanup,rls_cleanup,pop_signal,signal,proc2_startup,single_step,
+fault_return,trace_bit,fline,fp_abort,fp_init,fsave,frestore,fp_get_state,
+fp_put_state,spurious_int,parity_trap,get_user_sr_ptr,deliver_trace_fault,
+clear_trace_fault,exit}.s and fp/sau2/savep.s; fim/sau2/bus_err.s and
+fp/sau2/fp_context.s were split per section.  The fim/sau2/fim.s rows of the
+inventory below are the d2da5e6 snapshot; the operands they describe now
+read as follows (every other address operand is a symbol or a `.set` alias,
+verified by the gate):
+
+| where | code | value | class | what | done |
+|---|---|---|---|---|---|
+| fim/sau2/uii.s, priv_viol.s, illegal_usp.s | `.equ FIM_COMMON_FAULT, 0x00E213A0` | 0xE213A0 | 4 not yet translated | FIM_UNWIRED common fault entry; image `bsr.w`, ours `jsr (xxx).l` | kept, TODO(source-k79b) |
+| fim/sau2/generate.s | `.equ FIM_SOFT_FAULT_TAIL, 0x00E21458` | 0xE21458 | 4 not yet translated | FIM_$SOFT_FAULT+0xC; image `bra.s`, ours `jmp (xxx).l` | kept, TODO(source-k79b) |
+| fim/sau2/frestore.s, parity_trap.s | `.equ FIM_COM, 0x00E213A4` | 0xE213A4 | 4 not yet translated | map FIM_$COM; image `jmp (xxx).l` | kept, TODO(source-k79b) |
+| fim/sau2/fp_init.s, fp_get_state.s | `.equ FP_HW_OWNER, 0x00FFB402` | 0xFFB402 | 1 hardware/PROM | FPU owner register | kept (.equ, commented) |
+| fim/sau2/frestore.s | `move.w (0x2000).w,-(%sp)` | 0x002000 | 1 hardware/PROM | the image reads the word at absolute 0x2000 (abs.w) where its siblings push an immediate class word | kept as the image has it, commented |
+| fim/sau2/get_user_sr_ptr.s | `.equ USER_VA_LIMIT, 0x00CC0000`; `cmp.l #0x00008000` | 0xCC0000, 0x008000 | 5 not an address | user/kernel VA limit, lowest user PC | kept |
+| fim/sau2/get_user_sr_ptr.s | `cmp.l #FIM_$EXIT,%d0` | 0xE228BC | 3 code in tree | a user PC equal to FIM_$EXIT is accepted | symbol (R_68K_32) |
+| fim/sau2/crash.s | `(0x21c..0x24e,A5)`, A5 = CRASH_SYSTEM | 0xE1E91C..0xE1E94E | 2 data object | FIM_$CRASH's own report template, 0x202 past CRASH_SYSTEM in the image | -> named labels, (d16,An) -> (xxx).l |
+| fim/sau2/crash.s | `(0x2e6,A5)`, A5 = CRASH_SYSTEM | 0xE1E9E6 | 2 data object | map CRASH_SP = CRASH_REPORT + 0x68 | -> (CRASH_SP).l |
+| fim/sau2/spurious_int.s | `(0x6ea/0x6ee/0x6f2,A5)`, A5 = 0xE21890 | 0xE21F7A..0xE21F82 | 2 data object | the routine's own cells (FIM_$SPUR_CNT) | kept: A5 is a same-section base 0x690 before the routine, bytes identical |
+| fim/sau2/deliver_trace_fault.s, clear_trace_fault.s, exit.s | `(0x76e,An)`, `(0x102c,An)`, An = FIM_$TRACE_BIT | 0xE21FFE, 0xE228BC | 2 data object, 3 code in tree | PENDING_TRACE_FAULTS, FIM_$EXIT (self-patching) | -> (FIM_$WIRED_DATA+0x18).l, (FIM_$EXIT).l |
+| fim/sau2/fsave.s | `tst.w (0x00e8180c).l` | 0xE8180C | 2 data object | map M68881_EXISTS (peb/peb_data.c) | -> M68881_EXISTS |
+| fim/sau2/*.s | inline `.long`/`.short` after the fault calls; `#0x00120015`, `#0x0012001E`, `#0x0012002D`, `#0x00120035`, `.long 0x00120033` | status codes | 5 not an address | fault descriptors and statuses | kept |
 
 ## Inventory
 

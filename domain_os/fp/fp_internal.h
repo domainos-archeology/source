@@ -24,8 +24,9 @@
  * ============================================================================
  */
 
-/* Addresses of the FP module's data cells (see fim/sau2/fim.s, which
- * defines them because FIM_$FLINE reaches them PC-relative). */
+/* Image addresses of the FP module's data cells (fp/sau2/savep.s defines
+ * them, at their map position, because FIM_$FLINE reaches them
+ * PC-relative). */
 #define FP_SAVEP_ADDR           0x00E218D0  /* longword: save-area base ptr */
 #define FP_OWNER_ADDR           0x00E218D4  /* word: owning AS id */
 #define FP_EXCLUSION_ADDR       0x00E218D6  /* ml_$exclusion_t, 18 bytes */

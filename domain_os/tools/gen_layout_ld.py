@@ -35,9 +35,11 @@
 #   - A few sections hold image data under C names the map does not use;
 #     ANCHORS below keys them by their image address.
 #   - A section whose map symbols straddle another placed section's key
-#     would put the two out of order whatever we do (a hand-written file
-#     that cannot be split without changing its bytes); it goes to the
-#     catch-all and is listed as such.
+#     (or a block's) would put the two out of order whatever we do; that
+#     is an error naming the section, which must be split, one section per
+#     routine (source-c573: fim/sau2/fim.s was the last such file; the rule
+#     that placed it with its largest run and `held' the rest out of the
+#     order check is gone with it).
 #   - Sections of an object that define no map symbol (file-static helper
 #     functions) follow the object's first placed section, so a module's
 #     private code stays with it; objects with no placed section at all go
@@ -85,6 +87,11 @@ ANCHORS = {
     # (0xE27376, inside SMD_WIRED), reached from SMD_$DISP1_INT with
     # `lea (0x446,PC),A1' at 0xE26F2E (source-uwxz).
     '.text.smd_display_info': 0xE27376,
+    # fp/sau2/fp_context.s: fp_$switch_owner .. fp_$save_state
+    # (0xE21B10..0xE21B7F), which the map counts into FIM_$FLINE (it names
+    # no symbol between FIM_$FLINE 0xE21ACC and FIM_$FP_ABORT 0xE21B80);
+    # FIM_$FLINE reaches it with `bsr.s' (source-c573).
+    '.text.fp_$switch_owner': 0xE21B10,
 }
 
 SITE_RE = re.compile(
@@ -264,7 +271,6 @@ class Section:
         self.pattern = None
         self.why = None     # catch-all reason
         self.follows = None # placed section of the same object it trails
-        self.held = []      # map symbols it holds out of map order
 
     @property
     def label(self):
@@ -355,31 +361,24 @@ class Layout:
                 self.errors.append('ANCHORS names %s, which no link input '
                                    'defines' % name)
 
-        # A section whose map symbols straddle other placed keys (a
-        # hand-written file that cannot be split without changing its
-        # bytes) cannot be wholly in order.  Its symbols fall into runs
-        # separated by those keys; the section is placed with its largest
-        # run (the earliest on a tie), and the symbols of the other runs are
-        # `held' out of map order by it - excluded from the order check and
-        # listed by it.
+        # A section whose map symbols straddle other placed keys cannot be
+        # wholly in order: an error (split the file per routine).
         for s in self.sections:
             if s.key is None or len(s.map_syms) < 2:
                 continue
             others = sorted([t.key for t in self.sections
                              if t is not s and t.key is not None]
                             + [addr_key(b.addr) for b in self.blocks])
-            runs = [[s.map_syms[0]]]
             for prev, cur in zip(s.map_syms, s.map_syms[1:]):
                 i = bisect.bisect_right(others, prev[0])
                 if i < len(others) and others[i] < cur[0]:
-                    runs.append([])
-                runs[-1].append(cur)
-            if len(runs) == 1:
-                continue
-            best = max(runs, key=len)  # max() keeps the first of equals
-            s.key = best[0][0]
-            s.held = [sym for run in runs if run is not best for sym in run]
-            s.map_syms = best
+                    self.errors.append(
+                        '%s: map symbols %s (0x%06X) and %s (0x%06X) '
+                        'straddle another placed section or block; split '
+                        'it one section per routine'
+                        % (s.label, prev[1], prev[0][0], cur[1],
+                           cur[0][0]))
+                    break
 
         # File-static helpers follow their object's first placed section.
         by_obj = {}
@@ -475,9 +474,6 @@ def fragment(layout, map_path):
                     note += ' .. ' + item.map_syms[-1][1]
             else:
                 note = 'anchor'
-            if item.held:
-                note += '; holds %d map symbol(s) out of order: %s' % (
-                    len(item.held), ' '.join(n for _, n in item.held))
             out.append('    %s%s/* %06X %s */'
                        % (item.pattern, pad(item.pattern, 0), addr, note))
     out.append('')
@@ -580,13 +576,6 @@ def check_elf(layout, elf, nm):
           'catch-all:' % (len(catch), nfun))
     for s in catch:
         print('    %s: %s' % (s.label, s.why))
-    held = [s for s in layout.sections if s.held]
-    print('gen_layout_ld: %d map symbol(s) held out of order by %d '
-          'section(s) that cannot be split without changing their bytes '
-          '(not checked):' % (sum(len(s.held) for s in held), len(held)))
-    for s in held:
-        print('    %s, placed with %s: %s'
-              % (s.label, s.map_syms[0][1], ' '.join(n for _, n in s.held)))
     print('gen_layout_ld: %d order inversion(s)' % inversions)
     if first:
         (ka, na, ea, _), (kb, nb, eb, _) = first

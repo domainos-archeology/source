@@ -43,9 +43,10 @@
  * Global Data
  * ============================================================================
  *
- * The three cells below are defined by fim/sau2/fim.s: FIM_$FLINE and the
- * FP routines address them PC-relative, so they are assembled in the image's
- * place with that code.  No C file defines them (a host test that needs one
+ * The three cells below are defined by fp/sau2/savep.s, in their own
+ * section at their map position (0x00E218D0, between BUS_ERROR_SWITCH and
+ * FIM_$BUS_ERR): FIM_$FLINE and the FP routines address them PC-relative,
+ * so they are assembled next to that code as in the image.  No C file defines them (a host test that needs one
  * defines it; source-702z removed fp/fp_data.c, which held host-only
  * definitions under an architecture guard).
  */

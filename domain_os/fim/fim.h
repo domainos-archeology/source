@@ -63,7 +63,7 @@
  *   0x00E224C4 FIM_$DELIV_EC       58 * 12 -> 0x00E2277C FIM_$GET_USER_SR_PTR
  *
  * (Map names.  The tables are fields of FIM_$DATA and FIM_$WIRED_DATA
- * below, except FIM_$TRACE_BIT, which fim/sau2/fim.s defines.)
+ * below, except FIM_$TRACE_BIT, which fim/sau2/trace_bit.s defines.)
  *
  * The base addresses are the ones the code itself materialises: 0x00E2126C
  * and its +0x3C displacement from FIM_$INSTALL (0x00E0A9C2) and
@@ -210,7 +210,11 @@ typedef struct sigcontext_t {
     uint32_t    sc_fp;          /* 0x0C: Frame pointer (A6) */
     uint32_t    sc_ap;          /* 0x10: Argument pointer (A5) */
     uint32_t    sc_pc;          /* 0x14: Program counter */
-    uint16_t    sc_ps;          /* 0x18: Status register */
+    uint32_t    sc_ps;          /* 0x18: Status register in the LOW word
+                                 * (0x1A): FIM_$FAULT_RETURN reads the
+                                 * longword (0x00E2184A move.l (0x18,A2),D0;
+                                 * and.w #0xC01F,D0; move.w D0,-(A0)), as
+                                 * BSD's `int sc_ps' (source-hf8q) */
 } sigcontext_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -221,6 +225,7 @@ _Static_assert(__builtin_offsetof(sigcontext_t, sc_fp) == 0x0C, "sigcontext_t.sc
 _Static_assert(__builtin_offsetof(sigcontext_t, sc_ap) == 0x10, "sigcontext_t.sc_ap");
 _Static_assert(__builtin_offsetof(sigcontext_t, sc_pc) == 0x14, "sigcontext_t.sc_pc");
 _Static_assert(__builtin_offsetof(sigcontext_t, sc_ps) == 0x18, "sigcontext_t.sc_ps");
+_Static_assert(sizeof(sigcontext_t) == 0x1C, "sigcontext_t size");
 
 /*
  * ============================================================================
@@ -291,7 +296,7 @@ MODULE_DATA_DECLARE(fim_$data_t, FIM_$DATA, 0x00E2126C);
  * ----------------------------------------------------------------------------
  *
  * The map segment "D E21890 FIM_WIRED size = 1074" is the hand-written
- * wired FIM code (fim/sau2/fim.s, fim/sau2/bus_err.s, the fp/sau2 files) with data
+ * wired FIM code (fim/sau2/*.s, fp/sau2/*.s, one section per routine) with data
  * interleaved.  The cells between FIM_$PARITY_TRAP (ends 0xE21FE6) and
  * FIM_$GET_USER_SR_PTR (0xE2277C) are one unbroken run of data that the C
  * code and other modules address by absolute address; that run is this
@@ -329,8 +334,8 @@ MODULE_DATA_DECLARE(fim_$data_t, FIM_$DATA, 0x00E2126C);
  * eventcounts carry pointers, so offsets past pending_trace_faults are
  * asserted for the target only.
  *
- * fim/sau2/fim.s and fim/sau2/bus_err.s reach trace_sts and
- * pending_trace_faults by name through `.set' aliases onto this block.
+ * The fim/sau2 routines reach parity, pending_trace_faults, trace_sts and
+ * quit_inh by name through `.set' aliases onto this block.
  */
 #define FIM_$WIRED_DATA_SIZE 0x796      /* 0xE21FE6..0xE2277C */
 
@@ -380,6 +385,14 @@ MODULE_DATA_DECLARE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);
  * hand-written segments (ordering them is source-91vs).
  */
 extern uint32_t FIM_$INITIAL_STACK_SIZE;
+
+/*
+ * FIM_$SPUR_CNT - spurious interrupts taken since boot
+ * Address: 0x00E21F7E, a cell of the FIM_WIRED code right after
+ * FIM_$SPURIOUS_INT, which counts into it off its module base; defined with
+ * it in fim/sau2/spurious_int.s (source-kt66).
+ */
+extern uint32_t FIM_$SPUR_CNT;
 
 /*
  * FIM_$COLD_BUS_ERR - Bus error handler for cold boot
@@ -519,8 +532,9 @@ uint8_t FIM_$BUILD_DF(void *exception_frame, uint32_t return_pc,
 /*
  * FIM_$EXIT - Return from exception
  *
- * Simply executes RTE instruction.
- * Address: 0x00e228bc (2 bytes)
+ * The rte that handlers jump to; patched to nop while a trace fault is
+ * pending, when it falls into its trace arm (fim/sau2/exit.s).
+ * Address: 0x00E228BC (72 bytes with the trace arm)
  */
 void FIM_$EXIT(void);
 
@@ -528,18 +542,20 @@ void FIM_$EXIT(void);
  * FIM_$UII - Unimplemented Instruction Interrupt handler
  *
  * Handles illegal/unimplemented instruction traps.
- * Address: 0x00E2146C (38 bytes) -- SAU2 link map and Ghidra agree; this
+ * Address: 0x00E2146C (48 bytes with its descriptor words, fim/sau2/uii.s)
+ * -- SAU2 link map and Ghidra agree; this
  * file previously carried 0x00e21326, which is not an entry point at all.
  */
 void FIM_$UII(void);
 
 /*
- * FIM_$GENERATE - Generate a fault
+ * FIM_$GENERATE - Raise the fault `status' at the caller's return point
  *
- * Small stub for fault generation.
- * Address: 0x00e214a8 (6 bytes)
+ * Pops its return address and the status and enters FIM_$SOFT_FAULT's
+ * descriptor tail (0x00E21458).  No C caller.
+ * Address: 0x00E214A8 (6 bytes, fim/sau2/generate.s)
  */
-void FIM_$GENERATE(void *context);
+void FIM_$GENERATE(status_$t status);
 
 /*
  * FIM_$PRIV_VIOL - Privilege violation handler
@@ -568,7 +584,8 @@ void FIM_$FLINE(void);
  * FIM_$ILLEGAL_USP - Illegal USP handler
  *
  * Handles invalid user stack pointer situations.
- * Address: 0x00E2158A (4 bytes) -- see fim/sau2/fim.s.  (This file used to
+ * Address: 0x00E2158A (12 bytes with its descriptor words) -- see
+ * fim/sau2/illegal_usp.s.  (This file used to
  * give 0x00E216D2, which is inside the FIM_$CLEANUP_STACK zero fill.)
  */
 void FIM_$ILLEGAL_USP(void);
@@ -657,7 +674,7 @@ void FIM_$PROC2_STARTUP(void *context);
  * FIM_$SINGLE_STEP - Single step exception handler
  *
  * Handles trace exceptions for single-step debugging.
- * Address: 0x00E217D4 (80 bytes) -- see fim/sau2/fim.s.  (This file used to
+ * Address: 0x00E217D4 (80 bytes) -- see fim/sau2/single_step.s.  (This file used to
  * give 0x00E21754, which is inside the FIM_$CLEANUP_STACK zero fill.)
  */
 void FIM_$SINGLE_STEP(void);
@@ -686,7 +703,7 @@ NORETURN void FIM_$FAULT_RETURN(sigcontext_t **context_ptr,
  * FIM_$FP_ABORT - Floating point abort handler
  *
  * Handles floating point exception aborts.
- * Address: 0x00e21b80 (48 bytes)
+ * Address: 0x00E21B80 (48 bytes, fim/sau2/fp_abort.s)
  */
 void FIM_$FP_ABORT(void);
 
@@ -697,7 +714,8 @@ void FIM_$FP_ABORT(void);
  *   asid - address space id for the process
  *
  * Initializes the 68881/68882 FPU for a process.
- * Address: 0x00e21bb0 (84 bytes)
+ * Address: 0x00E21BB0 (84 bytes and the 48-byte fim_$copy_fp_frame,
+ * fim/sau2/fp_init.s)
  */
 void FIM_$FP_INIT(int16_t asid);
 
@@ -712,7 +730,7 @@ void FIM_$FP_INIT(int16_t asid);
  *   type - FP save type
  *   unused - Unused parameter
  *
- * Address: 0x00e21c34 (160 bytes)
+ * Address: 0x00E21C34 (160 bytes, fim/sau2/fsave.s)
  */
 void FIM_$FSAVE(int16_t *status, uint32_t *sp_ptr, uint16_t type, uint8_t unused);
 
@@ -724,7 +742,7 @@ void FIM_$FSAVE(int16_t *status, uint32_t *sp_ptr, uint16_t type, uint8_t unused
  * Parameters:
  *   state_ptr - Pointer to saved FP state
  *
- * Address: 0x00e21cd4 (116 bytes)
+ * Address: 0x00E21CD4 (116 bytes, fim/sau2/frestore.s)
  */
 void FIM_$FRESTORE(void *state_ptr);
 
@@ -788,7 +806,8 @@ void FIM_$PARITY_TRAP(void);
  * Returns:
  *   Pointer to SR word
  *
- * Address: 0x00e2277c (118 bytes)
+ * Address: 0x00E2277C (118 bytes and a 116-byte frame checker,
+ * fim/sau2/get_user_sr_ptr.s)
  */
 void *FIM_$GET_USER_SR_PTR(uint16_t process, uint32_t unused);
 
@@ -801,14 +820,14 @@ void *FIM_$GET_USER_SR_PTR(uint16_t process, uint32_t unused);
  * Parameters:
  *   as_id - Address space ID to deliver trace fault to
  *
- * Address: 0x00e22866 (42 bytes)
+ * Address: 0x00E22866 (42 bytes, fim/sau2/deliver_trace_fault.s)
  */
 void FIM_$DELIVER_TRACE_FAULT(int16_t as_id);
 
 /*
  * FIM_$CLEAR_TRACE_FAULT - Clear trace fault state
  *
- * Address: 0x00E22890 (44 bytes) -- see fim/sau2/fim.s
+ * Address: 0x00E22890 (44 bytes) -- see fim/sau2/clear_trace_fault.s
  */
 void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word argument */
 
@@ -816,15 +835,21 @@ void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word ar
  * FIM_$CRASH - System crash handler
  *
  * Called when a fault cannot be delivered or is fatal.
- * Displays crash information and invokes CRASH_SYSTEM.
+ * Prints the fault report (frame pointer, SR, PC, format word, class and,
+ * for bus/address errors, fault address and SSW), records the saved A7 in
+ * CRASH_REPORT (the map's CRASH_SP), reloads the saved registers and calls
+ * CRASH_SYSTEM(status); returns if CRASH_SYSTEM does.
  *
  * Parameters:
  *   exception_frame - Pointer to exception frame
- *   regs - Saved register set
+ *   regs - Saved register set (D0..A7)
+ *   status - handed to CRASH_SYSTEM (read at 0xE(SP) after the SR push;
+ *            FIM_$SPURIOUS_INT passes all three)
  *
- * Address: 0x00e1e864 (158 bytes)
+ * Address: 0x00E1E864 (158 bytes of code and a 124-byte report template,
+ * fim/sau2/crash.s)
  */
-void FIM_$CRASH(void *exception_frame, fim_regs_t *regs);
+void FIM_$CRASH(void *exception_frame, fim_regs_t *regs, status_$t *status);
 
 /*
  * FIM_$BUS_ERR - Bus error trap handler (assembly entry point)
@@ -897,7 +922,8 @@ extern void JMP_TO_BUS_ERR(void);
  * is module-local in the original), so this is a tree name.  Because the
  * image places it inside the FIM_ code region between FIM_$SIGNAL and
  * FIM_$PROC2_STARTUP, it is defined -- as 260 zero bytes, which is what the
- * image holds -- in fim/sau2/fim.s, and not in fim/fim_data.c.
+ * image holds -- with FIM_$SIGNAL in fim/sau2/signal.s, and not in
+ * fim/fim_data.c.
  */
 extern void *FIM_$CLEANUP_STACK[PROC1_MAX_PROCESSES];
 
@@ -913,9 +939,9 @@ extern void *FIM_$CLEANUP_STACK[PROC1_MAX_PROCESSES];
  *
  * Address: 0x00E21890, stride 1, FIM_AS_COUNT elements; it is the first
  * object of the module's wired data area, so it is defined -- as 58 zero
- * bytes, which is what the image holds -- in fim/sau2/fim.s, immediately
- * after FIM_$SETUP_RETURN, and not in fim/fim_data.c.  0x00E21890 + 58 =
- * 0x00E218CA, the address of JMP_TO_BUS_ERR.
+ * bytes, which is what the image holds -- in fim/sau2/trace_bit.s, linked
+ * after fim/sau2/fault_return.s (FIM_$SETUP_RETURN), not in fim/fim_data.c.
+ * 0x00E21890 + 58 = 0x00E218CA, the address of JMP_TO_BUS_ERR.
  */
 extern uint8_t FIM_$TRACE_BIT[];
 

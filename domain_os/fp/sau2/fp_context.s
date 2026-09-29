@@ -17,6 +17,18 @@
  *   fp_$check_owner       0x00E21D70  36 bytes
  *   FP_$PUT_FP            0x00E21D94  46 bytes   (asid on the stack)
  *
+ * The two groups are separate in the image - FIM_$FP_ABORT .. FIM_$FRESTORE
+ * (fim/sau2/) lie between them - so each is its own section, linked at its
+ * image position by tools/gen_layout_ld.py (source-c573, source-kt66;
+ * Claude Opus 5.5):
+ *
+ *   .text.fp_$switch_owner  0x00E21B10..0x00E21B7F  no map symbol: the map
+ *                           counts these bytes into FIM_$FLINE, so the
+ *                           section is keyed by an ANCHORS entry
+ *   .text.FP_$GET_FP        0x00E21D48..0x00E21DC1  FP_$GET_FP, FP_$PUT_FP
+ *
+ * The calls between the groups keep the image's bsr.w (R_68K_PC16).
+ *
  * A1 is loaded once (from FP_$SAVEP) by fp_$switch_owner_d2 or
  * fp_$check_owner and is then relied on by the save/restore helper that
  * runs next, which is why FP_$GET_FP / FP_$PUT_FP cannot be expressed as
@@ -44,13 +56,10 @@
  * address in the image.
  */
 
-        .section ".text.FP_$GET_FP","ax",@progbits
-        .even
-
         .extern PROC1_$AS_ID            /* 0x00E2060A */
-        .extern FP_$SAVEP               /* 0x00E218D0 (fim/sau2/fim.s) */
-        .extern FP_$OWNER               /* 0x00E218D4 (fim/sau2/fim.s) */
-        .extern FP_$EXCLUSION           /* 0x00E218D6 (fim/sau2/fim.s) */
+        .extern FP_$SAVEP               /* 0x00E218D0 (fp/sau2/savep.s) */
+        .extern FP_$OWNER               /* 0x00E218D4 (fp/sau2/savep.s) */
+        .extern FP_$EXCLUSION           /* 0x00E218D6 (fp/sau2/savep.s) */
         .extern ML_$EXCLUSION_START     /* 0x00E20DF8 */
         .extern ML_$EXCLUSION_STOP      /* 0x00E20E7E */
 
@@ -65,6 +74,9 @@
  * precision, all traps disabled (0x00E21B3E `fmove.l #0xf400,FPCR`). */
         .set    FP_DEFAULT_FPCR, 0xF400
 
+
+        .section ".text.fp_$switch_owner","ax",@progbits
+        .even
 
 /* ====================================================================
  * fp_$switch_owner - 0x00E21B10
@@ -154,6 +166,9 @@ fp_$save_state:
         move.l  %a0, (-4,%a1,%d0.l)     /* 00e21b7a */
 .Lss_done:
         rts                             /* 00e21b7e */
+
+        .section ".text.FP_$GET_FP","ax",@progbits
+        .even
 
 /* ====================================================================
  * FP_$GET_FP - 0x00E21D48

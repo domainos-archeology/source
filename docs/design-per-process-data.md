@@ -282,8 +282,8 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    from their map symbols, eventcounts self-linked and `quit_inh` 0xFF as in
    the image).  PROC1_ASM cells (`PCBS`, `PROC1_$CURRENT`, ...) and the
    FIM_UNWIRED/FIM_WIRED code-segment cells stay individual or
-   assembly-owned objects; `svc/sau2/trap8.s`, `fim/sau2/fim.s` and
-   `fim/sau2/bus_err.s` reach the block fields through `.set` aliases with
+   assembly-owned objects; `svc/sau2/trap8.s`, the `fim/sau2` files
+   (`fim/sau2/fim.s` until source-kt66) and `fim/sau2/bus_err.s` reach the block fields through `.set` aliases with
    their bytes unchanged.  PARITY's absolute state macros became
    `FIM_$WIRED_DATA.parity` fields.
    Amended 2026-09-29 (proc2/acl half, source-l2yd): blocks
@@ -437,10 +437,11 @@ because the public header still exports the same names (now fields or
   image address still used on the target now lies inside our own `.text`
   (0xE7DC00 DIR; the AST_ one, 0xE1DC80, is gone with source-gmxj) or `.bss` (0xEB2800 MMAPE_BASE, 0xEB2BE8
   interrupt stack), which is why those beads matter. The risks that remain: (a) a hand-written file
-  whose routines interleave with other code in the image and cannot be
-  split without changing its bytes holds some map symbols out of order
-  (today `fim/sau2/fim.s`, placed with its largest run at `FIM_$UII`; the
-  check lists the 16 symbols it holds and excludes them); (b) code the map
+  whose routines interleave with other code in the image would hold map
+  symbols out of order (`fim/sau2/fim.s` did, 16 of them, until source-kt66
+  / source-c573 split it one section per routine, 2026-09-29; the layout
+  generator now rejects such a section instead of placing it with its
+  largest run); (b) code the map
   does not name (renamed or local helpers, a few assembly files) lands in
   the catch-all at the end of `.text`, so a 16-bit PC-relative reference
   into it can overflow - the link reports that as a truncated relocation;

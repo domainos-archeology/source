@@ -21,10 +21,9 @@
 #   1. The section is split into RUNS at each symbol with a known image
 #      address (a map symbol, or LOCAL_SYMBOLS below for module-local
 #      labels; a section named only by a map SEGMENT starts there); each
-#      run is compared with the image at that address.  fim/sau2/fim.s is
-#      one section holding routines from several places in the image, and
-#      several files keep code the image has elsewhere (the SMD trampoline
-#      bodies, shared crash stubs); the runs follow them.  Runs starting at
+#      run is compared with the image at that address.  Several files keep
+#      code the image has elsewhere (the SMD trampoline bodies, shared crash
+#      stubs); the runs follow them.  Runs starting at
 #      an ADDITIONS symbol (C-callable shims that are not image code) are
 #      skipped and counted.
 #   2. The two byte streams are walked in step.  They must be equal except:
@@ -104,6 +103,8 @@ LOCAL_SYMBOLS = {
     'set_lock_crash': 0x00E20B56,
     'clr_lock_crash': 0x00E20B56,
     'Illegal_lock_err': 0x00E20DE4,
+    # fim/sau2/bus_err.s: the trampoline whose operand is BUS_ERROR_SWITCH
+    'JMP_TO_BUS_ERR': 0x00E218CA,
     # fp/sau2/fp_context.s header
     'fp_$switch_owner': 0x00E21B10,
     'fp_$restore_state': 0x00E21B30,
@@ -132,12 +133,6 @@ LOCAL_SYMBOLS = {
 # symbol): reason}.  An entry that no longer diverges fails the check, so
 # the list cannot go stale.
 KNOWN_DEVIATIONS = {
-    ('fim/sau2/fim.o', '*'):
-        'fim/sau2/fim.s is not a faithful transcription: 18 of its 23 runs '
-        'diverge (FIM_$CRASH keeps local crash fields the image addresses '
-        'off CRASH_SYSTEM; the fault stubs lack the inline status words '
-        'after their bsr to 0xE213A0; the FP entry points are 2-byte '
-        'stubs) - source-kt66',
     ('proc1/sau2/clr_lock.o', 'PROC1_$CLR_LOCK'):
         'PROC1_$CLR_LOCK inlines the tail it shares with PROC1_$INHIBIT_END '
         '(image beq.w 0xE20EB0 / bra.w 0xE20EB6 into INHIBIT_END, which is '
@@ -157,6 +152,16 @@ REGISTER_BASES = {
     '.text.SMD_$OR_CURSOR': {5: 0x00E26F20},
     # mmu/sau2/init.s: A5 = M68020 (0xE23D2E); (0x5a6,A5) is CACHE_$CLEAR
     '.text.MMU_$INIT': {5: 0x00E23D2E},
+    # fim/sau2/crash.s: A5 = CRASH_SYSTEM (0xE1E700), the base of the
+    # image's CRASH_SYSTEM module; the report fields FIM_$CRASH stores are
+    # named (its own template, CRASH_REPORT + 0x68) - source-kt66
+    '.text.FIM_$CRASH': {5: 0x00E1E700},
+    # fim/sau2/deliver_trace_fault.s, clear_trace_fault.s, exit.s: the
+    # FIM_WIRED base FIM_$TRACE_BIT (0xE21890) in A1 / A5; (0x76e,An) is
+    # PENDING_TRACE_FAULTS, (0x102c,An) FIM_$EXIT - source-kt66
+    '.text.FIM_$DELIVER_TRACE_FAULT': {1: 0x00E21890},
+    '.text.FIM_$CLEAR_TRACE_FAULT': {1: 0x00E21890},
+    '.text.FIM_$EXIT': {5: 0x00E21890},
 }
 
 # Code in the hand-written files that is NOT image code: a run starting at
@@ -308,9 +313,10 @@ def runs_of(obj, sec, linkmap):
 
     Runs start at the section's symbols with a known image address, in
     offset order.  The first need not be at offset 0: bytes ahead of it
-    are alignment devices the image does not have (fim/sau2/bus_err.s pads
-    two bytes so that the BUS_ERROR_SWITCH cell is longword aligned) and
-    are left uncompared.  A section whose own name is only a map SEGMENT
+    (an alignment device the image does not have) are left uncompared.
+    None of the hand-written files has one since source-kt66, when
+    fim/sau2/bus_err.s lost the two-byte pad ahead of JMP_TO_BUS_ERR.
+    A section whose own name is only a map SEGMENT
     name (NULLPROC, VFMT_$WRITEN) starts at that segment."""
     name = sec[len('.text.'):]
     syms = sorted((v, n) for n, (s, v) in obj.symbols.items()
@@ -395,8 +401,9 @@ class Alignment:
             if o <= off:
                 best = a + (off - o) if a >= 0 else None
         if best is None and pts and off < pts[0][0] and pts[0][1] >= 0:
-            # ahead of the first run (JMP_TO_BUS_ERR, two bytes before
-            # the BUS_ERROR_SWITCH run in fim/sau2/bus_err.s)
+            # ahead of the first run: bytes before a section's first
+            # known symbol, or a PC-relative target in front of the
+            # section (a module base such as FIM_$CRASH's CRASH_SYSTEM)
             best = pts[0][1] - (pts[0][0] - off)
         return best
 

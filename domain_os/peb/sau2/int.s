@@ -91,7 +91,7 @@
  * source-702z. */
         .extern PEB_$INFO
         .set    PEB_$OWNER_ASID_B,  PEB_$INFO + 0x16  /* owner ASID byte     */
-/* Routines in our tree, by name: FIM_$SPURIOUS_INT (fim/sau2/fim.s, map
+/* Routines in our tree, by name: FIM_$SPURIOUS_INT (fim/sau2/spurious_int.s, map
  * 0xE21F20, the default jmp target), IO_$USE_INT_STACK (io/sau2, map
  * 0xE2E826), CRASH_SYSTEM (misc/sau2, map 0xE1E700), DXM_$ADD_SIGNAL (dxm/,
  * map 0xE17270) and PROC1_$INT_EXIT, the shared interrupt exit (proc1/sau2,

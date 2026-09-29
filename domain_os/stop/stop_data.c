@@ -48,8 +48,9 @@ MODULE_DATA_DEFINE_INIT(stop_$data_t, STOP_$DATA, 0x00E81BEC, {
 });
 
 /*
- * 0x00E21596.  Physically inside the FIM data region, not this block, but
+ * 0x00E21596.  Physically inside the FIM code region, not this block, but
  * written only by STOP_$WATCH_UII / STOP_$WATCH_TRACE (stop/sau2/watch.s)
- * and read by the FIM trace dispatcher at 0x00E215A6.
+ * and read by the FIM trace dispatcher at 0x00E215A6; its own `.text.'
+ * section (stop/stop_internal.h) links it at its map position.
  */
-boolean STOP_$WATCH_TRACE_FLAG;
+boolean STOP_$WATCH_TRACE_FLAG STOP_WATCH_TRACE_FLAG_SECTION;

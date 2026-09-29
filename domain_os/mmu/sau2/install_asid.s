@@ -33,7 +33,7 @@
         .extern MMU_$GLOBALS
         .set    MMU_$PID_PRIV,  MMU_$GLOBALS + 0x0  /* map 0xE23D2C, a field of the MMU_$GLOBALS block */
         /* PROC1_$AS_ID (uint16_t, proc1/proc1_data.c, map 0xE2060A) and
-         * FP_$OWNER (the 2-byte owner cell in fim/sau2/fim.s, map 0xE218D4;
+         * FP_$OWNER (the 2-byte owner cell in fp/sau2/savep.s, map 0xE218D4;
          * the byte store reads its low byte) are used by name (source-6psc). */
         .extern PROC1_$AS_ID
         .extern FP_$OWNER

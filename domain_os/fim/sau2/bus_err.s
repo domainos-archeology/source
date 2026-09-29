@@ -1,14 +1,18 @@
 /*
  * fim/sau2/bus_err.s - FIM_$BUS_ERR, the Domain/OS bus-error handler (m68k/SAU2)
  *
- * Byte gate (source-6psc; tools/asm_compare.py, `make check'): encodings
- * identical to the image (modulo the documented widenings); address
- * operands resolve to our objects.
+ * Byte gate (source-6psc; tools/asm_compare.py, `make check'): identical to
+ * the image modulo relocations; address operands resolve to our objects.
  *
- * Original ROM extent: 0x00E218CA .. 0x00E21ACB
- *   0x00E218CA  JMP_TO_BUS_ERR    (6 bytes)   jmp (BUS_ERROR_SWITCH).l
- *   0x00E218CC  BUS_ERROR_SWITCH  (4 bytes)   patchable jmp operand
- *   0x00E218E8  FIM_$BUS_ERR      (484 bytes) exception vector 2 handler
+ * Image extent, one section per map symbol so tools/gen_layout_ld.py links
+ * each at its map position (source-c573, source-kt66, Claude Opus 5.5):
+ *   .text.BUS_ERROR_SWITCH  0x00E218CA  JMP_TO_BUS_ERR (6 bytes):
+ *                                       jmp (BUS_ERROR_SWITCH).l, whose
+ *                                       operand is the cell BUS_ERROR_SWITCH
+ *                                       (0x00E218CC)
+ *   (fp/sau2/savep.s        0x00E218D0  FP_$SAVEP, FP_$OWNER, FP_$EXCLUSION)
+ *   .text.FIM_$BUS_ERR      0x00E218E8  FIM_$BUS_ERR (484 bytes), the
+ *                                       exception vector 2 handler
  *
  * FIM_$BUS_ERR is installed as the CPU bus-error vector; the vector-table
  * cell that names it lives at 0x00E342E8, and OS_$INIT swaps it in for the
@@ -94,43 +98,27 @@
  *   bit 3  (with bit 5, on a type 2 MMU) memory error - crash the system
  *
  * ---------------------------------------------------------------------------
- * Encoding differences from the ROM image
+ * Cross-section references
  * ---------------------------------------------------------------------------
- * Disassembling this file and comparing it instruction for instruction with
- * the image (124 instructions on both sides) leaves 17 differing encodings,
- * in three classes.  None of them changes what the routine does.
+ * The image reaches FIM_$EXIT (`jmp (0xf02,PC)'), FIM_$DELIVER_TRACE_FAULT
+ * (`bsr.w'), the trace status table (`lea (0x9c4,PC)', FIM_$WIRED_DATA +
+ * 0x3BC), JMP_TO_BUS_ERR (`bra.w') and FIM_$FLINE's body (`bra.b
+ * fim_fline_switch') PC-relatively.  All but the last keep those encodings
+ * here, as R_68K_PC16 relocations: the link keeps the FIM_WIRED sections in
+ * map order, so every target stays in reach.  The last is widened to
+ * bra.w (see the site), so the routine is 486 bytes, the image's 484 + 2.
+ * Until source-kt66 the first three were widened to absolute forms too.
  *
- * (a) Four cross-file references the ROM reached PC-relatively.  A 16-bit
- *     displacement cannot survive independent assembly and linking, so these
- *     are re-encoded as absolute (or as a wider branch):
+ * The other encodings that differ from the image are five immediate-operand
+ * instructions where the Apollo assembler chose the CMP/SUB/ADD "immediate
+ * effective address" encoding and gas chooses CMPI/SUBI/ADDI (same
+ * operation, operand, size and condition codes; recognised by the gate):
  *
- *       0x00E219B8  jmp (FIM_$EXIT,%pc)           4efa 0f02 -> 4ef9 <FIM_$EXIT>
- *       0x00E219CE  bsr.w FIM_$DELIVER_TRACE_FAULT
- *                                                 6100 0e96 -> 4eb9 <FIM_$DELIVER_TRACE_FAULT>
- *       0x00E219DC  lea (FIM_$TRACE_STS,%pc),%a0  41fa 09c4 -> 41f9 <FIM_$TRACE_STS>
- *       0x00E21ACA  bra.b fim_fline_switch        600a      -> 6000 xxxx
- *
- *     Each grows by two bytes, so the emitted routine is 492 bytes rather
- *     than the original 484.  An absolute jmp/jsr and a PC-relative one
- *     differ only in how the destination is spelled; bra.w differs from
- *     bra.b only in displacement width; and bsr and jsr push the same
- *     return address (the branch here is a call that returns normally).
- *
- * (b) Five immediate-operand instructions where the Apollo assembler chose
- *     the CMP/SUB/ADD "immediate effective address" encoding and gas chooses
- *     CMPI/SUBI/ADDI.  Same operation, same operand, same size, same
- *     condition codes:
- *
- *       0x00E2195A  cmp.l #0x00FC0000,%d2   b4bc ... -> 0c82 ...
- *       0x00E21962  cmp.l #0x00FE0000,%d2   b4bc ... -> 0c82 ...
- *       0x00E21974  sub.l #0x00FC0000,%d2   94bc ... -> 0482 ...
- *       0x00E2197E  add.w #128,%d2          d47c ... -> 0642 ...
- *       0x00E219C0  cmp.l #0x0004000A,%d0   b0bc ... -> 0c80 ...
- *
- * (c) Eight branches whose opcode and destination are unchanged but whose
- *     displacement shifts, because (a) made the code eight bytes longer:
- *     the branches at 0x00E21912, 0x00E2194E, 0x00E219B0, 0x00E219C6,
- *     0x00E219E8, 0x00E21A62, 0x00E21A84 and 0x00E21AC2.
+ *   0x00E2195A  cmp.l #0x00FC0000,%d2   b4bc ... -> 0c82 ...
+ *   0x00E21962  cmp.l #0x00FE0000,%d2   b4bc ... -> 0c82 ...
+ *   0x00E21974  sub.l #0x00FC0000,%d2   94bc ... -> 0482 ...
+ *   0x00E2197E  add.w #128,%d2          d47c ... -> 0642 ...
+ *   0x00E219C0  cmp.l #0x0004000A,%d0   b0bc ... -> 0c80 ...
  * ==================================================================== */
 
         .section ".text.BUS_ERROR_SWITCH","ax",@progbits
@@ -142,10 +130,10 @@
 
         /* Data and code in our tree, by name:
          *   PROC1_$AS_ID              uint16_t, proc1/proc1_data.c (map 0xE2060A)
-         *   FIM_$EXIT                 the shared RTE, fim/sau2/fim.s (map 0xE228BC)
-         *   FIM_$DELIVER_TRACE_FAULT  fim/sau2/fim.s (map 0xE22866)
+         *   FIM_$EXIT                 the shared RTE, fim/sau2/exit.s (map 0xE228BC)
+         *   FIM_$DELIVER_TRACE_FAULT  fim/sau2/deliver_trace_fault.s (map 0xE22866)
          *   FP_$SAVEP                 uint32_t save-area table pointer,
-         *                             fim/sau2/fim.s (map 0xE218D0)
+         *                             fp/sau2/savep.s (map 0xE218D0)
          *   MMU_$INSTALL              mmu/sau2/install.s (map 0xE24048)
          *   CACHE_$CLEAR              cache/sau2/clear.s (map 0xE242D4)
          *   CRASH_SYSTEM(&status)     misc/sau2/crash_system.s (map 0xE1E700) */
@@ -159,7 +147,7 @@
 
         /* Per-AS trace fault status, 4 bytes per AS: the trace_sts field of
          * FIM_$WIRED_DATA (fim/fim.h, block image 0x00E21FE6, field +0x3BC);
-         * its sibling FIM_$TRACE_BIT is in fim/sau2/fim.s. */
+         * its sibling FIM_$TRACE_BIT is in fim/sau2/trace_bit.s. */
         .extern FIM_$WIRED_DATA
         .set    FIM_$TRACE_STS, FIM_$WIRED_DATA + 0x3BC  /* 0x00E223A2 */
 
@@ -222,16 +210,11 @@
  *
  * Assembly (0x00E218CA, 6 bytes):
  * ==================================================================== */
-        /* In ROM the trampoline sits at the odd-longword address 0x00E218CA,
-         * so that BUS_ERROR_SWITCH - the jmp's operand - lands longword
-         * aligned at 0x00E218CC.  These two directives reproduce that parity
-         * inside this object; they are an alignment device, not image bytes.
-         * What actually precedes 0x00E218CA in the image is the tail of
-         * FIM_$TRACE_BIT (0x00E21890, 58 bytes), which is emitted with the
-         * rest of that region in fim/sau2/fim.s. */
-        .balign 4
-        .short  0
-
+        /* The image has the trampoline at 0x00E218CA, two bytes off a
+         * longword, so that BUS_ERROR_SWITCH - the jmp's operand - is
+         * longword aligned at 0x00E218CC.  This section follows
+         * fim/sau2/trace_bit.s (58 bytes, longword aligned) in the link, so
+         * the same holds without an alignment device. */
         .global JMP_TO_BUS_ERR
 JMP_TO_BUS_ERR:
         .short  0x4EF9                  /* jmp (BUS_ERROR_SWITCH).l - the */
@@ -262,6 +245,9 @@ BUS_ERROR_SWITCH:
  *
  * Assembly (0x00E218E8, 484 bytes):
  * ==================================================================== */
+        .section ".text.FIM_$BUS_ERR","ax",@progbits
+        .even
+
         .global FIM_$BUS_ERR
 FIM_$BUS_ERR:
         ori.w   #0x0700,%sr             /* Mask all interrupts (IPL 7) */
@@ -361,7 +347,7 @@ FIM_$BUS_ERR:
 .bus_err_return:
         movem.l (%sp)+,%d0-%d2/%a0-%a1  /* Restore working registers */
         addq.w  #8,%sp                  /* Discard the fault descriptor scratch */
-        jmp     (FIM_$EXIT).l            /* RTE (was "jmp (FIM_$EXIT,%pc)") */
+        jmp     (FIM_$EXIT:w,%pc)       /* 0x00E219B8  4efa 0f02: the shared RTE */
 
 /* --------------------------------------------------------------------
  * MST_$TOUCH could not satisfy the fault.
@@ -375,11 +361,11 @@ FIM_$BUS_ERR:
         /* A guard page was touched: turn it into a trace fault for the
          * current address space and let the process run on. */
         move.w  (PROC1_$AS_ID).l,-(%sp)
-        jsr     (FIM_$DELIVER_TRACE_FAULT).l  /* was "bsr.w" (PC-relative) */
+        bsr.w   FIM_$DELIVER_TRACE_FAULT  /* 0x00E219CE  6100 0e96 */
         addq.l  #2,%sp
         move.w  (PROC1_$AS_ID).l,%d0
         lsl.w   #2,%d0                  /* 4 bytes of trace status per AS */
-        lea     (FIM_$TRACE_STS).l,%a0  /* was "lea (FIM_$TRACE_STS,%pc),%a0" */
+        lea     (FIM_$TRACE_STS:w,%pc),%a0  /* 0x00E219DC  41fa 09c4 */
         move.l  #STATUS_MST_GUARD_FAULT,(0,%a0,%d0.w)
         bra.b   .bus_err_return
 
@@ -509,5 +495,8 @@ FIM_$BUS_ERR:
  */
 .bus_err_fp_switch:
         movem.l %d0-%d3/%a0-%a1,-(%sp)  /* FIM_$FLINE's save set */
-        bra.w   fim_fline_switch        /* was "bra.b" (PC-relative, in range */
-                                        /* only because FIM_$FLINE follows) */
+        /* widened: image bra.b (600a).  gas cannot emit this as an
+         * R_68K_PC8 relocation this far into a section (it range-checks
+         * the in-section offset), so it is bra.w (R_68K_PC16) - the
+         * Bcc.b -> Bcc.w widening the gate recognises; 2 bytes longer. */
+        bra.w   fim_fline_switch        /* 0x00E21ACA  FIM_$FLINE's body */

@@ -62,7 +62,7 @@ static int tests_failed = 0;
  * ========================================================================== */
 
 MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
-volatile int8_t   M68881_EXISTS;
+volatile int32_t  M68881_EXISTS;
 
 static uint16_t   host_peb_ctl;
 /* The PEB control page stands in for SAU2_PEB_CTL (arch/m68k/sau2/hw.h). */

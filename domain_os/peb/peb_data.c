@@ -11,8 +11,10 @@ status_$t PEB_FPU_Is_Hung_Err = status_$peb_fpu_is_hung | 0x80000000;
  */
 MODULE_DATA_DEFINE(peb_globals_t, PEB_$INFO, 0x00E24C78);
 
-/* M68881_EXISTS (0xE8180C, PEB_UNWIRED): zero in the image. */
-volatile int8_t M68881_EXISTS;
+/* M68881_EXISTS (0xE8180C, the 4-byte PEB_UNWIRED segment; the flag is its
+ * first byte, FIM_$FSAVE reads its first word - peb_internal.h): zero in
+ * the image. */
+volatile int32_t M68881_EXISTS;
 
 /*
  * The PEB_ASM module, 0x00E24468..0x00E244F0 (map: "D E24468 PEB_ASM

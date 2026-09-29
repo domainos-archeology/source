@@ -61,12 +61,18 @@ extern uint16_t peb_$const_word_1;
 /*
  * MC68881 existence flag
  * Set negative (<0) if MC68881 is present instead of PEB
- * Address: 0xE8180C, the first byte of the PEB_UNWIRED segment (map "D
- * E8180C PEB_UNWIRED size = 4", symbol M68881_EXISTS).  Zero in the image;
- * PEB_$INIT reads it (0x00E31D20).  A plain object on every build since
- * source-702z (ordering map-named plain globals is source-91vs).
+ * Address: 0xE8180C, the whole PEB_UNWIRED segment (map "D E8180C
+ * PEB_UNWIRED size = 4", symbol M68881_EXISTS), so the object is the
+ * segment's 4 bytes: the flag is its first byte (sign bit = the int32's
+ * sign bit), and FIM_$FSAVE's word reads (0x00E21C62, 0x00E21C84 `tst.w
+ * (0xE8180C).l', fim/sau2/fsave.s) stay inside the object with a zero
+ * second byte (source-0fye).  Zero in the image; nothing in the kernel
+ * writes it; PEB_$INIT tests its sign (0x00E31D26 tst.b (A0) / bpl).  A
+ * plain object on every build since source-702z (ordering map-named plain
+ * globals is source-91vs).
  */
-extern volatile int8_t M68881_EXISTS;
+extern volatile int32_t M68881_EXISTS;
+_Static_assert(sizeof(M68881_EXISTS) == 4, "M68881_EXISTS: PEB_UNWIRED size = 4");
 
 /*
  * ============================================================================
