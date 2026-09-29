@@ -13,7 +13,7 @@
  *
  * Module context: this routine runs with A5 = 0xE7FD24, the NAME/DIR "OLD"
  * module data base.  The four per-process tables it touches
- * (NAME_$LOCK_SLOT/_MODE/_HANDLE/_UID) are described in name/name_data.c.
+ * (NAME_$OLD_DIR_DATA.lock_slot/_mode/_handle/_uid) are laid out in name/name.h.
  *
  * Parameters (five - see name/name.h): every caller pushes lock_mode and
  * acl_rights together with a single `move.l #imm,-(SP)`, but the callee reads
@@ -77,8 +77,8 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
     /* 0xE5488C: lock-acquisition retry loop. */
     for (;;) {
         /* 0xE54894 / 0xE548A0 */
-        NAME_$LOCK_MODE[PROC1_$CURRENT] = lock_mode;
-        NAME_$LOCK_HANDLE[PROC1_$CURRENT] = 0;
+        NAME_$OLD_DIR_DATA.lock_mode[PROC1_$CURRENT] = lock_mode;
+        NAME_$OLD_DIR_DATA.lock_handle[PROC1_$CURRENT] = 0;
 
         /*
          * 0xE548A4-0xE548D6.  The `subq.l #2,SP` result slot the original
@@ -98,14 +98,14 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
                         0, 0, 0,                    /* rem_key/rem_node/rem_extra */
                         &name_$lock_dir_acl_ctx,
                         1,                          /* rem_wait */
-                        &NAME_$LOCK_SLOT[PROC1_$CURRENT],
+                        &NAME_$OLD_DIR_DATA.lock_slot[PROC1_$CURRENT],
                         &lock_result,               /* rights_out */
                         status_ret);
 
         /* 0xE548DA */
         if (*status_ret == status_$ok) {
             /* 0xE548DE: remember which directory this process has locked. */
-            NAME_$LOCK_UID[PROC1_$CURRENT] = local_uid;
+            NAME_$OLD_DIR_DATA.lock_uid[PROC1_$CURRENT] = local_uid;
             break;
         }
 
@@ -247,7 +247,7 @@ void NAME_$LOCK_DIR(uid_t *dir_uid, uint32_t *handle_ret,
 
 have_handle:
     /* 0xE54AEE */
-    NAME_$LOCK_HANDLE[PROC1_$CURRENT] = *handle_ret;
+    NAME_$OLD_DIR_DATA.lock_handle[PROC1_$CURRENT] = *handle_ret;
 
     /* 0xE54B06: the first word of a directory is its type; it must be 1. */
     if (*(int16_t *)NAME_$HANDLE_TO_PTR(*handle_ret) == 1) {

@@ -2,15 +2,16 @@
  * name/test/test_validate_leaf.c - unit tests for name_$validate_leaf
  * (0x00E54414) with the real MAP_CASE (0x00E53EF8) underneath.
  *
- * The two OLD_DIR character sets and NAME_$LOCK_SLOT are defined here with
- * the image bytes (0xE7FD24 / 0xE7FD44 / 0xE7FD60).  The tests pin:
+ * The two OLD_DIR character sets come from the real NAME_$OLD_DIR_DATA
+ * block (name/name_data.c, image bytes at 0xE7FD24 / 0xE7FD44).  The tests
+ * pin:
  *   - the 32-byte length gate                          0x00E5442A
  *   - the mapped-length gates and the '\' test        0x00E54452-0x00E54460
  *   - the first-character set (a bare '.' component)  0x00E54462-0x00E54476
  *   - the every-character set (no '/')                 0x00E54484-0x00E54498
- *   - a first byte below 0x20 reading its set bit out  0x00E5446E: A5+0x20
- *     of NAME_$LOCK_SLOT[0], because that set is only  is 28 bytes long
- *     28 bytes long
+ *   - a first byte below 0x20 reading set bytes 28..31  0x00E5446E: A5+0x20
+ *     (zero in the image), the same storage as
+ *     NAME_$OLD_DIR_DATA.lock_slot[0]
  */
 
 #include <stdio.h>
@@ -43,25 +44,7 @@ static int current_failed = 0;
 
 #include "name/name_internal.h"
 
-/* 0xE7FD24, 32 bytes: every byte of a leaf. */
-uint8_t NAME_$LEAF_CHAR_SET[NAME_$LEAF_SET_SIZE] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x7f, 0xff, 0xff, 0xff, 0xef, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0x7f, 0xfe, 0x00, 0x00, 0x00, 0x00
-};
-
-/* 0xE7FD44, 28 bytes: the first byte of a leaf. */
-uint8_t NAME_$LEAF_FIRST_CHAR_SET[NAME_$LEAF_FIRST_SET_SIZE] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x3f, 0xff, 0xff, 0xfe, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0x3f, 0xfe
-};
-
-/* 0xE7FD60: the lock slots that follow the second set. */
-uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];
-
+#include "../name_data.c"
 #include "../validate_leaf.c"
 #include "../../file/map_case.c"
 
@@ -144,25 +127,25 @@ TEST(slash_inside_name_is_rejected)
 
 /*
  * 0x00E5446E `lea (0x20,A5),A0` + 0x00E54472 `btst.b D4,(0x0,A0,D5w*1)`
- * with ch = 0: byte (0xFF-0)>>3 = 31 of a 28-byte set, i.e. byte 3 of
- * NAME_$LOCK_SLOT[0], bit 0.  A NUL passes through MAP_CASE unchanged.
+ * with ch = 0: byte (0xFF-0)>>3 = 31 of the 32-byte set, bit 0.  The image
+ * has bytes 28..31 zero, so a NUL first byte is rejected; those bytes are
+ * also NAME_$OLD_DIR_DATA.lock_slot[0] (the bias slot), so a set bit there
+ * lets it through.  A NUL passes through MAP_CASE unchanged.
  */
-TEST(nul_first_byte_reads_lock_slot_zero)
+TEST(nul_first_byte_reads_set_byte_31)
 {
-    NAME_$LOCK_SLOT[0] = 0;
+    ASSERT_EQ(0, NAME_$OLD_DIR_DATA.leaf_first_char_set[31]);
     ASSERT_EQ(0, run("\0", 1));
 
-    NAME_$LOCK_SLOT[0] = 0x00000001u;           /* byte 3 bit 0 */
+    NAME_$OLD_DIR_DATA.leaf_first_char_set[31] = 0x01;     /* bit 0 */
     ASSERT_EQ(-1, run("\0", 1));
+    ASSERT_EQ(0, ((uint8_t *)&NAME_$OLD_DIR_DATA.lock_slot[0] -
+                  NAME_$OLD_DIR_DATA.leaf_first_char_set) - 28);
 
-    NAME_$LOCK_SLOT[0] = 0x00000100u;           /* byte 2 bit 0: not consulted */
+    NAME_$OLD_DIR_DATA.leaf_first_char_set[31] = 0x02;     /* bit 1: not consulted */
     ASSERT_EQ(0, run("\0", 1));
 
-    /* ch = 0x1F: byte (0xFF-0x1F)>>3 = 28 = NAME_$LOCK_SLOT[0] byte 0, bit 7.
-     * MAP_CASE hex-escapes 0x1F, so drive the set lookup directly. */
-    NAME_$LOCK_SLOT[0] = 0x80000000u;
-    ASSERT_EQ(0x80, name_$leaf_first_set_byte(28));
-    NAME_$LOCK_SLOT[0] = 0;
+    NAME_$OLD_DIR_DATA.leaf_first_char_set[31] = 0;
 }
 
 int main(void)
@@ -176,7 +159,7 @@ int main(void)
     RUN_TEST(leading_backslash_maps_to_colon_and_is_accepted);
     RUN_TEST(dot_component_is_rejected_but_escaped_leads_pass);
     RUN_TEST(slash_inside_name_is_rejected);
-    RUN_TEST(nul_first_byte_reads_lock_slot_zero);
+    RUN_TEST(nul_first_byte_reads_set_byte_31);
     printf("\n%d passed, %d failed\n", tests_passed, tests_failed);
     return tests_failed != 0;
 }

@@ -1886,16 +1886,19 @@ extern status_$t Bad_request_header_version_err;
 /*
  * OLD directory subsystem data area
  *
- * Base address: 0xE7FD24 (runtime, A5-relative in OLD functions).  The
- * DIR_$OLD_* entry points share this module data area with NAME_$LOCK_DIR /
- * NAME_$UNLOCK_DIR, so the per-process lock tables are declared once in
- * name/name.h (NAME_$LOCK_SLOT / _MODE / _HANDLE / _UID) and defined in
- * name/name_data.c.  What the OLD directory code calls "the slot handle
- * pointer" at 0x2B8 + i*8 is the high longword of NAME_$LOCK_UID[i]: a
- * non-zero value means process i holds a directory lock.
+ * The DIR_$OLD_* entry points run with A5 = 0xE7FD24, the OLD_DIR data block
+ * (SAU2 map "D E7FD24 OLD_DIR size = 4C0") they share with NAME_$LOCK_DIR /
+ * NAME_$UNLOCK_DIR; it is NAME_$OLD_DIR_DATA, laid out in name/name.h and
+ * defined in name/name_data.c.  What the OLD directory code tests at
+ * 0x2B8 + pid*8 is NAME_$OLD_DIR_DATA.lock_uid[pid].high: non-zero means
+ * the process holds a directory lock.
+ *
+ * DIR_OLD_INIT_CLEAR_COUNT is DIR_$OLD_INIT's loop count (`moveq #0x39,D0` +
+ * `dbf` at 0x00E31500), not a table bound: the tables are Pascal [1..64]
+ * (65 C elements including the bias slot), and PROC1_$CURRENT is 1..64
+ * (pid 0 is reserved, proc1/proc1_config.h).
  */
-#define DIR_OLD_NUM_SLOTS NAME_$MAX_LOCK_PROCS  /* dbf 0x39 = 58 iterations */
-#define DIR_OLD_HANDLE_OFFSET 0x2B8
+#define DIR_OLD_INIT_CLEAR_COUNT 58
 
 /*
  * Status codes used by OLD functions.

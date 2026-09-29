@@ -5,8 +5,8 @@
  * Original size: 414 bytes (0x00E571AE-0x00E5734B)
  *
  * Re-derived from the disassembly (bead source-04ci).  A5 = 0x00E7FD24, the
- * NAME/DIR module block, so the four per-process directory-lock tables are the
- * NAME_$LOCK_* arrays declared in name/name.h.
+ * OLD_DIR data block, so the four per-process directory-lock tables are the
+ * NAME_$OLD_DIR_DATA.lock_* fields laid out in name/name.h.
  */
 
 #include "dir/dir_internal.h"
@@ -60,10 +60,10 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     }
 
     /* 0x00E5720E-0x00E57246: save the caller's per-process lock state */
-    saved_lock_uid    = NAME_$LOCK_UID[PROC1_$CURRENT];
-    saved_lock_handle = NAME_$LOCK_HANDLE[PROC1_$CURRENT];
-    saved_lock_mode   = NAME_$LOCK_MODE[PROC1_$CURRENT];
-    saved_lock_slot   = NAME_$LOCK_SLOT[PROC1_$CURRENT];
+    saved_lock_uid    = NAME_$OLD_DIR_DATA.lock_uid[PROC1_$CURRENT];
+    saved_lock_handle = NAME_$OLD_DIR_DATA.lock_handle[PROC1_$CURRENT];
+    saved_lock_mode   = NAME_$OLD_DIR_DATA.lock_mode[PROC1_$CURRENT];
+    saved_lock_slot   = NAME_$OLD_DIR_DATA.lock_slot[PROC1_$CURRENT];
 
     /* 0x00E5724A: type word is 1, and the created UID goes straight into the
      * caller's new_dir_uid (A3) - there is no local copy. */
@@ -90,10 +90,10 @@ void DIR_$OLD_CREATE_DIRU(uid_t *parent_uid, char *name, uint16_t *name_len,
     }
 
     /* 0x00E572EE-0x00E57326: restore the caller's per-process lock state */
-    NAME_$LOCK_UID[PROC1_$CURRENT]    = saved_lock_uid;
-    NAME_$LOCK_HANDLE[PROC1_$CURRENT] = saved_lock_handle;
-    NAME_$LOCK_MODE[PROC1_$CURRENT]   = saved_lock_mode;
-    NAME_$LOCK_SLOT[PROC1_$CURRENT]   = saved_lock_slot;
+    NAME_$OLD_DIR_DATA.lock_uid[PROC1_$CURRENT]    = saved_lock_uid;
+    NAME_$OLD_DIR_DATA.lock_handle[PROC1_$CURRENT] = saved_lock_handle;
+    NAME_$OLD_DIR_DATA.lock_mode[PROC1_$CURRENT]   = saved_lock_mode;
+    NAME_$OLD_DIR_DATA.lock_slot[PROC1_$CURRENT]   = saved_lock_slot;
 
     /*
      * 0x00E5732A-0x00E5733A: unlock into a local; the unlock status replaces

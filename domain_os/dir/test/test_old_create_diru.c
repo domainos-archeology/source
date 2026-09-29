@@ -57,10 +57,8 @@ uid_t    UID_$NIL = { 0, 0 };
 uid_t    ACL_$FILE_ACL = { 0x00000006u, 0x00000000u };  /* 0xE17444 */
 uid_t    ACL_$DIR_ACL  = { 0x00000601u, 0x00000000u };  /* 0xE1744C */
 
-uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];
-int16_t  NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];
-uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS];
-uid_t    NAME_$LOCK_UID[NAME_$MAX_LOCK_PROCS];
+/* The OLD_DIR data block (name/name.h); zero-filled is enough here. */
+MODULE_DATA_DEFINE(name_$old_dir_data_t, NAME_$OLD_DIR_DATA, 0x00E7FD24);
 
 /* ------------------------------------------------------------------ */
 /* Mocks                                                                */
@@ -126,11 +124,11 @@ void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
     create_uid_seen = new_dir_uid;
     create_handle_seen = handle;
     (void)parent_uid;
-    NAME_$LOCK_UID[PROC1_$CURRENT].high = 0xBAD00001u;
-    NAME_$LOCK_UID[PROC1_$CURRENT].low  = 0xBAD00002u;
-    NAME_$LOCK_HANDLE[PROC1_$CURRENT] = 0xBAD00003u;
-    NAME_$LOCK_MODE[PROC1_$CURRENT] = 0x0BAD;
-    NAME_$LOCK_SLOT[PROC1_$CURRENT] = 0xBAD00004u;
+    NAME_$OLD_DIR_DATA.lock_uid[PROC1_$CURRENT].high = 0xBAD00001u;
+    NAME_$OLD_DIR_DATA.lock_uid[PROC1_$CURRENT].low  = 0xBAD00002u;
+    NAME_$OLD_DIR_DATA.lock_handle[PROC1_$CURRENT] = 0xBAD00003u;
+    NAME_$OLD_DIR_DATA.lock_mode[PROC1_$CURRENT] = 0x0BAD;
+    NAME_$OLD_DIR_DATA.lock_slot[PROC1_$CURRENT] = 0xBAD00004u;
     new_dir_uid->high = 0x0C0FFEE0u;
     new_dir_uid->low  = 0x0C0FFEE1u;
     *status_ret = create_status;
@@ -204,15 +202,15 @@ static const uint32_t SAVED_SLT = 0x55AA55AAu;
 
 static void reset(void)
 {
-    memset(NAME_$LOCK_SLOT, 0, sizeof(NAME_$LOCK_SLOT));
-    memset(NAME_$LOCK_MODE, 0, sizeof(NAME_$LOCK_MODE));
-    memset(NAME_$LOCK_HANDLE, 0, sizeof(NAME_$LOCK_HANDLE));
-    memset(NAME_$LOCK_UID, 0, sizeof(NAME_$LOCK_UID));
+    memset(NAME_$OLD_DIR_DATA.lock_slot, 0, sizeof(NAME_$OLD_DIR_DATA.lock_slot));
+    memset(NAME_$OLD_DIR_DATA.lock_mode, 0, sizeof(NAME_$OLD_DIR_DATA.lock_mode));
+    memset(NAME_$OLD_DIR_DATA.lock_handle, 0, sizeof(NAME_$OLD_DIR_DATA.lock_handle));
+    memset(NAME_$OLD_DIR_DATA.lock_uid, 0, sizeof(NAME_$OLD_DIR_DATA.lock_uid));
     PROC1_$CURRENT = 5;
-    NAME_$LOCK_UID[5] = SAVED_UID;
-    NAME_$LOCK_HANDLE[5] = SAVED_HND;
-    NAME_$LOCK_MODE[5] = SAVED_MOD;
-    NAME_$LOCK_SLOT[5] = SAVED_SLT;
+    NAME_$OLD_DIR_DATA.lock_uid[5] = SAVED_UID;
+    NAME_$OLD_DIR_DATA.lock_handle[5] = SAVED_HND;
+    NAME_$OLD_DIR_DATA.lock_mode[5] = SAVED_MOD;
+    NAME_$OLD_DIR_DATA.lock_slot[5] = SAVED_SLT;
 
     vl_result = (int8_t)0xFF;   /* Domain TRUE: the leaf is valid */
     vl_calls = 0;
@@ -275,11 +273,11 @@ TEST(the_per_process_lock_state_is_saved_and_restored)
     reset();
     DIR_$OLD_CREATE_DIRU(&parent, the_name, &name_len, &out_uid, &st);
     ASSERT_EQ(1, create_calls);
-    ASSERT_EQ(SAVED_UID.high, NAME_$LOCK_UID[5].high);
-    ASSERT_EQ(SAVED_UID.low,  NAME_$LOCK_UID[5].low);
-    ASSERT_EQ(SAVED_HND, NAME_$LOCK_HANDLE[5]);
-    ASSERT_EQ((uint16_t)SAVED_MOD, (uint16_t)NAME_$LOCK_MODE[5]);
-    ASSERT_EQ(SAVED_SLT, NAME_$LOCK_SLOT[5]);
+    ASSERT_EQ(SAVED_UID.high, NAME_$OLD_DIR_DATA.lock_uid[5].high);
+    ASSERT_EQ(SAVED_UID.low,  NAME_$OLD_DIR_DATA.lock_uid[5].low);
+    ASSERT_EQ(SAVED_HND, NAME_$OLD_DIR_DATA.lock_handle[5]);
+    ASSERT_EQ((uint16_t)SAVED_MOD, (uint16_t)NAME_$OLD_DIR_DATA.lock_mode[5]);
+    ASSERT_EQ(SAVED_SLT, NAME_$OLD_DIR_DATA.lock_slot[5]);
 }
 
 /* The restore happens even when dir_$old_create_obj fails (0x00E57264). */
@@ -289,8 +287,8 @@ TEST(the_lock_state_is_restored_after_a_failed_create)
     create_status = status_$naming_bad_directory;
     DIR_$OLD_CREATE_DIRU(&parent, the_name, &name_len, &out_uid, &st);
     ASSERT_EQ(0, add_calls);
-    ASSERT_EQ(SAVED_HND, NAME_$LOCK_HANDLE[5]);
-    ASSERT_EQ(SAVED_SLT, NAME_$LOCK_SLOT[5]);
+    ASSERT_EQ(SAVED_HND, NAME_$OLD_DIR_DATA.lock_handle[5]);
+    ASSERT_EQ(SAVED_SLT, NAME_$OLD_DIR_DATA.lock_slot[5]);
     ASSERT_EQ(status_$naming_bad_directory, st);
     ASSERT_EQ(1, unlock_calls);
     ASSERT_EQ(1, exit_super_calls);

@@ -6,8 +6,8 @@
  * Runs MAP_CASE over the name into the caller's buffer and then checks the
  * mapped result against two Pascal character sets kept in the OLD_DIR module
  * data area (A5 = 0xE7FD24, inherited from the DIR_$OLD_* caller):
- *   A5+0x00  NAME_$LEAF_CHAR_SET        every byte of the name
- *   A5+0x20  NAME_$LEAF_FIRST_CHAR_SET  the first byte only
+ *   A5+0x00  NAME_$OLD_DIR_DATA.leaf_char_set        bytes 2..len
+ *   A5+0x20  NAME_$OLD_DIR_DATA.leaf_first_char_set  the first byte only
  * Returns 0xFF when the name is acceptable, else 0.
  *
  * Frame (A6+): 0x08 name (long), 0x0C name_len (word -> D3w; its ADDRESS is
@@ -42,20 +42,12 @@ static int name_$leaf_in_set(const uint8_t *set, uint8_t ch)
 }
 
 /*
- * The first-character set at A5+0x20 is a 28-byte `set of chr(32)..chr(255)`
- * (NAME_$LEAF_FIRST_SET_SIZE) and NAME_$LOCK_SLOT starts right after it at
- * A5+0x3C.  The test at 0x00E54462-0x00E54476 indexes it with the bound-0xFF
- * formula and no lower-bound check, so set bytes 28..31 - consulted only for
- * ch < 0x20 - are the four bytes of NAME_$LOCK_SLOT[0], big-endian.
- * Reproduced rather than tidied: this is what the image does.
+ * Both sets are 32-byte `set of char' values (name/name.h), so the bound-0xFF
+ * index stays inside each.  Bytes 28..31 of the first-character set (ch <
+ * 0x20) are also the storage of NAME_$OLD_DIR_DATA.lock_slot[0], the bias slot
+ * of the lock-slot table; the image has them zero and only a process 0 lock
+ * would write them.  The union in name/name.h reproduces that overlay.
  */
-static uint8_t name_$leaf_first_set_byte(uint16_t idx)
-{
-    if (idx < NAME_$LEAF_FIRST_SET_SIZE) {
-        return NAME_$LEAF_FIRST_CHAR_SET[idx];
-    }
-    return (uint8_t)(NAME_$LOCK_SLOT[0] >> (24 - 8 * (idx - NAME_$LEAF_FIRST_SET_SIZE)));
-}
 
 int8_t name_$validate_leaf(char *name, uint16_t name_len,
                            uint8_t *parsed, uint16_t *parsed_len)
@@ -65,7 +57,6 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
     int16_t  len_slot = (int16_t)name_len;  /* the (0xc,A6) argument slot */
     uint16_t len;                           /* D1w */
     uint8_t  ch;
-    uint16_t idx;
     int16_t  count;
     int16_t  i;
 
@@ -98,8 +89,7 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
 
     /* 0x00E54462-0x00E54476: first byte against A5+0x20 */
     ch = parsed[0];
-    idx = (uint16_t)(0xFF - ch) >> 3;
-    if (((name_$leaf_first_set_byte(idx) >> (ch & 7)) & 1) == 0) {
+    if (!name_$leaf_in_set(NAME_$OLD_DIR_DATA.leaf_first_char_set, ch)) {
         goto done;
     }
 
@@ -114,7 +104,7 @@ int8_t name_$validate_leaf(char *name, uint16_t name_len,
     i = 2;
     do {
         ch = parsed[i - 1];
-        if (!name_$leaf_in_set(NAME_$LEAF_CHAR_SET, ch)) {
+        if (!name_$leaf_in_set(NAME_$OLD_DIR_DATA.leaf_char_set, ch)) {
             goto done;                                      /* 0x00E54498 */
         }
         i = (int16_t)(i + 1);

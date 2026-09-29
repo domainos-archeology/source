@@ -208,10 +208,10 @@ static int16_t not_a_dir_page[64];
 static void reset(void)
 {
     memset(&NAME_$DATA, 0, sizeof(NAME_$DATA));
-    memset(NAME_$LOCK_SLOT, 0, sizeof(NAME_$LOCK_SLOT));
-    memset(NAME_$LOCK_MODE, 0, sizeof(NAME_$LOCK_MODE));
-    memset(NAME_$LOCK_HANDLE, 0, sizeof(NAME_$LOCK_HANDLE));
-    memset(NAME_$LOCK_UID, 0, sizeof(NAME_$LOCK_UID));
+    memset(NAME_$OLD_DIR_DATA.lock_slot, 0, sizeof(NAME_$OLD_DIR_DATA.lock_slot));
+    memset(NAME_$OLD_DIR_DATA.lock_mode, 0, sizeof(NAME_$OLD_DIR_DATA.lock_mode));
+    memset(NAME_$OLD_DIR_DATA.lock_handle, 0, sizeof(NAME_$OLD_DIR_DATA.lock_handle));
+    memset(NAME_$OLD_DIR_DATA.lock_uid, 0, sizeof(NAME_$OLD_DIR_DATA.lock_uid));
     memset(PROC1_$TYPE, 0, sizeof(PROC1_$TYPE));
 
     PROC1_$CURRENT = TEST_PROC;
@@ -243,7 +243,7 @@ static void reset(void)
 /*
  * The two words at (0x10,A6) and (0x12,A6) are separate parameters: the
  * caller's `move.l #0x00040002,-(SP)` means lock_mode = 4, acl_rights = 2.
- * lock_mode reaches FILE_$PRIV_LOCK and NAME_$LOCK_MODE; acl_rights drives
+ * lock_mode reaches FILE_$PRIV_LOCK and NAME_$OLD_DIR_DATA.lock_mode; acl_rights drives
  * ACL_$RIGHTS and is zero-extended to a longword (0xE54976).
  */
 TEST(signature_splits_mode_and_rights)
@@ -257,7 +257,7 @@ TEST(signature_splits_mode_and_rights)
 
     ASSERT_EQ(1, mock_lock_calls);
     ASSERT_EQ(4, mock_lock_mode);                       /* not 2 */
-    ASSERT_EQ(4, NAME_$LOCK_MODE[TEST_PROC]);
+    ASSERT_EQ(4, NAME_$OLD_DIR_DATA.lock_mode[TEST_PROC]);
     ASSERT_EQ(1, mock_rights_calls);
     ASSERT_EQ(2, mock_rights_mask);                     /* not 4 */
     ASSERT_EQ(1, mock_rights_obj_type);                 /* ACL object type = directory */
@@ -322,7 +322,7 @@ TEST(mst_maps_status_tests_low_word_only)
 
     ASSERT_EQ(0x00120000, status);      /* not turned into an error */
     ASSERT_EQ(0, mock_unlock_calls);
-    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$LOCK_HANDLE[TEST_PROC]);
+    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$OLD_DIR_DATA.lock_handle[TEST_PROC]);
 
     reset();
     mock_maps_status = 0x00000007;      /* low half set */
@@ -341,21 +341,21 @@ TEST(per_process_tables_are_written)
     status_$t status = 0xdeadbeef;
 
     reset();
-    NAME_$LOCK_HANDLE[TEST_PROC] = 0xAAAAAAAA;
+    NAME_$OLD_DIR_DATA.lock_handle[TEST_PROC] = 0xAAAAAAAA;
     NAME_$LOCK_DIR(&uid, &handle, 7, 0, &status);
 
     /* A5+0x13E: the requested lock mode */
-    ASSERT_EQ(7, NAME_$LOCK_MODE[TEST_PROC]);
+    ASSERT_EQ(7, NAME_$OLD_DIR_DATA.lock_mode[TEST_PROC]);
     /* A5+0x3C: the slot passed to FILE_$PRIV_LOCK by reference */
-    ASSERT_EQ((uintptr_t)&NAME_$LOCK_SLOT[TEST_PROC], (uintptr_t)mock_lock_slot_io);
+    ASSERT_EQ((uintptr_t)&NAME_$OLD_DIR_DATA.lock_slot[TEST_PROC], (uintptr_t)mock_lock_slot_io);
     /* A5+0x2B8: the UID of the directory now locked */
-    ASSERT_EQ(TEST_DIR_UID.high, NAME_$LOCK_UID[TEST_PROC].high);
-    ASSERT_EQ(TEST_DIR_UID.low, NAME_$LOCK_UID[TEST_PROC].low);
+    ASSERT_EQ(TEST_DIR_UID.high, NAME_$OLD_DIR_DATA.lock_uid[TEST_PROC].high);
+    ASSERT_EQ(TEST_DIR_UID.low, NAME_$OLD_DIR_DATA.lock_uid[TEST_PROC].low);
     /* A5+0x1BC: cleared on entry, then set to the mapped base */
-    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$LOCK_HANDLE[TEST_PROC]);
+    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$OLD_DIR_DATA.lock_handle[TEST_PROC]);
     /* neighbouring slots are untouched */
-    ASSERT_EQ(0, NAME_$LOCK_MODE[TEST_PROC + 1]);
-    ASSERT_EQ(0, NAME_$LOCK_UID[TEST_PROC + 1].high);
+    ASSERT_EQ(0, NAME_$OLD_DIR_DATA.lock_mode[TEST_PROC + 1]);
+    ASSERT_EQ(0, NAME_$OLD_DIR_DATA.lock_uid[TEST_PROC + 1].high);
 }
 
 /*
@@ -374,7 +374,7 @@ TEST(lock_failure_sets_high_bit_and_leaves_uid_clear)
     NAME_$LOCK_DIR(&uid, &handle, 1, 0, &status);
 
     ASSERT_EQ((status_$t)0x800F0002u, status);
-    ASSERT_EQ(0, NAME_$LOCK_UID[TEST_PROC].high);
+    ASSERT_EQ(0, NAME_$OLD_DIR_DATA.lock_uid[TEST_PROC].high);
     ASSERT_EQ(1, mock_enter_super_calls);
     ASSERT_EQ(0, mock_maps_calls);
     ASSERT_EQ(0, mock_unlock_calls);
@@ -506,7 +506,7 @@ TEST(wdir_cached_mapping)
 
     ASSERT_EQ(0, mock_maps_calls);
     ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), handle);
-    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$LOCK_HANDLE[TEST_PROC]);
+    ASSERT_EQ(NAME_$PTR_TO_HANDLE(dir_page), NAME_$OLD_DIR_DATA.lock_handle[TEST_PROC]);
 
     /* The UID must match this ASID's slot, not a neighbour's. */
     reset();
@@ -577,7 +577,7 @@ TEST(non_directory_is_rejected_and_unlocked)
     ASSERT_EQ(0x000E000D, status);      /* status_$naming_bad_directory */
     ASSERT_EQ(1, mock_unlock_calls);
     /* the handle was still recorded before the type check (0xE54B02) */
-    ASSERT_EQ(NAME_$PTR_TO_HANDLE(not_a_dir_page), NAME_$LOCK_HANDLE[TEST_PROC]);
+    ASSERT_EQ(NAME_$PTR_TO_HANDLE(not_a_dir_page), NAME_$OLD_DIR_DATA.lock_handle[TEST_PROC]);
 }
 
 /* An ACL failure converts the status and releases the lock (0xE5499A). */

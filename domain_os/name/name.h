@@ -209,40 +209,126 @@ extern int16_t ACL_TYPE_DIR;    /* 0xE54B26: literal word 1 - ACL object type (d
 
 /*
  * ============================================================================
- * Per-process directory-lock state (NAME/DIR module A5 data area)
+ * OLD_DIR module data: per-process directory-lock state and the leaf sets
  * ============================================================================
  *
- * NAME_$LOCK_DIR, NAME_$UNLOCK_DIR and the DIR_$OLD_* entry points all run
- * with A5 = 0xE7FD24 (`lea (0xe7fd24).l,A5` in every gate) and address this
- * state as (offset,A5).  All four tables are indexed *directly* by
- * PROC1_$CURRENT - the code applies no 1-based adjustment - and each holds
- * NAME_$MAX_LOCK_PROCS entries; DIR_$OLD_INIT (0xE314F4) clears 0x3A == 58
- * NAME_$LOCK_UID entries with `moveq #0x39` + `dbf`.
+ * SAU2 map: "D E7FD24 OLD_DIR size = 4C0", 0x00E7FD24..0x00E801E4, with no
+ * interior symbols (the map exports nothing from it; the field names below
+ * are the tree's).  It is the data block of the OLD_DIR code segment
+ * (I E53EF8, size 4308) that holds NAME_$LOCK_DIR (0x00E54854),
+ * NAME_$UNLOCK_DIR (0x00E54734), name_$validate_leaf (0x00E54414) and the
+ * DIR_$OLD_* entry points: every one of those gates begins with
+ * `lea (0xe7fd24).l,A5` (e.g. 0x00E54B30) and the NAME_$ routines inherit
+ * that A5.  DIR_$OLD_INIT (0x00E314F4) runs with another A5 and reaches the
+ * block as `movea.l #0xe7fd24,A0` (0x00E31502).  NAME_$DATA above is the
+ * separate NAME segment at 0x00E80264.
+ *
+ * Image contents (`gsk read 0xE7FD24 0x4C0`): the two sets below, every
+ * other byte zero.
+ *
+ * Layout.  The two character sets are 32-byte Pascal `set of char` values
+ * (name_$validate_leaf indexes both with (0xFF - ch) >> 3 = 0..31, 0x00E5446C
+ * and 0x00E54490).  The four per-process tables are Pascal arrays [1..64]:
+ * element 1 of each sits right after the previous object and element 64
+ * ends exactly where the next begins -
+ *     sets    0x000..0x040
+ *     slot    0x040 + 64*4 = 0x140
+ *     mode    0x140 + 64*2 = 0x1C0
+ *     handle  0x1C0 + 64*4 = 0x2C0
+ *     uid     0x2C0 + 64*8 = 0x4C0 = the map's segment size
+ * - and the compiler folds the lower bound into the displacement, so every
+ * access is (element-1 offset - stride, A5 + index*stride):
+ *     slot    pea (0x3c,A5,D6w*1), D6 = pid*4         0x00E5489A/0x00E548AC
+ *     mode    move.w D2w,(0x13e,A0), A0 = A5 + pid*2  0x00E5488E/0x00E54894
+ *     handle  clr.l (0x1bc,A0), A0 = A5 + pid*4       0x00E5489C/0x00E548A0
+ *     uid     move.l (A1)+,(0x2b8,A0), A0 = A5+pid*8  0x00E548E6/0x00E548EA
+ * Following docs/design-per-process-data.md section 3, each table is
+ * declared at that biased base, sized for every index the code produces
+ * (PROC1_$CURRENT, 0..64 = PROC1_MAX_PROCESSES entries; DIR_$OLD_INIT's
+ * loop index 0..57), and indexed with the index the assembly computes.
+ * Element 0 of each is therefore the bias slot and overlays the last bytes
+ * of the object before it, so the block is a union of one arm per object:
+ *     lock_slot[0]   = leaf_first_char_set[28..31]
+ *     lock_mode[0]   = bytes 2..3 of lock_slot[64] (its low-order half on m68k)
+ *     lock_handle[0] = lock_mode[63..64]
+ *     lock_uid[0]    = lock_handle[63..64]
+ * Only DIR_$OLD_INIT reaches an element 0 (it clears lock_uid[0].high, i.e.
+ * lock_handle[63]); the rest index with PROC1_$CURRENT, which is 1..64 (pid
+ * 0 is reserved, proc1/proc1_config.h; PROC1 crashes on it), so no process
+ * ever uses a bias slot.  The overlay is byte-exact on both builds; the
+ * bytes of a longword written through lock_slot[0] and read back through the
+ * set are in host order off m68k.
  */
-#define NAME_$MAX_LOCK_PROCS    58
+#define NAME_$LOCK_TABLE_SIZE   65  /* index 0..64: PROC1_$CURRENT's range
+                                     * (PROC1_MAX_PROCESSES, proc1/proc1_config.h) */
+#define NAME_$LEAF_SET_SIZE     32  /* a Pascal `set of char` */
 
-/*
- * The first 0x3C bytes of the same module data area are two Pascal character
- * sets that name_$validate_leaf (0x00E54414) tests with the bound-0xFF idiom
- * `btst.b ch,((0xFF-ch)>>3,A5[+0x20])`: bit (ch & 7) of byte (0xFF - ch) >> 3.
- * Image bytes (SAU2 map: D E7FD24 OLD_DIR size 4C0):
- *   0xE7FD24  00 x16  7f ff ff ff ef ff ff ff ff ff 7f fe  00 00 00 00
- *   0xE7FD44  00 x16  3f ff ff fe ff ff ff ff ff ff 3f fe
- * i.e. every byte of a leaf may be 0x21..0x7E except '/' and '\'; the first
- * byte additionally may not be '.', '`' or '~'.  The first set is a 32-byte
- * `set of char`; the second is a 28-byte `set of chr(32)..chr(255)` and
- * NAME_$LOCK_SLOT[0] begins right after it at A5+0x3C, so a first byte below
- * 0x20 makes name_$validate_leaf read its bit out of that lock slot.
- */
-#define NAME_$LEAF_SET_SIZE         32  /* A5+0x00..0x1F */
-#define NAME_$LEAF_FIRST_SET_SIZE   28  /* A5+0x20..0x3B */
-extern uint8_t NAME_$LEAF_CHAR_SET[NAME_$LEAF_SET_SIZE];              /* A5+0x000 = 0xE7FD24 */
-extern uint8_t NAME_$LEAF_FIRST_CHAR_SET[NAME_$LEAF_FIRST_SET_SIZE];  /* A5+0x020 = 0xE7FD44 */
+typedef struct name_$old_dir_data_t {
+    union {
+        struct {
+            /* +0x000 (0x00E7FD24): bytes 1..len-1 of a leaf ('!'..'~'
+             * except '/' and '\', bytes 28..31 = chr(0)..chr(31) empty). */
+            uint8_t  leaf_char_set[NAME_$LEAF_SET_SIZE];
+            /* +0x020 (0x00E7FD44): byte 0 of a leaf; also excludes '.',
+             * '`' and '~'. */
+            uint8_t  leaf_first_char_set[NAME_$LEAF_SET_SIZE];
+        };
+        struct {
+            uint8_t  _slot_bias[0x03C];
+            /* +0x03C (0x00E7FD60), Pascal [1..64] at +0x040: the
+             * FILE_$PRIV_LOCK lock-context slot, passed by reference as
+             * its lock_ptr_out (0x00E548AC) and passed back by value to
+             * FILE_$PRIV_UNLOCK (0x00E54816). */
+            uint32_t lock_slot[NAME_$LOCK_TABLE_SIZE];
+        };
+        struct {
+            uint8_t  _mode_bias[0x13E];
+            /* +0x13E (0x00E7FE62), Pascal [1..64] at +0x140: lock mode
+             * requested/held (0x00E54894, read 0x00E5480A). */
+            int16_t  lock_mode[NAME_$LOCK_TABLE_SIZE];
+        };
+        struct {
+            uint8_t  _handle_bias[0x1BC];
+            /* +0x1BC (0x00E7FEE0), Pascal [1..64] at +0x1C0: mapped base
+             * address of the locked directory, a 32-bit VA / handle
+             * (cleared 0x00E548A0, stored 0x00E54B02, read 0x00E54764). */
+            uint32_t lock_handle[NAME_$LOCK_TABLE_SIZE];
+        };
+        struct {
+            uint8_t  _uid_bias[0x2B8];
+            /* +0x2B8 (0x00E7FFDC), Pascal [1..64] at +0x2C0: UID of the
+             * directory the process has locked; .high == 0 means none
+             * (stored 0x00E548EA, tested 0x00E54B42, cleared 0x00E54834
+             * and by DIR_$OLD_INIT 0x00E31508). */
+            uid_t    lock_uid[NAME_$LOCK_TABLE_SIZE];
+        };
+    };
+} name_$old_dir_data_t;
 
-extern uint32_t NAME_$LOCK_SLOT[NAME_$MAX_LOCK_PROCS];   /* A5+0x03C = 0xE7FD60: FILE_$PRIV_LOCK slot */
-extern int16_t  NAME_$LOCK_MODE[NAME_$MAX_LOCK_PROCS];   /* A5+0x13E = 0xE7FE62: lock mode in effect */
-extern uint32_t NAME_$LOCK_HANDLE[NAME_$MAX_LOCK_PROCS]; /* A5+0x1BC = 0xE7FEE0: mapped directory base */
-extern uid_t    NAME_$LOCK_UID[NAME_$MAX_LOCK_PROCS];    /* A5+0x2B8 = 0xE7FFDC: UID of the locked dir */
+/* The map's segment size; every element is pointer-free, so the offsets
+ * and strides are asserted unconditionally. */
+#define NAME_$OLD_DIR_DATA_SIZE 0x4C0
+_Static_assert(sizeof(name_$old_dir_data_t) == NAME_$OLD_DIR_DATA_SIZE,
+               "OLD_DIR block: map size 0x4C0");
+_Static_assert(offsetof(name_$old_dir_data_t, leaf_char_set) == 0x000, "leaf_char_set");
+_Static_assert(offsetof(name_$old_dir_data_t, leaf_first_char_set) == 0x020, "leaf_first_char_set");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_slot) == 0x03C, "lock_slot");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_mode) == 0x13E, "lock_mode");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_handle) == 0x1BC, "lock_handle");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_uid) == 0x2B8, "lock_uid");
+_Static_assert(sizeof(((name_$old_dir_data_t *)0)->lock_slot[0]) == 4, "lock_slot stride (lsl.w #2)");
+_Static_assert(sizeof(((name_$old_dir_data_t *)0)->lock_mode[0]) == 2, "lock_mode stride (add.w D0,D0)");
+_Static_assert(sizeof(((name_$old_dir_data_t *)0)->lock_handle[0]) == 4, "lock_handle stride (lsl.w #2)");
+_Static_assert(sizeof(((name_$old_dir_data_t *)0)->lock_uid[0]) == 8, "lock_uid stride (lsl.w #3)");
+/* Element 1 of each Pascal [1..64] table tiles the block: */
+_Static_assert(offsetof(name_$old_dir_data_t, lock_slot[1]) == 0x040, "slot[1] follows the sets");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_mode[1]) == 0x140, "mode[1] follows slot[64]");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_handle[1]) == 0x1C0, "handle[1] follows mode[64]");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_uid[1]) == 0x2C0, "uid[1] follows handle[64]");
+_Static_assert(offsetof(name_$old_dir_data_t, lock_uid[NAME_$LOCK_TABLE_SIZE]) == NAME_$OLD_DIR_DATA_SIZE,
+               "uid[64] ends the block");
+
+MODULE_DATA_DECLARE(name_$old_dir_data_t, NAME_$OLD_DIR_DATA, 0x00E7FD24);
 
 /*
  * Directory handles

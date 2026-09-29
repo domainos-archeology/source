@@ -65,8 +65,9 @@ procedures inherit it, and everything the module keeps between calls lives
 at `(off,A5)`. Per-process and per-ASID state is an array inside that block
 indexed by `PROC1_$CURRENT` or `PROC1_$AS_ID`, with the Pascal lower bound
 folded into the base address by the compiler (`(-0x2,A0,D6w)` for a
-`[1..n]` word array is element 1 at `A0`; `(0x3c,A5,D6w)` for a `[0..n]`
-longword array).
+`[1..n]` word array is element 1 at `A0`; `(0x3c,A5,D6w)` for the `[1..64]`
+longword table whose element 1 is at A5+0x40 - corrected 2026-09-28, step 2:
+it is not a `[0..n]` array).
 
 ## 3. Proposed C representation
 
@@ -89,6 +90,11 @@ MODULE_DATA_DECLARE(name_$data_t, NAME_$DATA);       /* extern */
 /* name/name_data.c */
 MODULE_DATA_DEFINE(name_$data_t, NAME_$DATA, 0xE7FD24);
 ```
+
+(The sketch as first proposed.  Step 2, 2026-09-28, landed it as
+`NAME_$OLD_DIR_DATA` / `name_$old_dir_data_t` - `NAME_$DATA` is the NAME
+segment at 0xE80264 - with the four tables as Pascal `[1..64]`, each declared
+at its bias slot; see the per-process convention below and `name/name.h`.)
 
 `arch/arch.h` provides the family:
 
@@ -134,8 +140,14 @@ Per-process arrays follow one convention, enforced by the assert set:
   every index the code can produce, and index with the Pascal index the
   assembly computes.** `PROC1_$TYPE` is `uint16_t type[PROC1_MAX+1]` at
   0xE2612A (element 0 at the `-0x2` bias, unused) so `type[pid]` is direct;
-  `P2_INFO_TABLE` stays 1-based via `P2_INFO_ENTRY(idx)`; `NAME_$DATA.lock_slot`
-  is 0-based because `(0x3c,A5,D6w*4)` starts at A5+0x3C with pid 0.
+  `P2_INFO_TABLE` stays 1-based via `P2_INFO_ENTRY(idx)`;
+  `NAME_$OLD_DIR_DATA.lock_slot` is declared at A5+0x3C because
+  `(0x3c,A5,D6w*4)` is element 0 of a Pascal `[1..64]` table whose element 1
+  is at A5+0x40 (step 2, 2026-09-28: the four lock tables are `[1..64]`, not
+  58 entries - element 1 of each follows the previous object and element 64
+  ends the 0x4C0-byte OLD_DIR segment).  Where a bias slot overlays the
+  previous object inside one block, the block is a union of one arm per
+  object so both names keep their A5 offsets (`name/name.h`).
 - Never write `[x-1]` or `[x+1]` at a use site. If the assembly has a bias,
   the bias goes into the declaration (base address and bound), once, with the
   citing instruction in a comment.
@@ -178,7 +190,8 @@ delete its `#if ARCH_M68K` data macros, add the linker line, rebuild with
    `make check` verifies the order. `STOP_$DATA.wire_start` is the link-time
    address of `STOP_$WATCH`; `wire_end` keeps the image literal until the
    FILE_ block exists (source-h5ro).
-2. **name** (four lock arrays, A5 0xE7FD24) and **smd** (`smd_globals_t`
+2. **name** (four lock arrays, A5 0xE7FD24; done as `NAME_$OLD_DIR_DATA`,
+   since `NAME_$DATA` already names the NAME segment at 0xE80264) and **smd** (`smd_globals_t`
    at 0xE82B8C is already asserted end to end).
 3. **netlog, xns, pmap, route, rip, asknode, ring, sock, pkt, msg**: each
    has a base macro and a host variable today; the struct exists for most.
