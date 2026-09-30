@@ -37,10 +37,8 @@
 #define status_$software_detected_checksum_error    0x0008001F
 #define status_$checksum_error_in_read_after_write  0x00080020
 
-/* Recoverable driver errors that DISK_IO retries past (0xe3d77c-0xe3d792) */
-#define status_$disk_recoverable_1  0x00080031
-#define status_$disk_recoverable_2  0x0008002F
-#define status_$disk_recoverable_3  0x00080030
+/* Recoverable driver errors that DISK_IO retries past (0xe3d77c-0xe3d792):
+ * the status_$disk_ok_after_* codes in disk/disk.h */
 
 /* Internal operation codes handed to disk_$map_request / DISK_$DO_IO */
 #define DISK_INTERNAL_OP_READ   1
@@ -321,9 +319,9 @@ status_$t DISK_IO(uint16_t op, uint16_t vol_idx, uint32_t ppn, uint32_t daddr,
         disk_$io_error((int16_t)io_volx, req, info);    /* 0xe3d766 */
 
         /* 0xe3d778-0xe3d796 */
-        if (req->status != status_$disk_recoverable_1 &&
-            req->status != status_$disk_recoverable_2 &&
-            req->status != status_$disk_recoverable_3) {
+        if (req->status != status_$disk_ok_after_device_recovery &&
+            req->status != status_$disk_ok_after_retry &&
+            req->status != status_$disk_ok_after_crc_correction) {
             goto cleanup;
         }
         req->status = status_$ok;

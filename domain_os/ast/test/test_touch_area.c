@@ -232,8 +232,8 @@ void DISK_$RTN_QBLKS(int16_t count, uint32_t qblk_head, uint32_t qblk_tail)
     (void)count; (void)qblk_head; (void)qblk_tail;
 }
 
-void DISK_$READ_MULTI(uint16_t vol_idx, int16_t flags1, int16_t flags2,
-                      int32_t qblk_head, uint32_t qblk_tail,
+void DISK_$READ_MULTI(uint16_t vol_idx, int8_t flags1, int8_t flags2,
+                      uint32_t qblk_head, uint32_t qblk_tail,
                       int16_t *pages_read, status_$t *status)
 {
     (void)vol_idx; (void)flags1; (void)flags2;

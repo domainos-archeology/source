@@ -34,11 +34,13 @@
  */
 #define status_$reference_to_illegal_address 0x00040004 /* Invalid VA */
 #define status_$mst_object_not_found 0x00040001 /* Object UID not found */
+#define status_$mst_uid_not_vm_area 0x00040012 /* "specified UID is not for a VM area" (SR10.4 text; absent from the 10.2 table) */
 #define status_$no_asid_available 0x00040006    /* No free ASIDs */
 #define status_$no_space_available 0x00040003   /* Segment table full */
 #define status_$mst_guard_fault 0x0004000a /* "guard fault" (SR10.4 stcodes 4000a) */
 #define status_$mst_access_violation 0x00040005 /* Access rights violation */
 #define status_$mst_invalid_length 0x00040002  /* "invalid length" (stcodes 40002) */
+#define status_$mst_object_is_not_mapped 0x00040007  /* "object is not mapped" (stcodes 40007) */
 #define status_$mst_insufficient_rights 0x00040009 /* "insufficient rights" (40009) */
 #define status_$mst_uid_mismatch 0x0004000d    /* "uid mismatch" (4000d) */
 
@@ -382,7 +384,13 @@ void MST_$REMAP(void);
 void *MST_$REMAP_PRIVI(void *config1, uint32_t *va_ptr, void *config2,
                         uint32_t *offset_ptr, void *config3,
                         uint32_t *result_ptr, status_$t *status_ret);
-void MST_$GROW_AREA(void);
+/*
+ * MST_$GROW_AREA (0x00E4360C; mst/grow_area.c) - SVC TRAP4 0x07: resize the
+ * VM area the VA *va_ptr lies in to *virt_size_ptr / *commit_size_ptr,
+ * mapping or unmapping its 32 KB segments.
+ */
+void MST_$GROW_AREA(uint32_t *va_ptr, uint32_t *virt_size_ptr,
+                    uint32_t *commit_size_ptr, status_$t *status);
 
 /* Unmapping */
 

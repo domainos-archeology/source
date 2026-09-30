@@ -36,8 +36,9 @@ The frame locals are contiguous 36-byte blocks, so they model cleanly as one
 record (`acl_$set_re_sids_audit_t`, `acl_$set_res_sids_audit_t` in
 acl/acl_internal.h).  The flag word is 1 = attempt, 0 = success.
 
-`ACL_$ENTER_SUBS` is still **not emitted** (bead source-m5y2) even though
-acl/acl.h declares it and svc/svc_tables.c puts it in SVC slot 0x3C.
+`ACL_$ENTER_SUBS` is emitted in acl/enter_subs.c (bead source-m5y2, closed
+2026-09-29) with its helper acl_$sids_allowed (0x00E44CE8); it audits with
+AUDIT_$ENTER_SUBS_EU (0x00E85660), flag 0 = success, 1 = failure.
 
 ## ACL_$DATA and ACL_$INIT (0xE3109C)
 

@@ -13,6 +13,7 @@
 #include "pkt/pkt.h"     /* pkt_$info_t */
 #include "ec/ec.h"
 #include "app/app.h"     /* app_$receive_rec_t */
+#include "file/file.h"   /* file_$obj_loc_t */
 
 /*
  * NETWORK_$LOOPBACK_FLAG - Loopback mode indicator
@@ -182,84 +183,6 @@ _Static_assert(offsetof(network_$rcv_rec_t, node_b) == 0x0E, "rcv_rec.node_b");
 _Static_assert(offsetof(network_$rcv_rec_t, flags) == 0x14, "rcv_rec.flags");
 
 /*
- * network_$ps_frame_t - NETWORK_$PAGE_SERVER's frame (link.w A6,-0x384), the
- * record its nested procedures reach through the static link: the reply
- * sender 0x00E10510 (A1 = the server's A6) and
- * NETWORK_$PROCESS_PAGING_REQUEST 0x00E10628 (`movea.l (A6),A2`).  The
- * struct starts at A6-0x384; each field's comment gives its A6
- * displacement, and offset = 0x384 + displacement.  Regions no emitted code
- * names yet are opaque.  The server's eventcount pointer array (A6-0x70)
- * holds host pointers and is kept outside the struct (_70 is its slot).
- * Pointer-free, so the asserts are unconditional.
- */
-typedef struct network_$ps_frame_t {
-    uint8_t     _384[0x0A];
-    int16_t     reply_len;      /* -0x37A: reply template length */
-    int16_t     dest_sock;      /* -0x378 */
-    int16_t     request_id;     /* -0x376 */
-    uint16_t    rqst_copy_len;  /* -0x374 */
-    int16_t     data_len;       /* -0x372: reply data length */
-    int16_t     src_sock;       /* -0x370 */
-    uint16_t    pkt_flags;      /* -0x36E */
-    uint8_t     _36c[0x0C];
-    uint16_t    failure_word;   /* -0x360: NETWORK_$REPORT_FAILURE's word */
-    uint8_t     _35e[0x06];
-    ml_$spin_token_t token;     /* -0x358 */
-    uint16_t    _356;
-    uint32_t    src_node;       /* -0x354 */
-    uint32_t    src_node_or;    /* -0x350 */
-    uint32_t    dest_node;      /* -0x34C */
-    uint32_t    routing_key;    /* -0x348 */
-    uint32_t    hdr_pa;         /* -0x344 */
-    uint32_t    zero_ppn;       /* -0x340 */
-    status_$t   status;         /* -0x33C */
-    uint8_t     _338[0x08];
-    uint32_t    deadline;       /* -0x330: compared by the reply sender */
-    uint8_t     _32c[0x08];
-    uint32_t    arrival;        /* -0x324: app_$receive_rec_t.src_addr */
-    uint8_t     _320[0x24];
-    uint32_t    rtn_hdr_va;     /* -0x2FC */
-    uint8_t     overflow_rqst[0xB8]; /* -0x2F8 */
-    uint32_t    data_pages[4];  /* -0x240 */
-    uint8_t     rqst[0x48];     /* -0x230 */
-    uint8_t     reply[0xB8];    /* -0x1E8 */
-    uint8_t     _130[0xC0];
-    uint8_t     _70[0x10];      /* -0x070: eventcount pointers (see above) */
-    uint32_t    waits[4];       /* -0x060 */
-    pkt_$info_t pkt_info;       /* -0x050: NETWORK_$SERVER_PKT_INFO copy */
-    app_$receive_rec_t rec;     /* -0x030 */
-    uint8_t     _04[0x04];
-} network_$ps_frame_t;
-
-#define NETWORK_PS_OFF(disp)    (0x384 + (disp))
-_Static_assert(offsetof(network_$ps_frame_t, reply_len) == NETWORK_PS_OFF(-0x37A), "ps.reply_len");
-_Static_assert(offsetof(network_$ps_frame_t, pkt_flags) == NETWORK_PS_OFF(-0x36E), "ps.pkt_flags");
-_Static_assert(offsetof(network_$ps_frame_t, failure_word) == NETWORK_PS_OFF(-0x360), "ps.failure_word");
-_Static_assert(offsetof(network_$ps_frame_t, token) == NETWORK_PS_OFF(-0x358), "ps.token");
-_Static_assert(offsetof(network_$ps_frame_t, src_node) == NETWORK_PS_OFF(-0x354), "ps.src_node");
-_Static_assert(offsetof(network_$ps_frame_t, status) == NETWORK_PS_OFF(-0x33C), "ps.status");
-_Static_assert(offsetof(network_$ps_frame_t, deadline) == NETWORK_PS_OFF(-0x330), "ps.deadline");
-_Static_assert(offsetof(network_$ps_frame_t, arrival) == NETWORK_PS_OFF(-0x324), "ps.arrival");
-_Static_assert(offsetof(network_$ps_frame_t, rtn_hdr_va) == NETWORK_PS_OFF(-0x2FC), "ps.rtn_hdr_va");
-_Static_assert(offsetof(network_$ps_frame_t, overflow_rqst) == NETWORK_PS_OFF(-0x2F8), "ps.overflow_rqst");
-_Static_assert(offsetof(network_$ps_frame_t, data_pages) == NETWORK_PS_OFF(-0x240), "ps.data_pages");
-_Static_assert(offsetof(network_$ps_frame_t, rqst) == NETWORK_PS_OFF(-0x230), "ps.rqst");
-_Static_assert(offsetof(network_$ps_frame_t, reply) == NETWORK_PS_OFF(-0x1E8), "ps.reply");
-_Static_assert(offsetof(network_$ps_frame_t, waits) == NETWORK_PS_OFF(-0x060), "ps.waits");
-_Static_assert(offsetof(network_$ps_frame_t, pkt_info) == NETWORK_PS_OFF(-0x050), "ps.pkt_info");
-_Static_assert(offsetof(network_$ps_frame_t, rec) == NETWORK_PS_OFF(-0x030), "ps.rec");
-_Static_assert(sizeof(network_$ps_frame_t) == 0x384, "ps frame: link.w A6,-0x384");
-
-/*
- * NETWORK_$PROCESS_PAGING_REQUEST (0x00E10628, 3842 bytes) - the page
- * server's nested procedure for a request on socket 1 (0x00E11708), which
- * reaches the server's frame through `movea.l (A6),A2`.  No map symbol.
- * TODO(source-590f): not yet emitted; it belongs in network/page_server.c
- * as a static taking the frame, like network_$ps_send_reply.
- */
-void NETWORK_$PROCESS_PAGING_REQUEST(network_$ps_frame_t *ps);
-
-/*
  * network_$c_zero_long - the by-reference zero longword at 0x00E1050C
  * (NETWORK_$REPORT_FAILURE's constant pool), shared by
  * NETWORK_$REPORT_FAILURE and NETWORK_$REQUEST_SERVER.  Defined in
@@ -336,6 +259,345 @@ _Static_assert(offsetof(network_$pagin_reply_t, dtm_high) == 0x34, "pagin_reply.
 _Static_assert(offsetof(network_$pagin_reply_t, clock_high) == 0x3C, "pagin_reply.clock (-0x8c)");
 _Static_assert(offsetof(network_$pagin_reply_t, acl_high) == 0x44, "pagin_reply.acl (-0x84)");
 _Static_assert(sizeof(network_$pagin_reply_t) == 0xB8, "pagin_reply: A6-0xC8 .. A6-0x10");
+
+/*
+ * ============================================================================
+ * The page server's request and reply records
+ *
+ * NETWORK_$PROCESS_PAGING_REQUEST (0x00E10628) copies at most 0x32 request
+ * bytes into the server frame at A6-0x230 (network_$ps_rqst_t, 0x48 bytes)
+ * and builds its reply at A6-0x1E8 (network_$ps_reply_t, 0xB8 bytes).  The
+ * request type word (+0) selects the shape through the jump table at
+ * 0x00E1077E; the reply type is the request type + 1.  Wire records with
+ * longwords on odd word boundaries, so every arm is packed.
+ * ============================================================================
+ */
+
+/* Request 4 (page-out), handled at 0x00E10CDA; reply 5. */
+typedef struct network_$pagout_rqst_t {
+    int16_t     type;           /* 0x00: 4 */
+    uint32_t    chksum;         /* 0x02: page checksum, 0 = none (0x00E10CF8) */
+    network_$page_request_t req;/* 0x06: object and page (copied to A6-0x30) */
+    int8_t      flag;           /* 0x26: TRUE -> flags 1 for AST_$ASSOC /
+                                 *       AST_$TOUCH (0x00E10D3E) */
+    uint8_t     _27;
+    int16_t     version;        /* 0x28: >= 4 gets the whole DTM low word
+                                 *       (0x00E1100E) */
+} __attribute__((packed)) network_$pagout_rqst_t;
+
+_Static_assert(offsetof(network_$pagout_rqst_t, chksum) == 0x02, "pagout_rqst.chksum (-0x22e)");
+_Static_assert(offsetof(network_$pagout_rqst_t, req) == 0x06, "pagout_rqst.req (-0x22a)");
+_Static_assert(offsetof(network_$pagout_rqst_t, flag) == 0x26, "pagout_rqst.flag (-0x20a)");
+_Static_assert(offsetof(network_$pagout_rqst_t, version) == 0x28, "pagout_rqst.version (-0x208)");
+
+/* Request 6 (get attributes), handled at 0x00E112FC; reply 7. */
+typedef struct network_$getattr_rqst_t {
+    int16_t     type;           /* 0x00: 6 */
+    uid_t       uid;            /* 0x02: the object (short requests) */
+    uint8_t     _0a;
+    int8_t      big;            /* 0x0B: TRUE -> AST_$GET_ATTRIBUTES flags
+                                 *       0x281, else 0x81 (0x00E1138E) */
+    int16_t     version;        /* 0x0C: < 5 wants the old 0x40-byte record */
+    uint8_t     _0e[4];
+    file_$obj_loc_t loc;        /* 0x12: location record, when the request
+                                 *       is 0x32 bytes long (0x00E1133E) */
+} __attribute__((packed)) network_$getattr_rqst_t;
+
+_Static_assert(offsetof(network_$getattr_rqst_t, uid) == 0x02, "getattr_rqst.uid (-0x22e)");
+_Static_assert(offsetof(network_$getattr_rqst_t, big) == 0x0B, "getattr_rqst.big (-0x225)");
+_Static_assert(offsetof(network_$getattr_rqst_t, version) == 0x0C, "getattr_rqst.version (-0x224)");
+_Static_assert(offsetof(network_$getattr_rqst_t, loc) == 0x12, "getattr_rqst.loc (-0x21e)");
+_Static_assert(sizeof(network_$getattr_rqst_t) == 0x32, "getattr_rqst: the 0x32-byte form");
+
+/* Request 0xA (set attribute), handled at 0x00E110D0; reply 0xB. */
+typedef struct network_$setattr_rqst_t {
+    int16_t     type;           /* 0x00: 0xA */
+    int16_t     version;        /* 0x02: <= 4 gets bits 15..11 of the DTM
+                                 *       low word only (0x00E1115C) */
+    uid_t       uid;            /* 0x04 */
+    int16_t     attr_id;        /* 0x0C */
+    uint8_t     value[0x3A];    /* 0x0E: the value, to the end of the buffer */
+} __attribute__((packed)) network_$setattr_rqst_t;
+
+_Static_assert(offsetof(network_$setattr_rqst_t, uid) == 0x04, "setattr_rqst.uid (-0x22c)");
+_Static_assert(offsetof(network_$setattr_rqst_t, attr_id) == 0x0C, "setattr_rqst.attr_id (-0x224)");
+_Static_assert(offsetof(network_$setattr_rqst_t, value) == 0x0E, "setattr_rqst.value (-0x222)");
+_Static_assert(sizeof(network_$setattr_rqst_t) == 0x48, "setattr_rqst");
+
+/* The request buffer at A6-0x230; request 0xC is network_$pagin_rqst_t. */
+typedef union network_$ps_rqst_t {
+    int16_t                 type;       /* 0x00: the jump table index */
+    network_$pagin_rqst_t   pagin;      /* 0xC */
+    network_$pagout_rqst_t  pagout;     /* 4 */
+    network_$getattr_rqst_t getattr;    /* 6 */
+    network_$setattr_rqst_t setattr;    /* 0xA */
+    uint8_t                 bytes[0x48];
+} network_$ps_rqst_t;
+
+_Static_assert(sizeof(network_$ps_rqst_t) == 0x48, "ps rqst: A6-0x230 .. A6-0x1E8");
+
+/*
+ * network_$ps_attrs_t - the 0x90-byte attribute record AST_$GET_ATTRIBUTES
+ * fills at A6-0xC0 for a page-in (0x00E109C2); the page-in reply takes its
+ * three clocks (0x00E109D6-0x00E109F4).
+ */
+typedef struct network_$ps_attrs_t {
+    uint8_t     _00[0x1C];
+    clock_t     acl;            /* 0x1C -> reply acl   (-0xa4) */
+    uint8_t     _22[2];
+    clock_t     dtm;            /* 0x24 -> reply dtm   (-0x9c) */
+    uint8_t     _2a[0x0A];
+    clock_t     clock;          /* 0x34 -> reply clock (-0x8c) */
+    uint8_t     _3a[0x56];
+} __attribute__((packed)) network_$ps_attrs_t;
+
+_Static_assert(offsetof(network_$ps_attrs_t, acl) == 0x1C, "ps_attrs.acl");
+_Static_assert(offsetof(network_$ps_attrs_t, dtm) == 0x24, "ps_attrs.dtm");
+_Static_assert(offsetof(network_$ps_attrs_t, clock) == 0x34, "ps_attrs.clock");
+_Static_assert(sizeof(network_$ps_attrs_t) == 0x90, "ps_attrs: AST_ATTR_REC_SIZE");
+
+/* The reply's common head: type, status, and the version word most carry. */
+typedef struct network_$ps_reply_hdr_t {
+    int16_t     type;           /* 0x00: request type + 1 */
+    status_$t   status;         /* 0x02 */
+    int16_t     version;        /* 0x06: 8 in the replies that carry it */
+} __attribute__((packed)) network_$ps_reply_hdr_t;
+
+/*
+ * Reply 5 (page-out).  The request's 32-byte record is copied over
+ * +0x0A..+0x29 first (0x00E10FAC) and then partly overwritten, so the
+ * fields below overlay `req`.
+ */
+typedef struct network_$pagout_reply_t {
+    int16_t     type;           /* 0x00: 5 */
+    status_$t   status;         /* 0x02 */
+    uint8_t     _06[4];
+    union {
+        network_$page_request_t req;    /* 0x0A: the request's record */
+        struct {
+            uid_t       uid;            /* 0x0A */
+            uint32_t    page_num;       /* 0x12 */
+            uint32_t    dtm_high;       /* 0x16: the DTM set (0x00E10FFE) */
+            uint8_t     dtm_bits;       /* 0x1A: old replies: bits 15..11 of
+                                         *       the DTM low word (0x00E11028) */
+            uint8_t     _1b;
+            uint32_t    zero_1c;        /* 0x1C: 0 */
+            uint32_t    zero_20;        /* 0x20: 0 */
+            uint8_t     _24[6];
+        } __attribute__((packed)) f;
+    } __attribute__((packed)) u;
+    int16_t     version;        /* 0x2A: 8 */
+    uint16_t    dtm_low;        /* 0x2C: version >= 4 only */
+    clock_t     clock;          /* 0x2E: TIME_$CLOCK (0x00E10FCC) */
+} __attribute__((packed)) network_$pagout_reply_t;
+
+_Static_assert(offsetof(network_$pagout_reply_t, u.f.dtm_high) == 0x16, "pagout_reply.dtm_high (-0x1d2)");
+_Static_assert(offsetof(network_$pagout_reply_t, u.f.dtm_bits) == 0x1A, "pagout_reply.dtm_bits (-0x1ce)");
+_Static_assert(offsetof(network_$pagout_reply_t, u.f.zero_1c) == 0x1C, "pagout_reply (-0x1cc)");
+_Static_assert(offsetof(network_$pagout_reply_t, version) == 0x2A, "pagout_reply.version (-0x1be)");
+_Static_assert(offsetof(network_$pagout_reply_t, dtm_low) == 0x2C, "pagout_reply.dtm_low (-0x1bc)");
+_Static_assert(offsetof(network_$pagout_reply_t, clock) == 0x2E, "pagout_reply.clock (-0x1ba)");
+_Static_assert(sizeof(network_$pagout_reply_t) == 0x34, "pagout_reply: reply_len 0x34");
+
+/*
+ * Reply 7 (attributes).  Version >= 5 requests get the location record and
+ * the 0x90-byte attribute record (`new`, length 0xB8); older ones get the
+ * 0x40-byte old record at +6 (`old`, length 0x48), which for an object whose
+ * UID has bits 25..27 set is synthesised (0x00E113E4-0x00E11414).
+ */
+typedef struct network_$getattr_reply_t {
+    int16_t     type;           /* 0x00: 7 */
+    status_$t   status;         /* 0x02 */
+    union {
+        struct {
+            int16_t         version;    /* 0x06: 8 */
+            file_$obj_loc_t loc;        /* 0x08 */
+            uint8_t         attrs[0x90];/* 0x28: AST_$GET_ATTRIBUTES */
+        } __attribute__((packed)) new_;
+        struct {
+            union {
+                uint32_t    l[16];      /* 0x06: VTOCE_$NEW_TO_OLD's record */
+                struct {
+                    uint8_t     _06;
+                    uint8_t     kind;       /* 0x07: 3 */
+                    uint8_t     _08[2];
+                    uid_t       uid;        /* 0x0A */
+                    uint8_t     _12[8];
+                    uid_t       uid2;       /* 0x1A */
+                    uint32_t    size;       /* 0x22: 0x400 */
+                    uint8_t     _26[0x20];
+                } __attribute__((packed)) f;
+            } __attribute__((packed)) attrs;
+            int16_t         version;    /* 0x46: 8 */
+        } __attribute__((packed)) old;
+    } __attribute__((packed)) u;
+} __attribute__((packed)) network_$getattr_reply_t;
+
+_Static_assert(offsetof(network_$getattr_reply_t, u.new_.loc) == 0x08, "getattr_reply.loc (-0x1e0)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.new_.attrs) == 0x28, "getattr_reply.attrs (-0x1c0)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.old.attrs.f.kind) == 0x07, "getattr_reply.kind (-0x1e1)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.old.attrs.f.uid) == 0x0A, "getattr_reply.uid (-0x1de)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.old.attrs.f.uid2) == 0x1A, "getattr_reply.uid2 (-0x1ce)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.old.attrs.f.size) == 0x22, "getattr_reply.size (-0x1c6)");
+_Static_assert(offsetof(network_$getattr_reply_t, u.old.version) == 0x46, "getattr_reply.old version (-0x1a2)");
+_Static_assert(sizeof(network_$getattr_reply_t) == 0xB8, "getattr_reply: reply_len 0xB8");
+
+/* Reply 0xB (set attribute): the DTM that was set. */
+typedef struct network_$setattr_reply_t {
+    int16_t     type;           /* 0x00: 0xB */
+    status_$t   status;         /* 0x02 */
+    int16_t     version;        /* 0x06: 8 */
+    uint32_t    dtm_high;       /* 0x08 */
+    uint16_t    dtm_low;        /* 0x0C */
+} __attribute__((packed)) network_$setattr_reply_t;
+
+_Static_assert(offsetof(network_$setattr_reply_t, dtm_high) == 0x08, "setattr_reply.dtm_high (-0x1e0)");
+_Static_assert(sizeof(network_$setattr_reply_t) == 0x0E, "setattr_reply: reply_len 0xE");
+
+/* Reply 0xF (ring information): network.h's ring_info_t at +6. */
+typedef struct network_$ring_reply_t {
+    int16_t     type;           /* 0x00: 0xF */
+    status_$t   status;         /* 0x02: 0 */
+    ring_info_t info;           /* 0x06 */
+} __attribute__((packed)) network_$ring_reply_t;
+
+_Static_assert(offsetof(network_$ring_reply_t, info) == 0x06, "ring_reply.info (-0x1e2)");
+_Static_assert(sizeof(network_$ring_reply_t) == 0x80, "ring_reply: reply_len 0x80");
+
+/* The reply buffer at A6-0x1E8; reply 0xD is network_$pagin_reply_t. */
+typedef union network_$ps_reply_t {
+    int16_t                     type;
+    network_$ps_reply_hdr_t     hdr;
+    network_$pagin_reply_t      pagin;      /* 0xD */
+    network_$pagout_reply_t     pagout;     /* 5 */
+    network_$getattr_reply_t    getattr;    /* 7 */
+    network_$setattr_reply_t    setattr;    /* 0xB */
+    network_$ring_reply_t       ring;       /* 0xF */
+    uint8_t                     bytes[0xB8];
+} network_$ps_reply_t;
+
+_Static_assert(sizeof(network_$ps_reply_t) == 0xB8, "ps reply: A6-0x1E8 .. A6-0x130");
+
+/*
+ * network_$ps_frame_t - NETWORK_$PAGE_SERVER's frame (link.w A6,-0x384), the
+ * record its nested procedures reach through the static link: the reply
+ * sender 0x00E10510 (A1 = the server's A6) and
+ * NETWORK_$PROCESS_PAGING_REQUEST 0x00E10628 (`movea.l (A6),A2`).  The
+ * struct starts at A6-0x384; each field's comment gives its A6
+ * displacement, and offset = 0x384 + displacement.  Regions no code names
+ * are opaque.  The server's eventcount pointer array (A6-0x70) holds host
+ * pointers and is kept outside the struct (_70 is its slot).  Pointer-free,
+ * so the asserts are unconditional.  The three clocks the paging request
+ * logs are read as the longword at clock+2, i.e. the low 32 bits.
+ */
+typedef struct network_$ps_frame_t {
+    uint8_t     _384[0x0A];
+    int16_t     reply_len;      /* -0x37A: reply template length */
+    int16_t     dest_sock;      /* -0x378 */
+    int16_t     request_id;     /* -0x376 */
+    uint16_t    rqst_copy_len;  /* -0x374: request bytes copied, <= 0x32 */
+    int16_t     data_len;       /* -0x372: reply data length */
+    int16_t     src_sock;       /* -0x370 */
+    uint16_t    pkt_flags;      /* -0x36E */
+    uint8_t     _36c[0x06];
+    uint16_t    log_seg;        /* -0x366: NETLOG_$LOG_IT page >> 5 */
+    uint16_t    log_page;       /* -0x364: NETLOG_$LOG_IT page & 0x1F */
+    int16_t     touched;        /* -0x362: pages a page-in touched */
+    uint16_t    failure_word;   /* -0x360: NETWORK_$REPORT_FAILURE's word */
+    uint8_t     _35e[0x06];
+    ml_$spin_token_t token;     /* -0x358 */
+    uint16_t    _356;
+    uint32_t    src_node;       /* -0x354 */
+    uint32_t    src_node_or;    /* -0x350 */
+    uint32_t    dest_node;      /* -0x34C */
+    uint32_t    routing_key;    /* -0x348 */
+    uint32_t    hdr_pa;         /* -0x344 */
+    uint32_t    zero_ppn;       /* -0x340 */
+    status_$t   status;         /* -0x33C */
+    uint8_t     _338[0x08];
+    clock_t     deadline;       /* -0x330: TIME_$ABS_CLOCK when a page-out or
+                                 *         set-attribute is done; the reply
+                                 *         sender compares its high longword */
+    uint8_t     _32a[0x06];
+    clock_t     arrival;        /* -0x324: app_$receive_rec_t.src_addr/port */
+    uint8_t     _31e[0x02];
+    clock_t     start_clock;    /* -0x31C: TIME_$ABS_CLOCK at entry (logging) */
+    uint8_t     _316[0x02];
+    clock_t     end_clock;      /* -0x314: TIME_$ABS_CLOCK before logging */
+    uint8_t     _30e[0x0A];
+    uint32_t    copy_src_pa;    /* -0x304: partial page-out source */
+    uint32_t    copy_dst_pa;    /* -0x300: partial page-out destination */
+    uint32_t    rtn_hdr_va;     /* -0x2FC */
+    uint8_t     overflow_rqst[0xB8]; /* -0x2F8 */
+    uint32_t    data_pages[4];  /* -0x240 */
+    network_$ps_rqst_t  rqst;   /* -0x230 */
+    network_$ps_reply_t reply;  /* -0x1E8 */
+    uint32_t    old_attrs[16];  /* -0x130: VTOCE_$NEW_TO_OLD's output */
+    uint32_t    ppns[32];       /* -0x0F0: pages AREA_$TOUCH / AST_$TOUCH
+                                 *         return, [0..31] up to A6-0x70 */
+    uint8_t     _70[0x10];      /* -0x070: eventcount pointers (see above) */
+    uint32_t    waits[4];       /* -0x060 */
+    pkt_$info_t pkt_info;       /* -0x050: NETWORK_$SERVER_PKT_INFO copy */
+    app_$receive_rec_t rec;     /* -0x030 */
+    uint8_t     _04[0x04];
+} network_$ps_frame_t;
+
+#define NETWORK_PS_OFF(disp)    (0x384 + (disp))
+_Static_assert(offsetof(network_$ps_frame_t, reply_len) == NETWORK_PS_OFF(-0x37A), "ps.reply_len");
+_Static_assert(offsetof(network_$ps_frame_t, pkt_flags) == NETWORK_PS_OFF(-0x36E), "ps.pkt_flags");
+_Static_assert(offsetof(network_$ps_frame_t, log_seg) == NETWORK_PS_OFF(-0x366), "ps.log_seg");
+_Static_assert(offsetof(network_$ps_frame_t, touched) == NETWORK_PS_OFF(-0x362), "ps.touched");
+_Static_assert(offsetof(network_$ps_frame_t, failure_word) == NETWORK_PS_OFF(-0x360), "ps.failure_word");
+_Static_assert(offsetof(network_$ps_frame_t, token) == NETWORK_PS_OFF(-0x358), "ps.token");
+_Static_assert(offsetof(network_$ps_frame_t, src_node) == NETWORK_PS_OFF(-0x354), "ps.src_node");
+_Static_assert(offsetof(network_$ps_frame_t, status) == NETWORK_PS_OFF(-0x33C), "ps.status");
+_Static_assert(offsetof(network_$ps_frame_t, deadline) == NETWORK_PS_OFF(-0x330), "ps.deadline");
+_Static_assert(offsetof(network_$ps_frame_t, arrival) == NETWORK_PS_OFF(-0x324), "ps.arrival");
+_Static_assert(offsetof(network_$ps_frame_t, start_clock) == NETWORK_PS_OFF(-0x31C), "ps.start_clock");
+_Static_assert(offsetof(network_$ps_frame_t, end_clock) == NETWORK_PS_OFF(-0x314), "ps.end_clock");
+_Static_assert(offsetof(network_$ps_frame_t, copy_src_pa) == NETWORK_PS_OFF(-0x304), "ps.copy_src_pa");
+_Static_assert(offsetof(network_$ps_frame_t, rtn_hdr_va) == NETWORK_PS_OFF(-0x2FC), "ps.rtn_hdr_va");
+_Static_assert(offsetof(network_$ps_frame_t, overflow_rqst) == NETWORK_PS_OFF(-0x2F8), "ps.overflow_rqst");
+_Static_assert(offsetof(network_$ps_frame_t, data_pages) == NETWORK_PS_OFF(-0x240), "ps.data_pages");
+_Static_assert(offsetof(network_$ps_frame_t, rqst) == NETWORK_PS_OFF(-0x230), "ps.rqst");
+_Static_assert(offsetof(network_$ps_frame_t, reply) == NETWORK_PS_OFF(-0x1E8), "ps.reply");
+_Static_assert(offsetof(network_$ps_frame_t, old_attrs) == NETWORK_PS_OFF(-0x130), "ps.old_attrs");
+_Static_assert(offsetof(network_$ps_frame_t, ppns) == NETWORK_PS_OFF(-0x0F0), "ps.ppns");
+_Static_assert(offsetof(network_$ps_frame_t, waits) == NETWORK_PS_OFF(-0x060), "ps.waits");
+_Static_assert(offsetof(network_$ps_frame_t, pkt_info) == NETWORK_PS_OFF(-0x050), "ps.pkt_info");
+_Static_assert(offsetof(network_$ps_frame_t, rec) == NETWORK_PS_OFF(-0x030), "ps.rec");
+_Static_assert(sizeof(network_$ps_frame_t) == 0x384, "ps frame: link.w A6,-0x384");
+
+/*
+ * network_$ps_send_reply (0x00E10510) - the page server's reply sender, a
+ * procedure nested in NETWORK_$PAGE_SERVER (network/page_server.c).
+ */
+void network_$ps_send_reply(network_$ps_frame_t *ps);
+
+/*
+ * NETWORK_$PROCESS_PAGING_REQUEST (0x00E10628, 3842 bytes; no map symbol,
+ * inside the NETWORK code segment) - the page server's nested procedure for
+ * a request on socket 1 (0x00E11708), which reaches the server's frame
+ * through `movea.l (A6),A2`.  Emitted in network/process_paging_request.c.
+ */
+void NETWORK_$PROCESS_PAGING_REQUEST(network_$ps_frame_t *ps);
+
+/*
+ * network_$read_ahead_chksum_status - the status cell at 0x00E10268
+ * (00 11 00 10, status_$network_bad_checksum) that follows
+ * NETWORK_$READ_AHEAD; CRASH_SYSTEM is handed it PC-relative from
+ * NETWORK_$READ_AHEAD (0x00E0FEF4) and NETWORK_$PROCESS_PAGING_REQUEST
+ * (0x00E10D16).  Defined in network/read_ahead.c.
+ */
+extern const status_$t network_$read_ahead_chksum_status;
+
+/*
+ * NETWORK_$CLEAR_WIRED - 0xE24C5C (A5+0x360), map symbol (4 bytes to
+ * NULLPROC; its second word is NETWORK_$STD_OPEN_FLAG): a word counter of
+ * page-out pages whose wire count the page server had to clear
+ * (`addq.w #0x1,(0x360,A5)` at 0x00E10D76).
+ */
+extern uint16_t NETWORK_$CLEAR_WIRED;
 
 /*
  * NETWORK_$LOCK - Spin lock for network data protection

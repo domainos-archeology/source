@@ -70,6 +70,9 @@
 #define status_$invalid_volume_index 0x0008000f
 #define status_$invalid_logical_volume_index 0x00080014
 #define status_$invalid_unit_number 0x00080018
+#define status_$disk_ok_after_retry 0x0008002f            /* "disk operation completed successfully after retry" */
+#define status_$disk_ok_after_crc_correction 0x00080030   /* "... after crc correction" */
+#define status_$disk_ok_after_device_recovery 0x00080031  /* "... after device recovery" */
 #define status_$invalid_physical_volume_label 0x0008001a
 #define status_$storage_module_stopped 0x0008001b
 #define status_$disk_illegal_request_for_device 0x0008002a
@@ -637,13 +640,18 @@ void DISK_$WRITE(int16_t vol_idx, uint32_t daddr, uint32_t ppn, uint32_t *info,
                  status_$t *status);
 
 /*
- * Internal multi-block I/O (used by AST subsystem)
- * Takes queue block head/tail from DISK_$GET_QBLKS
+ * Multi-block I/O on queue block chains from DISK_$GET_QBLKS.
+ *
+ * DISK_$READ_MULTI (0x00E3CFCC; disk/read_multi.c): `mounted` and
+ * `check_hdr` are bytes in word slots ((0xa,A6), (0xc,A6)); the chain is the
+ * +0x08-linked one and qblk_tail is never read.
+ * DISK_$WRITE_MULTI (0x00E3CCEE; disk/write_multi.c): the list is linked
+ * through +0x00 and each block names its volume at +0x1F.
  */
-void DISK_$READ_MULTI(uint16_t vol_idx, int16_t flags1, int16_t flags2,
-                      int32_t qblk_head, uint32_t qblk_tail,
+void DISK_$READ_MULTI(uint16_t vol_idx, int8_t mounted, int8_t check_hdr,
+                      uint32_t qblk_head, uint32_t qblk_tail,
                       int16_t *pages_read, status_$t *status);
-void DISK_$WRITE_MULTI(int8_t flags, void *req_list, status_$t *status);
+void DISK_$WRITE_MULTI(int8_t all_mounted, void *req_list, status_$t *status);
 void DISK_$DO_IO(void *dev_entry, void *req, void *param_3, void *result);
 
 /* Allocation operations */

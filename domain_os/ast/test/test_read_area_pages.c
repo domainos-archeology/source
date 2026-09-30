@@ -86,7 +86,7 @@ static int rtnq_calls; static int16_t rtnq_count;
 void DISK_$RTN_QBLKS(int16_t count, uint32_t head, uint32_t tail) { (void)head; (void)tail; rtnq_calls++; rtnq_count = count; }
 
 static uint16_t rm_vol; static int16_t rm_f1, rm_f2; static int16_t rm_pages; static status_$t rm_status;
-void DISK_$READ_MULTI(uint16_t vol, int16_t f1, int16_t f2, int32_t head, uint32_t tail,
+void DISK_$READ_MULTI(uint16_t vol, int8_t f1, int8_t f2, uint32_t head, uint32_t tail,
                       int16_t *pages_read, status_$t *status)
 {
     (void)head; (void)tail;

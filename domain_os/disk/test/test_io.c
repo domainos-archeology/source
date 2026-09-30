@@ -421,7 +421,7 @@ static int test_recoverable_error_cleared(void)
 
     reset_all(0x8000);
     memset(info, 0, sizeof(info));
-    do_io_status = status_$disk_recoverable_2;
+    do_io_status = status_$disk_ok_after_retry;
 
     st = DISK_IO(0, TEST_VOL, 0x10, 0x20, info);
 

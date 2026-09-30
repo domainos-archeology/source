@@ -345,7 +345,7 @@ top:
          * head, tail, &pages_read, status); the two `st -(SP)` are single
          * bytes and the result slot is discarded.
          */
-        DISK_$READ_MULTI((uint16_t)area->volx, -1, -1, (int32_t)qblk_head,
+        DISK_$READ_MULTI((uint16_t)area->volx, -1, -1, qblk_head,
                          qblk_tail, &pages_read, status);
         got = (uint16_t)pages_read;                          /* 0x00E03E28 */
 

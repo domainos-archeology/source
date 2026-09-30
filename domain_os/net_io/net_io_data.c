@@ -20,6 +20,9 @@
 #include "net_io/net_io_internal.h"
 #include "ring/ring.h"   /* RING_$OVERFLOW_OVERFLOW .. RING_$DELIVERY_FAILED */
 
+/* NET_IO_$ALL_F_ADDR (0xE244F0): `gsk read 0xE244F0 4` = 00 0f ff ff */
+uint32_t NET_IO_$ALL_F_ADDR = 0x000FFFFF;
+
 /*
  * NET_IO_$NIL_DRIVER - the driver block ROUTE_$SERVICE hands
  * NET_IO_$CREATE_PORT for port type 1 (0x00E6A158).

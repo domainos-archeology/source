@@ -284,7 +284,7 @@ ppn = (uint16_t)*segmap;                       /* 0x00E035C4 */
              * 0x00E03806: the two `st -(SP)` pushes are Domain booleans
              * (0xFF == true) occupying one stack word each.
              */
-            DISK_$READ_MULTI((uint16_t)entry->volx, 0xFF, 0xFF,
+            DISK_$READ_MULTI((uint16_t)entry->volx, -1, -1,
                              qblk_head, qblk_tail, pages_read, status);
             pages_done = pages_read[0];                    /* 0x00E03828 */
 

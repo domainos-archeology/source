@@ -93,11 +93,12 @@
  * The crash status cells.  0x00E0F9FC (00 11 00 05) lies at the end of the
  * code before NETWORK_$GET_PKT_SIZE and is reached PC-relative from
  * 0x00E0FC58, 0x00E0FFA2 and 0x00E10010; 0x00E10268 (00 11 00 10) follows
- * this routine and is reached from 0x00E0FEF4.
+ * this routine and is reached from 0x00E0FEF4 (and from
+ * NETWORK_$PROCESS_PAGING_REQUEST, 0x00E10D16; shared, network_internal.h).
  */
 static const status_$t network_$read_ahead_crash_status =
     status_$network_receive_process_failed_to_start;     /* 0x00E0F9FC */
-static const status_$t network_$read_ahead_chksum_status =
+const status_$t network_$read_ahead_chksum_status =
     status_$network_bad_checksum;                         /* 0x00E10268 */
 
 int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,

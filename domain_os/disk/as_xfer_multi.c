@@ -151,7 +151,7 @@ void DISK_$AS_XFER_MULTI(uint16_t *vol_idx_ptr, int16_t *count_ptr,
         DISK_$WRITE_MULTI(0, ARCH_VA_TO_PTR(head), &st);            /* clr.w 0x00E6BAF4 */
         pages_done = count;                                         /* 0x00E6BB00 */
     } else {
-        DISK_$READ_MULTI(vol_idx, 0, 0, (int32_t)head, tail, &pages_done, &st);
+        DISK_$READ_MULTI(vol_idx, 0, 0, head, tail, &pages_done, &st);
     }
 
     /* 0x00E6BB24 - 0x00E6BB74: collect results along the +0x08 chain

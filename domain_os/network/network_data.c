@@ -113,6 +113,7 @@ int8_t   NETWORK_$STD_OPEN_FLAG = (int8_t)0xFF;   /* 0xE24C5E (+0x362) */
 uint16_t NETWORK_$REPORT_SEND_FLAGS = 0x0000;    /* 0xE24C58 (+0x35C): `gsk read 0xE24C58 2` = 00 00 */
 uint16_t NETWORK_$REPLY_SEND_FLAGS = 0x0000;     /* 0xE24C5A (+0x35E) */
 uint16_t NETWORK_$FILE_OVER_CNT;                 /* 0xE24C20 (+0x324) */
+uint16_t NETWORK_$CLEAR_WIRED;                   /* 0xE24C5C (+0x360) */
 
 /*
  * Spin lock for network data protection

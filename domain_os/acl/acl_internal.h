@@ -880,6 +880,17 @@ void acl_$setids(uid_t *uid, int8_t set, uid_t *sids, uint32_t *owner_ext,
                  int8_t *changed, status_$t *status_ret);
 
 /*
+ * acl_$sids_allowed (0x00E44CE8, 214 bytes, was FUN_00e44ce8; no map symbol)
+ *
+ * TRUE (0xFF) when every SID of `sids` is one process `pid` may assume: the
+ * user, group and org SIDs each equal the process's current or saved one,
+ * and the login SID is UID_$NIL or the saved or original login SID.  Called
+ * by ACL_$ENTER_SUBS (0x00E46EB0) and ACL_$CHECK_DEBUG_RIGHTS (0x00E48B22,
+ * 0x00E48B36).  Emitted in acl/sids_allowed.c.
+ */
+int8_t acl_$sids_allowed(acl_sid_block_t *sids, int16_t pid);
+
+/*
  * acl_$find_acl_slot (0x00E45E8E, was FUN_00e45e8e)
  *
  * Hashes `acl_uid` with UID_$HASH (0x00E45EB0) and walks the module's chained

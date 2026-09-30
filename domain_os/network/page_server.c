@@ -63,8 +63,8 @@
 /* Remote pool growth: `moveq #0x22,D1` at 0x00E11576 */
 #define NETWORK_PS_POOL_PAGES       0x22
 
-/* The reply sender's retry-with-new-header limit and "page-in" reply type */
-#define NETWORK_PS_REPLY_PAGIN      5           /* 0x00E10598 */
+/* The reply type the reply sender checks against the deadline: page-out */
+#define NETWORK_PS_REPLY_PAGOUT     5           /* 0x00E10598 */
 
 /* Longest request prefix copied on the overflow socket: `moveq #0x4,D0` */
 #define NETWORK_PS_OVERFLOW_COPY    4
@@ -79,7 +79,7 @@
  * ps->reply_len) with ps->data_len bytes of data from ps->data_pages and
  * sends it with NET_IO_$SEND, getting a new header and trying again while
  * the send fails, up to the retry count PKT_$BLD_INTERNET_HDR suggested.
- * A page-in reply (type 5) that has missed its deadline is not sent:
+ * A page-out reply (type 5) that has missed its deadline is not sent:
  * NETWORK_$2LONG1 is counted and the status is
  * status_$network_remote_node_failed_to_respond.
  *
@@ -87,7 +87,7 @@
  * (-0x10) hdr VA, (-0x12) port, (-0x14) timeout, (-0x16) retries,
  * (-0x1A) header length; D2w tries, D3w the retry limit, D4 the header VA.
  */
-static void network_$ps_send_reply(network_$ps_frame_t *ps)
+void network_$ps_send_reply(network_$ps_frame_t *ps)
 {
     net_io_$send_info_t send_info;     /* (-0x8,A6) */
     uint32_t send_hdr;                 /* (-0xC,A6) */
@@ -111,7 +111,7 @@ static void network_$ps_send_reply(network_$ps_frame_t *ps)
                               (uint16_t)ps->dest_sock, (int32_t)ps->src_node_or,
                               ps->src_node, (uint16_t)ps->src_sock,
                               &ps->pkt_info, (uint16_t)ps->request_id,
-                              ps->reply, (uint16_t)ps->reply_len,
+                              ps->reply.bytes, (uint16_t)ps->reply_len,
                               (uint16_t)ps->data_len, &port,
                               (pkt_$hdr_t *)ARCH_VA_TO_PTR(hdr_va), &hdr_len,
                               &retries, &timeout, &ps->status);
@@ -121,9 +121,10 @@ static void network_$ps_send_reply(network_$ps_frame_t *ps)
             break;                                         /* 0x00E10612 */
         }
 
-        /* 0x00E10598-0x00E105BE: a page-in reply that is too late */
-        if (*(int16_t *)(void *)ps->reply == NETWORK_PS_REPLY_PAGIN &&
-            (uint32_t)(uint16_t)NETWORK_$SERVICE_TIME + ps->arrival < ps->deadline) {
+        /* 0x00E10598-0x00E105BE: a page-out reply that is too late */
+        if (ps->reply.type == NETWORK_PS_REPLY_PAGOUT &&
+            (uint32_t)(uint16_t)NETWORK_$SERVICE_TIME + ps->arrival.high <
+                ps->deadline.high) {
             NETWORK_$2LONG1++;
             ps->status = status_$network_remote_node_failed_to_respond;
             break;
@@ -258,7 +259,7 @@ void NETWORK_$PAGE_SERVER(void)
             ((int16_t *)(void *)ps.overflow_rqst)[0] = -1;
             ((int16_t *)(void *)ps.overflow_rqst)[1] = -1;
             for (i = 0; i < (int)sizeof(ps.overflow_rqst); i++) {   /* 0x2E longwords */
-                ps.reply[i] = ps.overflow_rqst[i];
+                ps.reply.bytes[i] = ps.overflow_rqst[i];
             }
             ps.reply_len = 4;
             ps.data_pages[0] = 0;
@@ -268,8 +269,7 @@ void NETWORK_$PAGE_SERVER(void)
             break;
 
         case 1:
-            /* 0x00E11708: a paging request.  TODO(source-590f): the nested
-             * procedure is not emitted yet; it links as an external. */
+            /* 0x00E11708: a paging request (network/process_paging_request.c) */
             NETWORK_$PROCESS_PAGING_REQUEST(&ps);
             break;
 

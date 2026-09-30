@@ -306,6 +306,10 @@ extern uid_t AUDIT_$DISMOUNT_LV_EU;
 /* 0x00E85648: class 4, subtype 0x0D - logical volume mounted */
 extern uid_t AUDIT_$MOUNT_LV_EU;
 
+/* 0x00E85660: class 4, subtype 8 - a process entered a subsystem.  Pushed by
+ * ACL_$ENTER_SUBS (0x00E46F76). */
+extern uid_t AUDIT_$ENTER_SUBS_EU;
+
 /*
  * audit_$log_resolve_op - Audit a name-resolve operation
  *

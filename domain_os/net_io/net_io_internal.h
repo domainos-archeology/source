@@ -26,4 +26,42 @@
  */
 #define NET_IO_$CLEANUP_CLASS   10
 
+/*
+ * NET_IO_$ALL_F_ADDR (0xE244F0, A5+0 in NET_IO_$SEND) - the broadcast node
+ * mask; image value 0x000FFFFF.  A node is "all ones" when
+ * (node & 0xFFFFFF & NET_IO_$ALL_F_ADDR) == NET_IO_$ALL_F_ADDR.
+ */
+extern uint32_t NET_IO_$ALL_F_ADDR;
+
+/*
+ * net_io_$put_in_sock_common (0x00E0E238, 610 bytes, was FUN_00e0e238; the
+ * NET_IO code segment's first routine, no map symbol) - deliver a packet to
+ * a socket of this node.  Called by NET_IO_$PUT_IN_SOCK (0x00E0E4CE) and
+ * NET_IO_$PUT_IN_SOCK_INT (0x00E0E508) with port = 0 (it then finds the port
+ * itself) and by NET_IO_$SEND's loopback paths (0x00E0E756, 0x00E0E80E)
+ * with the port record.  The callers reserve a result slot the body never
+ * writes (no store to (0x22,A6)).  Frame offsets: port 0x08, port_type 0x0C,
+ * socket 0x0E, flag byte 0x10, hdr_va_p 0x12, data_pa_p 0x16, hdr_len 0x1A,
+ * data_len 0x1C, out 0x1E.
+ * TODO(source-fnwp): not yet translated.
+ */
+void net_io_$put_in_sock_common(route_$port_t *port, uint16_t port_type,
+                                uint16_t socket, int8_t flag,
+                                uint32_t *hdr_va_p, uint32_t *data_pa_p,
+                                uint16_t hdr_len, uint16_t data_len,
+                                void *out);
+
+/*
+ * The transmit procedure variable net_io_$driver_t.sendp (+0x08) as
+ * NET_IO_$SEND calls it (0x00E0E86A-0x00E0E896): RING_$SENDP's shape, with
+ * the header passed as the VA the caller holds.
+ */
+typedef void (*net_io_$sendp_fn_t)(uint16_t *socket, uint32_t hdr_pa,
+                                   void *hdr, uint16_t hdr_len,
+                                   const uint32_t *data_pages,
+                                   uint32_t data_va, uint16_t data_len,
+                                   const uint16_t *flags,
+                                   uint16_t *xmit_status,
+                                   status_$t *status_ret);
+
 #endif /* NET_IO_NET_IO_INTERNAL_H */

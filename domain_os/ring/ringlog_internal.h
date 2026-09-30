@@ -126,28 +126,8 @@ static inline void ringlog_$put_packed(ringlog_$entry_t *entry, int off, uint32_
     p[3] = (uint8_t)v;
 }
 
-/*
- * ============================================================================
- * RINGLOG_$DATA - the ring log buffer (0x00EA3E38, 0x11FC bytes)
- *
- * Map "D53 EA3E38 RINGLOG_$DATA loaded at 1B2152, size = 11FC", in the
- * trailing data region after FILE_$LOT_DATA; a MODULE_DATA block linked in
- * the map's order.  RINGLOG_$LOGIT and RINGLOG_$CNTL address it through its
- * literal base ("movea.l #0xea3e38,A0" at 0x00E1A2E4 and 0x00E7229A).
- *
- * A byte pool: the entry stride 0x2E is an explicit constant in the code and
- * entry 0 overlaps the index word, so there is no C array of entries.
- * Pointer-free.
- * ============================================================================
- */
-typedef struct ringlog_$data_t {
-    uint8_t     bytes[RINGLOG_DATA_SIZE];
-} ringlog_$data_t;
-
-_Static_assert(sizeof(ringlog_$data_t) == 0x11FC,
-               "RINGLOG_$DATA is 0x11FC bytes (SAU2 map D53 EA3E38)");
-
-MODULE_DATA_DECLARE(ringlog_$data_t, RINGLOG_$DATA, 0x00EA3E38);
+/* RINGLOG_$DATA (ringlog_$data_t) is declared in ring/ringlog.h: NET_IO_$SEND
+ * writes into it too. */
 
 /*
  * The next-entry index: the word at RINGLOG_$DATA + 0 (0x00E1A2B6,

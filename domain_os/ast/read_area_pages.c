@@ -76,7 +76,7 @@ int16_t ast_$read_area_pages(aste_t *aste, uint32_t *segmap,
 
     /* 0x00E02BAA..0x00E02BC6: DISK_$READ_MULTI(vol, TRUE, TRUE, head, tail,
      * &pages_read, status); the two `st` are single bytes */
-    DISK_$READ_MULTI(vol_idx, -1, -1, (int32_t)qblk_head, qblk_tail,
+    DISK_$READ_MULTI(vol_idx, -1, -1, qblk_head, qblk_tail,
                      &pages_read, status);
 
     /* 0x00E02BCA..0x00E02BD4 */

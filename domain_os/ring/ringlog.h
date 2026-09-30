@@ -270,4 +270,28 @@ void RINGLOG_$CNTL(uint16_t *cmd_ptr, void *param, status_$t *status_ret);
  */
 void RINGLOG_$STOP_LOGGING(int16_t *parent_index);
 
+/*
+ * ============================================================================
+ * RINGLOG_$DATA - the ring log buffer (0x00EA3E38, 0x11FC bytes)
+ *
+ * Map "D53 EA3E38 RINGLOG_$DATA loaded at 1B2152, size = 11FC", in the
+ * trailing data region after FILE_$LOT_DATA; a MODULE_DATA block linked in
+ * the map's order.  RINGLOG_$LOGIT and RINGLOG_$CNTL address it through its
+ * literal base ("movea.l #0xea3e38,A0" at 0x00E1A2E4 and 0x00E7229A).
+ *
+ * A byte pool: the entry stride 0x2E is an explicit constant in the code and
+ * entry 0 overlaps the index word, so there is no C array of entries.
+ * Pointer-free.  Public because NET_IO_$SEND stores the transmit status
+ * into entry n + 0x2E, the entry's last packet word (0x00E0E8B2).
+ * ============================================================================
+ */
+typedef struct ringlog_$data_t {
+    uint8_t     bytes[RINGLOG_DATA_SIZE];
+} ringlog_$data_t;
+
+_Static_assert(sizeof(ringlog_$data_t) == 0x11FC,
+               "RINGLOG_$DATA is 0x11FC bytes (SAU2 map D53 EA3E38)");
+
+MODULE_DATA_DECLARE(ringlog_$data_t, RINGLOG_$DATA, 0x00EA3E38);
+
 #endif /* RINGLOG_H */

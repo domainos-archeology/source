@@ -159,16 +159,13 @@ void ACL_$CLEAR_SUPER(void);
 /*
  * ACL_$ENTER_SUBS - Enter subsystem context
  *
- * Enters a subsystem context with the specified UID's privileges.
+ * SVC TRAP slot 0x3C.  Applies the set-ID SIDs of `uid`'s protection to the
+ * calling process (acl_$setids with set = the caller's "magic" matched) and
+ * commits them to its current and saved SIDs; audited.
  *
- * Parameters:
- *   uid        - UID of subsystem to enter
- *   status_ret - Output status code
+ * Returns: TRUE (0xFF) when the SIDs were committed, FALSE otherwise.
  *
- * Returns:
- *   Non-zero if successful, 0 otherwise
- *
- * Original address: 0x00E46DA0
+ * Original address: 0x00E46DA0; acl/enter_subs.c
  */
 int8_t ACL_$ENTER_SUBS(uid_t *uid, status_$t *status_ret);
 
@@ -1076,8 +1073,9 @@ typedef struct acl_$unwired_data_t {
     int16_t           cache_hash_buckets[ACL_CACHE_HASH_BUCKETS]; /* +0xAF0 */
     int16_t           _0b6a;                                /* +0xB6A never addressed */
     int32_t           subs_magic;                           /* +0xB6C ACL_$ENTER_SUBS
-                                                             *        (not yet emitted,
-                                                             *        source-m5y2) */
+                                                             *        (acl/enter_subs.c):
+                                                             *        the manager's
+                                                             *        return address */
     int16_t           local_locksmith;                      /* +0xB70 */
     int16_t           locksmith_owner_pid;                  /* +0xB72 */
     int16_t           cache_free_head;                      /* +0xB74 */
