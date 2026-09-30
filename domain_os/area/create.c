@@ -243,26 +243,30 @@ uint32_t area_$internal_create(uint32_t virt_size, uint32_t commit_size,
  * A thin wrapper: always a local create (remote_uid 0) for the running
  * process's ASID, with remote backing allowed.
  *
- * The handle returned by area_$internal_create is stored into a dead local
- * at 0x00E079EE and never read, so this is a Pascal *procedure*: it reports
- * only the status.
+ * The handle area_$internal_create returns is stored into the local at
+ * (-0x8,A6) (0x00E079EE) and stays in D0 through the epilogue (the
+ * following moves do not touch D0), so this is a Pascal *function* whose
+ * result is the handle: MST_$MAP_AREA reads D0 after the call
+ * (`move.l D0,(-0xc,A6)` at 0x00E43B6C).
  *
  * Original address: 0x00E079C0
  */
-void AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
-                  boolean shared, status_$t *status_p)
+area_$handle_t AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
+                            boolean shared, status_$t *status_p)
 {
     status_$t local_status;             /* (-0x4,A6) */
+    area_$handle_t handle;              /* (-0x8,A6) */
 
-    (void)area_$internal_create(virt_size,
-                                commit_size,
-                                0,              /* remote_uid: local create */
-                                PROC1_$AS_ID,   /* 0x00E079DA */
-                                1,              /* alloc_remote */
-                                shared,
-                                &local_status);
+    handle = area_$internal_create(virt_size,
+                                   commit_size,
+                                   0,              /* remote_uid: local create */
+                                   PROC1_$AS_ID,   /* 0x00E079DA */
+                                   1,              /* alloc_remote */
+                                   shared,
+                                   &local_status);
 
     *status_p = local_status;           /* 0x00E079F2 */
+    return handle;
 }
 
 /*

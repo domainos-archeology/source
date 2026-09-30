@@ -103,7 +103,8 @@ void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
 void NAME_$INIT_ASID(int16_t *a, status_$t *s) { (void)a; n_name_init++; *s = mock_name_status; }
 void EC_$ADVANCE(ec_$eventcount_t *ec) { n_advance++; last_advance_ec = ec; }
 void PROC1_$SET_ASID(uint16_t asid) { n_set_asid++; last_set_asid = asid; }
-void MST_$MAP_AREA_AT(void *a1, void *a2, void *a3, void *a4, void *a5, status_$t *status)
+void MST_$MAP_AREA_AT(uint32_t *a1, uint32_t *a2, uint32_t *a3, boolean *a4,
+                      uid_t *a5, status_$t *status)
 {
     n_map_area++;
     last_area_arg1 = a1; last_area_arg2 = a2; last_area_arg3 = a3;

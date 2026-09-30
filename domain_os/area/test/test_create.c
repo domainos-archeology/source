@@ -578,18 +578,20 @@ TEST(resize_failure_unlink_flag)
  * AREA_$CREATE
  * ========================================================================== */
 
-/* AREA_$CREATE is a procedure: it reports status only, always creates for
- * PROC1_$AS_ID with remote_uid 0 and alloc_remote 1. */
+/* AREA_$CREATE always creates for PROC1_$AS_ID with remote_uid 0 and
+ * alloc_remote 1, and returns the new area's handle (left in D0). */
 TEST(area_create_uses_current_asid)
 {
     status_$t status = 0xDEADBEEF;
+    area_$handle_t handle;
 
     seed_free_list(0, 2);
     PROC1_$AS_ID = 11;
 
-    AREA_$CREATE(0x8000, 0x400, false, &status);
+    handle = AREA_$CREATE(0x8000, 0x400, false, &status);
 
     ASSERT_EQ(status_$ok, status);
+    ASSERT_EQ(1, handle & 0xFFFF);          /* area id 1 */
     ASSERT_EQ(11, mock_area_table[0].owner_asid);
     ASSERT_EQ((uintptr_t)&mock_area_table[0], (uintptr_t)AREA_$ASID_LIST[11]);
 }

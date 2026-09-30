@@ -149,4 +149,16 @@ void *mst_$alloc_segs(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_
 void mst_$va_to_pte(uint16_t asid, uint32_t va, uint16_t *prot_out, void **entry_out,
                     status_$t *status);
 
+/*
+ * mst_$set_mstes (0x00E43E10, was FUN_00e43e10; module-local, no map
+ * symbol) - fill the MSTEs of ASID-relative segments [start, end] with
+ * `uid`, object segments obj_seg.., `location` with (touch_count - 1) in
+ * bits 26..30, flags (prot | 2) << 9 and bit 15 = wired; then
+ * CACHE_$CLEAR.  `wired` is a byte in the high half of its word slot;
+ * only the low byte of touch_count is read.  Emitted in mst/set_mstes.c.
+ */
+void mst_$set_mstes(uid_t *uid, uint16_t obj_seg, uint32_t location,
+                    uint16_t start, uint16_t end, uint16_t touch_count,
+                    uint16_t asid, uint16_t prot, int8_t wired);
+
 #endif /* MST_INTERNAL_H */

@@ -167,6 +167,9 @@ extern uint16_t MST_$SEG_HIGH;             /* Highest segment number */
 extern uint16_t MST_$SEG_MEM_TOP;          /* Top of addressable memory */
 extern uint16_t MST_$GLOBAL_B_SIZE;        /* Global B segment count */
 extern uint16_t MST_$TOUCH_COUNT;          /* Touch-ahead page count */
+extern boolean MST_$GOT_COLOR;             /* 0xE24466: set by MST_$DISKLESS_INIT */
+#define MST_DISKLESS_MSG_SIZE 0x80          /* E24304 .. E24383 (map) */
+extern char MST_$DISKLESS_MSG[MST_DISKLESS_MSG_SIZE]; /* 0xE24304 */
 extern uint16_t MST_$MST_PAGES_WIRED;      /* Number of wired MST pages */
 extern uint16_t MST_$MST_PAGES_LIMIT;      /* Maximum MST pages to wire */
 
@@ -210,7 +213,12 @@ extern uint16_t MST[MST_TABLE_ENTRIES];
 /* Initialization */
 void MST_$PRE_INIT(void);
 void MST_$INIT(void);
-void MST_$DISKLESS_INIT(int16_t flag, uint32_t mother_node, uint32_t node_me);
+/*
+ * MST_$DISKLESS_INIT (0x00E30DA8; mst/diskless_init.c) - format the
+ * partner-not-responding message into MST_$DISKLESS_MSG and record
+ * got_color (a byte in the high half of its word slot, (0x8,A6)).
+ */
+void MST_$DISKLESS_INIT(boolean got_color, uint32_t mother_node, uint32_t node_me);
 
 /* ASID management */
 uint16_t MST_$ALLOC_ASID(status_$t *status_ret);
@@ -300,9 +308,24 @@ void MST_$MAP_AT(void *start, uid_t *uid, void *param1, void *param2, void *para
 void MST_$MAP_CANNED_AT(uint32_t va, uid_t *uid, uint32_t offset,
                         uint32_t size, uint32_t flags, boolean wire,
                         boolean touch, uint32_t desc, status_$t *status);
-void MST_$MAP_AREA(void);
-void MST_$MAP_AREA_AT(void *addr_ptr, void *size_ptr, void *param1, void *param2,
-                      void *param3, status_$t *status);
+/*
+ * MST_$MAP_AREA (0x00E43B3A; mst/map_area.c) - SVC 0x01: AREA_$CREATE an
+ * area of *virt_size_ptr / *commit_size_ptr (reversed when *reversed_ptr)
+ * and map it at the private top; *uid_out = the area's UID.  Returns the
+ * mapped VA (A0).
+ */
+void *MST_$MAP_AREA(uint32_t *virt_size_ptr, uint32_t *commit_size_ptr,
+                    boolean *reversed_ptr, uid_t *uid_out, status_$t *status);
+/*
+ * MST_$MAP_AREA_AT (0x00E43C04; mst/map_area_at.c) - MST_$MAP_AREA at
+ * *addr_ptr (uint32_t): *virt_size_ptr / *commit_size_ptr (uint32_t),
+ * *reversed_ptr (Domain boolean), *uid_out (uid_t) = the area's UID.  A
+ * procedure (A0 is not set).  Frame: (0x08) addr_ptr, (0x0C) virt_size_ptr,
+ * (0x10) commit_size_ptr, (0x14) reversed_ptr, (0x18) uid_out, (0x1C) status.
+ */
+void MST_$MAP_AREA_AT(uint32_t *addr_ptr, uint32_t *virt_size_ptr,
+                      uint32_t *commit_size_ptr, boolean *reversed_ptr,
+                      uid_t *uid_out, status_$t *status);
 void MST_$MAP_GLOBAL(uid_t *uid, uint32_t *start_va_ptr, uint32_t *length_ptr,
                      uint16_t *area_id_ptr, uint32_t *area_size_ptr,
                      uint8_t *rights_ptr, int32_t *mapped_len,
@@ -362,28 +385,19 @@ void *MST_$MAPS(int16_t asid, boolean direction, uid_t *uid, uint32_t start_va,
 void MST_$MAPS_AT(void);
 void MST_$REMAP(void);
 /*
- * MST_$REMAP_PRIVI - Remap a privileged memory segment
+ * MST_$REMAP_PRIVI (0x00E43A0C; mst/remap_privi.c) - unmap *unmap_len
+ * bytes at *va_ptr and map the same object's UID again at
+ * [*offset_ptr, +*length_ptr) under ACL_$ENTER_SUPER.  Bit 0 of *flags
+ * selects the privileged unmap (mode 3, ASID 0 in global-B space).
  *
- * Remaps a segment in the current address space. Returns the
- * mapped base address in A0 (m68k calling convention).
+ * Frame: (0x08) flags, (0x0C) va_ptr, (0x10) unmap_len, (0x14) offset_ptr,
+ * (0x18) length_ptr, (0x1C) map_info, (0x20) status - all by reference.
  *
- * Parameters:
- *   config1     - Configuration data pointer
- *   va_ptr      - Pointer to current virtual address (in/out)
- *   config2     - Configuration data pointer
- *   offset_ptr  - Pointer to file offset to map
- *   config3     - Configuration data pointer
- *   result_ptr  - Output: size of mapped region
- *   status_ret  - Status return
- *
- * Returns: mapped base address (via A0 register)
- *
- * Original address: 0x00E43A0C
- * Size: 302 bytes
+ * Returns mst_$alloc_segs' A0 result, NULL on an error before it.
  */
-void *MST_$REMAP_PRIVI(void *config1, uint32_t *va_ptr, void *config2,
-                        uint32_t *offset_ptr, void *config3,
-                        uint32_t *result_ptr, status_$t *status_ret);
+void *MST_$REMAP_PRIVI(uint16_t *flags, uint32_t *va_ptr, uint32_t *unmap_len,
+                       uint32_t *offset_ptr, uint32_t *length_ptr,
+                       uint32_t *map_info, status_$t *status);
 /*
  * MST_$GROW_AREA (0x00E4360C; mst/grow_area.c) - SVC TRAP4 0x07: resize the
  * VM area the VA *va_ptr lies in to *virt_size_ptr / *commit_size_ptr,
@@ -464,7 +478,13 @@ void MST_$WIRE_AREA(const void *start_va_ptr, const void *end_va_ptr,
  */
 void MST_$INVALIDATE(uint32_t *va_ptr, uint32_t *length_ptr, uid_t *uid,
                      int8_t *zero_flag, status_$t *status_ret);
-void MST_$CHANGE_RIGHTS(void);
+/*
+ * MST_$CHANGE_RIGHTS (0x00E42FB0; mst/change_rights.c) - SVC 0x4B: unmap
+ * [*va_ptr, +*length_ptr) and map it again with rights *rights_ptr; on
+ * failure map it again with the old rights.
+ */
+void MST_$CHANGE_RIGHTS(uint32_t *va_ptr, uint32_t *length_ptr,
+                        uint16_t *rights_ptr, status_$t *status);
 void MST_$SET_GUARD(void);
 
 /* Query functions */
@@ -487,7 +507,7 @@ void MST_$GET_VA_INFO(uint16_t *asid_p, uint32_t *va_ptr, uid_t *uid_out,
  * &asid, &reply+0x08, &reply+0x0C and &status (0x00E65424-0x00E65434).
  */
 void MST_$GET_PRIVATE_SIZE(uint16_t *asid_p, uint32_t *size_ret,
-                           uint32_t *size2_ret, status_$t *status_ret);
+                           uint32_t *rw_size_ret, status_$t *status_ret);
 
 /* Touch-ahead control */
 void MST_$PRIV_SET_TOUCH_AHEAD_CNT(void);

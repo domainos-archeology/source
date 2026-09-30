@@ -181,9 +181,9 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
     return mock_acl_rights;
 }
 
-int16_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
-                          void *required_mask, void *option_flags,
-                          int8_t *check_flag, status_$t *status)
+uint32_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
+                           void *required_mask, void *option_flags,
+                           int8_t *check_flag, status_$t *status)
 {
     (void)acl_ctx; (void)file_uid; (void)required_mask; (void)option_flags;
     (void)check_flag;

@@ -61,8 +61,8 @@ void PROC1_$SET_PRIORITY(uint16_t pid, int8_t mode, uint16_t *min_priority,
 
 void EC_$INIT(ec_$eventcount_t *ec) { (void)ec; n_ec_init++; }
 
-void MST_$MAP_AREA_AT(void *addr_ptr, void *size_ptr, void *param1,
-                      void *param2, void *param3, status_$t *status)
+void MST_$MAP_AREA_AT(uint32_t *addr_ptr, uint32_t *size_ptr, uint32_t *param1,
+                      boolean *param2, uid_t *param3, status_$t *status)
 {
     (void)addr_ptr; (void)size_ptr; (void)param1; (void)param2; (void)param3;
     n_map_area_at++;

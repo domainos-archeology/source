@@ -571,8 +571,8 @@ void AREA_$INIT(void);
  *
  * Original address: 0x00E079C0
  */
-void AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
-                  boolean shared, status_$t *status_p);
+area_$handle_t AREA_$CREATE(uint32_t virt_size, uint32_t commit_size,
+                            boolean shared, status_$t *status_p);
 
 /*
  * AREA_$CREATE_FROM - Create area from remote UID (deduplicating)

@@ -314,7 +314,7 @@ uint16_t SMD_$INQ_DISP_TYPE(uint16_t *a)
     (void)a;
     return 0;
 }
-void MST_$DISKLESS_INIT(int16_t a, uint32_t b, uint32_t c)
+void MST_$DISKLESS_INIT(boolean a, uint32_t b, uint32_t c)
 {
     (void)a;
     (void)b;

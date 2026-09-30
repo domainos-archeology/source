@@ -239,11 +239,24 @@ uint16_t MST_$SEG_TN = 0x140;
 /*
  * Color display support flag
  *
- * Non-zero if system has color display hardware.
+ * A Domain boolean: MST_$DISKLESS_INIT stores its byte argument here with
+ * `move.b D2b,(0x00e24466).l` (0x00E30DEA), the image's only reference.
+ * The map gives the cell two bytes (E24466 to the MST_WIRED segment end at
+ * E24468); the second is the word-alignment pad.
  *
  * Original address: 0xE24466
  */
-uint16_t MST_$GOT_COLOR = 0;
+boolean MST_$GOT_COLOR = 0;
+
+/*
+ * The diskless "partner not responding" console message, formatted by
+ * MST_$DISKLESS_INIT (VFMT_$FORMATN into it at 0x00E30DCC) and also
+ * referenced from 0x00E0DCD0 / 0x00E0DD48.  0x80 bytes (E24304 up to
+ * MST_$ASID_LIST at E24384); zero in the image.
+ *
+ * Original address: 0xE24304
+ */
+char MST_$DISKLESS_MSG[MST_DISKLESS_MSG_SIZE];
 
 /*
  * ============================================================================

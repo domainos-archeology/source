@@ -215,16 +215,20 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
 /*
  * ACL_$RIGHTS_CHECK - Check access rights for an object (variant)
  *
+ * ACL_$RIGHTS with the caller's SID block / project list (acl_ctx),
+ * ignore_super FALSE and *check_flag as the in-subsystem boolean
+ * (acl/rights_check.c).
+ *
  * Parameters:
- *   acl_ctx       - pointer to the ACL context record (0x00E46AFA)
+ *   acl_ctx       - acl_sid_block_t followed by 8 project UIDs (+0x24)
  *   file_uid      - UID of object to check
- *   required_mask - Pointer to required access rights mask (or NULL)
- *   option_flags  - Pointer to option flags (or NULL)
- *   check_flag    - Pointer to check flag
+ *   required_mask - Pointer to the required rights mask (longword)
+ *   option_flags  - Pointer to the option flags (word)
+ *   check_flag    - Pointer to the in-subsystem Domain boolean
  *   status        - Output status code
  *
  * Returns:
- *   Non-zero if access granted, 0 if denied
+ *   acl_$eval_rights' D0: the granted rights
  *
  * Original address: 0x00E46AEC
  */
@@ -233,9 +237,9 @@ uint32_t ACL_$RIGHTS(uid_t *uid, boolean *ignore_super, uint32_t *required_mask,
  * value: 0x00E46AFA does `movea.l (0x8,A6),A2` and then passes `A2` and
  * `A2+0x24` on to 0x00E464B8.
  */
-int16_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
-                          void *required_mask, void *option_flags,
-                          int8_t *check_flag, status_$t *status);
+uint32_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
+                           void *required_mask, void *option_flags,
+                           int8_t *check_flag, status_$t *status);
 
 /*
  * ACL_$CHECK_RIGHTS - Check rights with full options
@@ -255,11 +259,11 @@ int16_t ACL_$CHECK_RIGHTS(uid_t *uid, void *acl_data, void *options,
  *   uid - UID of object to check
  *
  * Returns:
- *   Bitmask of rights (lower 4 bits valid)
+ *   Bitmask of rights (lower 4 bits valid), a word in D0 (acl/min_rights.c)
  *
  * Original address: 0x00E468E2
  */
-uint32_t ACL_$MIN_RIGHTS(uid_t *uid);
+uint16_t ACL_$MIN_RIGHTS(uid_t *uid);
 
 /*
  * acl_$prot_data_t - the 44-byte protection block that
@@ -356,7 +360,8 @@ int8_t ACL_$CHECK_FAULT_RIGHTS(const uint16_t *pid1, const uint16_t *pid2);
 /*
  * ACL_$CHECK_DEBUG_RIGHTS - Check debug rights between processes
  *
- * Similar to CHECK_FAULT_RIGHTS but for debugging privileges.
+ * TRUE when *pid1 is a super-user, or may assume *pid2's saved and
+ * original SIDs and holds every project *pid2 holds (acl/check_debug_rights.c).
  *
  * Parameters:
  *   pid1 - Pointer to debugger process ID
@@ -440,8 +445,10 @@ void ACL_$GET_RE_ALL_SIDS(void *acl_data, void *re_sids,
 /*
  * ACL_$ALLOC_ASID - Allocates an address space ID.
  *
- * Doesn't _actually_ acllocate it.  It marks the passed address space as being used,
- * copying settings from the current process's ASID
+ * Nothing is allocated: copies the current process's SID blocks, project
+ * UIDs and project lists into the rows for `asid`; when the current
+ * process's free-bitmap bit is clear the three new login SIDs become
+ * UID_$NIL (acl/alloc_asid.c).
  *
  * Parameters:
  *   asid       - ASID to mark as allocated
@@ -449,7 +456,7 @@ void ACL_$GET_RE_ALL_SIDS(void *acl_data, void *re_sids,
  *
  * Original address: 0x00E73BB8
  */
-void ACL_$ALLOC_ASID(int16_t asid_ret, status_$t *status_ret);
+void ACL_$ALLOC_ASID(int16_t asid, status_$t *status_ret);
 
 /*
  * ACL_$FREE_ASID - Free an address space ID
