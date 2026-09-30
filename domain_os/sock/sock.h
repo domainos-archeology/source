@@ -437,4 +437,14 @@ _Static_assert(sizeof(sock_$pkt_info_t) == 0x40, "sock_$pkt_info_t must be 0x40 
 int8_t SOCK_$PUT(uint16_t sock_num, sock_$pkt_info_t *pkt_info, int8_t flags,
                  uint16_t ec_param1, uint16_t ec_param2);
 
+/*
+ * SOCK_$PUT_INT - put a packet on a socket queue, returning its event count
+ * 0x00E16190: 0x08 sock_num(w), 0x0A pkt_info, 0x0E flags(b), 0x10/0x12 the
+ * two event-count words, 0x14 ec_ret.  Also called by
+ * net_io_$put_in_sock_common (0x00E0E3BC) at interrupt level.
+ */
+int8_t SOCK_$PUT_INT(uint16_t sock_num, sock_$pkt_info_t *pkt_info,
+                     int8_t flags, uint16_t ec_param1, uint16_t ec_param2,
+                     ec_$eventcount_t **ec_ret);
+
 #endif /* SOCK_H */

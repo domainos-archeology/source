@@ -77,7 +77,7 @@ void dir_$set_default_acl_internal(uint32_t handle, void *acl_type,
 
         if (format_check == 0) {
             /* Standard format - convert to 10ACL */
-            ACL_$CONVERT_TO_10ACL(src_acl_uid, (void *)(uintptr_t)handle,
+            ACL_$CONVERT_TO_10ACL(src_acl_uid, (uid_t *)(uintptr_t)handle,
                                   &acl_uid, acl_data, status_ret);
             if (*status_ret != status_$ok) {
                 goto audit;

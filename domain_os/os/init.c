@@ -217,38 +217,8 @@ _Static_assert(__builtin_offsetof(boot_params_t, flags) == 6, "flags");
 #define BOOT_FLAG_TYPE_VALUE 0x0004  /* 0x00E33A0C */
 #define BOOT_FLAG_IO_VERBOSE 0x8000  /* 0x00E33C0A: tst.w / smi */
 
-/*
- * The VTOCE the boot volume's paging file resolves to: a named view of the
- * fields OS_$INIT touches inside a vtoce_$result_t.
- *
- * The original clears exactly 0x90 bytes at A6-0x128 (0x00E34018:
- * `moveq #0x23` + `dbf` = 36 longwords), and the next frame slot -- the
- * lookup request at A6-0x98 -- starts 0x90 bytes later, so the buffer is
- * 0x90 bytes.  That is the true size of the record: VTOCE_$READ moves the
- * same 36 longwords into it (0x00E395B0) and VTOCE_$WRITE and VTOC_$ALLOCATE
- * move 36 back out (0x00E3977A, 0x00E38C26).  0x150 is the on-disk entry
- * stride, not the size of this record; vtoc/vtoc.h now says so.
- */
-typedef struct os_$init_vtoce_t {
-    uint32_t reserved00;                  /* +0x00 */
-    uid_t file_uid;                       /* +0x04 (A6-0x124) */
-    uint32_t reserved0c;                  /* +0x0C */
-    uint32_t reserved10;                  /* +0x10 */
-    uint32_t length;                      /* +0x14 (A6-0x114) */
-    uint8_t reserved18[0x74 - 0x18];      /* +0x18 */
-    uint16_t field74;                     /* +0x74 (A6-0xB4) */
-    uint8_t reserved76[0x88 - 0x76];      /* +0x76 */
-    uid_t acl_uid;                        /* +0x88 (A6-0xA0) */
-} os_$init_vtoce_t;
-
+/* os_$init_vtoce_t: see os/os_internal.h (shared with OS_$INSTALL_DISPLAY_ASTE) */
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(os_$init_vtoce_t) == 0x90, "os_$init_vtoce_t size");
-_Static_assert(sizeof(os_$init_vtoce_t) == sizeof(vtoce_$result_t),
-               "os_$init_vtoce_t must be the same record as vtoce_$result_t");
-_Static_assert(__builtin_offsetof(os_$init_vtoce_t, file_uid) == 0x04, "uid");
-_Static_assert(__builtin_offsetof(os_$init_vtoce_t, length) == 0x14, "length");
-_Static_assert(__builtin_offsetof(os_$init_vtoce_t, field74) == 0x74, "f74");
-_Static_assert(__builtin_offsetof(os_$init_vtoce_t, acl_uid) == 0x88, "acl");
 _Static_assert(sizeof(vtoc_$lookup_req_t) == 0x20, "vtoc_$lookup_req_t size");
 #endif
 
@@ -902,10 +872,9 @@ after_paging_file:
     /* --- 0x00E3412C-0x00E34160: install the display, if there is one -- */
     if (io_$probe((void *)&os_$init_one_word,
                   (void *)&os_$init_display_addr, &probe_result) < 0) {
-        OS_$INSTALL_DISPLAY_ASTE(&DISPLAY1_$UID,
-                                 (void *)&os_$init_display_addr,
-                                 (int *)&os_$init_display_size,
-                                 (char *)&os_$init_true);
+        OS_$INSTALL_DISPLAY_ASTE(&DISPLAY1_$UID, &os_$init_display_addr,
+                                 (const int32_t *)&os_$init_display_size,
+                                 (const int8_t *)&os_$init_true);
     }
 
     /* --- 0x00E34162-0x00E34172 --------------------------------------- */

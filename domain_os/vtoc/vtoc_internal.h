@@ -26,6 +26,7 @@
 #include "network/network.h"
 #include "netlog/netlog.h"
 #include "rgyc/rgyc.h"   /* RGYC_$G_NIL_UID */
+#include "file/file.h"   /* status_$file_volume_has_been_mounted_read_only */
 
 /*
  * Lock ID for disk operations
@@ -87,6 +88,8 @@
  * FILE_$PRIV_CREATE tests for it, so it is public. */
 #define status_$no_UID              0x20004     /* No UID found */
 #define status_$end_of_file         0x20003     /* End of file */
+#define status_$VTOC_no_file_map    0x20003     /* stcode DB: "no file map"
+                                                 * (VTOCE_$LOOKUP_FM) */
 
 /*
  * Old format VTOCE structure (0xCC bytes)
@@ -509,8 +512,9 @@ extern char vtoc_$new_to_old_flags_00e38f7e;
 /* UID cache insert (uid_cache.c) */
 void vtoc_$uid_cache_insert(uid_t *uid, int16_t vol_idx, uint32_t block_info);
 
-/* File map block allocation/traversal (vtoc_$fm_traverse, 0x00e397d0) */
-uint16_t vtoc_$fm_traverse(uint32_t *block_ptr, uint16_t level, uint32_t hint);
+/* vtoc_$fm_traverse (0x00E397D0) is a Pascal procedure nested in
+ * VTOCE_$LOOKUP_FM (static link in A1); it is a static function in
+ * vtoc/lookup_fm.c. */
 
 /* vtoc_$free_indirect (0x00E39BC2) is a Pascal procedure nested in
  * VTOCE_$TRUNCATE (static link in A1); it is a static function in

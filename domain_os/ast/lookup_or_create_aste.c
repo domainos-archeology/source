@@ -142,10 +142,10 @@ inserted:
         *status = status_$ok;
     } else {
         /* 0x00E026B2..0x00E026DC: drop the AST lock for the I/O.  The
-         * third argument is pushed as a single `st` byte; VTOCE_$LOOKUP_FM
-         * never reads that slot. */
+         * third argument is pushed as a single `st` byte: allocate = true
+         * (read by VTOCE_$LOOKUP_FM's nested walk, 0x00E397FC). */
         ML_$UNLOCK(AST_LOCK_ID);
-        VTOCE_$LOOKUP_FM(&aote->obj_uid, segment, (uint16_t)-1,
+        VTOCE_$LOOKUP_FM(&aote->obj_uid, segment, (int8_t)0xFF,
                          &aste->fm_block, (uint32_t *)&alloc_count, status);
 
         /* 0x00E026E0..0x00E02732 */

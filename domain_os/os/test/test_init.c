@@ -134,7 +134,7 @@ void AST_$PMAP_ASSOC(aste_t *a, uint16_t b, uint32_t c, uint16_t d, uint16_t e,
     (void)e;
     *f = status_$ok;
 }
-void IO_$INIT(void *a, char *b, status_$t *c)
+void IO_$INIT(void *a, const int8_t *b, status_$t *c)
 {
     (void)a;
     (void)b;
@@ -236,7 +236,8 @@ int8_t io_$probe(void *a, void *b, void *c)
     (void)c;
     return 0;
 }
-void OS_$INSTALL_DISPLAY_ASTE(uid_t *a, void *b, int *c, char *d)
+void OS_$INSTALL_DISPLAY_ASTE(uid_t *a, const uint32_t *b, const int32_t *c,
+                              const int8_t *d)
 {
     (void)a;
     (void)b;

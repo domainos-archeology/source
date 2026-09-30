@@ -103,14 +103,14 @@ extern void OS_$GET_REV_INFO(void *buf);
 // Display Functions
 // =============================================================================
 
-// OS_$INSTALL_DISPLAY_ASTE - Install display address space table entry
-// Sets up memory mapping for display hardware
-// @param uid: UID of the display object
-// @param param_2: Virtual address parameter
-// @param size: Pointer to size of display memory
-// @param touch: Pointer to touch flag (if true, touch all pages)
-extern void OS_$INSTALL_DISPLAY_ASTE(uid_t *uid, void *param_2,
-                                     int *size, char *touch);
+// OS_$INSTALL_DISPLAY_ASTE (0x00E6D29A) - make the display memory a canned
+// object: activate an AOTE for `uid' with `*size' bytes, associate every
+// page with the physical pages behind `*va' (32 per segment), and, when
+// `*touch' is true, map the object canned at `*va' and touch (not wire)
+// every page.  All four parameters are Pascal `var' (by reference); the
+// touch flag is a Domain boolean byte.  (os/install_display_aste.c)
+void OS_$INSTALL_DISPLAY_ASTE(uid_t *uid, const uint32_t *va, const int32_t *size,
+                              const int8_t *touch);
 
 // =============================================================================
 // System Control Functions

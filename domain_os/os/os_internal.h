@@ -240,4 +240,38 @@ void OS_$PRINT_INIT_ERROR(const char *msg);            /* Display message */
 void os_$free_va_page(uint32_t vaddr);          /* Free page at virtual address */
 void os_$start_proc2(void *param);             /* Free init pages and start proc2 */
 
+/*
+ * The VTOCE the boot volume's paging file resolves to: a named view of the
+ * fields OS_$INIT and OS_$INSTALL_DISPLAY_ASTE touch inside a vtoce_$result_t.
+ *
+ * The original clears exactly 0x90 bytes at A6-0x128 (0x00E34018:
+ * `moveq #0x23` + `dbf` = 36 longwords), and the next frame slot -- the
+ * lookup request at A6-0x98 -- starts 0x90 bytes later, so the buffer is
+ * 0x90 bytes.  That is the true size of the record: VTOCE_$READ moves the
+ * same 36 longwords into it (0x00E395B0) and VTOCE_$WRITE and VTOC_$ALLOCATE
+ * move 36 back out (0x00E3977A, 0x00E38C26).  0x150 is the on-disk entry
+ * stride, not the size of this record; vtoc/vtoc.h now says so.
+ */
+typedef struct os_$init_vtoce_t {
+    uint32_t reserved00;                  /* +0x00 */
+    uid_t file_uid;                       /* +0x04 (A6-0x124) */
+    uint32_t reserved0c;                  /* +0x0C */
+    uint32_t reserved10;                  /* +0x10 */
+    uint32_t length;                      /* +0x14 (A6-0x114) */
+    uint8_t reserved18[0x74 - 0x18];      /* +0x18 */
+    uint16_t field74;                     /* +0x74 (A6-0xB4) */
+    uint8_t reserved76[0x88 - 0x76];      /* +0x76 */
+    uid_t acl_uid;                        /* +0x88 (A6-0xA0) */
+} os_$init_vtoce_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(os_$init_vtoce_t) == 0x90, "os_$init_vtoce_t size");
+_Static_assert(sizeof(os_$init_vtoce_t) == sizeof(vtoce_$result_t),
+               "os_$init_vtoce_t must be the same record as vtoce_$result_t");
+_Static_assert(__builtin_offsetof(os_$init_vtoce_t, file_uid) == 0x04, "uid");
+_Static_assert(__builtin_offsetof(os_$init_vtoce_t, length) == 0x14, "length");
+_Static_assert(__builtin_offsetof(os_$init_vtoce_t, field74) == 0x74, "f74");
+_Static_assert(__builtin_offsetof(os_$init_vtoce_t, acl_uid) == 0x88, "acl");
+#endif
+
 #endif /* OS_INTERNAL_H */

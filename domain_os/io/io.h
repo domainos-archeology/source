@@ -19,6 +19,7 @@
  * Single definition; flp/, ring/, scsi/ and win/ include this header.
  */
 #define status_$io_controller_not_in_system 0x00100002
+#define status_$io_bad_dcte_length          0x00100007  /* io_$build_dcte_list */
 
 /*
  * ============================================================================
@@ -26,21 +27,37 @@
  * ============================================================================
  *
  * The DCTE structure contains information about each disk/device controller.
- * Size: 72 bytes (0x48)
+ * Size: 72 bytes (0x48) as declared; the image's static DCTEs (RING_DCTE,
+ * FLP_DCTE, WIN_DCTE in the DCTES segment) are 0x40 bytes apart and say so
+ * in their length word.
+ *
+ * What IO_$INIT (0x00E328E0) and io_$build_dcte_list (0x00E32834) read:
+ *   +0x00 kind    `cmpi.w #0x1,(A3)`: kind 1 has a VA at +0x2C to translate
+ *   +0x02 length  record length; 0 or not a multiple of 8 is "bad dcte
+ *                 length" (0x00E32852-0x00E3286A)
+ *   +0x0C csrsytr the controller's init procedure, called with the DCTE,
+ *                 status in D0 (`jsr (A0)` 0x00E329D2)
+ *   +0x10 cstatus
+ *   +0x14 name    eight characters printed "%m8a"; a zero first byte means
+ *                 the DCTE is not listed (`tst.b (0x14,A3)`)
+ *   +0x2C io_va / +0x30 io_pa  (0x00E3297C-0x00E329B8)
  */
+struct dcte_t;
+typedef status_$t (*io_$dcte_init_fn_t)(struct dcte_t *dcte);
+
 typedef struct dcte_t {
-  uint32_t no_clue;        /* 0x00: Unknown field */
+  uint16_t kind;           /* 0x00: 1 = io_va must be translated */
+  uint16_t length;         /* 0x02: record length (multiple of 8) */
   uint16_t ctype;          /* 0x04: Controller type (0, 1, or 2) */
   uint16_t cnum;           /* 0x06: Controller number */
   struct dcte_t *nextp;    /* 0x08: Next DCTE in list */
-  uint32_t csrsytr;        /* 0x0C: Unknown */
+  io_$dcte_init_fn_t csrsytr; /* 0x0C: controller init procedure */
   status_$t cstatus;       /* 0x10: Controller status */
-  uint32_t blk_hdr_ptr;    /* 0x14: Block header pointer */
-  uint32_t blk_hdr_pa;     /* 0x18: Block header physical address */
+  uint8_t name[8];         /* 0x14: device name ("%m8a") */
   uint8_t reserved_1c[12]; /* 0x1C-0x27: Reserved */
   uint32_t vector_ptr;     /* 0x28: Vector pointer */
-  uint32_t int_entry;      /* 0x2C: Interrupt entry */
-  uint32_t int_routine;    /* 0x30: Interrupt routine */
+  uint32_t io_va;          /* 0x2C: VA translated by IO_$INIT (kind 1) */
+  uint32_t io_pa;          /* 0x30: its PA: ppn << 10 | (io_va & 0x3FF) */
   uint32_t disk_dinit;     /* 0x34: Disk initialization structure */
   uint32_t disk_do_io;     /* 0x38: Disk I/O function pointer */
   uint32_t disk_error_que; /* 0x3C: Disk error queue */
@@ -51,18 +68,18 @@ typedef struct dcte_t {
 
 /* Layout recovered from the disassembly -- see the field comments above. */
 #if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(dcte_t, no_clue) == 0x00, "dcte_t.no_clue");
+_Static_assert(__builtin_offsetof(dcte_t, kind) == 0x00, "dcte_t.kind");
+_Static_assert(__builtin_offsetof(dcte_t, length) == 0x02, "dcte_t.length");
 _Static_assert(__builtin_offsetof(dcte_t, ctype) == 0x04, "dcte_t.ctype");
 _Static_assert(__builtin_offsetof(dcte_t, cnum) == 0x06, "dcte_t.cnum");
 _Static_assert(__builtin_offsetof(dcte_t, nextp) == 0x08, "dcte_t.nextp");
 _Static_assert(__builtin_offsetof(dcte_t, csrsytr) == 0x0C, "dcte_t.csrsytr");
 _Static_assert(__builtin_offsetof(dcte_t, cstatus) == 0x10, "dcte_t.cstatus");
-_Static_assert(__builtin_offsetof(dcte_t, blk_hdr_ptr) == 0x14, "dcte_t.blk_hdr_ptr");
-_Static_assert(__builtin_offsetof(dcte_t, blk_hdr_pa) == 0x18, "dcte_t.blk_hdr_pa");
+_Static_assert(__builtin_offsetof(dcte_t, name) == 0x14, "dcte_t.name");
 _Static_assert(__builtin_offsetof(dcte_t, reserved_1c) == 0x1C, "dcte_t.reserved_1c");
 _Static_assert(__builtin_offsetof(dcte_t, vector_ptr) == 0x28, "dcte_t.vector_ptr");
-_Static_assert(__builtin_offsetof(dcte_t, int_entry) == 0x2C, "dcte_t.int_entry");
-_Static_assert(__builtin_offsetof(dcte_t, int_routine) == 0x30, "dcte_t.int_routine");
+_Static_assert(__builtin_offsetof(dcte_t, io_va) == 0x2C, "dcte_t.io_va");
+_Static_assert(__builtin_offsetof(dcte_t, io_pa) == 0x30, "dcte_t.io_pa");
 _Static_assert(__builtin_offsetof(dcte_t, disk_dinit) == 0x34, "dcte_t.disk_dinit");
 _Static_assert(__builtin_offsetof(dcte_t, disk_do_io) == 0x38, "dcte_t.disk_do_io");
 _Static_assert(__builtin_offsetof(dcte_t, disk_error_que) == 0x3C, "dcte_t.disk_error_que");
@@ -243,25 +260,19 @@ dcte_t *IO_$GET_DCTE(uint16_t *ctypep, uint16_t *cnump, status_$t *status_ret);
 /*
  * IO_$INIT - Initialize the I/O subsystem
  *
- * Initializes the I/O exclusion locks and DMA, runs the per-controller
- * init routines, then walks IO_$DCTE_LIST calling each DCTE's csrsytr
- * entry.  When *verbose_flag is negative, prints a line per device.
+ * Initializes the I/O exclusion locks and DMA, builds IO_$DCTE_LIST, runs
+ * the bus init procedures of IO_$BUS_EPV, then walks the list translating
+ * each kind-1 DCTE's VA and calling its init procedure.  When *verbose_flag
+ * is negative, prints a line per named device.  (io/init.c)
  *
  * Parameters (all passed by address, pea'd by OS_$INIT):
- *   param1       - unused by the routine (OS_$INIT passes the address of its
- *                  own status_$ok cell)
- *   verbose_flag - pointer to a byte; negative => print device init status
- *   status_ret   - status (set to status_$ok on entry)
+ *   param1       - never read (OS_$INIT passes its status_$ok cell)
+ *   verbose_flag - Domain boolean byte; negative => print device init status
+ *   status_ret   - set to status_$ok on entry and never changed
  *
  * Original address: 0x00E328E0
- * TODO(source-s6ru): NOT EMITTED.  330 bytes at 0x00E328E0..0x00E32A29;
- * this header carries only the prototype, so OS_$INIT's call does not link.
- * Missing: the ML_$LOCK initialisation of the I/O exclusion locks, the DMA
- * init call, the per-controller init table walk, and the IO_$DCTE_LIST walk
- * that calls each DCTE's csrsytr entry and (when *verbose_flag < 0) prints a
- * line per device.  Tracked in the io link inventory as source-s6ru.
  */
-void IO_$INIT(void *param1, char *verbose_flag, status_$t *status_ret);
+void IO_$INIT(void *param1, const int8_t *verbose_flag, status_$t *status_ret);
 
 /*
  * IO_$GET_CONFIG - report which optional controllers are present

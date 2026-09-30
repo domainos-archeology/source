@@ -54,11 +54,13 @@ typedef enum {
  *
  * Codes this port has never needed and therefore does not define: 0x000E000C, 0x000E0010 ("name is not a file"), 0x000E0013,
  * 0x000E0015, 0x000E0017, 0x000E0018, 0x000E001B, 0x000E0021, 0x000E0024,
- * 0x000E0026..0x000E002A, 0x000E002C, 0x000E0034 ("ran out of address
+ * 0x000E0027, 0x000E0029, 0x000E002A, 0x000E002C, 0x000E0034 ("ran out of address
  * space"), 0x000E0035.  Add them from the database, never by guessing.
  * ============================================================================
  */
 #define status_$directory_is_full                           0x000e0002  /* directory is full */
+#define status_$naming_bad_request_header_version           0x000e0026  /* bad request header version (DIR_$SERVER) */
+#define status_$naming_bad_request_body_version             0x000e0028  /* bad request body version (DIR_$SERVER) */
 #define status_$name_already_exists                         0x000e0003  /* name already exists */
 #define status_$naming_invalid_pathname                     0x000e0004  /* invalid pathname */
 #define status_$naming_invalid_link                         0x000e0005  /* invalid link */

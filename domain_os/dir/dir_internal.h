@@ -1868,6 +1868,89 @@ _Static_assert(sizeof(uid_t) == 8, "mount uid stride (n*8)");
 MODULE_DATA_DECLARE(dir_$data_t, DIR_$DATA, 0x00E7DBF8);
 
 /*
+ * DIR_SERVER - the data block of the remote directory server, SAU2 map
+ * "D E801E4 DIR_SERVER size = 80" (no interior symbols; A5 of DIR_$SERVER,
+ * `lea (0xe801e4).l,A5` at 0x00E58208).  DIR_$SERVER saves the server
+ * process's own requester SIDs here the first time it runs and puts them
+ * back after every request.  Image bytes (`gsk read 0xE801E4 0x80`):
+ *
+ *   00e801e4  00 00 00 0c 00 00 00 0c  00 00 00 0c 00 00 00 00
+ *   (zero through 0x00E8025F)
+ *   00e80260  ff 00 00 00
+ */
+typedef struct dir_$server_data_t {
+    uint32_t default_proj[3];   /* +0x00 copied to request +0x14 when its
+                                 *       header version is 0 (0x00E58278) */
+    uint32_t _pad_0c;           /* +0x0C */
+    uint32_t saved_subsys[3];   /* +0x10 ACL_$GET_RE_ALL_SIDS arg 4 */
+    uint32_t _pad_1c;           /* +0x1C */
+    uint32_t saved_prot[3];     /* +0x20 arg 3 */
+    uint32_t _pad_2c;           /* +0x2C */
+    uint32_t saved_re_sids[9];  /* +0x30 arg 2 */
+    uint32_t _pad_54;           /* +0x54 */
+    uint32_t saved_acl[9];      /* +0x58 arg 1 */
+    int8_t   first_time;        /* +0x7C 0xFF until the SIDs are saved */
+    uint8_t  _pad_7d[3];        /* +0x7D */
+} dir_$server_data_t;
+
+#define DIR_SERVER_DATA_SIZE 0x80   /* map: DIR_SERVER size = 80 */
+_Static_assert(offsetof(dir_$server_data_t, saved_subsys) == 0x10, "(0x10,A5)");
+_Static_assert(offsetof(dir_$server_data_t, saved_prot) == 0x20, "(0x20,A5)");
+_Static_assert(offsetof(dir_$server_data_t, saved_re_sids) == 0x30, "(0x30,A5)");
+_Static_assert(offsetof(dir_$server_data_t, saved_acl) == 0x58, "(0x58,A5)");
+_Static_assert(offsetof(dir_$server_data_t, first_time) == 0x7C, "(0x7c,A5)");
+_Static_assert(sizeof(dir_$server_data_t) == DIR_SERVER_DATA_SIZE, "DIR_SERVER size 0x80");
+
+MODULE_DATA_DECLARE(dir_$server_data_t, DIR_SERVER, 0x00E801E4);
+
+/*
+ * The parts of a remote directory request (the wire form of
+ * dir_$do_op_request_t, as REM_FILE_$SERVER hands it over) and of its reply
+ * header that DIR_$SERVER itself reads and writes; the operation body is
+ * DIR_$DO_OP's business.
+ */
+typedef struct dir_$server_request_t {           /* naturally aligned */
+    uint8_t  _pad_00[3];
+    uint8_t  op;                /* 0x03 opcode; op >> 1 picks DIR_$OP_REC */
+    uint8_t  _pad_04[8];        /* 0x04 uid */
+    int16_t  hdr_version;       /* 0x0C must be <= 1 (0x00E58232) */
+    int16_t  version;           /* 0x0E must be <= DIR_$OP_REC().version */
+    uint8_t  _pad_10[4];
+    uint32_t cur_proj[3];       /* 0x14 ACL_$SET_RE_ALL_SIDS arg 4 */
+    uint8_t  _pad_20;
+    uint8_t  flags;             /* 0x21 bit 0: keep auditing on;
+                                 *      bit 2: run one subsystem level up */
+    uint8_t  _pad_22[6];
+    uint32_t re_sids[9];        /* 0x28 ACL_$SET_RE_ALL_SIDS arg 2 */
+    uid_t    proj_list[8];      /* 0x4C ACL_$SET_PROJ_LIST arg 1 */
+    int16_t  proj_count;        /* 0x8C ACL_$SET_PROJ_LIST arg 2 */
+} dir_$server_request_t;
+
+_Static_assert(offsetof(dir_$server_request_t, hdr_version) == 0x0C, "req +0x0C");
+_Static_assert(offsetof(dir_$server_request_t, cur_proj) == 0x14, "req +0x14");
+_Static_assert(offsetof(dir_$server_request_t, flags) == 0x21, "req +0x21");
+_Static_assert(offsetof(dir_$server_request_t, re_sids) == 0x28, "req +0x28");
+_Static_assert(offsetof(dir_$server_request_t, proj_list) == 0x4C, "req +0x4C");
+_Static_assert(offsetof(dir_$server_request_t, proj_count) == 0x8C, "req +0x8C");
+
+#define DIR_SERVER_REQ_KEEP_AUDIT   0x01    /* btst.b #0x0,(0x21,A2) */
+#define DIR_SERVER_REQ_SUBSYS_UP    0x04    /* btst.b #0x2,(0x21,A2) */
+
+typedef struct dir_$server_reply_t {             /* naturally aligned */
+    uint8_t   _pad_00[4];
+    status_$t status;           /* 0x04 */
+    uint32_t  long_08;          /* 0x08 cleared (0x00E5821A) */
+    uint16_t  version;          /* 0x0C the version a refused request
+                                 *      should have used */
+    uint8_t   _pad_0e[4];
+    uint16_t  word_12;          /* 0x12 cleared (0x00E58224) */
+} dir_$server_reply_t;
+
+_Static_assert(offsetof(dir_$server_reply_t, status) == 0x04, "reply +0x04");
+_Static_assert(offsetof(dir_$server_reply_t, version) == 0x0C, "reply +0x0C");
+_Static_assert(sizeof(dir_$server_reply_t) == 0x14, "reply header 0x14 bytes");
+
+/*
  * The 16-bit mount count: `move.w (0x155a,A5),D0w' reads the LOW half of
  * the longword DIR_$MTTAB count at `(0x1558,A5)' (dir_$do_op_drop_mount
  * reads the word at 0x00E53404 and the longword at 0x00E5342E).  Taking the

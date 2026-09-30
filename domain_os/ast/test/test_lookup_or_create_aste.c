@@ -107,7 +107,7 @@ static uint16_t  lookup_fm_block_num;
 static uint32_t  lookup_fm_phys;
 static uint32_t  lookup_fm_count;
 static status_$t lookup_fm_status;
-void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t block_num, uint16_t flags,
+void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t block_num, int8_t flags,
                       uint32_t *phys_block, uint32_t *alloc_count,
                       status_$t *status)
 {

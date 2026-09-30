@@ -322,22 +322,27 @@ void VTOC_$SEARCH_VOLUMES(void *uid_info, status_$t *status);
  */
 
 /*
- * VTOCE_$LOOKUP_FM - Look up block in file map
+ * VTOCE_$LOOKUP_FM - Find (or make) the file-map block of a segment
  *
- * Given a VTOCE location and logical block number, returns the physical
- * disk block. Handles direct, indirect, and double indirect blocks.
+ * Walks the VTOCE's direct / indirect / double-indirect roots to the
+ * 32-entry file map of `segment' and merges its location (block << 4 |
+ * slot) into *fm_loc.  With `allocate' true, missing blocks are allocated
+ * and counted in *alloc_count.  (vtoc/lookup_fm.c)
  *
- * @param vtoce_loc VTOCE location (block << 4 | entry)
- * @param block_num Logical block number within file
- * @param flags     Lookup flags
- * @param phys_block Receives physical block number
- * @param alloc_count Receives allocation count (if allocating)
- * @param status    Output status code
+ * @param vtoce_loc   the object's location record (vtoc_$lookup_req_t
+ *                    shape: +0x04 VTOCE block << 4 | entry, +0x08 uid,
+ *                    +0x1C volume index)
+ * @param segment     segment number within the file (word)
+ * @param allocate    Domain boolean BYTE in the high half of the word slot
+ *                    (`tst.b (0xe,A2)` in the nested walk, 0x00E397FC)
+ * @param fm_loc      receives the map location
+ * @param alloc_count receives the number of blocks allocated
+ * @param status      status return
  *
  * Original address: 0x00e39a04
  */
-void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t block_num, uint16_t flags,
-                      uint32_t *phys_block, uint32_t *alloc_count,
+void VTOCE_$LOOKUP_FM(void *vtoce_loc, uint16_t segment, int8_t allocate,
+                      uint32_t *fm_loc, uint32_t *alloc_count,
                       status_$t *status);
 
 /*

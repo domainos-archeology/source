@@ -339,9 +339,9 @@ void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int16_t e, status_$t *st)
 { (void)e; *st = status_$ok; }
 void ACL_$CONVERT_FUNKY_ACL(void *a, void *b, void *c, void *d, status_$t *st)
 { (void)a; (void)b; (void)c; (void)d; *st = status_$ok; }
-int8_t ACL_$CONVERT_TO_10ACL(void *a, void *b, uid_t *c, void *d,
-                             status_$t *st)
-{ (void)a; (void)b; (void)c; (void)d; *st = status_$ok; return 0; }
+void ACL_$CONVERT_TO_10ACL(uid_t *a, uid_t *b, uid_t *c, void *d,
+                           status_$t *st)
+{ (void)a; (void)b; (void)c; (void)d; *st = status_$ok; }
 
 void DIR_$GET_ENTRYU(uid_t *d, char *n, uint16_t *nl, void *e, status_$t *st)
 { (void)d; (void)n; (void)nl; (void)e; *st = status_$ok; }

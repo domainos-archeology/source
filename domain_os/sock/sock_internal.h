@@ -83,14 +83,7 @@
  * Internal Function Prototypes
  */
 
-/*
- * Put packet on socket queue (internal, returns event count pointer).
- * 0x00E16190: 0x08 sock_num(w), 0x0A pkt_info, 0x0E flags(b), 0x10/0x12 the
- * two event-count words, 0x14 ec_ret.
- */
-int8_t SOCK_$PUT_INT(uint16_t sock_num, sock_$pkt_info_t *pkt_info,
-                     int8_t flags, uint16_t ec_param1, uint16_t ec_param2,
-                     ec_$eventcount_t **ec_ret);
+/* SOCK_$PUT_INT (0x00E16190) is declared in sock/sock.h (net_io uses it). */
 
 /*
  * Put packet on socket queue (lowest level).

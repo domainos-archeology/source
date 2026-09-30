@@ -388,8 +388,8 @@ static void server_set_attribute(rem_file_server_frame_t *f)
             }
             old_acl.high = *(uint32_t *)attr_val;
             old_acl.low  = *(uint32_t *)(attr_val + 4);
-            (void)ACL_$CONVERT_TO_10ACL(&old_acl, file_uid, &converted,
-                                        acl_data, &status);
+            ACL_$CONVERT_TO_10ACL(&old_acl, file_uid, &converted,
+                                  acl_data, &status);
             *(uint32_t *)attr_val       = converted.high;
             *(uint32_t *)(attr_val + 4) = converted.low;
             f->response.status = status;

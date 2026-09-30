@@ -232,7 +232,10 @@ typedef struct route_$port_t {
     uint16_t    _unknown2d;         /* 0x52: ASKNODE's +0x52 word */
     uint32_t    stat_long_54;       /* 0x54: cleared by NET_IO_$CREATE_PORT;
                                      *       first half of the 8-byte block
-                                     *       ASKNODE copies to reply+0x0E */
+                                     *       ASKNODE copies to reply+0x0E;
+                                     *       net_io_$put_in_sock_common counts
+                                     *       every packet it offers a socket
+                                     *       ("addq.l #0x1,(0x54,A3)" 0x00E0E35C) */
     uint32_t    forward_count;      /* 0x58: Packets forwarded to this port (ROUTE_$PROCESS) */
 } route_$port_t;
 

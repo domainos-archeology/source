@@ -109,6 +109,8 @@ uint32_t NETWORK_$RQST_WAIT[4];        /* 0xE24B74 (+0x278) */
 uint32_t NETWORK_$PAGE_WAIT[4];        /* 0xE24B8C (+0x290) */
 uint32_t NETWORK_$RING_DCTE;           /* 0xE24BA4 (+0x2A8) */
 uint16_t NETWORK_$AGE_TICKS;           /* 0xE24C1A (+0x31E) */
+uint32_t NETWORK_$HDR_PAGE_PA;         /* 0xE24C04 (+0x308): `gsk read 0xE24C04 8` = 0 */
+uint32_t NETWORK_$HDR_PAGE;            /* 0xE24C08 (+0x30C) */
 int8_t   NETWORK_$STD_OPEN_FLAG = (int8_t)0xFF;   /* 0xE24C5E (+0x362) */
 uint16_t NETWORK_$REPORT_SEND_FLAGS = 0x0000;    /* 0xE24C58 (+0x35C): `gsk read 0xE24C58 2` = 00 00 */
 uint16_t NETWORK_$REPLY_SEND_FLAGS = 0x0000;     /* 0xE24C5A (+0x35E) */

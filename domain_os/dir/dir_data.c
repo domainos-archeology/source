@@ -214,3 +214,13 @@ uint16_t DIR_$PROT_TYPE_ACL = 6;
  * status value as Naming_bad_request_header_ver_err, in OLD_DIR's own pool. */
 status_$t Bad_request_header_version_err = 0x000E0025;
 
+
+/*
+ * DIR_SERVER (0x00E801E4, map size 0x80): the remote directory server's
+ * saved identity.  Image: the default project record 0x0000000C x 3 at
+ * +0x00 and first_time = 0xFF at +0x7C; everything else zero.
+ */
+MODULE_DATA_DEFINE_INIT(dir_$server_data_t, DIR_SERVER, 0x00E801E4, {
+    .default_proj = { 0x0000000C, 0x0000000C, 0x0000000C },
+    .first_time = (int8_t)0xFF,
+});

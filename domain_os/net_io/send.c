@@ -14,7 +14,8 @@
  *   (0x18,A6) data_pages (D4), (0x1C,A6) data_len word,
  *   (0x1E,A6) flags       word, handed to the driver BY ADDRESS
  *   (0x20,A6) send_info (D5), (0x24,A6) status (A3)
- *   (-0x10) copy_pages[4], (-0x14) deliver_out, (-0x20) copy_hdr,
+ *   (-0x10) copy_pages[4], (-0x14) deliver_out (ec_ret; the boolean
+ *   result of net_io_$put_in_sock_common is ignored), (-0x20) copy_hdr,
  *   (-0x24) drv_status; D2w the RINGLOG entry index.
  *
  * Blocks:
@@ -81,7 +82,7 @@ void NET_IO_$SEND(int16_t port, uint32_t *hdr_ptr, uint32_t hdr_pa,
                   net_io_$send_info_t *send_info, status_$t *status_ret)
 {
     uint32_t copy_pages[4];             /* (-0x10,A6) */
-    uint32_t deliver_out;               /* (-0x14,A6) */
+    ec_$eventcount_t *deliver_out;      /* (-0x14,A6) */
     uint32_t copy_hdr;                  /* (-0x20,A6) */
     status_$t drv_status;               /* (-0x24,A6) */
     route_$port_t *p;                   /* A2 */

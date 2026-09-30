@@ -63,14 +63,16 @@ void NET_IO_$COPY_PACKET(uint32_t *hdr_src_p, uint16_t hdr_len,
     (void)data_len; (void)data_pages_out;
     n_copy++; *hdr_va_out = 0x1234; *status_ret = copy_status;
 }
-void net_io_$put_in_sock_common(route_$port_t *port, uint16_t port_type,
-                                uint16_t socket, int8_t flag,
-                                uint32_t *hdr_va_p, uint32_t *data_pa_p,
-                                uint16_t hdr_len, uint16_t data_len, void *out)
+int8_t net_io_$put_in_sock_common(route_$port_t *port, uint16_t port_type,
+                                  uint16_t socket, int8_t int_level,
+                                  uint32_t *hdr_va_p, uint32_t *data_pa_p,
+                                  uint16_t hdr_len, uint16_t data_len,
+                                  ec_$eventcount_t **ec_ret)
 {
-    (void)port_type; (void)socket; (void)flag; (void)hdr_va_p; (void)data_pa_p;
-    (void)hdr_len; (void)data_len; (void)out;
+    (void)port_type; (void)socket; (void)int_level; (void)hdr_va_p;
+    (void)data_pa_p; (void)hdr_len; (void)data_len; (void)ec_ret;
     n_deliver++; deliver_port = port;
+    return 0;
 }
 int16_t RINGLOG_$LOGIT(const uint8_t *info, void *pkt)
 {

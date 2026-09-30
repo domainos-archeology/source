@@ -764,22 +764,24 @@ void ACL_$COPY(uid_t *source_acl_uid, uid_t *dest_uid, uid_t *source_type,
                uid_t *dest_type, status_$t *status_ret);
 
 /*
- * ACL_$CONVERT_TO_10ACL - Convert ACL to 10-entry format
+ * ACL_$CONVERT_TO_10ACL - Make an SR10 ACL object from an old ACL
  *
- * Converts an ACL from older format to 10-entry format.
+ * Renders `source_acl' through acl_$image_internal (with the caller's
+ * privilege raised and both ACL locks held) and, unless the image is the
+ * plain default (0x34 bytes, owner ACL_$DIR_ACL or ACL_$FILE_ACL, nil
+ * second uid, group equal to the owner), creates an ACL object for it with
+ * ACL_$PRIM_CREATE.  *result_uid is UID_$NIL when nothing was created.
+ * A procedure: nothing is returned in D0.  (acl/convert_to_10acl.c)
  *
- * Parameters:
- *   source_acl   - Source ACL UID
- *   file_uid     - File UID for conversion context
- *   result_uid   - Output: converted ACL UID
- *   acl_data     - Output: ACL data buffer (44 bytes)
- *   status_ret   - Output status code
- *
- * Returns:
- *   Non-zero if conversion was performed
+ * Parameters (frame 0x00E48E02):
+ *   0x08 source_acl   the ACL UID to render
+ *   0x0C dir_uid      PRIM_CREATE's directory UID
+ *   0x10 result_uid   Output: the new ACL object's UID, or UID_$NIL
+ *   0x14 acl_data     acl_$image_internal's data_out and PRIM_CREATE's type
+ *   0x18 status_ret   Output status code
  */
-int8_t ACL_$CONVERT_TO_10ACL(void *source_acl, void *file_uid, uid_t *result_uid,
-                              void *acl_data, status_$t *status_ret);
+void ACL_$CONVERT_TO_10ACL(uid_t *source_acl, uid_t *dir_uid, uid_t *result_uid,
+                           void *acl_data, status_$t *status_ret);
 
 /*
  * ACL_$GET_ACL_ATTRIBUTES - Get ACL attributes for a file
@@ -845,10 +847,10 @@ void ACL_$SET_LOCAL_LOCKSMITH(int16_t *locksmith_value, status_$t *status_ret);
 /* Default ACL UIDs for different object types */
 extern uid_t ACL_$DNDCAL;   /* 0xE174DC: Default ACL for dirs/links */
 extern uid_t ACL_$FNDWRX;   /* 0xE174C4: Default ACL for files */
-extern uid_t ACL_$DIR_ACL;  /* Well-known ACL UID for directories */
+extern uid_t ACL_$DIR_ACL;  /* 0xE1744C: well-known ACL UID for directories */
 
 /* ACL type UIDs - used to identify ACL operations */
-extern uid_t ACL_$FILE_ACL;    /* 0xE1744C */
+extern uid_t ACL_$FILE_ACL;    /* 0xE17444 (SAU2 map) */
 extern uid_t ACL_$FILEIN_ACL;  /* 0xE17454 */
 extern uid_t ACL_$DIRIN_ACL;   /* 0xE1745C: {0x00000603, 0} (used by dir/) */
 

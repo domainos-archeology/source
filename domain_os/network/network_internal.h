@@ -138,6 +138,15 @@ extern uint32_t NETWORK_$RQST_WAIT[4];
 extern uint32_t NETWORK_$PAGE_WAIT[4];
 extern uint32_t NETWORK_$RING_DCTE;
 extern uint16_t NETWORK_$AGE_TICKS;
+
+/*
+ * NETWORK_$HDR_PAGE_PA (0xE24C04, +0x308) and NETWORK_$HDR_PAGE (0xE24C08,
+ * +0x30C), named by the map: the byte address (ppn << 10) of the page
+ * NETWORK_$INIT takes with WP_$CALLOC and the VA NETBUF_$GETVA maps it at
+ * (0x00E2F700-0x00E2F724).  Both zero in the image.
+ */
+extern uint32_t NETWORK_$HDR_PAGE_PA;
+extern uint32_t NETWORK_$HDR_PAGE;
 extern int8_t NETWORK_$STD_OPEN_FLAG;
 
 /*

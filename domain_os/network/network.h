@@ -796,10 +796,7 @@ void network_$fetch_diskless_info(int16_t cmd, uint32_t node);
 /*
  * NETWORK_$INIT - Initialize the network subsystem
  *
- * Original address: 0x00E2F684
- * TODO(source-sdx1): NOT EMITTED.  358 bytes at 0x00E2F684..0x00E2F7F1;
- * only the prototype exists, so OS_$INIT's call does not link.  Tracked in
- * the network link inventory as source-sdx1.
+ * Original address: 0x00E2F684 (network/init.c)
  */
 void NETWORK_$INIT(void);
 

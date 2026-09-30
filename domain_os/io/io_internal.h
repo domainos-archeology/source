@@ -24,4 +24,68 @@
  * a host-only stand-in buffer.
  */
 
+
+#include "ml/ml.h"
+
+/*
+ * ============================================================================
+ * IO_ data segment cells touched by IO_$INIT (map "D E2C368 IO_ size = 554";
+ * the module is not a MODULE_DATA block yet, so like IO_$DCTE_LIST these are
+ * individual objects, each with its address and IO_ offset).
+ * ============================================================================
+ */
+
+/* A bus's entry-point vector: IO_$INIT calls every non-nil `init'
+ * (0x00E3292C-0x00E3293A, `lea (0x24,A3),A3`, five entries). */
+typedef void (*io_$proc_t)(void);
+
+typedef struct io_$bus_epv_t {
+    io_$proc_t init;            /* +0x00 */
+    uint32_t   _04[2];          /* +0x04 */
+    io_$proc_t define_int;      /* +0x0C */
+    uint16_t   words_10[10];    /* +0x10 */
+} io_$bus_epv_t;
+
+#define IO_BUS_EPV_COUNT    5   /* moveq #0x4,D2 / dbf */
+#if defined(ARCH_M68K)
+/* Pointer-bearing: target-only (design section 3). */
+_Static_assert(sizeof(io_$bus_epv_t) == 0x24, "IO_$BUS_EPV stride 0x24");
+_Static_assert(__builtin_offsetof(io_$bus_epv_t, define_int) == 0x0C, "define_int");
+#endif
+
+/* IO_$BUS_EPV, 0xE2C3C8 (IO_ +0x60) */
+extern io_$bus_epv_t IO_$BUS_EPV[IO_BUS_EPV_COUNT];
+
+/* 0xE2C880 (IO_ +0x518, no map symbol) and IO_$WIRING_EXCLUSION 0xE2C898
+ * (+0x530): the two exclusion locks IO_$INIT initialises. */
+extern ml_$exclusion_t io_$exclusion;
+extern ml_$exclusion_t IO_$WIRING_EXCLUSION;
+
+/* 0xE2C8AC (+0x544) and 0xE2C8B0 (+0x548), no map symbols: the end and the
+ * start of the linker's DCTES area (map: DCTE_START = DCTE_END = 0xE2E0A0,
+ * size 0 on the SAU2), walked by io_$build_dcte_list. */
+extern uint32_t io_$dcte_area_end;
+extern uint32_t io_$dcte_area_start;
+
+/* IO_$IN_INIT, 0xE2C8BA (+0x552): true while IO_$INIT runs. */
+extern int8_t IO_$IN_INIT;
+
+/*
+ * DEV_DCTES, 0xE2C97C: the nil-terminated list of the static DCTEs
+ * (image: WIN_DCTE 0xE2C93C, FLP_DCTE 0xE2C8FC, RING_DCTE 0xE2C8BC, 0),
+ * last object of the DCTES segment (map "D E2C8BC DCTES size = D0").
+ * TODO(source-e0ta): the DCTES segment (three 0x40-byte DCTEs whose init,
+ * interrupt and I/O procedures are ring/flp/win routines, and this list)
+ * is not yet defined; it stays unresolved in the m68k link.
+ */
+extern dcte_t *DEV_DCTES[4];
+
+/*
+ * io_$build_dcte_list (0x00E32834, 170 bytes, was FUN_00e32834; the IO_ code
+ * segment's first routine, no map symbol) - build IO_$DCTE_LIST from the
+ * dynamic DCTE area and DEV_DCTES.  Called only by IO_$INIT (0x00E32920).
+ * (io/build_dcte_list.c)
+ */
+void io_$build_dcte_list(void);
+
 #endif /* IO_INTERNAL_H */
