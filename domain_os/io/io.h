@@ -280,13 +280,13 @@ void IO_$INIT(void *param1, const int8_t *verbose_flag, status_$t *status_ret);
  * IO_$GET_CONFIG - report which optional controllers are present
  *
  * Clears all four words and then sets bits in the LOW byte of each
- * (i.e. bits 0..7 of the word on m68k) according to what IO_$FIND_CTLR
- * (0x00E1A404) reports:
+ * (i.e. bits 0..7 of the word on m68k) according to what CHK (0x00E1A404,
+ * misc/chk.c) reports for a controller type:
  *
- *   config1 bit 0 / bit 1   two controller probes (0x00E72354 / 0x00E7236E)
- *   config2 bit 0           a third probe          (0x00E7238E)
+ *   config1 bit 0 / bit 1   CHK(&0) / CHK(&1)      (0x00E72354 / 0x00E7236E)
+ *   config2 bit 0           CHK(&2)                (0x00E7238E)
  *   config3                 cleared, never set     (0x00E72398)
- *   config4 bit 0           a flag byte at 0xE2C8B8 (0x00E723AC)
+ *   config4 bit 0           io_$config_flag, 0xE2C8B8 (0x00E723AC)
  *
  * ASKNODE_$INTERNET_INFO's request-0x27 arm passes reply+0x22, +0x24, +0x26
  * and +0x28 (0x00E64D3C-0x00E64D48).

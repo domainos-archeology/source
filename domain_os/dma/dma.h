@@ -131,6 +131,15 @@
 
 
 /*
+ * The disk-module status codes DMA_$CHECK returns or crashes with live in
+ * their owners' headers: status_$disk_equipment_check and
+ * status_$bus_error_occurred_during_disk_dma_transfer in disk/disk.h,
+ * status_$floppy_is_not_2_sided, status_$unknown_status_returned_by_hardware
+ * and status_$dma_not_at_end_of_range in flp/flp.h (dma/check.c includes
+ * both).
+ */
+
+/*
  * Public function prototypes
  */
 

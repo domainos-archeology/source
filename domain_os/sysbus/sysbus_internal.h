@@ -17,11 +17,8 @@
  */
 #define status_$sysbus_unknown_interrupt_id 0x003E0002
 
-/*
- * External interrupt handler declarations
- * These are defined in the disk and ring subsystems.
- */
-extern void DISK_INTERRUPT(void);
-extern void RING_INTERRUPT(void);
+/* The two first-level interrupt routines SYSBUS_$INIT installs. */
+#include "disk/disk.h"          /* DISK_INTERRUPT (disk/interrupt.c) */
+#include "ring/ring.h"          /* RING_INTERRUPT (ring/interrupt.c) */
 
 #endif /* SYSBUS_INTERNAL_H */

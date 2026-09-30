@@ -694,6 +694,20 @@ _Static_assert(offsetof(acl_$image_t, rights)          == 0x2A, "acl_image.right
 _Static_assert(sizeof(acl_$image_t) == 0x42, "acl_$image_t must be 0x42 bytes");
 
 /*
+ * acl_$exsid_t - the extended SID record ACL_$GET_EXSID fills (0x64
+ * bytes): the current SID block (nine longwords, 0x00E489A4) followed by
+ * the project list ACL_$GET_PROJ_LIST returns (sixteen longwords at +0x24,
+ * 0x00E489D0).  The same shape ACL_$RIGHTS_CHECK takes as its acl_ctx.
+ */
+typedef struct acl_$exsid_t {
+    acl_sid_block_t sids;                       /* +0x00 */
+    uid_t           proj_uids[ACL_MAX_PROJECTS]; /* +0x24 */
+} acl_$exsid_t;
+
+_Static_assert(__builtin_offsetof(acl_$exsid_t, proj_uids) == 0x24, "exsid: projects at +0x24");
+_Static_assert(sizeof(acl_$exsid_t) == 0x64, "exsid: 0x64 bytes");
+
+/*
  * Default ACL UIDs (referenced in acl.h, defined here for internal use)
  * These are loaded from RGYC during initialization.
  */
@@ -960,18 +974,7 @@ int8_t acl_$check_suser_pid(int16_t pid);
  */
 void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret);
 
-/*
- * ACL_$GET_SID - Get SID for an ASID
- *
- * Returns the current user SID for the specified ASID.
- *
- * Parameters:
- *   asid - Address space ID
- *   sid_ret - Output SID buffer
- *
- * Original address: 0x00E74C24
- */
-void ACL_$GET_SID(int16_t asid, uid_t *sid_ret);
+/* ACL_$GET_SID is declared in acl/acl.h (acl/get_sid.c). */
 
 /*
  * acl_$is_process_type_2 - Check if process is type 2 (user process)

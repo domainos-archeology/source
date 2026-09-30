@@ -242,12 +242,22 @@ uint32_t ACL_$RIGHTS_CHECK(void *acl_ctx, uid_t *file_uid,
                            int8_t *check_flag, status_$t *status);
 
 /*
- * ACL_$CHECK_RIGHTS - Check rights with full options
+ * ACL_$CHECK_RIGHTS - ACL_$RIGHTS_CHECK with the in-subsystem flag FALSE
+ *
+ * Parameters (acl/check_rights.c):
+ *   acl_ctx       - acl_sid_block_t followed by 8 project UIDs (+0x24)
+ *   file_uid      - UID of object to check
+ *   required_mask - Pointer to the required rights mask (longword)
+ *   option_flags  - Pointer to the option flags (word)
+ *   status        - Output status code
+ *
+ * Returns acl_$eval_rights' D0, the granted rights.
  *
  * Original address: 0x00E46A8E
  */
-int16_t ACL_$CHECK_RIGHTS(uid_t *uid, void *acl_data, void *options,
-                          status_$t *status);
+uint32_t ACL_$CHECK_RIGHTS(void *acl_ctx, uid_t *file_uid,
+                           void *required_mask, void *option_flags,
+                           status_$t *status);
 
 /*
  * ACL_$MIN_RIGHTS - Get minimum rights for an object
@@ -396,8 +406,9 @@ int8_t ACL_$USED_SUSER(void);
 /*
  * ACL_$GET_EXSID - Get extended SID for current process
  *
- * Parameters:
- *   exsid  - Output buffer for extended SID
+ * Parameters (acl/get_exsid.c):
+ *   exsid  - Output: acl_$exsid_t (0x64 bytes) - current SID block and the
+ *            eight project UIDs
  *   status - Output status code
  *
  * Original address: 0x00E48972
@@ -472,15 +483,15 @@ void ACL_$ALLOC_ASID(int16_t asid, status_$t *status_ret);
 void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret);
 
 /*
- * ACL_$GET_SID - Get SID for an ASID
+ * ACL_$GET_SID - the current process's original SID block
  *
- * Parameters:
- *   asid    - Address space ID
- *   sid_ret - Output SID buffer
+ * Parameters (acl/get_sid.c):
+ *   sid_ret    - Output: 36-byte SID block
+ *   status_ret - Output status code (always 0)
  *
  * Original address: 0x00E74C24
  */
-void ACL_$GET_SID(int16_t asid, uid_t *sid_ret);
+void ACL_$GET_SID(void *sid_ret, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -504,10 +515,11 @@ void ACL_$DEFAULT_ACL(uid_t *acl_ret, int16_t *acl_type);
  * ACL_$DEF_ACLDATA - Get default ACL data
  *
  * Fills a 44-byte acl_$prot_data_t with the system default protection -
- * owner RGYC_$P_SYS_USER_UID (0xE174EC), group RGYC_$G_NIL_UID (0xE17524),
- * org PPO_$NIL_ORG_UID (0xE17574), rights 0x10/0x10/0x10 and world 0x0F
- * (0x00E478EE-0x00E4792E) - and sets *uid_out to UID_$NIL
- * (0x00E4793E-0x00E4794A).
+ * owner PPO_$NIL_USER_UID (0xE174EC), group RGYC_$G_NIL_UID (0xE17524),
+ * org PPO_$NIL_ORG_UID (0xE17574), rights 0x10/0x10/0x10 and world 0x0F,
+ * then +0x1C..+0x2B from the constant at 0x00E47958 (subsys rights 0,
+ * owner_ext 0xC/0xC/0xC) - and sets *uid_out to UID_$NIL
+ * (0x00E4793E-0x00E4794A).  acl/def_acldata.c.
  *
  * Parameters:
  *   acl_data_out - Output ACL data buffer (44 bytes, an acl_$prot_data_t)
@@ -811,11 +823,15 @@ void ACL_$GET_ACL_ATTRIBUTES(void *file_uid, int16_t flags, void *attrs_out,
  * current process. Used by remote file server to perform privileged
  * operations on behalf of remote clients.
  *
- * Parameters:
- *   enable     - Non-zero to enable override, 0 to disable
- *   status_ret - Output status code
+ * Parameters (acl/override_local_locksmith.c):
+ *   enable     - Domain boolean BYTE by value (high byte of its word slot);
+ *                its bit for the caller is copied into the override bitmap
+ *   status_ret - no_right_to_perform_operation unless the caller's process
+ *                type is 9, then 0
+ *
+ * Original address: 0x00E49254
  */
-void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int16_t enable, status_$t *status_ret);
+void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int8_t enable, status_$t *status_ret);
 
 /*
  * ============================================================================

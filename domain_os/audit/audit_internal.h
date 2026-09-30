@@ -23,7 +23,8 @@
 #include "proc1/proc1.h"
 #include "proc2/proc2.h"
 #include "ml/ml.h"
-#include "mmap/mmap.h"  /* For GET_WIRED */
+#include "mmap/mmap.h"
+#include "misc/misc.h"  /* GET_WIRED */
 #include "ec/ec.h"
 #include "file/file.h"
 #include "uid/uid.h"      /* UID_$NIL, UID_$HASH, NODE_$ME */

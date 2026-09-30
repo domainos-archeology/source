@@ -1235,4 +1235,10 @@ extern uint16_t RING_$OVERFLOW_OVERFLOW;
 extern uint16_t RING_$FILE_OVERFLOW;
 extern uint16_t RING_$DELIVERY_FAILED;
 
+/*
+ * RING_INTERRUPT (0x00E0AB0C; ring/interrupt.c) - the ring's first-level
+ * interrupt routine: IO_$INT_CTRL.type2_do_io(IO_$INT_CTRL.type2_dcte).
+ */
+void RING_INTERRUPT(void);
+
 #endif /* RING_H */

@@ -335,7 +335,7 @@ void ACL_$GET_PROJ_LIST(uid_t *a, int16_t *b, int16_t *c, status_$t *st)
 { (void)a; (void)b; (void)c; *st = status_$ok; }
 void ACL_$SET_PROJ_LIST(uid_t *a, int16_t *b, status_$t *st)
 { (void)a; (void)b; *st = status_$ok; }
-void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int16_t e, status_$t *st)
+void ACL_$OVERRIDE_LOCAL_LOCKSMITH(int8_t e, status_$t *st)
 { (void)e; *st = status_$ok; }
 void ACL_$CONVERT_FUNKY_ACL(void *a, void *b, void *c, void *d, status_$t *st)
 { (void)a; (void)b; (void)c; (void)d; *st = status_$ok; }

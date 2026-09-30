@@ -224,7 +224,7 @@ void CRASH_SHOW_STRING(const char *str);
  */
 uint32_t VTOP_OR_CRASH(uint32_t *va_p);
 /* SUB48 declared in cal/cal.h */
-void PRINT_BUILD_TIME(void);
+/* PRINT_BUILD_TIME declared in misc/misc.h */
 /* VFMT_$WRITE10 declared in vfmt/vfmt.h (via misc/misc.h) */
 
 /*

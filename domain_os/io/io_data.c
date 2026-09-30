@@ -96,5 +96,9 @@ ml_$exclusion_t IO_$WIRING_EXCLUSION;
 uint32_t io_$dcte_area_end = ARCH_PTR_TO_VA_STATIC(&ROUTE_$PORT_ARRAY, 0x00E2E0A0);
 uint32_t io_$dcte_area_start = ARCH_PTR_TO_VA_STATIC(&ROUTE_$PORT_ARRAY, 0x00E2E0A0);
 
+/* 0xE2C8B8 (IO_ +0x550, no map symbol): read only by IO_$GET_CONFIG;
+ * zero in the image (`gsk read 0xE2C8B8 2` = 00 00). */
+int8_t io_$config_flag;
+
 /* IO_$IN_INIT (0xE2C8BA): zero in the image. */
 int8_t IO_$IN_INIT;

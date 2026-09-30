@@ -37,6 +37,12 @@ uid_t AUDIT_$ENTER_SUBS_EU  = { 0x00040008u, 0x00000000u };  /* 0x00E85660: `gsk
 int8_t AUDIT_$CORRUPTED = 0;
 
 /*
+ * audit_$wired_ec - the AUDIT wired segment, 0x00E2E07C (0x20 bytes, zero in
+ * the image), returned by GET_WIRED; see audit/audit.h.
+ */
+MODULE_DATA_DEFINE(audit_$wired_ec_t, audit_$wired_ec, 0x00E2E07C);
+
+/*
  * AUDIT_$DATA - Main audit subsystem data area
  *
  * Contains all per-subsystem state including:

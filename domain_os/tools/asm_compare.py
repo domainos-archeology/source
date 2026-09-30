@@ -93,6 +93,8 @@ import gen_layout_ld  # noqa: E402  (LinkMap, scan_sources, ANCHORS)
 # places in the image is compared piece by piece.
 LOCAL_SYMBOLS = {
     'io_$probe': 0x00E29138,                # io/sau2/probe.s
+    # io/sau2/trap.s: the first-level interrupt dispatcher in IO_$TBLS
+    'io_$flih_dispatch': 0x00E2E85C,
     'mmu_$installi': 0x00E2409C,            # mmu/sau2/installi.s
     'mmu_$remove_internal': 0x00E23DCC,     # mmu/sau2/internal.s
     # proc1/sau2/dispatch.s: the crash stub is the tail of

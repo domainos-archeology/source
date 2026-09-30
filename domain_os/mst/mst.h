@@ -261,7 +261,8 @@ void *MST_$MAP(uid_t *uid, uint32_t *start_ptr, uint32_t *length_ptr,
                uint16_t *mode_ptr, uint32_t *extend_ptr,
                uint8_t *concur_ptr, void *map_info, status_$t *status_ret);
 /*
- * MST_$MAP_AT (0x00E42F54) - map an object at a caller-supplied address.
+ * MST_$MAP_AT (0x00E42F54; mst/map_at.c) - map an object at a
+ * caller-supplied address.
  *
  * Nine var parameters; the widths come from the routine's own forwarding
  * prologue at 0x00E42F62-0x00E42FA0, which dereferences each one before
@@ -383,7 +384,12 @@ void *MST_$MAPS(int16_t asid, boolean direction, uid_t *uid, uint32_t start_va,
                 uint32_t length, int16_t area_id, uint32_t area_size,
                 boolean access_rights, void *map_info, status_$t *status);
 void MST_$MAPS_AT(void);
-void MST_$REMAP(void);
+/*
+ * MST_$REMAP (0x00E439D4; mst/remap.c) - MST_$REMAP_PRIVI with the flags
+ * word 0 (not privileged); returns its A0 result.
+ */
+void *MST_$REMAP(uint32_t *va_ptr, uint32_t *unmap_len, uint32_t *offset_ptr,
+                 uint32_t *length_ptr, uint32_t *map_info, status_$t *status);
 /*
  * MST_$REMAP_PRIVI (0x00E43A0C; mst/remap_privi.c) - unmap *unmap_len
  * bytes at *va_ptr and map the same object's UID again at
@@ -423,10 +429,25 @@ void MST_$GROW_AREA(uint32_t *va_ptr, uint32_t *virt_size_ptr,
  */
 void MST_$UNMAP(uid_t *uid, uint32_t *start_ptr, uint32_t *map_info,
                 status_$t *status_ret);
-void MST_$UNMAP_GLOBAL(void);
-void MST_$UNMAPS(void);
-void MST_$UNMAP_AND_FREE_AREA(void);
-void MST_$UNMAPS_AND_FREE_AREA(void);
+/*
+ * MST_$UNMAP_PRIVI wrappers in the current address space (PROC1_$AS_ID),
+ * each a 52/54-byte forwarding routine:
+ *   MST_$UNMAP_GLOBAL          0x00E44764  mode 0x0A  (mst/unmap_global.c)
+ *   MST_$UNMAPS                0x00E4479A  mode 0, UID_$NIL (mst/unmaps.c)
+ *   MST_$UNMAP_AND_FREE_AREA   0x00E447D0  mode 0x12  (mst/unmap_and_free_area.c)
+ *   MST_$UNMAPS_AND_FREE_AREA  0x00E44806  mode 0x10, UID_$NIL
+ *                                          (mst/unmaps_and_free_area.c)
+ *   MST_$SET_GUARD             0x00E4487C  mode 6     (mst/set_guard.c)
+ * start and length are pointers to longwords, dereferenced before the call.
+ */
+void MST_$UNMAP_GLOBAL(uid_t *uid, uint32_t *start_va_ptr,
+                       uint32_t *length_ptr, status_$t *status_ret);
+void MST_$UNMAPS(uint32_t *start_va_ptr, uint32_t *length_ptr,
+                 status_$t *status_ret);
+void MST_$UNMAP_AND_FREE_AREA(uid_t *uid, uint32_t *start_va_ptr,
+                              uint32_t *length_ptr, status_$t *status_ret);
+void MST_$UNMAPS_AND_FREE_AREA(uint32_t *start_va_ptr, uint32_t *length_ptr,
+                               status_$t *status_ret);
 void MST_$UNMAP_ALL(void);
 void MST_$UNMAP_PRIVI(int16_t mode, uid_t *uid, uint32_t start, uint32_t size,
                       uint16_t asid, status_$t *status_ret);
@@ -485,7 +506,8 @@ void MST_$INVALIDATE(uint32_t *va_ptr, uint32_t *length_ptr, uid_t *uid,
  */
 void MST_$CHANGE_RIGHTS(uint32_t *va_ptr, uint32_t *length_ptr,
                         uint16_t *rights_ptr, status_$t *status);
-void MST_$SET_GUARD(void);
+void MST_$SET_GUARD(uid_t *uid, uint32_t *start_va_ptr,
+                    uint32_t *length_ptr, status_$t *status_ret);
 
 /* Query functions */
 void MST_$GET_UID(uint32_t *va_ptr, uid_t *uid_out, uint32_t *adjusted_va,
@@ -510,8 +532,21 @@ void MST_$GET_PRIVATE_SIZE(uint16_t *asid_p, uint32_t *size_ret,
                            uint32_t *rw_size_ret, status_$t *status_ret);
 
 /* Touch-ahead control */
-void MST_$PRIV_SET_TOUCH_AHEAD_CNT(void);
-void MST_$SET_TOUCH_AHEAD_CNT(void);
+/*
+ * MST_$PRIV_SET_TOUCH_AHEAD_CNT (0x00E44514, 480 bytes, not yet
+ * translated: source-6qfw): frame (0x08) flags -> word, (0x0C) va_ptr -> longword,
+ * (0x10) length_ptr -> longword, (0x14) count_ptr -> word (clamped to
+ * 1..0x20, with the negative special values -4..-1), (0x18) result_ptr,
+ * (0x1C) status.
+ */
+void MST_$PRIV_SET_TOUCH_AHEAD_CNT(uint16_t *flags, uint32_t *va_ptr,
+                                   uint32_t *length_ptr, int16_t *count_ptr,
+                                   void *result_ptr, status_$t *status);
+/* MST_$SET_TOUCH_AHEAD_CNT (0x00E446FC; mst/set_touch_ahead_cnt.c) - the
+ * above with the flags word 0. */
+void MST_$SET_TOUCH_AHEAD_CNT(uint32_t *va_ptr, uint32_t *length_ptr,
+                              int16_t *count_ptr, void *result_ptr,
+                              status_$t *status);
 
 /*
  * MST_$FORK (0x00E739F8) - clone the parent's MST segment entries into the

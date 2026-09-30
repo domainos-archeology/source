@@ -67,6 +67,11 @@ extern ml_$exclusion_t IO_$WIRING_EXCLUSION;
 extern uint32_t io_$dcte_area_end;
 extern uint32_t io_$dcte_area_start;
 
+/* 0xE2C8B8 (+0x550), no map symbol: a Domain boolean IO_$GET_CONFIG
+ * reports as bit 0 of its fourth word (`tst.b (0x550,A2)' 0x00E723A6).
+ * Nothing in this image writes it; zero in the image. */
+extern int8_t io_$config_flag;
+
 /* IO_$IN_INIT, 0xE2C8BA (+0x552): true while IO_$INIT runs. */
 extern int8_t IO_$IN_INIT;
 

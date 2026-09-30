@@ -100,6 +100,15 @@
 #define SAU2_PEB_CS_PAGE        ((volatile uint16_t *)0x00FF7800u)
 
 /*
+ * SAU2_SIO_BASE - map SIO 0xFFB000: the serial controllers' register
+ *   blocks, 0x20 bytes per chip, chip n (1-based) at base + (n-1)*0x20.
+ *   SIO6509_$INIT (0x00E3353E `movea.l #0xffb000,A3' / `lea
+ *   (-0x20,A3,D0w)') and SIO2681_$INIT (sio2681_internal.h
+ *   SIO2681_BASE_ADDR) index it that way.
+ */
+#define SAU2_SIO_BASE           0x00FFB000u
+
+/*
  * The MMU register page (map MMU 0xFFB400) and the MMU's two tables
  *
  * Register names and layouts are Apollo's, from the DN3xx chapter of the

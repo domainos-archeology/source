@@ -325,4 +325,32 @@ void audit_$log_resolve_op(uint32_t pname_data, uint16_t path_len,
 /* Master enable flag (0xE2E09E, defined in audit/audit_data.c) */
 extern int8_t AUDIT_$ENABLED;
 
+/*
+ * The AUDIT wired data segment (map "D E2E07C AUDIT size = 20", no interior
+ * symbol, so the tree name is module-local): the eventcount and exclusion
+ * lock AUDIT_$INIT keeps a pointer to in AUDIT_$DATA.event_count
+ * (0x00E70B0E `move.l A0,(0x198,A5)`), handed out by GET_WIRED (A0 =
+ * 0xE2E07C, misc/get_wired.c).  The ML exclusion sits at +0x0C
+ * (audit/init.c `event_count + 0x0C`).  Zero in the image; defined in
+ * audit/audit_data.c.  Pointer-bearing, so the layout asserts are
+ * target-only.
+ */
+#include "ec/ec.h"
+#include "ml/ml.h"
+
+#define AUDIT_WIRED_EC_SIZE 0x20        /* map: AUDIT size = 20 */
+
+typedef struct audit_$wired_ec_t {
+    ec_$eventcount_t ec;                /* +0x00 */
+    ml_$exclusion_t  lock;              /* +0x0C */
+    uint8_t          _1e[2];            /* +0x1E: to the segment end */
+} audit_$wired_ec_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(audit_$wired_ec_t, lock) == 0x0C, "AUDIT wired: lock at +0x0C");
+_Static_assert(sizeof(audit_$wired_ec_t) == AUDIT_WIRED_EC_SIZE, "AUDIT wired: map size 0x20");
+#endif
+
+MODULE_DATA_DECLARE(audit_$wired_ec_t, audit_$wired_ec, 0x00E2E07C);
+
 #endif /* AUDIT_H */

@@ -121,7 +121,7 @@ MODULE_DATA_DEFINE(route_$rtwired_data_t, ROUTE_$RTWIRED_DATA, 0x00E87D80);
 MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
 
 uint32_t MMU_$SYSTEM_REV;
-int8_t   GPU_$PRESENT;
+MODULE_DATA_DEFINE(gpu_$asm_data_t, GPU_$ASM_DATA, 0x00E27500);
 uint32_t arch_$prom_machine_id;     /* PROM_$MACHINE_ID (prom/prom.h) */
 os_$boot_device_t OS_$BOOT_DEVICE;
 int16_t  CAL_$BOOT_VOLX;

@@ -55,6 +55,7 @@
 #define status_$disk_controller_timeout 0x00080003
 #define status_$disk_controller_error 0x00080004
 #define status_$disk_equipment_check 0x00080005
+#define status_$bus_error_occurred_during_disk_dma_transfer 0x00080017 /* DMA_$CHECK, M68450 CER 9-11 */
 #define status_$disk_data_check 0x00080009
 #define status_$DMA_overrun 0x0008000a
 #define status_$logical_volume_not_found 0x00080010

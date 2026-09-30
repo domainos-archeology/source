@@ -96,4 +96,38 @@ void DISP_LITES(uint16_t pattern, uint16_t y_pos);
  */
 void GET_BUILD_TIME(char *buf, int16_t *len_p);
 
+/*
+ * GET_WIRED - the address of the AUDIT wired segment
+ *
+ * AUDIT's only routine in the SAU2 map ("I E1D8DC AUDIT size = 18"): a
+ * Pascal function that returns 0xE2E07C, the AUDIT wired data segment
+ * (audit_$wired_ec, audit/audit.h), in A0.  Sole caller AUDIT_$INIT
+ * (0x00E70B08).
+ *
+ * Original address: 0x00E1D8DC (22 bytes)
+ */
+void *GET_WIRED(void);
+
+/*
+ * PRINT_BUILD_TIME - print the kernel's build banner on the console
+ *
+ * GET_BUILD_TIME into a local buffer, then VFMT_$WRITE10("%/%a%/%.").
+ * Called by OS_$INIT (0x00E33D2A).
+ *
+ * Original address: 0x00E38000 (38 bytes)
+ */
+void PRINT_BUILD_TIME(void);
+
+/*
+ * CHK - is a controller of this type configured and up?
+ *
+ * Module-local routine of the IO_ code segment (map "I E1A404 IO_", symbol
+ * CHK): walks IO_$DCTE_LIST for a DCTE whose ctype equals *ctype and
+ * returns a Domain boolean, true (0xFF, `seq') when such a DCTE's cstatus
+ * is zero.  Called three times by IO_$GET_CONFIG.
+ *
+ * Original address: 0x00E1A404 (68 bytes)
+ */
+int8_t CHK(const uint16_t *ctype);
+
 #endif /* MISC_H */
