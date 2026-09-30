@@ -157,8 +157,16 @@ _Static_assert(__builtin_offsetof(win_stats_t, dma_overrun) == 0x16, "win_stats_
 #define WIN_REG_COMMAND 0x00   /* ANSI command code / extended status */
 #define WIN_REG_PARAM 0x02     /* input or output parameter byte */
 #define WIN_REG_STATUS 0x06    /* status word, see WIN_STAT_* below */
+#define WIN_REG_CYLINDER 0x08  /* target cylinder word (SEEK 0x00E195FE) */
+#define WIN_REG_HEAD 0x0A      /* target head byte (SEEK 0x00E195CA) */
 #define WIN_REG_MODE 0x0C      /* written 0x01 / 0x0A before a command */
 #define WIN_REG_GO 0x0E        /* command type: 5 ANSI, 6 init, 3 format, 0 idle */
+
+/* Values SEEK writes: head select (0x00E195CE), then mode 0x0A and go 4
+ * for the cylinder seek (0x00E19618 / 0x00E1961E). */
+#define WIN_GO_SELECT_HEAD 0x08
+#define WIN_MODE_SEEK      0x0A
+#define WIN_GO_SEEK        0x04
 
 /* Values WIN_$FORMAT_TRACK writes (0x00E1970C / 0x00E19712). */
 #define WIN_MODE_FORMAT 0x09   /* -> WIN_REG_MODE */

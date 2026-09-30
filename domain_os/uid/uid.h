@@ -45,6 +45,9 @@ extern uid_t NIL_$NETWORK_UID;          /* 0xE1748C: Nil network UID
                                          * (defined in iic/iic_data.c) */
 extern uid_t USER_$NETWORK_UID;         /* 0xE1749C: User network UID
                                          * (defined in iic/iic_data.c) */
+extern uid_t UNKNOWN_$NETWORK_UID;      /* 0xE174A4: network UID of a port
+                                         * that does not exist (UID_LIST,
+                                         * defined in uid/uid_data.c) */
 extern uid_t PPO_$NIL_USER_UID;         /* 0xE174EC: Nil user UID
                                          * (defined in vtoc/vtoc_data.c) */
 extern uid_t PPO_$NIL_ORG_UID;          /* 0xE17574: Nil org UID

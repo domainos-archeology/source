@@ -70,6 +70,20 @@
 #define SAU2_TIMER_BASE         0x00FFAC00u
 
 /*
+ * Token ring and disk controller register pages (map IODEFS)
+ *
+ * SAU2_RING2_BASE - map RING2 0xFF9C00: the ring controller's register
+ *   block, the +0x34 cell of RING_DCTE (io/dctes_data.c) that RING_$INT and
+ *   RING_$POLL_STICKY_BPHERR reach through the DCTE (ring/ring.h
+ *   ring_hw_regs_t).
+ * SAU2_DISK_BASE - map DISK / WIN / FLOP 0xFFA800: the Winchester and
+ *   floppy controller's register block, the +0x34 cell of FLP_DCTE and
+ *   WIN_DCTE.  The calendar (SAU2_CALENDAR_BASE) shares the page at +0x20.
+ */
+#define SAU2_RING2_BASE         0x00FF9C00u
+#define SAU2_DISK_BASE          0x00FFA800u
+
+/*
  * Peripheral floating-point board (PEB) register pages (map IODEFS)
  *
  * SAU2_PEB_CTL - map PEB_CTL / PEB_$M_CTRL_PAGE 0xFF7000: the control

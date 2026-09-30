@@ -27,9 +27,11 @@
  * ============================================================================
  *
  * The DCTE structure contains information about each disk/device controller.
- * Size: 72 bytes (0x48) as declared; the image's static DCTEs (RING_DCTE,
- * FLP_DCTE, WIN_DCTE in the DCTES segment) are 0x40 bytes apart and say so
- * in their length word.
+ * Size: 0x40 bytes, the length the image's static DCTEs (RING_DCTE, FLP_DCTE,
+ * WIN_DCTE in the DCTES segment, io/dctes_data.c) are apart and give in
+ * their length word.  (Three words at +0x40..+0x47 that no code reads were
+ * dropped when the DCTES segment was defined: they would overlay the next
+ * static DCTE.)
  *
  * What IO_$INIT (0x00E328E0) and io_$build_dcte_list (0x00E32834) read:
  *   +0x00 kind    `cmpi.w #0x1,(A3)`: kind 1 has a VA at +0x2C to translate
@@ -42,6 +44,9 @@
  *                 the DCTE is not listed (`tst.b (0x14,A3)`)
  *   +0x2C io_va / +0x30 io_pa  (0x00E3297C-0x00E329B8)
  */
+/* dcte_t.kind 1: IO_$INIT translates io_va (`cmpi.w #0x1,(A3)` 0x00E32976) */
+#define IO_DCTE_KIND_MAPPED     1
+
 struct dcte_t;
 typedef status_$t (*io_$dcte_init_fn_t)(struct dcte_t *dcte);
 
@@ -60,10 +65,10 @@ typedef struct dcte_t {
   uint32_t io_pa;          /* 0x30: its PA: ppn << 10 | (io_va & 0x3FF) */
   uint32_t disk_dinit;     /* 0x34: Disk initialization structure */
   uint32_t disk_do_io;     /* 0x38: Disk I/O function pointer */
-  uint32_t disk_error_que; /* 0x3C: Disk error queue */
-  uint16_t dflags;         /* 0x40: Device flags */
-  uint16_t d_unit_irq;     /* 0x42: Device unit IRQ */
-  uint32_t pdvte_index;    /* 0x44: PDVTE index */
+  uint32_t disk_error_que; /* 0x3C: Disk error queue; FLP_DO_IO takes the
+                            *       high word as its ML lock and WIN_$CINIT
+                            *       reads it too (0x0017 in the static
+                            *       FLP/WIN DCTEs, 0x0018 in RING_DCTE) */
 } dcte_t;
 
 /* Layout recovered from the disassembly -- see the field comments above. */
@@ -83,10 +88,7 @@ _Static_assert(__builtin_offsetof(dcte_t, io_pa) == 0x30, "dcte_t.io_pa");
 _Static_assert(__builtin_offsetof(dcte_t, disk_dinit) == 0x34, "dcte_t.disk_dinit");
 _Static_assert(__builtin_offsetof(dcte_t, disk_do_io) == 0x38, "dcte_t.disk_do_io");
 _Static_assert(__builtin_offsetof(dcte_t, disk_error_que) == 0x3C, "dcte_t.disk_error_que");
-_Static_assert(__builtin_offsetof(dcte_t, dflags) == 0x40, "dcte_t.dflags");
-_Static_assert(__builtin_offsetof(dcte_t, d_unit_irq) == 0x42, "dcte_t.d_unit_irq");
-_Static_assert(__builtin_offsetof(dcte_t, pdvte_index) == 0x44, "dcte_t.pdvte_index");
-_Static_assert(sizeof(dcte_t) == 0x48, "dcte_t size");
+_Static_assert(sizeof(dcte_t) == 0x40, "dcte_t size: the static DCTEs' length word");
 #endif
 
 /*

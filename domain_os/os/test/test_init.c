@@ -152,7 +152,7 @@ uint32_t RING_$GET_ID(void *a)
     (void)a;
     return 0;
 }
-char NET_IO_$BOOT_DEVICE(short a, short b)
+int8_t NET_IO_$BOOT_DEVICE(uint16_t a, uint16_t b)
 {
     (void)a;
     (void)b;

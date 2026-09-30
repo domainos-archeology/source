@@ -138,6 +138,9 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
     *status_ret = add_status;
 }
 
+/* the shared 0xE544AE cell (defined by name/validate_leaf.c in the kernel) */
+const int16_t name_$leaf_max_len_00e544ae = 0x0020;
+
 #include "../old_validate_root_entry.c"
 
 /* ------------------------------------------------------------------ */

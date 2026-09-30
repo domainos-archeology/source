@@ -65,4 +65,28 @@ typedef void (*net_io_$sendp_fn_t)(uint16_t *socket, uint32_t hdr_pa,
                                    uint16_t *xmit_status,
                                    status_$t *status_ret);
 
+/*
+ * net_io_$route_op_close (0x00E74F1C) - the constant word 0x0008 that sits
+ * between NET_IO_$CLEANUP_NIL's rts and NET_IO_$CLEANUP_USER's entry
+ * (`gsk read 0xE74F1C 2` = 00 08).  Both routines pass its address as
+ * ROUTE_$SERVICE's operation: `pea (0x10,PC)` at 0x00E74F0A and
+ * `pea (-0x4e,PC)` at 0x00E74F68 reach the same cell, so it is one shared
+ * object (net_io/net_io_data.c).  Operation 8 is ROUTE_$SERVICE's "close
+ * port" (route/service.c SERVICE_OP_CLOSE_PORT).
+ */
+extern const uint16_t net_io_$route_op_close;
+
+/*
+ * net_io_$stat_fn_t - the shape of the driver's get_stats (+0x0C) and
+ * get_stats2 (+0x10) slots as NET_IO_$DEVICE_STAT / _STAT2 call them
+ * (0x00E5A3FE-0x00E5A414, 0x00E5A482-0x00E5A498): a discarded word result
+ * slot, then, right to left, status_ret, stat_len_ret, the caller's max_len
+ * word, the caller's stat_buf longword and the address of the caller's own
+ * index argument slot, (0xa,A6).  Same frame as RING_$GET_STATS and
+ * ROUTE_$READ_USER_STATS (route/route.h).
+ */
+typedef void (*net_io_$stat_fn_t)(uint16_t *index_ptr, void *stat_buf,
+                                  uint16_t max_len, uint16_t *stat_len_ret,
+                                  status_$t *status_ret);
+
 #endif /* NET_IO_NET_IO_INTERNAL_H */

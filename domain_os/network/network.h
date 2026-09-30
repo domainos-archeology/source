@@ -415,11 +415,11 @@ void NETWORK_$AST_GET_INFO(void *uid_info, uint16_t *flags, void *attrs,
  *
  * @param node_ptr  Pointer to target node ID
  * @param va_out    Output pointer for virtual address
- * @param ppn_out   Output pointer for physical address (ppn << 10)
+ * @param pa_out    Output pointer for physical address (ppn << 10)
  *
  * Original address: 0x00E0F37A
  */
-void NETWORK_$GETHDR(uint32_t *node_ptr, uint32_t *va_out, uint32_t *ppn_out);
+void NETWORK_$GETHDR(uint32_t *node_ptr, uint32_t *va_out, uint32_t *pa_out);
 
 /*
  * NETWORK_$RTNHDR - Return a network packet header buffer
@@ -803,10 +803,7 @@ void NETWORK_$INIT(void);
 /*
  * NETWORK_$LOAD - Late network initialization (after PROC2_$INIT)
  *
- * Original address: 0x00E2F7F2
- * TODO(source-sdx1): NOT EMITTED.  86 bytes at 0x00E2F7F2..0x00E2F847;
- * only the prototype exists, so OS_$INIT's call does not link.  Tracked in
- * the network link inventory as source-sdx1.
+ * Original address: 0x00E2F7F2 (network/load.c)
  */
 void NETWORK_$LOAD(void);
 
@@ -814,10 +811,7 @@ void NETWORK_$LOAD(void);
  * NETWORK_$DISMISS_REQUEST_SERVERS - Dismiss the network request server
  * processes during OS_$SHUTDOWN.
  *
- * Original address: 0x00E71E78
- * TODO(source-sdx1): NOT EMITTED.  74 bytes at 0x00E71E78..0x00E71EC1;
- * only the prototype exists, so OS_$SHUTDOWN's call does not link.  Tracked
- * in the network link inventory as source-sdx1.
+ * Original address: 0x00E71E78 (network/dismiss_request_servers.c)
  */
 void NETWORK_$DISMISS_REQUEST_SERVERS(void);
 

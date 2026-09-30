@@ -921,6 +921,44 @@ _Static_assert(sizeof(audit_$resolve_data_t) == 0x408,
                "audit_$resolve_data_t must be 0x408 bytes");
 
 /*
+ * dir_$old_slot_t - one 0x30-byte entry slot of an old-format directory
+ *
+ * Recovered from the two search routines DIR_$OLD_FIND_UID and
+ * DIR_$OLD_FIND_NET use (0x00E557D4, 0x00E559D6).  Inline slot i (1-based)
+ * starts at dir + 0x30*i - 0x16 (the code holds A0 = dir + 0x30*i and reads
+ * the name at -0x16, the extra longword at +0xA, the length at +0x10, the
+ * type at +0x11 and the UID at +0x12); slot j of overflow block k starts at
+ * dir + 0x96*k + 0x30*j + 0x340 (A0 = dir + 0x96*k + 0x30*j; +0x340 name,
+ * +0x360 extra, +0x366 length, +0x367 type, +0x368 UID).  Inline slots sit
+ * on 2-byte boundaries only, so the record is packed.
+ */
+typedef struct __attribute__((packed)) dir_$old_slot_t {
+    uint8_t  name[0x20];        /* +0x00: the case-mapped name */
+    uint32_t extra;             /* +0x20: copied out as dir_$rep_entry_t.extra */
+    uint8_t  _24[2];            /* +0x24: not read by the search routines */
+    uint8_t  name_len;          /* +0x26 */
+    uint8_t  type;              /* +0x27: 1 = in use by an object */
+    uid_t    uid;               /* +0x28 */
+} dir_$old_slot_t;
+
+_Static_assert(offsetof(dir_$old_slot_t, extra) == 0x20, "dir_$old_slot_t.extra");
+_Static_assert(offsetof(dir_$old_slot_t, name_len) == 0x26, "dir_$old_slot_t.name_len");
+_Static_assert(offsetof(dir_$old_slot_t, type) == 0x27, "dir_$old_slot_t.type");
+_Static_assert(offsetof(dir_$old_slot_t, uid) == 0x28, "dir_$old_slot_t.uid");
+_Static_assert(sizeof(dir_$old_slot_t) == 0x30, "dir_$old_slot_t must be 0x30 bytes");
+
+/* Old-format directory header words the slot searches read */
+#define DIR_OLD_HDR_INLINE_SLOTS    0x04    /* `tst.w (0x4,A2)' */
+#define DIR_OLD_HDR_BLOCK_SLOTS     0x08    /* `cmp.w (0x8,A2),D3w' */
+#define DIR_OLD_HDR_BLOCKS          0x0A    /* `tst.w (0xa,A2)' */
+#define DIR_OLD_INLINE_SLOT_BIAS    0x16    /* name at A0 - 0x16 */
+#define DIR_OLD_BLOCK_STRIDE        0x96
+#define DIR_OLD_BLOCK_SLOT_BASE     0x340   /* slot j at block + 0x30*j + 0x340 */
+#define DIR_OLD_BLOCK_TYPE          0x36F   /* `move.b (0x36f,A1),D2b' */
+#define DIR_OLD_SLOT_STRIDE         0x30
+#define DIR_OLD_SLOT_IN_USE         1
+
+/*
  * dir_$old_link_refs_t - the 8-byte block dir_$old_delete_entry lifts out of
  * an old-format directory entry before clearing it.
  *

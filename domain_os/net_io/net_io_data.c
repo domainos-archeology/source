@@ -139,3 +139,10 @@ net_io_unwired_t NET_IO_UNWIRED = {
     .boot_unit      = NET_IO_$NO_BOOT_UNIT,
     .boot_port_type = 0,
 };
+
+/*
+ * net_io_$route_op_close - the ROUTE_$SERVICE operation word 0x0008 at
+ * 0x00E74F1C, in the code region between NET_IO_$CLEANUP_NIL and
+ * NET_IO_$CLEANUP_USER; both pass its address (see net_io_internal.h).
+ */
+const uint16_t net_io_$route_op_close = 0x0008;

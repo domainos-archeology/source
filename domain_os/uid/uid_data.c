@@ -83,3 +83,8 @@ uid_t OS_WIRED_$UID = UID_CONST(0x00000406, 0);
 /* Anonymous (unnamed) object - Address: 0xE17414 */
 uid_t ANON_$UID = UID_CONST(0x00000407, 0);
 
+/* Unknown network UID - Address: 0xE174A4 (`gsk read 0xE174A4 8` =
+ * 00 00 07 05 00 00 00 00); NET_IO_$DEVICE_STAT / _STAT2 answer it for a
+ * port that does not exist (0x00E5A3D2, 0x00E5A456) */
+uid_t UNKNOWN_$NETWORK_UID = UID_CONST(0x00000705, 0);
+

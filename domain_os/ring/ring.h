@@ -1005,15 +1005,17 @@ void RING_$KICK_DRIVER(void);
 void RING_$SVC_OPEN(void *name, void *args, void *unused, status_$t *status_ret);
 
 /*
- * RING_$SVC_CLOSE - Close a ring channel (service call)
+ * RING_$SVC_CLOSE - Close a ring channel (the driver's svc_close slot)
  *
- * @param unit_ptr      Pointer to unit number
- * @param args          Close arguments
- * @param status_ret    Output: status code
+ * Five arguments, the shape NET_$CLOSE pushes (net/net.h
+ * net_$svc_ctl_fn_t): (0x8,A6) unit_ptr, (0xC,A6) channel_ptr, a word at
+ * (0x10,A6) and a longword at (0x12,A6) that are never read, (0x16,A6)
+ * status_ret.  Callers reserve a word result slot it never writes.
  *
- * Original address: 0x00E76E22
+ * Original address: 0x00E76E22 (ring/svc_close.c)
  */
-void RING_$SVC_CLOSE(uint16_t *unit_ptr, void *args, status_$t *status_ret);
+void RING_$SVC_CLOSE(uint16_t *unit_ptr, uint16_t *channel_ptr,
+                     int16_t unused3, uint32_t unused4, status_$t *status_ret);
 
 /*
  * RING_$SVC_READ - Read from a ring channel (service call)
@@ -1131,15 +1133,14 @@ void RING_$SVC_IOCTL(uint16_t *unit_ptr, void *args, int16_t param4,
 void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret);
 
 /*
- * RING_$CLOSE_OS - Close ring OS use
+ * RING_$CLOSE_OS - Close a channel the OS opened (the driver's close_os slot)
  *
- * @param param1        Parameter 1
- * @param args          Arguments
- * @param status_ret    Output: status code
+ * (0x8,A6) unit word by value, (0xA,A6) channel_ptr, (0xE,A6) status_ret;
+ * a wrapper around RING_$SVC_CLOSE.
  *
- * Original address: 0x00E77C24
+ * Original address: 0x00E77C24 (ring/close_os.c)
  */
-void RING_$CLOSE_OS(uint16_t param1, void *args, status_$t *status_ret);
+void RING_$CLOSE_OS(uint16_t unit, uint16_t *channel_ptr, status_$t *status_ret);
 
 /*
  * RING_$SEND_OS - Send an OS packet on a ring channel (driver slot 0x44)
@@ -1210,15 +1211,15 @@ void RING_$RCV_FROM_UNIT_PRIV(uint16_t unit);
 int8_t RING_$POLL_STICKY_BPHERR(uint32_t *dcte_cell);
 
 /*
- * RING_$PROC2_CLEANUP - Process cleanup handler
+ * RING_$PROC2_CLEANUP - close every channel an address space holds
  *
- * Called when a process using ring sockets terminates.
+ * The driver's proc2_cleanup slot: (0x8,A6) the port's socket cell (the
+ * ring unit number) by address, (0xC,A6) the address-space id word by
+ * value, as NET_IO_$FREE_ASID pushes them (net_io/net_io.h).
  *
- * @param param1        Parameter 1
- *
- * Original address: 0x00E76A42
+ * Original address: 0x00E76A42 (ring/proc2_cleanup.c)
  */
-void RING_$PROC2_CLEANUP(void *param1);
+void RING_$PROC2_CLEANUP(uint16_t *unit_ptr, uint16_t asid);
 
 /*
  * Ring receive overflow counters.  The SAU2 map puts all three in the NET_IO

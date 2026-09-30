@@ -71,14 +71,44 @@ extern uint32_t io_$dcte_area_start;
 extern int8_t IO_$IN_INIT;
 
 /*
- * DEV_DCTES, 0xE2C97C: the nil-terminated list of the static DCTEs
- * (image: WIN_DCTE 0xE2C93C, FLP_DCTE 0xE2C8FC, RING_DCTE 0xE2C8BC, 0),
- * last object of the DCTES segment (map "D E2C8BC DCTES size = D0").
- * TODO(source-e0ta): the DCTES segment (three 0x40-byte DCTEs whose init,
- * interrupt and I/O procedures are ring/flp/win routines, and this list)
- * is not yet defined; it stays unresolved in the m68k link.
+ * DCTES - the DCTES data segment (map "D E2C8BC DCTES size = D0"), defined
+ * in io/dctes_data.c with the image contents.  Four objects, each a map
+ * symbol:
+ *
+ *   +0x00  RING_DCTE  0xE2C8BC  the token ring controller's DCTE
+ *   +0x40  FLP_DCTE   0xE2C8FC  the floppy controller's DCTE
+ *   +0x80  WIN_DCTE   0xE2C93C  the Winchester controller's DCTE
+ *   +0xC0  DEV_DCTES  0xE2C97C  the nil-terminated list of the three, as
+ *                               32-bit VAs: WIN_DCTE, FLP_DCTE, RING_DCTE, 0
+ *
+ * io_$build_dcte_list (0x00E328A4-0x00E328CA) walks DEV_DCTES and appends
+ * each DCTE to IO_$DCTE_LIST.  The records hold native pointers (nextp,
+ * csrsytr), so the layout asserts are target-only.
  */
-extern dcte_t *DEV_DCTES[4];
+#define IO_DCTES_SIZE       0xD0
+#define IO_DEV_DCTES_COUNT  4
+
+typedef struct io_$dctes_t {
+    dcte_t   ring_dcte;                         /* +0x00 RING_DCTE */
+    dcte_t   flp_dcte;                          /* +0x40 FLP_DCTE */
+    dcte_t   win_dcte;                          /* +0x80 WIN_DCTE */
+    uint32_t dev_dctes[IO_DEV_DCTES_COUNT];     /* +0xC0 DEV_DCTES (VAs) */
+} io_$dctes_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(offsetof(io_$dctes_t, flp_dcte) == 0x40, "FLP_DCTE (0xE2C8FC)");
+_Static_assert(offsetof(io_$dctes_t, win_dcte) == 0x80, "WIN_DCTE (0xE2C93C)");
+_Static_assert(offsetof(io_$dctes_t, dev_dctes) == 0xC0, "DEV_DCTES (0xE2C97C)");
+_Static_assert(sizeof(io_$dctes_t) == IO_DCTES_SIZE, "DCTES: map size D0");
+#endif
+
+MODULE_DATA_DECLARE(io_$dctes_t, DCTES, 0x00E2C8BC);
+
+/* The map's names for the four objects */
+#define RING_DCTE   (DCTES.ring_dcte)
+#define FLP_DCTE    (DCTES.flp_dcte)
+#define WIN_DCTE    (DCTES.win_dcte)
+#define DEV_DCTES   (DCTES.dev_dctes)
 
 /*
  * io_$build_dcte_list (0x00E32834, 170 bytes, was FUN_00e32834; the IO_ code

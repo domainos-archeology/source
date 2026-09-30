@@ -62,7 +62,7 @@ static const char io_$fmt_ok[] = "OK%.";
 static const char io_$fmt_device[] = "Device: %m8a: %$";
 
 /* `cmpi.w #0x1,(A3)` 0x00E32976 */
-#define IO_DCTE_KIND_MAPPED     1
+/* IO_DCTE_KIND_MAPPED (1): io/io.h */
 
 void IO_$INIT(void *param1, const int8_t *verbose_flag, status_$t *status_ret)
 {

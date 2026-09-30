@@ -114,19 +114,15 @@ void NET_IO_$COPY_PACKET(uint32_t *hdr_src_p, uint16_t hdr_len,
  *
  * Parameters (two words at 8(A6) and 0xA(A6)):
  *   boot_device - boot device code (2/3, 6 and 8 are network devices)
- *   param       - low word of the boot info, stored when diskless
+ *   boot_unit   - the boot controller/unit word, stored in
+ *                 NET_IO_UNWIRED.boot_unit for a network device
  *
  * Returns: -1 (0xFF) if booting over the network (diskless), 0 otherwise.
  * OS_$INIT stores the result in NETWORK_$DISKLESS.
  *
- * Original address: 0x00E31C14
- * TODO(source-8qa7, 0x00E31C14): NOT EMITTED.  132 bytes at 0x00E31C14..0x00E31C97;
- * only the prototype exists, so OS_$INIT's call does not link.  Missing:
- * the boot-device code classification (2/3, 6, 8) and the diskless-path
- * store of the boot-info low word.  Tracked in the net_io link inventory
- * as source-8qa7.
+ * Original address: 0x00E31C14 (net_io/boot_device.c)
  */
-char NET_IO_$BOOT_DEVICE(short boot_device, short param);
+int8_t NET_IO_$BOOT_DEVICE(uint16_t boot_device, uint16_t boot_unit);
 
 /*
  * NET_IO_$CREATE_PORT - Create a network I/O port
@@ -315,9 +311,8 @@ _Static_assert(sizeof(net_io_$driver_t) == NET_IO_DRIVER_SIZE,
  * socket cell by address and the address-space id by value, with a word
  * result slot that is discarded.
  *
- * TODO(source-8qa7, 0x00E74EC8): NOT EMITTED.  84 bytes at 0x00E74EC8 and
- * 94 bytes at 0x00E74F1E; only these prototypes exist, so the two driver
- * blocks below do not link.
+ * (net_io/cleanup_nil.c, 0x00E74EC8, 84 bytes; net_io/cleanup_user.c,
+ * 0x00E74F1E, 92 bytes.)
  */
 void NET_IO_$CLEANUP_NIL(uint16_t *socket_ptr, uint16_t asid);
 void NET_IO_$CLEANUP_USER(uint16_t *socket_ptr, uint16_t asid);

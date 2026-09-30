@@ -40,7 +40,7 @@ ml_$exclusion_t IO_$WIRING_EXCLUSION;
 uint32_t io_$dcte_area_end;
 uint32_t io_$dcte_area_start;
 int8_t IO_$IN_INIT;
-dcte_t *DEV_DCTES[4];
+MODULE_DATA_DEFINE(io_$dctes_t, DCTES, 0x00E2C8BC);
 
 static uint8_t area[0x100] __attribute__((aligned(16)));
 static dcte_t sd1, sd2;
@@ -92,8 +92,8 @@ static void test_static_list_only(void)
 {
     int8_t verbose = 0;
     status_$t st = -1;
-    DEV_DCTES[0] = &sd1;
-    DEV_DCTES[1] = &sd2;
+    DEV_DCTES[0] = ARCH_PTR_TO_VA(&sd1);
+    DEV_DCTES[1] = ARCH_PTR_TO_VA(&sd2);
     sd1.csrsytr = init_ok;
     sd1.nextp = &sd2;                   /* overwritten */
     IO_$BUS_EPV[0].init = bus0;
@@ -113,8 +113,8 @@ static void test_verbose_and_failure(void)
 {
     int8_t verbose = (int8_t)0xFF;
     status_$t st = -1;
-    DEV_DCTES[0] = &sd1;
-    DEV_DCTES[1] = &sd2;
+    DEV_DCTES[0] = ARCH_PTR_TO_VA(&sd1);
+    DEV_DCTES[1] = ARCH_PTR_TO_VA(&sd2);
     sd1.name[0] = 'W'; sd1.csrsytr = init_bad;
     sd2.name[0] = 'R'; sd2.csrsytr = init_ok;
     IO_$INIT(NULL, &verbose, &st);
@@ -127,8 +127,8 @@ static void test_kind1_translation_and_dbf_ppn(void)
 {
     int8_t verbose = 0;
     status_$t st;
-    DEV_DCTES[0] = &sd1;
-    DEV_DCTES[1] = &sd2;
+    DEV_DCTES[0] = ARCH_PTR_TO_VA(&sd1);
+    DEV_DCTES[1] = ARCH_PTR_TO_VA(&sd2);
     sd1.kind = 1; sd1.io_va = 0;        /* keeps D2 = 0xFFFF */
     sd2.kind = 1; sd2.io_va = 0xFF9C12;
     IO_$INIT(NULL, &verbose, &st);
@@ -141,7 +141,7 @@ static void test_vtop_failure_crashes(void)
 {
     int8_t verbose = 0;
     status_$t st;
-    DEV_DCTES[0] = &sd1;
+    DEV_DCTES[0] = ARCH_PTR_TO_VA(&sd1);
     sd1.kind = 1; sd1.io_va = 0x1000;
     vtop_status = 0x00040004;
     if (setjmp(crash_jmp) == 0) {
@@ -160,7 +160,7 @@ static void test_dynamic_area(void)
     b->length = 0x48;
     c->length = 0;                      /* ends the walk, unlinked */
     io_$dcte_area_end = 0x20000u + 0xE0;
-    DEV_DCTES[0] = &sd1;
+    DEV_DCTES[0] = ARCH_PTR_TO_VA(&sd1);
     io_$build_dcte_list();
     ASSERT_EQ((uintptr_t)a, (uintptr_t)IO_$DCTE_LIST);
     ASSERT_EQ((uintptr_t)b, (uintptr_t)a->nextp);

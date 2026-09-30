@@ -11,11 +11,9 @@
 
 /*
  * 0x00E544AE, word 0x0020: the 32-byte output-buffer size the UNMAP_CASE call
- * at 0x00E5819E gets (`pea (-0x3cfa,PC)` at 0x00E581A6).  It is the same cell
- * name/ knows as 0x00E544AE; a file static keeps DIR out of NAME's internal
- * header.  Image bytes: 00 20.
+ * at 0x00E5819E gets (`pea (-0x3cfa,PC)` at 0x00E581A6) is the shared cell
+ * name_$leaf_max_len_00e544ae (name/name.h).
  */
-static int16_t dir_$validate_root_name_max_00e544ae = 0x0020;
 
 /*
  * DIR_$OLD_VALIDATE_ROOT_ENTRY - Legacy validate replicated-root entry
@@ -95,7 +93,7 @@ void DIR_$OLD_VALIDATE_ROOT_ENTRY(char *name, uint16_t *name_len,
 
     /* 0x00E5819E: bring the replicated name back to Unix case */
     UNMAP_CASE((char *)rep_entry.name, (int16_t *)&rep_entry.name_len,
-               (char *)unmapped_name, &dir_$validate_root_name_max_00e544ae,
+               (char *)unmapped_name, (int16_t *)&name_$leaf_max_len_00e544ae,
                (int16_t *)&unmapped_len, (uint8_t *)&truncated);
 
     /* 0x00E581BE: seven arguments - type word 0, the rep entry's own UID and

@@ -540,6 +540,17 @@ void name_$old_add_entry(uid_t *dir_uid, uint16_t type, char *name,
 void name_$old_drop_entry(uid_t *dir_uid, char *name, uint16_t name_len,
                           uint16_t type, void *result, status_$t *status_ret);
 
+/*
+ * name_$leaf_max_len_00e544ae - the constant word 0x0020 at 0x00E544AE, right
+ * after name_$validate_leaf's rts (`gsk read 0xE544AE 2` = 00 20): the
+ * 32-byte name-buffer size handed by reference to MAP_CASE / UNMAP_CASE.
+ * Reached with `pea (d,PC)' from name_$validate_leaf (0x00E54436),
+ * DIR_$OLD_FIND_UID (0x00E55940, 0x00E55994), DIR_$OLD_FIND_NET
+ * (0x00E55BA8) and DIR_$OLD_VALIDATE_ROOT_ENTRY (0x00E581A6); one shared
+ * object, defined in name/validate_leaf.c.
+ */
+extern const int16_t name_$leaf_max_len_00e544ae;
+
 /* name_$validate_leaf - Validate and parse leaf name
  * Returns negative (true) on success, non-negative on failure.
  * Original address: 0x00E54414 (name/validate_leaf.c)
@@ -593,11 +604,16 @@ void NAME_CONVERT_ACL_STATUS(status_$t *status_ret);
 void NAME_$SET_ACL(uid_t *uid, void *acl, status_$t *status_ret);
 
 /*
- * NAME_$READ_DIRS_PS - Read directory entries (Pascal string)
+ * NAME_$READ_DIRS_PS - Read a process's working and naming directory UIDs
  *
- * Original address: 0x00e588be
+ * TRAP #4 syscall 0x48: proc_uid (UID_$NIL = the caller), wdir_ret,
+ * ndir_ret, status_ret (status_$proc2_uid_not_found when the UID names no
+ * process).
+ *
+ * Original address: 0x00E588BE (name/read_dirs_ps.c)
  */
-void NAME_$READ_DIRS_PS(void);
+void NAME_$READ_DIRS_PS(uid_t *proc_uid, uid_t *wdir_ret, uid_t *ndir_ret,
+                        status_$t *status_ret);
 
 /*
  * NAME_$CLEANUP - Clean up naming resources

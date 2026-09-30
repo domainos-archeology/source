@@ -87,55 +87,6 @@ void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret)
 }
 
 /*
- * RING_$SVC_CLOSE - Close a ring channel
- *
- * Closes the specified ring channel.
- *
- * Original address: 0x00E76E22
- *
- * @param unit_ptr      Pointer to unit number
- * @param args          Close arguments
- * @param status_ret    Output: status code
- */
-void RING_$SVC_CLOSE(uint16_t *unit_ptr, void *args, status_$t *status_ret)
-{
-    uint16_t unit;
-    ring_unit_t *unit_data;
-    uint16_t channel;
-
-    unit = *unit_ptr;
-
-    /* Validate unit number */
-    if (unit >= RING_MAX_UNITS) {
-        *status_ret = status_$ring_invalid_unit_num;
-        return;
-    }
-
-    unit_data = &RING_$CTL.units[unit];
-
-    /* Get channel number from args */
-    channel = *((uint16_t *)args + 2);
-
-    /* Validate channel number */
-    if (channel == 0 || channel > RING_MAX_CHANNELS) {
-        *status_ret = status_$ring_channel_not_open;
-        return;
-    }
-
-    /* Check if channel is open */
-    if (RING_UNIT_CHANNEL(unit_data, channel).flags >= 0) {
-        *status_ret = status_$ring_channel_not_open;
-        return;
-    }
-
-    /* Close the channel */
-    RING_UNIT_CHANNEL(unit_data, channel).flags = 0;
-    RING_UNIT_CHANNEL(unit_data, channel).socket_id = 0;
-
-    *status_ret = status_$ok;
-}
-
-/*
  * RING_$SVC_READ - Read data from a ring channel
  *
  * Reads data from the specified ring channel into the provided buffer.

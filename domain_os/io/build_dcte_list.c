@@ -62,8 +62,8 @@ void io_$build_dcte_list(void)
     }
 
     /* 0x00E328A4-0x00E328CA */
-    for (k = 0; DEV_DCTES[k] != NULL; k++) {
-        d = DEV_DCTES[k];
+    for (k = 0; DEV_DCTES[k] != 0; k++) {
+        d = (dcte_t *)ARCH_VA_TO_PTR(DEV_DCTES[k]);
         d->nextp = NULL;
         *link = d;
         link = &d->nextp;

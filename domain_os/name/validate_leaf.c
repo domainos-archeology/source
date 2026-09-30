@@ -27,8 +27,9 @@
 #include "name/name_internal.h"
 
 /* 0xE544AE, word 0x0020: MAP_CASE's maximum output length, the word right
- * after this routine's `rts` (`pea (0x76,PC)` at 0x00E54436). */
-static const int16_t name_$leaf_max_len_00e544ae = 0x0020;
+ * after this routine's `rts` (`pea (0x76,PC)` at 0x00E54436).  Shared with
+ * the DIR routines that reach the same cell (name/name.h). */
+const int16_t name_$leaf_max_len_00e544ae = 0x0020;
 
 /*
  * Pascal set membership as compiled at 0x00E54462-0x00E54476: with the set
