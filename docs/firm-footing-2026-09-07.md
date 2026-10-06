@@ -235,3 +235,42 @@ MMAP_\$WS_OWNER's bias, a few wire-range cells that name untranslated
 code, mmu_\$installi's register ABI, PROC1_\$CLR_LOCK's shared tail).
 Next phase: the 133 untranslated functions, largest first, with the
 same emit-then-review pattern.
+
+## Addendum, 2026-10-06: the SAU2 kernel links
+
+The 133 functions that were still unresolved at link when the
+per-process-data design closed (2026-09-29) were translated in nine
+batches between 2026-09-29 and 2026-10-06, each emitted by an Opus 5.5
+agent from the disassembly and walked block by block against the image
+by a separate Fable 5.1 agent before commit (9 commits, 412 files
+touched, 42,649 lines added).  Every function the SAU2 link map names
+now has a definition; the 53 module-local helpers that existing C had
+referenced by name without a source file are translated too; the
+compiler-support memcpy that gcc emits for struct copies has an
+arch/m68k definition.  `make` now produces dist/sau2/domain_os, a
+906,876-byte flat image, with no unresolved symbols.
+
+Gates on HEAD: 0 build diagnostics, 0 truncated relocations, 55 module
+data blocks and 1356 map symbols placed in map order with 0 inversions,
+109 of 109 hand-assembly sections identical to the image modulo
+relocation fields (every relocated operand verified against the image
+operand), the architecture-guard checker clean, 642 host tests passing.
+
+The reviews kept finding real errors in the old C and in the emitters'
+first drafts, which is why the second pass stays: wrong prototypes
+derived from callers instead of frames (RING_$SVC_IOCTL, RING_$SEND_OS,
+RING_$SVC_CLOSE, MST_$INVALIDATE, MST_$GROW_AREA, network_$send_request,
+acl_$prim_create_internal with two arguments swapped), an inverted list
+insert in AST_$ACTIVATE_ASTE_CANNED, a socket slot off by one in
+NETWORK_$DO_REQUEST, a boolean stored as 1 where the image stores 0xFF,
+misnamed record fields (the aote directory pointer, the find-uid result),
+data cells with wrong initial values, a phantom ACL_$GET_ACL_ATTRIBUTES
+that was really a miscalled AST routine, and a KBD state table whose
+image indexing runs past its segment (source-kz1g).
+
+Still open: the pre-existing "complete subsystem" P2 epics, which
+predate this work and should be re-read against the now-complete tree;
+source-ewh0 (TIME_$CLOCKH as the value field of an eventcount);
+source-l2p4 (data cells carried in .text.* sections, the assembler's
+section-attribute warnings); source-kz1g; the P3/P4 follow-ups filed
+during the design work; and the question of booting the image.
