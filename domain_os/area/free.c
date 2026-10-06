@@ -55,7 +55,7 @@ void AREA_$FREE_ASID(int16_t asid)
         entry->first_bste = -1;
 
         /* Delete the area */
-        area_$internal_delete(entry, entry->reserved_2a, &status, 0);
+        area_$internal_delete(entry, entry->area_id, &status, 0);
 
         if (status != status_$ok) {
             CRASH_SYSTEM(&status);
@@ -116,7 +116,7 @@ void AREA_$SHUTDOWN(void)
                 entry->first_bste = -1;
 
                 /* Delete the area */
-                area_$internal_delete(entry, entry->reserved_2a, &status, 0);
+                area_$internal_delete(entry, entry->area_id, &status, 0);
 
                 if (status != status_$ok) {
                     CRASH_SYSTEM(&status);
@@ -187,7 +187,7 @@ void AREA_$SHUTDOWN(void)
  *                                      ; the remote_uid is dead from here on
  *   00e0802a  clr.w -(SP)              ; do_unlink = FALSE       (arg 4)
  *   00e0802c  pea (-0x4,A6)            ; &status                 (arg 3)
- *   00e08030  move.w (0x2a,A2),-(SP)   ; entry->reserved_2a      (arg 2)
+ *   00e08030  move.w (0x2a,A2),-(SP)   ; entry->area_id      (arg 2)
  *   00e08034  pea (A2)                 ; entry                   (arg 1)
  *   00e08036  bsr.w 0x00e07b50         ; area_$internal_delete
  *   00e0803e  tst.l (-0x4,A6) / beq.b 0x00e08050
@@ -251,7 +251,7 @@ void AREA_$FREE_FROM(uint32_t remote_uid)
             next_entry = entry->next;
 
             /* 0x00E08036: do_unlink is pushed as a zero word, i.e. FALSE */
-            area_$internal_delete(entry, entry->reserved_2a, &status, 0);
+            area_$internal_delete(entry, entry->area_id, &status, 0);
 
             /* 0x00E0803E */
             if (status != status_$ok) {

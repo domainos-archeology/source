@@ -48,8 +48,7 @@
 #include "time/time.h"
 #include "uid/uid.h"
 
-/* mmape_t.disk_addr keeps the block address in its low 22 bits */
-#define PMAP_DADDR_MASK         0x003FFFFFu
+/* PMAP_DADDR_MASK (the low 22 bits of mmape_t.disk_addr): pmap/pmap_internal.h */
 /* 0x00E13548: NETLOG record kind for a page write */
 #define PMAP_NETLOG_KIND_WRITE  3
 /* 0x00E134FE: `bset.b #5,(-0x2,A1)` with A1 = aste + 0x14 -> bit 5 of the byte at

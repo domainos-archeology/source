@@ -565,7 +565,17 @@ void MST_$SET_TOUCH_AHEAD_CNT(uint32_t *va_ptr, uint32_t *length_ptr,
 void MST_$FORK(uint16_t asid, uint16_t pid, uint32_t flags, status_$t *status);
 
 /* Internal helper functions */
-void mst_$unwire_page(void);
+/*
+ * mst_$unwire_page (0x00E74A74; mst/unwire_page.c) - MMU_$VTOP the
+ * page-table page at `va` (a longword at (0x8,A6)), then MMU_$REMOVE and
+ * MMAP_$FREE its physical page; CRASH_SYSTEM on a translation failure.
+ */
+void mst_$unwire_page(uint32_t va);
+/*
+ * mst_$unwire_asid_pages (0x00E74AB6; mst/unwire_asid_pages.c) - for each
+ * MST slot start..end (two words, (0x8,A6) and (0xA,A6)) that holds a
+ * page-table page, unwire it and return it to MST_$PAGE_AVAIL_BITMAP.
+ */
 void mst_$unwire_asid_pages(uint16_t start, uint16_t end);
 
 #endif /* MST_H */

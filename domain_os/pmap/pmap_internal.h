@@ -199,19 +199,30 @@ void pmap_$wait_in_transit(void);
  */
 void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count);
 
-/* pmap_$write_complete - Page write I/O completion handler
+/*
+ * pmap_$write_complete - Page write I/O completion handler
  *
- * Handles completion of a page write operation. Indexes into the
- * page frame table at 0xEB4800 (offset = vpn * 0x10). On success
- * (status 0 or write-protected): clears status, updates dirty flags,
- * clears physical map in-transit bit, updates page state. On error:
- * sets error bit, marks page, updates hardware PTE, calls MMAP_$AVAIL,
- * advances AST_$PMAP_IN_TRANS_EC.
+ * Frame: (0x8,A6) vpn, a longword physical page number (MMAPE_FOR_VPN,
+ * PFT_FOR_PPN); (0xC,A6) the write's status_$t, read and rewritten
+ * (`move.l (A0),D3`, `clr.l (A0)`, `bset.b #7,(A0)`).  See
+ * pmap/write_complete.c for the blocks.
  *
  * Original address: 0x00e12d84
  * Size: 218 bytes
  */
-void pmap_$write_complete(int32_t vpn, void *status_ptr);
+void pmap_$write_complete(int32_t vpn, status_$t *status_ptr);
+
+/*
+ * mmape_t.disk_addr: the block address is the low 22 bits (moved here from
+ * pmap/fill_write_qblks.c; pmap_$write_page masks with it too, 0x00E1311A
+ * `andi.l #0x3fffff`).  Bit 22 (`btst.b #6,(0xd,A1)` - bit 6 of the byte at
+ * mmape+0x0D, the second byte of the big-endian longword) is a flag the
+ * write-completion path tests and clears before it marks the page's ASTE
+ * dirty (0x00E12DDC-0x00E12DFC); AST_$LOOKUP_OR_CREATE_ASTE plants the same
+ * bit in a segment-map entry (ast/lookup_or_create_aste.c).
+ */
+#define PMAP_DADDR_MASK         0x003FFFFFu
+#define PMAP_DADDR_ASTE_DIRTY   0x00400000u
 
 /*
  * PMAP_$INIT_TIMERS - Initialize PMAP purifier and update timers

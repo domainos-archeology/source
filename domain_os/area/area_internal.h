@@ -54,16 +54,10 @@ extern status_$t Area_Internal_Error;
  *
  * Original address: 0x00E075CA
  */
-boolean area_$alloc_resources(int16_t count);
+boolean area_$alloc_resources(uint16_t count);
 
-/*
- * area_$remote_sync - Sync with remote partner
- *
- * Synchronizes area state with remote partner node.
- *
- * Original address: 0x00E087BA
- */
-void area_$remote_sync(void);
+/* area_$remote_sync (0x00E087BA) is a nested procedure of area_$resize,
+ * reached through its static link; it is a static in area/resize.c. */
 
 /*
  * area_$free_segments - Free segment range
@@ -78,8 +72,8 @@ void area_$remote_sync(void);
  *
  * Original address: 0x00E085A6
  */
-void area_$free_segments(int16_t area_id, uint32_t start_seg,
-                          uint32_t end_seg, int8_t clear_bitmap,
+void area_$free_segments(int16_t area_id, uint32_t start_page,
+                          uint32_t end_page, int8_t clear_bitmap,
                           status_$t *status_p);
 
 /*
@@ -117,24 +111,69 @@ void area_$free_seg_table(area_$seg_table_t *entry,
                            area_$seg_table_t *prev, int16_t asid);
 
 /*
- * area_$get_aste - Get the ASTE named by one segment-map slot
+ * area_$get_aste - Get (activating if need be) the ASTE named by one
+ * segment-map slot
  *
  * Six Pascal parameters; the prologue at 0x00E09A72-0x00E09A86 reads
  *   A6+0x08 word  area_id
  *   A6+0x0A long  slot        the area_$seg_slot_t cell for this segment
  *   A6+0x0E word  seg_idx
- *   A6+0x10 byte  wait        if true (0x00E09A90 `tst.b D4b` / `bmi`) spin
- *                             on the slot's in-transition bit
+ *   A6+0x10 byte  in_trans_held  if FALSE (0x00E09A90 `tst.b D4b` / `bmi`)
+ *                             spin on the slot's in-transition bit first and
+ *                             clear it (advancing AREA_$PITE_IN_TRANS_EC) at
+ *                             the end; if TRUE the caller owns that bit
  *   A6+0x12 byte  create      if false and no ASTE is mapped, fail with
  *                             0x00030004 (0x00E09AFA)
  *   A6+0x14 long  status
  * and the result is left in A0 (0x00E09AE4 `movea.l A0,A2` at the caller).
+ * Called with ML lock 0x12 held.  See area/get_aste.c.
  *
  * Original address: 0x00E09A6A
  */
 struct aste_t *area_$get_aste(int16_t area_id, area_$seg_slot_t *slot,
-                              int16_t seg_idx, int8_t wait, int8_t create,
-                              status_$t *status_p);
+                              int16_t seg_idx, int8_t in_trans_held,
+                              int8_t create, status_$t *status_p);
+
+/*
+ * area_$wait_pite_in_trans (0x00E0778E; area/wait_pite_in_trans.c) - drop
+ * ML lock 0x12, wait for AREA_$PITE_IN_TRANS_EC to advance once, relock.
+ */
+void area_$wait_pite_in_trans(void);
+
+/*
+ * area_$rpmap_get (0x00E07370, 602 bytes; Ghidra FUN_00e07370, no map
+ * symbol; NOT YET TRANSLATED, bead source-8xzg) - the RPMAP page-cache
+ * manager: returns (A0) the cached 0x400-byte remote page-map page at
+ * 0xEE4C00 + (slot - 1) * 0x400 that holds the eight segment maps of group
+ * seg_idx >> 3 of `entry', reading it from the partner on a miss.  Frame:
+ *   (0x08) entry   longword  compared on (0x28,A3) = remote_volx
+ *   (0x0C) seg_idx word      `lsr.w #0x3`
+ *   (0x0E) dirty   byte      `tst.b (0xe,A6)` / `st (0xc,A0)`
+ *   (0x10) flag    byte      `move.b (0x10,A6),D5b`
+ *   (0x12) status
+ * area_$get_aste pushes `clr.l` for the two bytes (0x00E09C50).
+ */
+void *area_$rpmap_get(area_$entry_t *entry, uint16_t seg_idx, int8_t dirty,
+                      int8_t flag, status_$t *status_p);
+
+/*
+ * The slot cell read as the big-endian LONGWORD the code tests it as
+ * (`and.l (A4),D1` with 0x3FFFFF at 0x00E09BBC / 0x00E09CDC): while state
+ * bit 7 is clear, its low 22 bits are the disk address of the segment
+ * group's page-map block.
+ */
+#define AREA_SLOT_LONG(s) \
+    (((uint32_t)(s)->bits << 24) | ((uint32_t)(s)->state << 16) | \
+     (uint32_t)(s)->aste_index)
+#define AREA_SLOT_STORE(s, v) do {                                         \
+        uint32_t area_slot_v_ = (uint32_t)(v);                              \
+        (s)->bits = (uint8_t)(area_slot_v_ >> 24);                          \
+        (s)->state = (uint8_t)(area_slot_v_ >> 16);                         \
+        (s)->aste_index = (uint16_t)area_slot_v_;                           \
+    } while (0)
+#define AREA_SLOT_DADDR_MASK    0x003FFFFFu
+#define AREA_SLOT_HAS_ASTE      0x80    /* state bit 7: aste_index is valid */
+#define AREA_SLOT_IN_TRANS      0x40    /* state bit 6 */
 
 /*
  * area_$find_entry_by_uid - Locate the ASTE that backs one area page

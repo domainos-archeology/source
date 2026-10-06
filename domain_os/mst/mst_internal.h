@@ -117,26 +117,35 @@ uint32_t mst_$init_table_page(uintptr_t page_addr);
 status_$t MST_$ALLOC_TABLE_PAGE(uint16_t asid, uint16_t flags, uint16_t *table_ptr);
 
 /*
- * mst_$alloc_segs - Internal segment allocation and mapping
- *
- * Core internal function called by all MST_$MAP* variants.
- * Finds free segments in the address space, allocates page table
- * pages as needed, and sets up the MST entries for the mapping.
- *
- * Returns the mapped virtual address in A0 register.
- *
- * Original address: 0x00E43182
- *
- * access_rights (its 9th argument, at A6+0x22) and direction (its 10th, at
- * A6+0x24) are Pascal BYTEs: the body tests them with `tst.b (0x22,A6)`
- * (0x00E43234, 0x00E43288) and `tst.b (0x24,A6)` (0x00E432F0, 0x00E4331A),
- * i.e. the even/high byte of each word slot, which is where the callers'
- * `st -(SP)` / `move.b Dn,-(SP)` pushes land.
+ * mst_$alloc_segs (0x00E43182; mst/alloc_segs.c) - find `length' bytes of
+ * free segments (top-down for addr_hint 0x7FFFFFFF, bottom-up for 0, or
+ * exactly at addr_hint), allocate the page-table pages the range needs,
+ * thread an anonymous area's BSTEs and fill the MSTEs; returns the VA (A0)
+ * and the mapped length through map_info.  Twelve Pascal parameters, frame
+ * (0x08) .. (0x2A): prot (A6+0x1E) is the rights word and the MSTE
+ * protection, wired (A6+0x22) and b_space (A6+0x24) are BYTEs tested with
+ * `tst.b` (the high half of their word slots, where the callers' `st -(SP)`
+ * / `move.b Dn,-(SP)` pushes land).
  */
 void *mst_$alloc_segs(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_t length,
-                      uint32_t area_size, int16_t asid, uint16_t area_id, uint16_t touch_count,
-                      uint8_t access_rights, boolean direction, void *map_info,
+                      uint32_t area_size, int16_t asid, uint16_t prot, uint16_t touch_count,
+                      uint8_t wired, boolean b_space, void *map_info,
                       status_$t *status);
+
+/*
+ * mst_$lookup_object (0x00E43CBE, 338 bytes; Ghidra FUN_00e43cbe, no map
+ * symbol; NOT YET TRANSLATED - bead source-8xzg) - mst_$alloc_segs'
+ * named-object path: reads the object's attributes (0x00E04A00), refuses a
+ * directory-like object for some rights (0xF0016), forms its location word
+ * (local, or remote via 0x00E0F1E0), returns its length and checks the
+ * rights (0x00E5D172; ACL 0x23000x statuses become 0x40008/0x40009/0x4000B,
+ * not-found 0x40001).  Frame: (0x08) uid, (0x0C) prot word, (0x0E) a
+ * longword passed to the rights check, (0x12) location out, (0x16) length
+ * out, (0x1A) status.
+ */
+void mst_$lookup_object(uid_t *uid, uint16_t prot, uint32_t area_size,
+                        uint32_t *location, uint32_t *obj_length,
+                        status_$t *status);
 
 /*
  * mst_$va_to_pte - Look up page table entry for a virtual address

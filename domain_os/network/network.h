@@ -348,6 +348,24 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
                             clock_t *acl_info, status_$t *status);
 
 /*
+ * NETWORK_$WRITE (0x00E0FAE6, 290 bytes; not yet translated, source-8xzg) - send one page
+ * to the node that backs it.  Frame read off the callee (link.w A6,-0x110):
+ *   (0x08,A6) node_addr  8-byte node address, passed on to 0x00E0FA00/0x00E0F86C
+ *   (0x0C,A6) req        the 32-byte request record, copied into the frame
+ *                        (`moveq #0x7` + `move.l (A0)+,(A1)+` at 0x00E0FB3A)
+ *   (0x10,A6) ppn        longword, scaled by 0x400 (0x00E0FB42)
+ *   (0x14,A6) pkt_size   word
+ *   (0x16,A6) count      word, zero-extended (0x00E0FB1C)
+ *   (0x18,A6) dtv_low    word out (`move.w (-0xd4,A6),(A3)`)
+ *   (0x1C,A6) dtm        clock out (`move.l ...,(A2)` / `move.w ...,(0x4,A2)`)
+ *   (0x20,A6) status
+ * Caller: pmap_$write_page (0x00E130DC).
+ */
+void NETWORK_$WRITE(void *node_addr, network_$page_request_t *req,
+                    uint32_t ppn, uint16_t pkt_size, uint16_t count,
+                    uint16_t *dtv_low, clock_t *dtm, status_$t *status);
+
+/*
  * NETWORK_$INSTALL_NET - Install network node
  *
  * Registers a network node in the network table. If the node already exists,

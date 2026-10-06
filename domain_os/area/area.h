@@ -107,7 +107,13 @@ typedef struct area_$entry_t {
     int16_t volx;                   /* 0x24: Local volume index */
     int16_t owner_asid;             /* 0x26: Owner address space ID */
     int16_t remote_volx;            /* 0x28: Remote volume index */
-    int16_t reserved_2a;            /* 0x2A: Reserved */
+    int16_t area_id;                /* 0x2A: the entry's own 1-based id,
+                                     * written when area_$alloc_resources
+                                     * threads it onto the free list
+                                     * (`move.w D2w,(-0x6,A0)` 0x00E076F4,
+                                     * 0x00E07722); AREA_$FREE_ASID and
+                                     * AREA_$COPY hand it to
+                                     * area_$internal_delete */
     int16_t generation;             /* 0x2C: Generation number (for handle validation) */
     uint16_t flags;                 /* 0x2E-0x2F: Flags (see AREA_FLAG_*) */
 } area_$entry_t;
@@ -123,10 +129,13 @@ _Static_assert(offsetof(area_$entry_t, virt_size)   == 0x08, "virt_size");
 _Static_assert(offsetof(area_$entry_t, commit_size) == 0x0C, "commit_size");
 _Static_assert(offsetof(area_$entry_t, caller_id)   == 0x10, "caller_id");
 _Static_assert(offsetof(area_$entry_t, first_bste)  == 0x14, "first_bste");
+_Static_assert(offsetof(area_$entry_t, first_seg_index) == 0x16, "first_seg_index");
+_Static_assert(offsetof(area_$entry_t, seg_bitmap)  == 0x18, "seg_bitmap");
 _Static_assert(offsetof(area_$entry_t, remote_uid)  == 0x20, "remote_uid");
 _Static_assert(offsetof(area_$entry_t, volx)        == 0x24, "volx");
 _Static_assert(offsetof(area_$entry_t, owner_asid)  == 0x26, "owner_asid");
 _Static_assert(offsetof(area_$entry_t, remote_volx) == 0x28, "remote_volx");
+_Static_assert(offsetof(area_$entry_t, area_id)     == 0x2A, "area_id");
 _Static_assert(offsetof(area_$entry_t, generation)  == 0x2C, "generation");
 _Static_assert(offsetof(area_$entry_t, flags)       == 0x2E, "flags");
 #endif

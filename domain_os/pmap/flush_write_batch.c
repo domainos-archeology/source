@@ -143,7 +143,7 @@ void pmap_$flush_write_batch(int16_t *batch_count_p, uint32_t *batch_vpns,
                 int32_t *qblk_status_p = (int32_t *)(qblk + QBLK_STATUS_OFFSET);
 
                 /* Call write completion handler to update page frame state */
-                pmap_$write_complete(vpn, (void *)qblk_status_p);
+                pmap_$write_complete(vpn, (status_$t *)qblk_status_p);
 
                 if (*qblk_status_p == 0) {
                     /* Write succeeded */

@@ -13,7 +13,7 @@
  *     early: it still clears AREA_FLAG_IN_TRANS on the source entry and
  *     advances AREA_$IN_TRANS_EC.
  *   - area_$internal_delete's second argument is `move.w (0x2a,A0),-(SP)`
- *     with A0 = the DESTINATION entry, i.e. dst_entry->reserved_2a, not the
+ *     with A0 = the DESTINATION entry, i.e. dst_entry->area_id, not the
  *     new area id (0x00E09348).
  *   - the three early failures return the frame slot at A6-0x2C, which is
  *     only ever written at 0x00E090D4; the C models that slot as zero.
@@ -474,18 +474,18 @@ TEST(copy_area_failure_reaches_the_caller)
 
 /*
  * 0x00E09344-0x00E0934C: area_$internal_delete(dst_entry,
- * dst_entry->reserved_2a, &local_status, TRUE) - the second argument is the
+ * dst_entry->area_id, &local_status, TRUE) - the second argument is the
  * DESTINATION entry's +0x2A word, and the status is a scratch local so the
  * caller keeps the AST_$COPY_AREA failure.
  */
-TEST(internal_delete_uses_dst_reserved_2a_and_a_scratch_status)
+TEST(internal_delete_uses_dst_area_id_and_a_scratch_status)
 {
     status_$t status = 0;
 
     make_one_segment_source();
     copy_area_status = 0x00030005;
     /* area_$internal_create fills this in for real; forge it here. */
-    dst_entry()->reserved_2a = 0x2BAD;
+    dst_entry()->area_id = 0x2BAD;
 
     AREA_$COPY(0x55, SRC_ID, 7, 0, 0, &status);
 
@@ -693,7 +693,7 @@ int main(void)
     RUN_TEST(source_marked_in_trans_and_dst_initialised);
     RUN_TEST(callees_receive_the_caller_status_cell);
     RUN_TEST(copy_area_failure_reaches_the_caller);
-    RUN_TEST(internal_delete_uses_dst_reserved_2a_and_a_scratch_status);
+    RUN_TEST(internal_delete_uses_dst_area_id_and_a_scratch_status);
     RUN_TEST(copy_area_arguments);
     RUN_TEST(get_aste_arguments);
     RUN_TEST(stack_segments_are_skipped);

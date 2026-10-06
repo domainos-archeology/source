@@ -43,6 +43,7 @@
 #define status_$ast_refcount_says_unused 0x00030007  /* reference count says unused */
 #define status_$ast_write_concurrency_violation 0x00030005
 #define status_$ast_eof 0x00030001
+#define status_$ast_last_page_partially_written 0x0003000C /* "last page partially written" (SR10.4 text; absent from the 10.2 table).  pmap_$write_page (0x00E1312E) returns it for a synchronous remote page write that took more than one packet; AST_$PURIFY tolerates it (ast/purify.c) */
 
 /* PMAP status codes (module 0x05) */
 #define status_$pmap_bad_assoc 0x00050006

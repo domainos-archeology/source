@@ -267,7 +267,7 @@ void pmap_$fill_write_qblks(int32_t *pages, uint32_t *qblk, int16_t count) {
     mock_fill_count = count;
 }
 
-void pmap_$write_complete(int32_t vpn, void *status_ptr) {
+void pmap_$write_complete(int32_t vpn, status_$t *status_ptr) {
     if (mock_write_complete_count < MAX_QBLKS) {
         mock_write_complete_vpns[mock_write_complete_count] = vpn;
     }

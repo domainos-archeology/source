@@ -151,7 +151,7 @@ void ML_$UNLOCK(int16_t resource_id)
     lock_depth--;
 }
 
-boolean area_$alloc_resources(int16_t count)
+boolean area_$alloc_resources(uint16_t count)
 {
     alloc_calls++;
     alloc_last_count = count;

@@ -323,7 +323,7 @@ uint32_t AREA_$COPY(int16_t gen, uint16_t area_id, int16_t new_asid,
                      * the status goes to a scratch local at A6-0x04 so the
                      * caller keeps the AST_$COPY_AREA failure.
                      */
-                    area_$internal_delete(dst_entry, dst_entry->reserved_2a,
+                    area_$internal_delete(dst_entry, dst_entry->area_id,
                                           &delete_status, (int8_t)-1);
                     goto finish;
                 }

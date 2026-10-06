@@ -164,7 +164,7 @@ void TIME_$WAIT(uint16_t *t, clock_t *d, status_$t *st)
 { (void)t; (void)d; *st = 0; }
 void pmap_$fill_write_qblks(int32_t *p, uint32_t *q, int16_t c)
 { (void)p; (void)q; (void)c; }
-void pmap_$write_complete(int32_t vpn, void *sp) { (void)vpn; (void)sp; }
+void pmap_$write_complete(int32_t vpn, status_$t *sp) { (void)vpn; (void)sp; }
 void pmap_$write_page(uint32_t vpn, status_$t *st, int8_t f)
 { (void)vpn; (void)f; *st = 0; }
 

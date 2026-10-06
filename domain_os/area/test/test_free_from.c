@@ -9,7 +9,7 @@
  *     comparing hash->first_entry->remote_uid (entry+0x20) against the
  *     argument (0x00E08008-0x00E08010);
  *   - every entry on the record's list is deleted with
- *     area_$internal_delete(entry, entry->reserved_2a, &status, FALSE) --
+ *     area_$internal_delete(entry, entry->area_id, &status, FALSE) --
  *     the fourth argument is a zero WORD (`clr.w -(SP)` at 0x00E0802A);
  *   - the deleted entries go onto AREA_$FREE_LIST head-first and
  *     AREA_$N_FREE counts them (0x00E08050-0x00E0805E);
@@ -194,10 +194,10 @@ TEST(frees_whole_chain_and_recycles_record)
 
     entries[0].next = &entries[1];
     entries[0].remote_uid = REMOTE_UID;
-    entries[0].reserved_2a = 0x11;
+    entries[0].area_id = 0x11;
     entries[1].next = NULL;
     entries[1].remote_uid = REMOTE_UID;
-    entries[1].reserved_2a = 0x22;
+    entries[1].area_id = 0x22;
 
     hash_rec[0].next = NULL;
     hash_rec[0].first_entry = &entries[0];
