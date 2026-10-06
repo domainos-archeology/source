@@ -55,7 +55,10 @@ typedef struct kbd_state_t {
     uint8_t kbd_type_str[4];    /* 0x40: Keyboard type string */
     uint16_t kbd_type_len;      /* 0x44: Keyboard type string length */
     uint16_t flags;             /* 0x46: Flags */
-    uint8_t pad_48[0x04];       /* 0x48: Padding */
+    /* 0x48: eventcount advanced (by value: `move.l (0x48,A2),-(SP)` /
+     * jsr EC_$ADVANCE_WITHOUT_DISPATCH, 0x00E1CC52) each time RCV's nested
+     * kbd_$process_key queues a key.  Nothing in kbd/ stores it. */
+    ec_$eventcount_t *key_ec;   /* 0x48 */
     ec_$eventcount_t ec;        /* 0x4C: Event counter (12 bytes) */
     /* Key ring.  Both indices are Pascal 1-based and run 1..KBD_RING_SIZE:
      * kbd_$fetch_key reads the head with `move.w (0x58,A4),D2w` (00e1cb24)
@@ -96,7 +99,7 @@ _Static_assert(__builtin_offsetof(kbd_state_t, pending_mode) == 0x3E, "kbd_state
 _Static_assert(__builtin_offsetof(kbd_state_t, kbd_type_str) == 0x40, "kbd_state_t.kbd_type_str");
 _Static_assert(__builtin_offsetof(kbd_state_t, kbd_type_len) == 0x44, "kbd_state_t.kbd_type_len");
 _Static_assert(__builtin_offsetof(kbd_state_t, flags) == 0x46, "kbd_state_t.flags");
-_Static_assert(__builtin_offsetof(kbd_state_t, pad_48) == 0x48, "kbd_state_t.pad_48");
+_Static_assert(__builtin_offsetof(kbd_state_t, key_ec) == 0x48, "kbd_state_t.key_ec");
 _Static_assert(__builtin_offsetof(kbd_state_t, ec) == 0x4C, "kbd_state_t.ec");
 _Static_assert(__builtin_offsetof(kbd_state_t, ring_head) == 0x58, "kbd_state_t.ring_head");
 _Static_assert(__builtin_offsetof(kbd_state_t, ring_tail) == 0x5A, "kbd_state_t.ring_tail");
@@ -131,16 +134,19 @@ extern uint8_t KBD_$MODE_TABLE[];
 extern uint8_t DAT_00e2dcbc[];
 
 /*
- * DAT_00e2ddec - State transition table
+ * kbd_$escape_state - 0x00E2DDEC (A5+0x08), eight words: the state a
+ * table entry whose next-state nibble is 0xF moves to.  KBD_$RCV indexes it
+ * with the keyboard type (0x00E1CE2A), kbd_$fetch_key with the mode word
+ * (0x00E1CBDA).  Module-local; the map names nothing here.
  */
-extern uint16_t DAT_00e2ddec[8];
+extern uint16_t kbd_$escape_state[8];
 
 /*
- * DAT_00e2ddfc - 0x00E2DDFC, the 32 words between DAT_00e2ddec and
- * TERM_$TPAD_BUFFER in the map segment "D E2DDE4 KBD size = D4".  No
- * instruction in the image reaches them; see kbd/kbd_data.c.
+ * kbd_$state_range - 0x00E2DDFC (A5+0x18), 32 words = 16 (first, limit)
+ * pairs, one per state: kbd_$state_lookup scans kbd_$state_table[first ..
+ * limit-1] and falls back to entry [limit] (0x00E1CA0C..0x00E1CA54).
  */
-extern uint16_t DAT_00e2ddfc[32];
+extern uint16_t kbd_$state_range[32];
 
 /* MNK_$KTT_PTRS (0x00E273DC), MNK_$KTT_MAX (0x00E273FC) and SMD_$KTT are
  * cells of the SMD_WIRED module (SAU2 map, 0xE26F20 size 0x5E0), so they are
@@ -155,12 +161,6 @@ extern uint16_t DAT_00e2ddfc[32];
  */
 
 /*
- * kbd_$state_lookup (0x00e1c9fc) - Keyboard state machine lookup
- * Returns pointer to state entry in A0
- */
-void *kbd_$state_lookup(uint16_t state, uint8_t key);
-
-/*
  * kbd_$set_type (0x00e1ca8c) - Set keyboard type
  * Copies type string and looks up translation table
  */
@@ -171,11 +171,6 @@ void kbd_$set_type(kbd_state_t *state, uint8_t *type_str, uint16_t type_len);
  * Returns -1 if key available, 0 if buffer empty
  */
 int8_t kbd_$fetch_key(kbd_state_t *state, uint8_t *key_out, int16_t *mode_out);
-
-/*
- * kbd_$process_key (0x00e1cc10) - Process normal key
- */
-void kbd_$process_key(uint8_t key, kbd_state_t *state);
 
 /*
  * kbd_$translate_key (0x00e1cc64) - Translate key code
@@ -209,6 +204,22 @@ typedef struct kbd_$state_entry_t {
 } kbd_$state_entry_t;
 
 _Static_assert(sizeof(kbd_$state_entry_t) == 2, "kbd_$state_entry_t");
+
+/*
+ * kbd_$state_table - 0x00E2DEA4 (A5+0xC0), the last 0x14 bytes of the map
+ * segment "D E2DDE4 KBD size = D4" (it ends at 0x00E2DEB8, SIO_IO).
+ * Ten entries: the image bytes cover states 0..4 only.  See
+ * kbd/kbd_data.c for the indices states 5..14 produce (TODO source-kz1g).
+ */
+#define KBD_STATE_TABLE_ENTRIES 10
+extern kbd_$state_entry_t kbd_$state_table[KBD_STATE_TABLE_ENTRIES];
+
+/*
+ * kbd_$state_lookup (0x00E1C9FC, 102 bytes) - find the entry for (state,
+ * key); a Pascal function whose result comes back in A0.  Uses its
+ * caller's A5 = 0xE2DDE4.
+ */
+kbd_$state_entry_t *kbd_$state_lookup(uint16_t state, uint8_t key);
 
 /*
  * kbd_$handler_fn_t - the shape KBD_$RCV calls state->handler with

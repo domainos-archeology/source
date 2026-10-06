@@ -5,8 +5,9 @@
  *   MNK_$KTT_PTRS    0x00E273DC  0x20 bytes (8 pointers)
  *   MNK_$KTT_MAX     0x00E273FC  2 bytes
  *   KBD_$MODE_TABLE  0x00E2DDE4  8 bytes
- *   DAT_00e2ddec     0x00E2DDEC  0x10 bytes (8 words)
- *   DAT_00e2ddfc     0x00E2DDFC  0x40 bytes (32 words)
+ *   kbd_$escape_state 0x00E2DDEC 0x10 bytes (8 words)
+ *   kbd_$state_range 0x00E2DDFC  0x40 bytes (32 words)
+ *   kbd_$state_table 0x00E2DEA4  0x14 bytes (10 entries)
  */
 
 #include "kbd/kbd_internal.h"
@@ -44,7 +45,7 @@ int16_t MNK_$KTT_MAX = 7;
 /*
  * KBD_$MODE_TABLE - keyboard mode translation table, 0x00E2DDE4, the first
  * object of the map segment "D E2DDE4 KBD size = D4".  Eight bytes: the next
- * object, DAT_00e2ddec, starts at 0x00E2DDEC.  KBD_$GET_CHAR_AND_MODE indexes
+ * object, kbd_$escape_state, starts at 0x00E2DDEC.  KBD_$GET_CHAR_AND_MODE indexes
  * it with the mode kbd_$fetch_key returns.
  * Image bytes: 00 01 02 03 12 10 11 0F.
  */
@@ -53,7 +54,7 @@ uint8_t KBD_$MODE_TABLE[8] = {
 };
 
 /*
- * DAT_00e2ddec - 0x00E2DDEC (A5+0x08), eight words.
+ * kbd_$escape_state - 0x00E2DDEC (A5+0x08), eight words.
  *
  * The escape state each keyboard type moves to when the received byte's low
  * nibble is 0x0F.  Both readers index it with a word scale off the KBD
@@ -67,33 +68,52 @@ uint8_t KBD_$MODE_TABLE[8] = {
  * Both indices run 0..MNK_$KTT_MAX (7), the same range KBD_$MODE_TABLE and
  * MNK_$KTT_PTRS use, so the table is eight words and ends at 0x00E2DDFC.
  */
-uint16_t DAT_00e2ddec[8] = {
+uint16_t kbd_$escape_state[8] = {
     0x0000, 0x0008, 0x0006, 0x0007, 0x000e, 0x000e, 0x000e, 0x000e
 };
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(DAT_00e2ddec) == 0x10,
-               "DAT_00e2ddec: 0x00E2DDEC..0x00E2DDFC");
+_Static_assert(sizeof(kbd_$escape_state) == 0x10,
+               "kbd_$escape_state: 0x00E2DDEC..0x00E2DDFC");
 #endif
 
 /*
- * DAT_00e2ddfc - 0x00E2DDFC (A5+0x18), 32 words, up to TERM_$TPAD_BUFFER
- * (0x00E2DE3C).  The last object of the map segment "D E2DDE4 KBD size = D4"
- * before that buffer.
+ * kbd_$state_range - 0x00E2DDFC (A5+0x18), 32 words, up to TERM_$TPAD_BUFFER
+ * (0x00E2DE3C): sixteen (first, limit) pairs, one per state.
  *
- * Nothing in the image reads it.  The only two routines that load the KBD
- * A5 (0x00E1CB06, 0x00E1CCC8) touch (0x8,A5) indexed -- DAT_00e2ddec -- and
- * (0x58,A5) / (0x5a,A5) / (0x5c,A5), which are TERM_$TPAD_BUFFER's head and
- * tail; no instruction anywhere in the image carries an absolute address in
- * 0x00E2DDFC..0x00E2DE3A either.  It is carried here so the segment's bytes
- * are covered exactly.
+ * kbd_$state_lookup (0x00E1C9FC) reads the pair for `state` with
+ * `lsl.w #2` / (0x18,A5,D1w) and (0x1a,A5,D1w), scans
+ * kbd_$state_table[first .. limit-1] for the key and otherwise returns
+ * &kbd_$state_table[limit] (the state's default entry).  (An earlier note
+ * here said nothing read this table; the lookup does, through the KBD A5
+ * its two callers load.)  The last pair (0, 0) belongs to no reachable
+ * state: next-state nibbles are 0..0xE, 0xF meaning kbd_$escape_state.
  */
-uint16_t DAT_00e2ddfc[32] = {
+uint16_t kbd_$state_range[32] = {
     0x0000, 0x0005, 0x0006, 0x0006, 0x0007, 0x0007, 0x0008, 0x0008,
     0x0009, 0x0009, 0x000a, 0x000f, 0x0010, 0x0011, 0x0012, 0x0013,
     0x0014, 0x0016, 0x0017, 0x001a, 0x001b, 0x001c, 0x001d, 0x001d,
     0x001e, 0x001f, 0x0020, 0x0020, 0x0021, 0x0023, 0x0000, 0x0000
 };
 #if defined(ARCH_M68K)
-_Static_assert(sizeof(DAT_00e2ddfc) == 0x40,
-               "DAT_00e2ddfc: 0x00E2DDFC..0x00E2DE3C (TERM_$TPAD_BUFFER)");
+_Static_assert(sizeof(kbd_$state_range) == 0x40,
+               "kbd_$state_range: 0x00E2DDFC..0x00E2DE3C (TERM_$TPAD_BUFFER)");
 #endif
+
+/*
+ * kbd_$state_table - 0x00E2DEA4 (A5+0xC0), after TERM_$TPAD_BUFFER and four
+ * zero bytes; the last 0x14 bytes of the KBD segment (0x00E2DEB8 = SIO_IO).
+ * Image bytes: FB 20 E8 31 DF 31 FE B4 FF 10 00 10 00 42 00 53 00 6F 00 C0.
+ * Entry = (key, action<<4 | next state):
+ *   state 0, [0..4] keys FB E8 DF FE FF, default [5] (00,10) action 1
+ *   state 1 default [6] (00,42); 2 [7] (00,53); 3 [8] (00,6F); 4 [9] (00,C0)
+ * kbd_$state_range gives states 5..14 entries 10..35, which lie past the
+ * segment, in SIO2681_$DATA's bytes (0x00E2DEB8..0x00E2DEEC); this array
+ * stops at the segment end.  TODO(source-kz1g).
+ */
+kbd_$state_entry_t kbd_$state_table[KBD_STATE_TABLE_ENTRIES] = {
+    { 0xfb, 0x20 }, { 0xe8, 0x31 }, { 0xdf, 0x31 }, { 0xfe, 0xb4 },
+    { 0xff, 0x10 }, { 0x00, 0x10 }, { 0x00, 0x42 }, { 0x00, 0x53 },
+    { 0x00, 0x6f }, { 0x00, 0xc0 }
+};
+_Static_assert(sizeof(kbd_$state_table) == 0x14,
+               "kbd_$state_table: 0x00E2DEA4..0x00E2DEB8 (SIO_IO)");

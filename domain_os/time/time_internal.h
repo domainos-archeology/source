@@ -257,12 +257,14 @@ extern const status_$t time_$c_queue_elem_in_use_crash;
 /*
  * TIME_$TIMER_HANDLER - Hardware timer interrupt entry point
  *
- * 0x00E2B130..0x00E2B280 in the TIME_ASM segment, hand-written (movem all,
- * IO_$USE_INT_STACK, DI dispatch of TIME_$DI_VT / TIME_$DI_RTE).  Installed
- * by TIME_$SET_VECTOR into the level-6 autovector.  Not yet transcribed
- * (no Ghidra function at that address) - bead source-lu78.
+ * 0x00E2B130..0x00E2B280 in the TIME_ASM segment, hand-written: an
+ * exception entry, not a C function (time/sau2/timer_handler.s).
+ * Installed by TIME_$SET_VECTOR into the level-6 autovector.
  */
 void TIME_$TIMER_HANDLER(void);
+
+/* 0x00E2B100: TIME_$TIMER_HANDLER's MMU_$MCR_CHANGE countdown (time_data.c) */
+extern uint16_t time_$mcr_countdown;
 
 /*
  * The three timer callbacks below are reached through TIME_$Q_SCAN_QUEUE's

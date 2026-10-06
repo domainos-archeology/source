@@ -12,79 +12,7 @@
 #include "pkt/pkt.h"
 #include "misc/crash_system.h"
 
-/*
- * RING_$SVC_OPEN - Open a ring channel (user service call)
- *
- * This is the user-level service call for opening a ring channel.
- * It wraps ring_$open_internal with is_os=0.
- *
- * Original address: 0x00E76DF2
- *
- * @param name          Channel name or identifier
- * @param args          Open arguments
- * @param unused        Unused
- * @param status_ret    Output: status code
- */
-void RING_$SVC_OPEN(void *name, void *args, void *unused, status_$t *status_ret)
-{
-    status_$t status;
-
-    (void)unused;
-
-    ring_$open_internal(0, name, args, &status);
-    *status_ret = status;
-}
-
-/*
- * RING_$OPEN_OS - Open ring for OS use
- *
- * This is the OS-level service call for opening a ring channel.
- * Copies arguments and calls ring_$open_internal with is_os=-1.
- *
- * Original address: 0x00E77BA0
- *
- * @param param1        First parameter (unit/channel related)
- * @param args          Open arguments structure
- * @param status_ret    Output: status code
- */
-void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret)
-{
-    status_$t local_status;
-    uint16_t local_args[3];
-    int16_t arg_count;
-    int16_t i;
-    uint32_t *args_ptr = (uint32_t *)args;
-    uint32_t *src;
-    uint8_t *dest;
-
-    /* Check argument count */
-    arg_count = *((int16_t *)args + 0x2A);  /* Offset 0x15 words = 0x2A bytes */
-    if (arg_count >= 0x11) {
-        *status_ret = status_$ring_invalid_svc_packet_type;
-        return;
-    }
-
-    /* Setup local args */
-    local_args[0] = 1;
-    local_args[1] = arg_count;
-
-    /* Copy arguments */
-    src = args_ptr;
-    dest = (uint8_t *)&local_args[2];
-    for (i = 0; i < arg_count; i++) {
-        ((uint32_t *)dest)[0] = src[0];
-        ((uint32_t *)dest)[1] = src[1];
-        dest += 8;
-        src += 2;
-    }
-
-    /* Call internal open with OS flag */
-    ring_$open_internal(-1, &param1, local_args, &local_status);
-    *status_ret = local_status;
-
-    /* Copy result back */
-    *((uint16_t *)args + 2) = local_args[2];
-}
+/* RING_$SVC_OPEN is in ring/svc_open.c, RING_$OPEN_OS in ring/open_os.c. */
 
 /*
  * RING_$SVC_READ - Read data from a ring channel
@@ -117,8 +45,8 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
     int16_t hdr_len;
     int16_t data_len;
     int32_t sock_info[10];
-    uint16_t offset;
-    uint16_t count;
+    int16_t offset;
+    int16_t count;
     uint32_t *result_ptr = (uint32_t *)result;
 
     (void)param4;  /* Unused in simplified implementation */
@@ -222,9 +150,9 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
         /* Copy header data to user buffer */
         offset = 1;
         count = 0;
-        int32_t src_ptr = hdr_buf + 0x1C;
-        ring_$copy_to_user((void **)&src_ptr, data_len, param3, param5,
-                          &offset, &count);
+        uint32_t src_ptr = (uint32_t)hdr_buf + 0x1C;
+        ring_$copy_to_user(&src_ptr, data_len, (ring_$iov_t *)param3,
+                           (int16_t)param5, &offset, &count);
 
         /* Return header buffer */
         NETBUF_$RTN_HDR((uint32_t *)&hdr_buf);
@@ -237,8 +165,9 @@ void RING_$SVC_READ(uint16_t *unit_ptr, void *result, void *param3,
                 CRASH_SYSTEM(status_ret);
             }
 
-            ring_$copy_to_user((void **)&data_va[0], hdr_len, param3, param5,
-                              &offset, &count);
+            ring_$copy_to_user((uint32_t *)&data_va[0], hdr_len,
+                               (ring_$iov_t *)param3, (int16_t)param5,
+                               &offset, &count);
 
             NETBUF_$RTNVA((uint32_t *)data_va);
             NETBUF_$RTN_DAT(data_va[0]);

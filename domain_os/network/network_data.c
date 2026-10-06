@@ -105,6 +105,13 @@ ec_$eventcount_t NETWORK_$RQST_QUIT_EC = {
     .waiter_list_head = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_QUIT_EC,
     .waiter_list_tail = (ec_$eventcount_waiter_t *)&NETWORK_$RQST_QUIT_EC,
 };
+/* network_$send_request's cells (network_internal.h) */
+pkt_$info_t NETWORK_$REQUEST_PKT_INFO = {     /* 0xE2491C (+0x020) */
+    .flags = 0x0008, .routing_type = 2, .addr_type = 2, .protocol = 0x8031,
+    .retry_limit = 0x0001, .field_0a = 0, .field_0c = 0xFFFF,
+};
+clock_t NETWORK_$RETRY_DELAY = { 0x00000000, 0x09C4 };   /* 0xE24C50 (+0x354) */
+uint16_t NETWORK_$REQUEST_SEND_FLAGS = 0x0001;          /* 0xE24C56 (+0x35A) */
 uint32_t NETWORK_$RQST_WAIT[4];        /* 0xE24B74 (+0x278) */
 uint32_t NETWORK_$PAGE_WAIT[4];        /* 0xE24B8C (+0x290) */
 uint32_t NETWORK_$RING_DCTE;           /* 0xE24BA4 (+0x2A8) */

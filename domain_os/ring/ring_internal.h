@@ -217,16 +217,14 @@ void ring_$do_start(uint16_t unit, ring_unit_t *unit_data, status_$t *status_ret
 void ring_$set_hw_mask(uint16_t unit, uint16_t mask);
 
 /*
- * ring_$open_internal - Internal channel open
- *
- * @param is_os         OS-level open flag
- * @param name          Channel name
- * @param args          Open arguments
- * @param status_ret    Status output
- *
- * Original address: 0x00E76B7C
+ * ring_$open_internal (0x00E76B7C, 628 bytes) - open a channel on a unit
+ * for the packet-type ranges in *args.  Frame: (0x8,A6) is_os byte (Domain
+ * boolean: true = the OS socket 0xE1, false = SOCK_$ALLOCATE_USER),
+ * (0xa,A6) unit_ptr, (0xe,A6) args, (0x12,A6) status.  Callers reserve a
+ * word result slot it never writes (0x00E76DFE, 0x00E77BF8).
  */
-void ring_$open_internal(int8_t is_os, void *name, void *args, status_$t *status_ret);
+void ring_$open_internal(boolean is_os, uint16_t *unit_ptr,
+                         ring_$open_args_t *args, status_$t *status_ret);
 
 /*
  * ring_$copy_data - Copy data for service calls
@@ -275,20 +273,29 @@ int16_t ring_$find_overlapping_pkt_type(uint32_t low, uint32_t high,
                                         uint16_t table_size);
 
 /*
- * ring_$copy_to_user - Copy data to user buffer
- *
- * @param src_ptr       Source pointer (updated)
- * @param src_len       Source length
- * @param dest          Destination buffer
- * @param dest_param    Destination parameter
- * @param offset_ptr    Offset pointer (updated)
- * @param count_ptr     Count pointer (updated)
- *
- * Original address: 0x00E77382
+ * ring_$iov_t - one element of the caller's I/O vector as ring_$copy_to_user
+ * reads it: `(-0x8,A2,D0w)` the buffer VA and `(-0x4,A2,D0w)` a word
+ * length, with D0w = index << 3 (0x00E773AE-0x00E773BE).  The word at +6 is
+ * never read.
  */
-void ring_$copy_to_user(void **src_ptr, int16_t src_len, void *dest,
-                        uint16_t dest_param, uint16_t *offset_ptr,
-                        uint16_t *count_ptr);
+typedef struct ring_$iov_t {
+    uint32_t va;        /* +0x0 */
+    uint16_t len;       /* +0x4 */
+    uint16_t pad_6;     /* +0x6 */
+} ring_$iov_t;
+_Static_assert(offsetof(ring_$iov_t, len) == 4, "ring_$iov_t.len");
+_Static_assert(sizeof(ring_$iov_t) == 8, "ring_$iov_t stride (lsl.w #3)");
+
+/*
+ * ring_$copy_to_user (0x00E77382, 128 bytes) - scatter `len` bytes from the
+ * VA in *src_va into iov[*iov_index] (1-based) at *iov_offset onwards.
+ * Frame: (0x8) src_va by reference (read once, not updated), (0xc) len
+ * word, (0xe) iov, (0x12) iov_max word, (0x14) iov_index, (0x18) iov_offset.
+ * Callers: RING_$SVC_READ (0x00E775D6, 0x00E77634).
+ */
+void ring_$copy_to_user(uint32_t *src_va, int16_t len, ring_$iov_t *iov,
+                        int16_t iov_max, int16_t *iov_index,
+                        int16_t *iov_offset);
 
 /*
  * ring_$validate_receive (0x00E75DE4) is a nested Pascal procedure of

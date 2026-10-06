@@ -3,8 +3,8 @@
  *
  * Pins the split of the two word tables that follow KBD_$MODE_TABLE.  The
  * eight words at 0x00E2DDEC are what KBD_$RCV (0x00E1CE30) and kbd_$fetch_key
- * (0x00E1CBDA) index; the 32 words at 0x00E2DDFC are a separate object that
- * nothing in the image reads.
+ * (0x00E1CBDA) index; the 32 words at 0x00E2DDFC are a separate object, the
+ * per-state ranges kbd_$state_lookup (0x00E1C9FC) reads.
  */
 
 #include "kbd/kbd_internal.h"
@@ -63,24 +63,24 @@ TEST(escape_state_table_covers_every_keyboard_type)
 {
     static const uint16_t image[8] = { 0x0000, 0x0008, 0x0006, 0x0007,
                                        0x000e, 0x000e, 0x000e, 0x000e };
-    ASSERT_EQ(0x10, sizeof(DAT_00e2ddec));
+    ASSERT_EQ(0x10, sizeof(kbd_$escape_state));
     ASSERT_EQ(MNK_$KTT_MAX + 1,
-              (int)(sizeof(DAT_00e2ddec) / sizeof(DAT_00e2ddec[0])));
-    ASSERT_EQ(0, memcmp(DAT_00e2ddec, image, sizeof(image)));
+              (int)(sizeof(kbd_$escape_state) / sizeof(kbd_$escape_state[0])));
+    ASSERT_EQ(0, memcmp(kbd_$escape_state, image, sizeof(image)));
 }
 
 /* 0x00E2DDFC..0x00E2DE3C, the bytes up to TERM_$TPAD_BUFFER. */
 TEST(trailing_words_fill_the_segment_to_tpad_buffer)
 {
-    ASSERT_EQ(0x40, sizeof(DAT_00e2ddfc));
+    ASSERT_EQ(0x40, sizeof(kbd_$state_range));
     ASSERT_EQ(0x00E2DE3C - 0x00E2DDE4,
-              (int)(sizeof(KBD_$MODE_TABLE) + sizeof(DAT_00e2ddec)
-                    + sizeof(DAT_00e2ddfc)));
+              (int)(sizeof(KBD_$MODE_TABLE) + sizeof(kbd_$escape_state)
+                    + sizeof(kbd_$state_range)));
     /* First and last words of the image run. */
-    ASSERT_EQ(0x0000, DAT_00e2ddfc[0]);
-    ASSERT_EQ(0x0005, DAT_00e2ddfc[1]);
-    ASSERT_EQ(0x0023, DAT_00e2ddfc[29]);
-    ASSERT_EQ(0x0000, DAT_00e2ddfc[31]);
+    ASSERT_EQ(0x0000, kbd_$state_range[0]);
+    ASSERT_EQ(0x0005, kbd_$state_range[1]);
+    ASSERT_EQ(0x0023, kbd_$state_range[29]);
+    ASSERT_EQ(0x0000, kbd_$state_range[31]);
 }
 
 /* MNK_$KTT_PTRS is 8 longwords and MNK_$KTT_MAX its last index. */

@@ -2,7 +2,7 @@
 TARGET_SAU := sau2
 
 # List of all subsystems
-SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum dbuf di dir disk dma dtty dxm ec file fim flop flp fp gpu fm hint iic io kbd log mac mac_os math mem misc ml mmap mmu msg mst name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rem_name rgyc ring rip route scsi sio sio2681 sio6509 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
+SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum ct dbuf di dir disk dma dtty dxm ec file fim flop flp fp gpu fm hint iic io kbd log lpr mac mac_os math mem misc ml mmap mmu msg mst mt name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rem_name rgyc ring rip route scsi sio sio2681 sio6509 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
 
 WARNING_FLAGS := -Werror
 
@@ -72,6 +72,14 @@ endef
 
 # Instantiate the template for each subsystem
 $(foreach sub,$(SUBSYSTEMS),$(eval $(call SUBSYSTEM_template,$(sub))))
+
+# arch/m68k/*.c: compiler-support routines for the m68k target only (memcpy;
+# the kernel links no libc).  Not image code, so no map symbol: they go to
+# the layout's catch-all.  Host test builds use libc instead.
+ARCH_M68K_SRCS := $(wildcard arch/m68k/*.c)
+ARCH_M68K_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ARCH_M68K_SRCS))
+ALL_SUBSYSTEM_OBJS += $(ARCH_M68K_OBJS)
+arch: $(ARCH_M68K_OBJS)
 
 # svc/sau2/*.s share instruction-encoding macros through a gas .include
 # (svc/sau2/svc_macros.inc, resolved relative to this directory).  The

@@ -348,7 +348,7 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
                             clock_t *acl_info, status_$t *status);
 
 /*
- * NETWORK_$WRITE (0x00E0FAE6, 290 bytes; not yet translated, source-8xzg) - send one page
+ * NETWORK_$WRITE (0x00E0FAE6, 290 bytes; network/write.c) - send pages
  * to the node that backs it.  Frame read off the callee (link.w A6,-0x110):
  *   (0x08,A6) node_addr  8-byte node address, passed on to 0x00E0FA00/0x00E0F86C
  *   (0x0C,A6) req        the 32-byte request record, copied into the frame

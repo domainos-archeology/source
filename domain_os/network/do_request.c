@@ -102,9 +102,7 @@ void network_$do_request(void *net_handle, void *cmd_buf, int16_t cmd_len,
          * This builds and transmits the packet, returning retry and timeout info.
          */
         network_$send_request(net_handle, sock_num, pkt_id,
-                              (int16_t *)cmd_buf, cmd_len,
-                              (int16_t)(param4 >> 16),
-                              ((param4 & 0xFFFF) << 16) | param5,
+                              (int16_t *)cmd_buf, cmd_len, param4, param5,
                               &max_retries, &timeout_value, status_ret);
 
         /* Check if send failed */

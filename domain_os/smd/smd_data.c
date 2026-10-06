@@ -80,6 +80,13 @@ MODULE_DATA_DEFINE_INIT(smd_globals_t, SMD_GLOBALS, 0x00E82B8C, {
 MODULE_DATA_DEFINE(smd_$wired_data_t, SMD_$WIRED_DATA, 0x00E2E3FC);
 
 /*
+ * SMD_$BLINK_TIMER_DATA - map segment "D E2E060 SMD size = 1C", the cursor
+ * blink timer's queue element (smd/smd_internal.h).  All 0x1C bytes are zero
+ * in the image (`gsk read 0xE2E060 0x1C`).
+ */
+MODULE_DATA_DEFINE(smd_$blink_timer_data_t, SMD_$BLINK_TIMER_DATA, 0x00E2E060);
+
+/*
  * Display info / hardware record table.
  * Original address: 0x00E27376 (Ghidra label SMD_$DISPLAY_COM).
  *

@@ -39,5 +39,5 @@
  */
 void SMD_$DISPLAY_CURSOR(uint16_t *unit, smd_cursor_pos_t *pos, status_$t *status_ret)
 {
-    smd_$cursor_op(*unit, *(uint32_t *)pos, 0, status_ret);
+    smd_$cursor_op((int16_t)*unit, *pos, false, status_ret);
 }

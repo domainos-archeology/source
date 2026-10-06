@@ -37,7 +37,7 @@ void WIN_$FORMAT_TRACK(void *dev_entry, win_$request_t *req)
      * thought it was working on.
      */
     unit = 0;
-    WIN_CUR_REQ = NULL;
+    WIN_CUR_REQ_VA = 0;
 
     /* 0x00E196C2 `lea (A5),A0` / 0x00E196C4 `movea.l (0x4,A0),A2`. */
     regs = WIN_UNIT_REGS(0);

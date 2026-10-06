@@ -92,6 +92,11 @@ ANCHORS = {
     # no symbol between FIM_$FLINE 0xE21ACC and FIM_$FP_ABORT 0xE21B80);
     # FIM_$FLINE reaches it with `bsr.s' (source-c573).
     '.text.fp_$switch_owner': 0xE21B10,
+    # time/sau2/timer_handler.s: TIME_$TIMER_HANDLER (0xE2B130..0xE2B27F),
+    # the end of the TIME_ASM segment; the map names no symbol after
+    # TIME_$DI_RTE (0xE2B11E), and TIME_$SET_VECTOR reaches the handler with
+    # `lea (0x2c,PC)' (source-lu78).
+    '.text.TIME_$TIMER_HANDLER': 0xE2B130,
 }
 
 SITE_RE = re.compile(

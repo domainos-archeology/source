@@ -101,12 +101,12 @@ int8_t PKT_$LIKELY_TO_ANSWER(void *handle, status_$t *status_ret)
 void CRASH_SYSTEM(const status_$t *status_p) { (void)status_p; crash_calls++; }
 
 void network_$send_request(void *net_handle, int16_t sock_num, int16_t pkt_id,
-                           int16_t *cmd_buf, int16_t cmd_len, int16_t param_hi,
-                           uint32_t param_lo, uint16_t *retry_count_out,
+                           int16_t *cmd_buf, int16_t cmd_len, uint32_t data_pa,
+                           uint16_t data_len, uint16_t *retry_count_out,
                            int16_t *timeout_out, status_$t *status_ret)
 {
     (void)net_handle; (void)sock_num; (void)pkt_id; (void)cmd_buf;
-    (void)cmd_len; (void)param_hi; (void)param_lo;
+    (void)cmd_len; (void)data_pa; (void)data_len;
     *retry_count_out = stub_max_retries;
     *timeout_out     = stub_timeout;
     *status_ret      = stub_send_status;

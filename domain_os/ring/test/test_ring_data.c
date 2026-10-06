@@ -61,7 +61,7 @@ void RING_$STOP(uint16_t *u, status_$t *s) { (void)u; (void)s; }
 void RING_$PROC2_CLEANUP(uint16_t *p, uint16_t a) { (void)p; (void)a; }
 void RING_$IOCTL(uint16_t *u, int16_t *c, uint16_t r, void *p, status_$t *s)
 { (void)u; (void)c; (void)r; (void)p; (void)s; }
-void RING_$SVC_OPEN(void *n, void *a, void *x, status_$t *s) { (void)n; (void)a; (void)x; (void)s; }
+void RING_$SVC_OPEN(uint16_t *n, ring_$open_args_t *a, int16_t x, uint32_t y, status_$t *s) { (void)n; (void)a; (void)x; (void)y; (void)s; }
 void RING_$SVC_CLOSE(uint16_t *u, uint16_t *c, int16_t w, uint32_t l, status_$t *s) { (void)u; (void)c; (void)w; (void)l; (void)s; }
 void RING_$SVC_IOCTL(uint16_t *u, void *c, int16_t a, uint32_t b, status_$t *s)
 { (void)u; (void)c; (void)a; (void)b; (void)s; }
@@ -69,7 +69,7 @@ void RING_$SVC_WRITE(uint16_t *u, void *h, void *a, void *d, int16_t l, uint16_t
 { (void)u; (void)h; (void)a; (void)d; (void)l; (void)r; (void)s; }
 void RING_$SVC_READ(uint16_t *u, void *r, void *a, void *b, uint16_t c, int16_t *l, status_$t *s)
 { (void)u; (void)r; (void)a; (void)b; (void)c; (void)l; (void)s; }
-void RING_$OPEN_OS(uint16_t p, void *a, status_$t *s) { (void)p; (void)a; (void)s; }
+void RING_$OPEN_OS(uint16_t p, ring_$open_os_args_t *a, status_$t *s) { (void)p; (void)a; (void)s; }
 void RING_$CLOSE_OS(uint16_t p, uint16_t *a, status_$t *s) { (void)p; (void)a; (void)s; }
 void RING_$SEND_OS(uint16_t u, int16_t *c, struct mac_os_$send_pkt_t *p, int16_t *b, status_$t *s)
 { (void)u; (void)c; (void)p; (void)b; (void)s; }

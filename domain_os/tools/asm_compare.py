@@ -127,6 +127,9 @@ LOCAL_SYMBOLS = {
     'Lstart_scroll_body': 0x00E15C68,       # scroll.s
     'Lcontinue_scroll_body': 0x00E15C9C,    # scroll.s
     'Lstart_blt_body': 0x00E15D1E,          # start_blt.s
+    # time/sau2/timer_handler.s: the level-6 timer interrupt, which the map
+    # counts into TIME_ASM without a symbol (source-lu78)
+    'TIME_$TIMER_HANDLER': 0x00E2B130,
 }
 
 # Runs whose code is restructured relative to the image (not a matter of
@@ -201,6 +204,11 @@ IMAGE_ALIASES = {
     # proc1/proc1_data.c: the crash status reached by `pea (0x3f8,PC)' at
     # 0x00E209EE
     'Bad_atomic_operation_err': 0x00E20DE8,
+    # time/time_data.c: the TIME_ASM cells TIME_$TIMER_HANDLER reaches that
+    # the map does not name (TIME_$CURRENT_TIME + 4, and the word before
+    # TIME_$SET_VECTOR)
+    'TIME_$CURRENT_USEC': 0x00E2B0F4,
+    'time_$mcr_countdown': 0x00E2B100,
 }
 
 # Sections whose module base register points at a different object in our

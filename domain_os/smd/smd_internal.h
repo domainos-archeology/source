@@ -1821,20 +1821,14 @@ void SMD_$INVERT_DISP(uint32_t display_base, smd_display_info_t *display_info);
  */
 
 /*
- * smd_$cursor_op - Internal cursor display/clear operation
- *
- * Common implementation for SMD_$DISPLAY_CURSOR and SMD_$CLEAR_CURSOR.
- *
- * Parameters:
- *   unit       - Display unit number
- *   pos        - Cursor position (packed as uint32_t: x in low 16, y in high
- * 16) clear_flag - 0 = display cursor, 0xFF = clear cursor status_ret - Status
- * return pointer
- *
- * Original address: 0x00E6DFFA
+ * smd_$cursor_op (0x00E6DFFA, 134 bytes) - body of SMD_$DISPLAY_CURSOR /
+ * SMD_$CLEAR_CURSOR.  Frame: (0x8,A6) cursor number word (0..3), (0xa,A6)
+ * the position record by value, (0xe,A6) the Domain boolean clear flag
+ * (`clr.w` / `st -(SP)`), (0x10,A6) status.  Uses its callers' A5 =
+ * SMD_GLOBALS.
  */
-void smd_$cursor_op(uint16_t unit, uint32_t pos, uint16_t clear_flag,
-                    status_$t *status_ret);
+void smd_$cursor_op(int16_t cursor_num, smd_cursor_pos_t pos,
+                    boolean clear_flag, status_$t *status_ret);
 
 /*
  * smd_$validate_unit - Validate display unit number
@@ -2068,5 +2062,36 @@ void smd_$init_display_state(int8_t options, status_$t *status_ret);
  * SMD_EC_1 / SMD_EC_2 views that SMD_$INIT initialised - one address, two
  * objects.
  */
+
+
+/*
+ * ---------------------------------------------------------------------------
+ * Appended 2026-10-06 (batch 9, source-dn79)
+ * ---------------------------------------------------------------------------
+ *
+ * SMD_$BLINK_TIMER_DATA - the map segment "D E2E060 SMD size = 1C"
+ * (0x00E2E060..0x00E2E07B, all zero in the image).  SMD_$BUSY_WAIT
+ * (0x00E1D8A4), SMD_$LITES (0x00E1D8BE) and smd_$reschedule_blink_timer
+ * (0x00E72696) load it as A5; only the last uses it, passing `pea (A5)`
+ * (0x00E726B8) as TIME_$Q_ADD_CALLBACK's queue element: the cursor blink
+ * timer's time_queue_elem_t (0x1A bytes) plus two bytes nothing touches.
+ * The segment exports no symbol, so the block name is descriptive.
+ */
+typedef struct smd_$blink_timer_data_t {
+    time_queue_elem_t qelem;    /* +0x00 */
+    uint8_t pad_1a[2];          /* +0x1A: never referenced */
+} smd_$blink_timer_data_t;
+
+#define SMD_$BLINK_TIMER_DATA_SIZE 0x1C  /* map: "D E2E060 SMD size = 1C" */
+_Static_assert(offsetof(smd_$blink_timer_data_t, qelem) == 0x00, "blink qelem (pea (A5))");
+#if defined(ARCH_M68K)
+/* Target-only: time_queue_elem_t ends in a word after longwords, so a host
+ * with 4-byte longword alignment pads it to 0x1C itself. */
+_Static_assert(offsetof(smd_$blink_timer_data_t, pad_1a) == 0x1A, "blink pad_1a");
+_Static_assert(sizeof(smd_$blink_timer_data_t) == SMD_$BLINK_TIMER_DATA_SIZE,
+               "SMD_$BLINK_TIMER_DATA: map size 0x1C");
+#endif
+
+MODULE_DATA_DECLARE(smd_$blink_timer_data_t, SMD_$BLINK_TIMER_DATA, 0x00E2E060);
 
 #endif /* SMD_INTERNAL_H */

@@ -11,8 +11,8 @@
  *   00e2b10c  rts
  *
  * The handler at 0x00E2B130 (TIME_$TIMER_HANDLER, 336 bytes up to the end
- * of TIME_ASM at 0x00E2B280) is hand-written assembly with no Ghidra
- * function yet; see bead source-lu78 in time/time_internal.h.
+ * of TIME_ASM at 0x00E2B280) is hand-written assembly,
+ * time/sau2/timer_handler.s.
  */
 
 #include "time/time_internal.h"

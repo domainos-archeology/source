@@ -8,11 +8,18 @@
 #define SIO6509_INTERNAL_H
 
 #include "sio6509/sio6509.h"
+/* The 6509 routines (SIO6509_$RCV 0x00E1D53E) belong to the same SIO_IO
+ * module as the 2681 driver and run with its A5 = 0xE2DEB8, so they read
+ * SIO2681_$DATA (sio6509_rcv_flags at +0xA8). */
+#include "sio2681/sio2681_internal.h"
+#include "sio/sio.h"
 
 /*
  * sio6509_chan_t - the channel record SIO6509_$INIT fills (TERM_$INIT
- * passes TERM_$DATA + 0x1250).  Only the two words INIT writes are known;
- * the rest belongs to SIO6509_$RCV / $XMIT, not yet translated.
+ * passes TERM_$DATA + 0x1250).  SIO6509_$RCV reads the same two words
+ * (0x00E1D552 `movea.l (A2),A0`, 0x00E1D572 `move.l (0x4,A2)`); nothing in
+ * the tree reaches further (SIO6509_$XMIT / SET_LINE / INQ_LINE are not
+ * referenced).
  *   +0x00  regs      the chip's register block VA (`move.l A3,(A4)'
  *                    0x00E33550)
  *   +0x04  sio_desc  *callback (`move.l (A3),(0x4,A4)' 0x00E33556)
@@ -41,8 +48,9 @@ extern m68k_ptr_t SIO6509_$PTRS[SIO6509_PTRS_COUNT];
 void SIO6509_$INT1_RTE(void);
 
 /*
- * SIO6509_$RCV (0x00E1D53E, not yet translated: source-77db) - the receive
- * interrupt routine the stub calls with the PTRS entry pushed.
+ * SIO6509_$RCV (0x00E1D53E, sio6509/rcv.c) - the receive interrupt routine
+ * SIO6509_$INT1_RTE calls with the SIO6509_$PTRS entry (a channel record
+ * VA) pushed.
  */
 void SIO6509_$RCV(m68k_ptr_t chan);
 

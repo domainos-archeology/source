@@ -106,6 +106,15 @@ uint16_t TIME_$CURRENT_SKEW = 0;
 uint32_t TIME_$CURRENT_DELTA = 0;
 
 /*
+ * time_$mcr_countdown - 0x00E2B100, the word after TIME_$CURRENT_DELTA and
+ * before TIME_$SET_VECTOR's code (no map symbol).  TIME_$TIMER_HANDLER
+ * decrements it on every CLOCKH step and, reaching zero, reloads 2 and
+ * calls MMU_$MCR_CHANGE(7) (0x00E2B1DE-0x00E2B1F4).
+ * `gsk read 0xE2B100 2` = 00 02.
+ */
+uint16_t time_$mcr_countdown = 0x0002;
+
+/*
  * ============================================================================
  * Interrupt Flags
  * ============================================================================

@@ -156,4 +156,16 @@
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
     T name MODULE_DATA_ATTRS_(name) = __VA_ARGS__
 
+/*
+ * memcpy - compiler-support routine (arch/m68k/memcpy.c)
+ *
+ * Not an image function.  GCC lowers large structure assignments and
+ * by-value record copies to calls of memcpy even with -ffreestanding /
+ * -fno-builtin, and the kernel links no libc, so the m68k target supplies
+ * a plain byte copy.  The host build uses its libc.  The name is
+ * parenthesised so misc/string.h's function-like memcpy macro cannot
+ * rewrite this declaration.
+ */
+void *(memcpy)(void *dst, const void *src, __SIZE_TYPE__ n);
+
 #endif /* ARCH_M68K_ARCH_H */

@@ -187,7 +187,7 @@ static void setup(void)
     req.status = status_$ok;
 
     /* the request the driver thinks it is working on, to see it cleared */
-    WIN_CUR_REQ = (void *)&req;
+    WIN_CUR_REQ_VA = 0x1234;
 }
 
 /* ------------------------------------------------------------------ */
@@ -202,7 +202,7 @@ static void test_success_runs_exactly_one_pass(void)
 {
     WIN_$FORMAT_TRACK(dev_entry, &req);
 
-    CHECK_PTR(NULL, WIN_CUR_REQ);
+    CHECK_EQ(0, WIN_CUR_REQ_VA);
     CHECK_EQ(1, seek_calls);
     CHECK_EQ(1, wait_calls);
     CHECK_EQ(1, check_calls);

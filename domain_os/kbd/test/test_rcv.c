@@ -5,7 +5,8 @@
  * KBD_$OUTPUT_BUFFER_DRAINED (0x00E1CE96)
  *
  * The real .c files are #included (kbd_data.c supplies KBD_$MODE_TABLE and
- * DAT_00e2ddec); kbd_$state_lookup, kbd_$fetch_key, kbd_$process_key,
+ * kbd_$escape_state; RCV's nested kbd_$process_key runs for real);
+ * kbd_$state_lookup, kbd_$fetch_key,
  * kbd_$translate_key, kbd_$set_type, MMU_$NORMAL_MODE, CRASH_SYSTEM,
  * TIME_$CLOCK, DXM_$ADD_CALLBACK, EC_$* and TERM_$SET_DISCIPLINE are mocked.
  */
@@ -65,7 +66,7 @@ DXM_$DEFINE_CALLBACK_CELL(PTR_TERM_$ENQUEUE_TPAD_00e1ce90, TERM_$ENQUEUE_TPAD);
 static kbd_$state_entry_t lookup_entry;
 static uint16_t lookup_state;
 static uint8_t lookup_key;
-void *kbd_$state_lookup(uint16_t state, uint8_t key)
+kbd_$state_entry_t *kbd_$state_lookup(uint16_t state, uint8_t key)
 {
     lookup_state = state;
     lookup_key = key;
@@ -79,14 +80,10 @@ static int crash_calls;
 static const status_$t *crash_cell;
 void CRASH_SYSTEM(const status_$t *p) { crash_calls++; crash_cell = p; }
 
-static int process_calls;
-static uint8_t process_key_arg;
-void kbd_$process_key(uint8_t key, kbd_state_t *state)
-{
-    (void)state;
-    process_calls++;
-    process_key_arg = key;
-}
+/* kbd_$process_key is RCV's nested procedure (static in rcv.c): with the
+ * ring reset to head = tail = 1 the keys it queued are counted by the tail. */
+#define process_calls   (desc.ring_tail - 1)
+#define process_key_arg (desc.ring_buffer[0])
 
 static clock_t mock_clock;
 void TIME_$CLOCK(clock_t *c) { *c = mock_clock; }
@@ -192,7 +189,9 @@ static void reset(void)
     memset(&lookup_entry, 0, sizeof(lookup_entry));
     ARCH_HOST_VA_BASE = (uintptr_t)arena;
     normal_mode = (int8_t)0xFF;
-    crash_calls = process_calls = dxm_calls = 0;
+    crash_calls = dxm_calls = 0;
+    desc.ring_head = desc.ring_tail = 1;
+    desc.ring_size = KBD_RING_SIZE;
     fetch_n = fetch_i = 0;
     handler_calls = 0;
     set_type_calls = ec_init_calls = ec_adv_calls = set_disc_calls = 0;
@@ -213,6 +212,44 @@ TEST(rcv_plain_key_processes_and_sets_next_state)
     ASSERT_EQ('a', process_key_arg);
     ASSERT_EQ(5, desc.state);
     ASSERT_EQ(0, dxm_calls);
+}
+
+static ec_$eventcount_t key_ec;
+
+TEST(rcv_process_key_queues_and_advances_key_ec)
+{
+    reset();
+    desc.key_ec = &key_ec;
+    lookup_entry.next = 0x10;
+    KBD_$RCV(&desc, 'x');
+    ASSERT_EQ(2, desc.ring_tail);
+    ASSERT_EQ('x', desc.ring_buffer[0]);
+    ASSERT_EQ(1, ec_adv_calls);
+    ASSERT_PTR_EQ(&key_ec, ec_adv_arg);
+}
+
+TEST(rcv_process_key_wraps_tail_at_0x40)
+{
+    reset();
+    desc.ring_head = 5;
+    desc.ring_tail = KBD_RING_SIZE;
+    lookup_entry.next = 0x10;
+    KBD_$RCV(&desc, 'y');
+    ASSERT_EQ('y', desc.ring_buffer[KBD_RING_SIZE - 1]);
+    ASSERT_EQ(1, desc.ring_tail);
+    ASSERT_EQ(1, ec_adv_calls);
+}
+
+TEST(rcv_process_key_drops_key_when_ring_full)
+{
+    reset();
+    desc.ring_head = 4;
+    desc.ring_tail = 3;                     /* next tail would meet head */
+    lookup_entry.next = 0x10;
+    KBD_$RCV(&desc, 'z');
+    ASSERT_EQ(3, desc.ring_tail);
+    ASSERT_EQ(0, desc.ring_buffer[2]);
+    ASSERT_EQ(0, ec_adv_calls);
 }
 
 TEST(rcv_actions_a_b_c_process_and_0_7_8_9_do_nothing)
@@ -244,7 +281,7 @@ TEST(rcv_escape_state_from_type_table)
     desc.kbd_type_idx = 2;
     lookup_entry.next = 0x0F;
     KBD_$RCV(&desc, 1);
-    ASSERT_EQ(DAT_00e2ddec[2], desc.state);
+    ASSERT_EQ(kbd_$escape_state[2], desc.state);
     ASSERT_EQ(6, desc.state);
 }
 
@@ -271,7 +308,7 @@ TEST(rcv_manual_stop_crashes_and_patches_entry)
     ASSERT_PTR_EQ(&Term_Manual_Stop_err, crash_cell);
     ASSERT_EQ(0, process_calls);                /* bra.w past process_key */
     ASSERT_EQ(0x2F, lookup_entry.next);         /* or.w #0xF */
-    ASSERT_EQ(DAT_00e2ddec[1], desc.state);     /* low nibble now 0xF */
+    ASSERT_EQ(kbd_$escape_state[1], desc.state);     /* low nibble now 0xF */
 }
 
 TEST(rcv_touchpad_bytes_land_in_order)
@@ -500,6 +537,9 @@ TEST(get_char_and_mode_and_inq_type_and_put_and_drained)
 int main(void)
 {
     RUN_TEST(rcv_plain_key_processes_and_sets_next_state);
+    RUN_TEST(rcv_process_key_queues_and_advances_key_ec);
+    RUN_TEST(rcv_process_key_wraps_tail_at_0x40);
+    RUN_TEST(rcv_process_key_drops_key_when_ring_full);
     RUN_TEST(rcv_actions_a_b_c_process_and_0_7_8_9_do_nothing);
     RUN_TEST(rcv_escape_state_from_type_table);
     RUN_TEST(rcv_manual_stop_in_normal_mode_is_a_plain_key);

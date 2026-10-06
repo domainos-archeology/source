@@ -317,6 +317,17 @@ _Static_assert(sizeof(net_io_$driver_t) == NET_IO_DRIVER_SIZE,
 void NET_IO_$CLEANUP_NIL(uint16_t *socket_ptr, uint16_t asid);
 void NET_IO_$CLEANUP_USER(uint16_t *socket_ptr, uint16_t asid);
 
+/* The proc2_cleanup slot's shape, as NET_IO_$FREE_ASID calls it. */
+typedef void (*net_io_$proc2_cleanup_fn_t)(uint16_t *socket_ptr, uint16_t asid);
+
+/*
+ * NET_IO_$FREE_ASID (0x00E74E84, net_io/free_asid.c) - call every port's
+ * driver proc2_cleanup slot for an address space that is going away.
+ * Frame: (0x8,A6) asid word.  Called by PROC2_$CLEANUP_HANDLERS_INTERNAL
+ * (0x00E3E8DC) with a word result slot it never writes.
+ */
+void NET_IO_$FREE_ASID(uint16_t asid);
+
 /*
  * NET_IO_$NIL_DRIVER / NET_IO_$USER_DRIVER - Driver descriptor blocks
  *

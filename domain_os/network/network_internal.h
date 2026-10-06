@@ -639,28 +639,42 @@ _Static_assert(sizeof(network_$reply_hdr_t) == 6,
                "network_$reply_hdr_t must be 6 bytes");
 
 /*
- * network_$send_request - Send a network request packet
- *
- * Internal helper that builds and sends a network request packet.
- * Handles retries on transmission failure.
- *
- * @param net_handle       Network handle
- * @param sock_num         Socket number
- * @param pkt_id           Packet ID
- * @param cmd_buf          Command buffer
- * @param cmd_len          Command length
- * @param param_hi         High word of param4
- * @param param_lo         Combined param4_lo and param5
- * @param retry_count_out  Output: max retry count
- * @param timeout_out      Output: timeout value
- * @param status_ret       Output: status code
- *
- * Original address: 0x00E0F5F4
+ * network_$send_request (0x00E0F5F4, 336 bytes, network/send_request.c) -
+ * build the request header for net_handle's node and transmit it, waiting
+ * and retrying on transient transmit failures.  Frame:
+ *   (0x08) net_handle  [0] routing key, [1] destination node
+ *   (0x0C) sock_num    word, the source socket
+ *   (0x0E) pkt_id      word, the request id
+ *   (0x10) cmd_buf     the template (request record)
+ *   (0x14) cmd_len     word
+ *   (0x16) data_pa     longword by value; its ADDRESS is NET_IO_$SEND's
+ *                      one-element page list (`pea (0x16,A6)`)
+ *   (0x1A) data_len    word
+ *   (0x1C) retry_out   PKT_$BLD_INTERNET_HDR's retry hint, also the limit
+ *   (0x20) timeout_out
+ *   (0x24) status
+ * Callers: network_$do_request (0x00E0F902), NETWORK_$READ_AHEAD (0x00E0FDD2).
  */
 void network_$send_request(void *net_handle, int16_t sock_num, int16_t pkt_id,
-                           int16_t *cmd_buf, int16_t cmd_len, int16_t param_hi,
-                           uint32_t param_lo, uint16_t *retry_count_out,
+                           int16_t *cmd_buf, int16_t cmd_len, uint32_t data_pa,
+                           uint16_t data_len, uint16_t *retry_out,
                            int16_t *timeout_out, status_$t *status_ret);
+
+/*
+ * NETWORK_ data cells network_$send_request reads off A5 = 0xE248FC; the
+ * map names none of them (`gsk read 0xE2491C 0x10`, `gsk read 0xE24C50 8`):
+ *   NETWORK_$REQUEST_PKT_INFO   0xE2491C (+0x020): the pkt_$info_t handed to
+ *       PKT_$BLD_INTERNET_HDR (`pea (0x20,A5)`, 0x00E0F654).
+ *       Image: 00 08 00 02 00 02 80 31 00 01 00 00 ff ff, then zeroes.
+ *   NETWORK_$RETRY_DELAY        0xE24C50 (+0x354): the clock TIME_$WAIT
+ *       sleeps between retries (`pea (0x354,A5)`, 0x00E0F71E): 0:0x09C4.
+ *   NETWORK_$REQUEST_SEND_FLAGS 0xE24C56 (+0x35A): NET_IO_$SEND's flags
+ *       word (`move.w (0x35a,A5)`, 0x00E0F692): 0x0001.  It precedes
+ *       NETWORK_$REPORT_SEND_FLAGS (0xE24C58).
+ */
+extern pkt_$info_t NETWORK_$REQUEST_PKT_INFO;
+extern clock_t NETWORK_$RETRY_DELAY;
+extern uint16_t NETWORK_$REQUEST_SEND_FLAGS;
 
 /*
  * network_$wait_response - Wait for network response

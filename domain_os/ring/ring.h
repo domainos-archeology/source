@@ -992,17 +992,67 @@ void RING_$KICK_DRIVER(void);
  * ============================================================================
  */
 
+
+/* One (low, high) packet-type range, as the open and ioctl requests carry
+ * them (`addq.l #0x8`). */
+typedef struct ring_$pkt_range_t {
+    uint32_t    low;            /* 0x00 */
+    uint32_t    high;           /* 0x04 */
+} ring_$pkt_range_t;
+
 /*
- * RING_$SVC_OPEN - Open a ring channel (service call)
- *
- * @param name          Channel name
- * @param args          Open arguments
- * @param unused        Unused
- * @param status_ret    Output: status code
- *
- * Original address: 0x00E76DF2
+ * ring_$open_args_t - the request block ring_$open_internal reads and
+ * answers in place (RING_$OPEN_OS builds one at (-0x88,A6), 0x84 bytes).
+ *   in:  +0x0 version (> 1 rejected, 0x00E76BAE), +0x2 count of ranges,
+ *        +0x4 the ranges ((-0x4,A3)/(A3) with A3 = args + 8, 0x00E76CA8)
+ *   out: +0x0 the EC2 handle of the channel's socket (`move.l A0,(A3)`,
+ *        0x00E76DCA), +0x4 the channel number (`move.w D3w,(0x4,A3)`,
+ *        0x00E76DA8) - over the inputs
  */
-void RING_$SVC_OPEN(void *name, void *args, void *unused, status_$t *status_ret);
+typedef struct ring_$open_args_t {
+    union {
+        struct {
+            int16_t  version;   /* +0x0 */
+            uint16_t count;     /* +0x2 */
+        } in;
+        uint32_t ec2_handle;    /* +0x0, written on success */
+    } hdr;
+    union {
+        ring_$pkt_range_t types[16];    /* +0x4: RING_$OPEN_OS allows 16 */
+        int16_t channel;                /* +0x4, written on success */
+    } body;
+} ring_$open_args_t;
+_Static_assert(offsetof(ring_$open_args_t, body) == 4, "ring_$open_args_t.body");
+_Static_assert(sizeof(ring_$open_args_t) == 0x84, "ring_$open_args_t: (-0x88,A6)..(-0x4,A6)");
+
+/*
+ * ring_$open_os_args_t - RING_$OPEN_OS's caller block: up to 16 ranges
+ * from +0x0 (copied 8 bytes at a time, 0x00E77BE8), the range count word at
+ * +0x54 (`cmpi.w #0x10,(0x54,A0)`, 0x00E77BB8) - inside the ranges when
+ * there are more than ten - and the channel number written back to +0x4
+ * (0x00E77C14).
+ */
+typedef struct ring_$open_os_args_t {
+    union {
+        ring_$pkt_range_t types[16];            /* +0x00 */
+        struct { uint8_t _00[4]; int16_t channel; } out;    /* +0x04 */
+        struct { uint8_t _00[0x54]; int16_t count; } in;    /* +0x54 */
+    } u;
+} ring_$open_os_args_t;
+_Static_assert(offsetof(ring_$open_os_args_t, u.out.channel) == 4, "open_os channel");
+_Static_assert(offsetof(ring_$open_os_args_t, u.in.count) == 0x54, "open_os count");
+
+/*
+ * RING_$SVC_OPEN - Open a ring channel (the driver's svc_open slot)
+ *
+ * The net_$svc_ctl_fn_t shape NET_$OPEN pushes (0x00E5A1E0): (0x8,A6)
+ * unit_ptr, (0xC,A6) the open request, a word at (0x10,A6) and a longword
+ * at (0x12,A6) that are never read, (0x16,A6) status_ret.
+ *
+ * Original address: 0x00E76DF2 (ring/svc_open.c)
+ */
+void RING_$SVC_OPEN(uint16_t *unit_ptr, ring_$open_args_t *args,
+                    int16_t unused3, uint32_t unused4, status_$t *status_ret);
 
 /*
  * RING_$SVC_CLOSE - Close a ring channel (the driver's svc_close slot)
@@ -1067,10 +1117,6 @@ void RING_$SVC_WRITE(uint16_t *unit_ptr, void *hdr, void *param3,
  *   +0x08 buf_len  word, must be >= 0x3C
  * Commands 1 and 4 write a reply word back into +0x00 (1 and 0x3C).
  */
-typedef struct ring_$pkt_range_t {
-    uint32_t    low;            /* 0x00 */
-    uint32_t    high;           /* 0x04 */
-} ring_$pkt_range_t;
 
 typedef struct ring_$svc_ioctl_types_t {
     int16_t     cmd;            /* 0x00 */
@@ -1122,15 +1168,15 @@ void RING_$SVC_IOCTL(uint16_t *unit_ptr, void *args, int16_t param4,
  */
 
 /*
- * RING_$OPEN_OS - Open ring for OS use
+ * RING_$OPEN_OS - Open a ring channel for the OS (socket RING_OS_SOCKET_ID)
  *
- * @param param1        Parameter 1
- * @param args          Arguments
- * @param status_ret    Output: status code
+ * Frame: (0x8,A6) unit word by value (its address is passed on),
+ * (0xA,A6) the caller's block, (0xE,A6) status_ret.
  *
- * Original address: 0x00E77BA0
+ * Original address: 0x00E77BA0 (ring/open_os.c)
  */
-void RING_$OPEN_OS(uint16_t param1, void *args, status_$t *status_ret);
+void RING_$OPEN_OS(uint16_t unit, ring_$open_os_args_t *args,
+                   status_$t *status_ret);
 
 /*
  * RING_$CLOSE_OS - Close a channel the OS opened (the driver's close_os slot)

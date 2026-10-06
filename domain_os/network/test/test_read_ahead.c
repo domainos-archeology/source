@@ -90,7 +90,7 @@ void network_$phys_copy(uint32_t d, uint32_t s, int16_t l)
 { copy_dst[copies & 7] = d; copy_src[copies & 7] = s; copy_len[copies & 7] = l; copies++; }
 
 void network_$send_request(void *h, int16_t s, int16_t id, int16_t *buf,
-                           int16_t len, int16_t hi, uint32_t lo,
+                           int16_t len, uint32_t hi, uint16_t lo,
                            uint16_t *retry, int16_t *timeout, status_$t *st)
 {
     (void)h; (void)s; (void)id; (void)hi; (void)lo;

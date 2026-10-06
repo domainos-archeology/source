@@ -195,13 +195,13 @@ static void test_sub_unit_refused(void)
     struct out o;
 
     memset(&o, 0, sizeof(o));
-    WIN_CUR_REQ = (void *)0x1234;
+    WIN_CUR_REQ_VA = 0x1234;
 
     CHECK_EQ(status_$invalid_unit_number, call_init(1, &o));
     CHECK_EQ(0, ansi_calls);
     CHECK_EQ(0, wait_calls);
     /* the refusal happens before `clr.l (0x60,A5)` */
-    CHECK(WIN_CUR_REQ == (void *)0x1234);
+    CHECK(WIN_CUR_REQ_VA == 0x1234);
 }
 
 /*
@@ -216,10 +216,10 @@ static void test_already_spinning(void)
     o.total_blocks = 100; /* > 0: the caller already knows the geometry */
     ansi_general_status = 0; /* bit 0 clear -> spindle running */
     ansi_attribute = (char)WIN_DRIVE_PRIAM_3450;
-    WIN_CUR_REQ = (void *)0x1234;
+    WIN_CUR_REQ_VA = 0x1234;
 
     CHECK_EQ(status_$ok, call_init(0, &o));
-    CHECK(WIN_CUR_REQ == NULL);        /* 0x00E199B2 */
+    CHECK(WIN_CUR_REQ_VA == 0);        /* 0x00E199B2 */
     CHECK_EQ(1, wait_calls);
     CHECK_EQ(0, ec_wait_calls);
     CHECK_EQ(1, regs[WIN_REG_PARAM]);  /* 0x00E199DA */

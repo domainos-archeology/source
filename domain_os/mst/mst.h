@@ -535,8 +535,8 @@ void MST_$GET_PRIVATE_SIZE(uint16_t *asid_p, uint32_t *size_ret,
 
 /* Touch-ahead control */
 /*
- * MST_$PRIV_SET_TOUCH_AHEAD_CNT (0x00E44514, 480 bytes, not yet
- * translated: source-6qfw): frame (0x08) flags -> word, (0x0C) va_ptr -> longword,
+ * MST_$PRIV_SET_TOUCH_AHEAD_CNT (0x00E44514, 480 bytes,
+ * mst/priv_set_touch_ahead_cnt.c): frame (0x08) flags -> word, (0x0C) va_ptr -> longword,
  * (0x10) length_ptr -> longword, (0x14) count_ptr -> word (clamped to
  * 1..0x20, with the negative special values -4..-1), (0x18) result_ptr,
  * (0x1C) status.

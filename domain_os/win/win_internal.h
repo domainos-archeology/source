@@ -58,11 +58,9 @@ uint32_t win_$host_clockh(void);
 /* WIN_DATA_BASE + 0x48: the "drive not ready" statistics word */
 #define WIN_NOT_READY_COUNT (*(uint16_t *)(WIN_DATA_BASE + 0x48))
 
-/* WIN_DATA_BASE + 0x60: the request the driver is currently working on */
-#define WIN_CUR_REQ (*(void **)(WIN_DATA_BASE + WIN_REQ_PTR_OFFSET))
 
 /*
- * The same two cells as 32-bit target VAs: +0x5C the disk_$volume_t
+ * Two WIN_ cells holding 32-bit target VAs: +0x5C the disk_$volume_t
  * WIN_$DO_IO was given and +0x60 the current request.  They are 4 bytes
  * apart, so on a 64-bit host they must not be read as native pointers;
  * WIN_$DO_IO and WIN_$INT use these with ARCH_VA_TO_PTR / ARCH_PTR_TO_VA.

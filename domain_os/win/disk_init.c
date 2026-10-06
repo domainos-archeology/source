@@ -76,7 +76,7 @@ status_$t DISK_INIT(uint16_t unit, uint16_t sub_unit, int32_t *total_blocks,
         return status_$invalid_unit_number;
     }
 
-    WIN_CUR_REQ = NULL;          /* 0x00E199B2: clr.l (0x60,A5) */
+    WIN_CUR_REQ_VA = 0;          /* 0x00E199B2: clr.l (0x60,A5) */
     unit_ec = WIN_UNIT_EC(unit); /* 0x00E19A2E / 0x00E19A62 */
 
     /*
