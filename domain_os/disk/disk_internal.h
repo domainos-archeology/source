@@ -149,6 +149,9 @@ void DISK_$REVALID(struct disk_$volume_t *vol);
 #define DISK_QBLK_FORWARD     0x00  /* uint32_t VA - next in allocated chain */
 #define DISK_QBLK_FREE_NEXT   0x08  /* uint32_t VA - next in free list */
 #define DISK_QBLK_STATUS      0x0C  /* uint32_t - I/O status */
+#define DISK_QBLK_PHYS        0x10  /* uint32_t - physical address of the
+                                     * block's own +0x20 (disk_$grow_qblk_pool
+                                     * 0x00E3BDDA-0x00E3BDE8) */
 #define DISK_QBLK_FLAGS       0x1C  /* uint16_t - I/O flags */
 #define DISK_QBLK_OWNER       0x1E  /* uint8_t - owning process ID */
 #define DISK_QBLK_RESERVED    0x1F  /* uint8_t - reserved */
@@ -413,48 +416,179 @@ uint16_t disk_$chksum_page(uint32_t *ppn);
 
 
 /*
- * DISK_$PV_MOUNT_INTERNAL - Internal physical volume mount
+ * disk_$pv_label_t - the physical volume label, disk block 0 of a volume
+ * (DISK_$GET_BLOCK with PV_LABEL_$UID, disk_$validate_pv_label 0x00E6C22E).
+ * Fields up to +0x9A follow the classic label (apollofs PVLabel: version,
+ * "APOLLO", name, uid, drive type, total blocks, blocks per track, tracks
+ * per cylinder, LV and alternate LV label daddrs, bad-spot and diagnostic
+ * cylinders, sector start / size, precompensation cylinder); the words from
+ * +0xA0 are the SR10 striping extension DISK_$PV_MOUNT_INTERNAL reads.
+ * Only cells the kernel reads are named.  Pointer-free.
+ */
+typedef struct disk_$pv_label_t {
+    int16_t     version;            /* 0x00: > 1 (unsigned) is refused
+                                     *   (0x00E6C266) */
+    char        apollo[6];          /* 0x02: "APOLLO" (0x00E6C270) */
+    char        name[32];           /* 0x08 */
+    uid_t       pv_uid;             /* 0x28: copied to the descriptor's
+                                     *   lv_uid (0x00E6C45A) and compared
+                                     *   across a striped set (0x00E6C636) */
+    uint16_t    reserved_30;        /* 0x30 */
+    uint16_t    drive_type;         /* 0x32: becomes unit_id for unit type 4
+                                     *   when its high byte is set
+                                     *   (0x00E6C42E) */
+    uint32_t    total_blocks;       /* 0x34: -> addr_start (0x00E6C43E) */
+    uint16_t    blocks_per_track;   /* 0x38: -> sec_per_track (0x00E6C454) */
+    uint16_t    tracks_per_cyl;     /* 0x3A: -> num_heads */
+    uint32_t    lv_daddr[10];       /* 0x3C */
+    uint32_t    alt_lv_daddr[10];   /* 0x64 */
+    uint32_t    badspot_daddr;      /* 0x8C */
+    uint32_t    diag_daddr;         /* 0x90 */
+    uint16_t    sector_start;       /* 0x94 */
+    uint16_t    sector_size;        /* 0x96 */
+    uint16_t    precomp_cyl;        /* 0x98: handed back in pvlabel_info+4
+                                     *   (0x00E6C476) */
+    uint16_t    reserved_9a[3];     /* 0x9A */
+    uint32_t    addr_end;           /* 0xA0: -> addr_end, 0 meaning
+                                     *   0xFFFFFF (0x00E6C444) */
+    uint32_t    reserved_a4;        /* 0xA4 */
+    uint16_t    num_parts;          /* 0xA8: volumes in a striped set; 0, 1,
+                                     *   2, 4 or 8 (0x00E6C284) */
+    uint16_t    part_num;           /* 0xAA: this volume's 1-based place in
+                                     *   the set (0x00E6C4F0, 0x00E6C648) */
+    uint16_t    part_dev[8];        /* 0xAC: entry k+1 names member k+1:
+                                     *   high byte & 7 = device, low byte
+                                     *   bits 4..7 = unit (0x00E6C55C) */
+    uint16_t    interleave;         /* 0xBC: the striping mode, 0..5; only
+                                     *   0, 1, 2, 4, 5 (mask 0x37) are legal
+                                     *   with more than one member
+                                     *   (0x00E6C258) */
+    uint16_t    sectors_per_block;  /* 0xBE: hardware sectors per disk
+                                     *   block (1, 2, 4, 8); its log2 via
+                                     *   DISK_$MOUNT_DATA.log2_table is the
+                                     *   sector_size_code (0x00E6C466) */
+} disk_$pv_label_t;
+
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, apollo) == 0x02, "pv_label.apollo");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, pv_uid) == 0x28, "pv_label.pv_uid");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, drive_type) == 0x32, "pv_label.drive_type");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, total_blocks) == 0x34, "pv_label.total_blocks");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, blocks_per_track) == 0x38, "pv_label.blocks_per_track");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, precomp_cyl) == 0x98, "pv_label.precomp_cyl");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, addr_end) == 0xA0, "pv_label.addr_end");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, num_parts) == 0xA8, "pv_label.num_parts");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, part_num) == 0xAA, "pv_label.part_num");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, part_dev) == 0xAC, "pv_label.part_dev");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, interleave) == 0xBC, "pv_label.interleave");
+_Static_assert(__builtin_offsetof(disk_$pv_label_t, sectors_per_block) == 0xBE, "pv_label.sectors_per_block");
+
+/*
+ * DISK_$MOUNT_DATA - the third DISK_ module data block, `D E826C4 DISK_
+ * size = 64` in the SAU2 map (no interior symbols).  The volume-mount
+ * routines (DISK_$PV_MOUNT, DISK_$PV_ASSIGN_N, DISK_$LV_ASSIGN,
+ * DISK_$DISMOUNT, ...) all load it as A5; DISK_$PV_MOUNT_INTERNAL and its
+ * nested slot finder are the routines that read it:
+ *   +0x00  the descriptor template copied into every new volume slot
+ *          (`lea (A5),A1` + 18 `move.l`, 0x00E6C32A-0x00E6C33E)
+ *   +0x48  log2_table[0..9]: log2 of 1, 2, 4, 8 at those indexes, read as
+ *          (0x48,A5,n*2) for the sector-size code (0x00E6C3D8, 0x00E6C46C)
+ *          and as (0x4a,A5,mask*2) for the stripe shifts (0x00E6C73C,
+ *          0x00E6C748)
+ *   +0x5C  pow2_table[0..3]: 1 << code, (0x5c,A5,code*2) (0x00E6C1E8)
+ * Image bytes (`gsk read 0x00E826C4 0x64`):
+ *   +0x00 00000000 00000000 00000000 00000001  (addr_start = 1)
+ *   +0x10 00000000 00000000 00000000 00000000
+ *   +0x20 0001 0002 0004 0001 0000 0000 0001 0000
+ *   +0x30 .. +0x47 zero
+ *   +0x48 0000 0000 0001 0000 0002 0000 0000 0000 0003 0000
+ *   +0x5C 0001 0002 0004 0000
+ */
+#define DISK_$MOUNT_DATA_SIZE   0x64    /* map: DISK_ size = 64 */
+typedef struct disk_$mount_data_t {
+    disk_$volume_t  vol_template;       /* +0x00 */
+    uint16_t        log2_table[10];     /* +0x48 */
+    uint16_t        pow2_table[4];      /* +0x5C */
+} disk_$mount_data_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_$mount_data_t, log2_table) == 0x48,
+               "DISK_$MOUNT_DATA.log2_table at +0x48");
+_Static_assert(__builtin_offsetof(disk_$mount_data_t, pow2_table) == 0x5C,
+               "DISK_$MOUNT_DATA.pow2_table at +0x5C");
+_Static_assert(sizeof(disk_$mount_data_t) == DISK_$MOUNT_DATA_SIZE,
+               "DISK_$MOUNT_DATA: map size 0x64");
+#endif
+
+MODULE_DATA_DECLARE(disk_$mount_data_t, DISK_$MOUNT_DATA, 0x00E826C4);
+
+/*
+ * disk_$diskless_init (0x00E6B6DC, 94 bytes; module-local, the first routine
+ * of the `I E6B6DC DISK_` code segment) - on a really diskless node, wire
+ * the DBUF and DISK code/data ranges (MST_$WIRE_AREA twice), run DBUF_$INIT
+ * and DISK_$INIT, and clear NETWORK_$REALLY_DISKLESS so it happens once.
+ * See disk/diskless_init.c.
+ */
+void disk_$diskless_init(void);
+
+/*
+ * disk_$validate_pv_label (0x00E6C21A, 156 bytes; module-local) - read
+ * volume `vol_idx`'s PV label (DISK_$GET_BLOCK, block 0, PV_LABEL_$UID) and
+ * check it: version <= 1, "APOLLO", a legal interleave for a striped set and
+ * a member count of 0, 1, 2, 4 or 8, else status_$invalid_physical_volume_label.
+ * Returns the label buffer (A0) - still held, the caller releases it with
+ * DBUF_$SET_BUFF - or NIL when the read failed.  See
+ * disk/validate_pv_label.c.
+ */
+disk_$pv_label_t *disk_$validate_pv_label(int16_t vol_idx, status_$t *status);
+
+/*
+ * DISK_$PV_MOUNT_INTERNAL (0x00E6C2BC, 1418 bytes) - mount (mount_type 2)
+ * or assign (0 / 1) a physical volume, and the other members of a striped
+ * set, under MOUNT_LOCK.  Returns (D0) the volume index of the first
+ * member.  See disk/pv_mount_internal.c.
  *
- * Core implementation for PV_ASSIGN_N. Handles device initialization,
- * volume table setup, and multi-volume configurations.
- *
- * Parameters:
- *   mount_type     - 0=normal, 1=boot, 2=mount, 4=remount
- *   unit_type      - Unit type word (0, 1 or 4)
- *   device         - Device number
- *   unit           - Unit number (the byte stored at 0xe6c346)
- *   vol_idx_ptr    - Output: volume index assigned
- *   num_blocks_ptr - I/O: number of blocks
- *   sec_per_track_ptr - I/O: sectors per track
- *   num_heads_ptr  - I/O: number of heads
- *   pvlabel_info   - I/O: PV label info (16 bytes)
- *   status         - Output: status code
- *
- * Returns:
- *   Volume index assigned
- *
- * Original address: 0x00e6c2bc
+ * Frame:
+ *   (0x08) mount_type   word: 0 or 1 = assign (DISK_$PV_ASSIGN_N), 2 = mount
+ *   (0x0A) unit_type    word: 0, 1 or 4
+ *   (0x0C) device       word
+ *   (0x0E) unit         word
+ *   (0x10) unit_id_ptr  word the driver's dinit fills (its seventh
+ *                       argument): copied to the descriptor's unit_id; a
+ *                       high byte of 3 forces a remount's re-init
+ *   (0x14) num_blocks_ptr, (0x18) sec_per_track_ptr, (0x1C) num_heads_ptr,
+ *   (0x20) pvlabel_info  the dinit geometry: +4 receives the label's
+ *                       precomp_cyl, +6 is the sectors per block (1, 2, 4,
+ *                       8), turned into sector_size_code by log2_table
+ *   (0x24) status
  */
 int16_t DISK_$PV_MOUNT_INTERNAL(int16_t mount_type, int16_t unit_type,
                                  uint16_t device, uint16_t unit,
-                                 uint16_t *vol_idx_ptr, uint32_t *num_blocks_ptr,
+                                 uint16_t *unit_id_ptr, uint32_t *num_blocks_ptr,
                                  uint16_t *sec_per_track_ptr, uint16_t *num_heads_ptr,
                                  void *pvlabel_info, status_$t *status);
 
 /*
- * disk_$grow_qblk_pool - Grow the disk queue block pool
- *
- * Allocates physical pages and initializes new queue blocks in the
- * disk module's free pool. Called under the module exclusion lock
- * when allocation requests cannot be satisfied from the current pool.
- *
- * Parameters:
- *   count - Requested number of blocks (used to calculate pages needed)
- *
- * Original address: 0x00e3bc40
- * Size: 586 bytes
+ * The queue-block pool: up to 16 wired pages of 16 0x40-byte queue blocks,
+ * page i (1-based, DMOD_PAGES_ALLOC counts them) at DISK_BLK_POOL_VA +
+ * (i - 1) * 0x400.  SAU2 map: `D60C00  DISK_BLK_POOL` (disk_$grow_qblk_pool
+ * `movea.l #0xd60c00,A0` 0x00E3BCFC).
  */
-void disk_$grow_qblk_pool(int16_t count);
+#define DISK_BLK_POOL_VA        0x00D60C00
+#define DISK_QBLK_SIZE          0x40
+#define DISK_QBLKS_PER_PAGE     16
+#define DISK_QBLK_MAX_PAGES     16
+#define DISK_QBLK_MIN_GROW      0x21    /* first growth's minimum (0x00E3BC52) */
+
+/*
+ * disk_$grow_qblk_pool (0x00E3BC40, 586 bytes; module-local) - grow the
+ * queue-block pool to hold `count` free blocks (at least 0x21 the first
+ * time, when no reserve block exists yet), at most 16 pages in all.  Called
+ * by disk_$get_qblks_internal with the module exclusion lock held; drops it
+ * around the page allocation.  A Pascal function: D0b is TRUE when the free
+ * count now covers the request (`sge` 0x00E3BE7E); the caller ignores it.
+ * See disk/grow_qblk_pool.c.
+ */
+int8_t disk_$grow_qblk_pool(uint16_t count);
 
 /*
  * disk_$get_qblks_internal - Internal queue block allocation body

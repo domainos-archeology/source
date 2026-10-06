@@ -32,13 +32,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-/* The host descriptor is wider than 0x0c, so the template is placed at
- * DISK_MAX_DEVICES * sizeof(entry) + the offset the code adds; on the
- * target both are 0x180. */
-static uint8_t devices_segment[sizeof(disk_device_entry_t) * DISK_MAX_DEVICES + 0x200];
-#define DISK_$DEVICES ((disk_device_entry_t *)devices_segment)
-#undef DISK_DEVICES_STATS_OFFSET
-#define DISK_DEVICES_STATS_OFFSET (sizeof(disk_device_entry_t) * DISK_MAX_DEVICES)
+MODULE_DATA_DEFINE(disk_$device_data_t, DISK_$DEVICE_DATA, 0x00E7AD5C);
 
 #include "../get_stats.c"
 
@@ -59,8 +53,8 @@ static disk_jump_table_t jt_with, jt_without;
 
 static void reset(void)
 {
-    uint32_t *tmpl = (uint32_t *)(devices_segment + DISK_DEVICES_STATS_OFFSET);
-    memset(devices_segment, 0, sizeof devices_segment);
+    uint32_t *tmpl = (uint32_t *)(void *)DISK_$DEVICE_DATA.stats_template;
+    memset(&DISK_$DEVICE_DATA, 0, sizeof DISK_$DEVICE_DATA);
     tmpl[0] = 0x01010101; tmpl[1] = 0x02020202; tmpl[2] = 0x03030303;
     tmpl[3] = 0x04040404; tmpl[4] = 0x05050505;
     *(uint16_t *)&tmpl[5] = 0x0606;

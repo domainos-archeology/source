@@ -306,6 +306,14 @@ extern uid_t AUDIT_$DISMOUNT_LV_EU;
 /* 0x00E85648: class 4, subtype 0x0D - logical volume mounted */
 extern uid_t AUDIT_$MOUNT_LV_EU;
 
+/* 0x00E85650: class 4, subtype 0x0C - a disk was assigned.  Pushed by
+ * DISK_$PV_MOUNT_INTERNAL (0x00E6C838) for every mount type. */
+extern uid_t AUDIT_$ASSIGN_DISK_EU;
+
+/* 0x00E85658: class 4, subtype 0x0B - a disk was mounted.  Selected (into a
+ * local that is never passed on) by DISK_$PV_MOUNT_INTERNAL (0x00E6C7EE). */
+extern uid_t AUDIT_$MOUNT_DISK_EU;
+
 /* 0x00E85660: class 4, subtype 8 - a process entered a subsystem.  Pushed by
  * ACL_$ENTER_SUBS (0x00E46F76). */
 extern uid_t AUDIT_$ENTER_SUBS_EU;

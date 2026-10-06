@@ -39,7 +39,8 @@ void ACL_$CONVERT_TO_9ACL(void *type, uid_t *source_uid, uid_t *dir_uid,
 
     /* Get image of source UID into workspace */
     acl_$image_internal(source_uid, 0x400, -1,  /* 0xFF */
-                        ACL_$UNWIRED_DATA.workspace, len_buf, data_buf, flag_buf, status_ret);
+                        ACL_$UNWIRED_DATA.workspace, len_buf,
+                        (acl_$prot_data_t *)(void *)data_buf, flag_buf, status_ret);
 
     /* Release lock #10 */
     ML_$UNLOCK(10);

@@ -39,7 +39,8 @@ static void tr(const char *s) { strcat(trace, s); strcat(trace, " "); }
 
 static status_$t st_funky, st_image, st_create_int, st_get_sids, st_get_proj,
                  st_set_sids, st_set_proj, st_check;
-static void *image_buf_arg, *create_int_data, *create_int_image;
+static void *image_buf_arg, *create_int_image;
+static const void *create_int_data;
 static int8_t image_flag_arg, create_int_flag;
 static int16_t create_len_arg;
 static uint32_t eval_mask;
@@ -64,9 +65,10 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
     *status_ret = st_funky;
 }
 
-void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
-                         void *output_buf, void *len_out, void *data_out,
-                         void *flag_out, status_$t *status)
+void acl_$image_internal(uid_t *source_uid, int16_t buffer_len, int8_t flag,
+                         void *output_buf, int16_t *len_out,
+                         acl_$prot_data_t *data_out, int8_t *flag_out,
+                         status_$t *status)
 {
     (void)source_uid; (void)buffer_len; (void)flag_out;
     tr("image");
@@ -77,17 +79,18 @@ void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
     *status = st_image;
 }
 
-void acl_$prim_create_internal(void *acl_header, void *acl_data, int16_t data_len,
-                               void *subsys_uid, int8_t flag, void *image,
-                               int16_t *image_len_ret, status_$t *status_ret)
+void acl_$prim_create_internal(acl_$prot_data_t *prot, const void *src_image,
+                               int16_t src_len, uid_t *acl_type, int8_t flag,
+                               void *image, int16_t *image_len_ret,
+                               status_$t *status_ret)
 {
-    (void)subsys_uid;
+    (void)acl_type;
     tr("pci");
-    create_int_data = acl_data;
+    create_int_data = src_image;
     create_int_flag = flag;
     create_int_image = image;
-    ASSERT_EQ(0x74, data_len);
-    ASSERT_EQ(0xF0, ((acl_$prot_data_t *)acl_header)->owner.high);
+    ASSERT_EQ(0x74, src_len);
+    ASSERT_EQ(0xF0, prot->owner.high);
     *image_len_ret = 0x60;
     *status_ret = st_create_int;
 }

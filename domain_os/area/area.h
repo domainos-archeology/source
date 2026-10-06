@@ -64,6 +64,12 @@
 /* Page size the loop steps by (0x00E2F4BA `addi.l #0x400,D4`). */
 #define AREA_RPMAP_PAGE_SIZE        0x400
 
+/* The overflow-slot page window of the seg-table pool: record i's page is
+ * mapped at 0xEE6400 + i * 0x400 (area_$alloc_seg_table 0x00E09D6E
+ * `movea.l #0xee6400,A0`, area_$free_seg_table 0x00E09E6E).  SAU2 map:
+ * `EE6400  PIT_PAGES`. */
+#define AREA_PIT_PAGES_VA           0x00EE6400
+
 /*
  * Area entry flags (in flags field at offset 0x2E)
  */
@@ -236,11 +242,21 @@ _Static_assert(offsetof(area_$uid_hash_t, first_entry) == 0x04, "hash first_entr
  * `move.l (0x5c0,A5),(0x4,A5,D3w*0x1)` where D3 = i * 0x0C and i is 1-based.
  */
 typedef struct area_$rpmap_cache_t {
-    uint32_t    seq;            /* 0x00: stamped from AREA_$GLOBALS.rpmap_seq */
-    uint16_t    word_04;        /* 0x04: cleared by AREA_$INIT */
-    uint16_t    word_06;        /* 0x06: AREA_$INIT sets 0xFFFF ("empty") */
-    uint8_t     byte_08;        /* 0x08: cleared by AREA_$INIT */
-    uint8_t     byte_09;        /* 0x09: cleared by AREA_$INIT */
+    uint32_t    seq;            /* 0x00: stamped from AREA_$GLOBALS.rpmap_seq
+                                 *       on every hit; the LRU key */
+    uint16_t    volx;           /* 0x04: the cached page's remote volume index,
+                                 *       compared with area_$entry_t.remote_volx
+                                 *       (area_$rpmap_get 0x00E073A4); cleared
+                                 *       by AREA_$INIT */
+    uint16_t    group;          /* 0x06: the cached segment group, seg_idx >> 3
+                                 *       (0x00E0739A); AREA_$INIT sets 0xFFFF
+                                 *       ("empty") */
+    int8_t      dirty;          /* 0x08: Domain boolean - written back to the
+                                 *       partner before the slot is reused
+                                 *       (`st (0xc,A0)` 0x00E073CC) */
+    int8_t      in_trans;       /* 0x09: Domain boolean - a read or write-back
+                                 *       is in flight; waiters sleep on
+                                 *       rpmap_in_trans_ec (0x00E073B2) */
     uint8_t     reserved_0a[2]; /* 0x0A: never read or written */
 } area_$rpmap_cache_t;
 
@@ -431,10 +447,10 @@ extern area_$globals_t AREA_$GLOBALS;
  * map segment size: `D  E1E118  AREA_  size = 5E8`. */
 _Static_assert(sizeof(area_$rpmap_cache_t) == 0x0C, "area_$rpmap_cache_t size");
 _Static_assert(offsetof(area_$rpmap_cache_t, seq)     == 0x00, "rpmap_cache.seq");
-_Static_assert(offsetof(area_$rpmap_cache_t, word_04) == 0x04, "rpmap_cache.word_04");
-_Static_assert(offsetof(area_$rpmap_cache_t, word_06) == 0x06, "rpmap_cache.word_06");
-_Static_assert(offsetof(area_$rpmap_cache_t, byte_08) == 0x08, "rpmap_cache.byte_08");
-_Static_assert(offsetof(area_$rpmap_cache_t, byte_09) == 0x09, "rpmap_cache.byte_09");
+_Static_assert(offsetof(area_$rpmap_cache_t, volx)     == 0x04, "rpmap_cache.volx");
+_Static_assert(offsetof(area_$rpmap_cache_t, group)    == 0x06, "rpmap_cache.group");
+_Static_assert(offsetof(area_$rpmap_cache_t, dirty)    == 0x08, "rpmap_cache.dirty");
+_Static_assert(offsetof(area_$rpmap_cache_t, in_trans) == 0x09, "rpmap_cache.in_trans");
 _Static_assert(sizeof(area_$format_t) == 0x08, "area_$format_t size");
 _Static_assert(offsetof(area_$format_t, max_entries) == 0x02, "format.max_entries");
 _Static_assert(offsetof(area_$format_t, seg_table_next)  == 0x04, "format.seg_table_next");

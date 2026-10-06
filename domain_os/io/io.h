@@ -18,6 +18,7 @@
  *
  * Single definition; flp/, ring/, scsi/ and win/ include this header.
  */
+#define status_$io_controller_not_found     0x00100001  /* "controller not found" */
 #define status_$io_controller_not_in_system 0x00100002
 #define status_$io_bad_dcte_length          0x00100007  /* io_$build_dcte_list */
 

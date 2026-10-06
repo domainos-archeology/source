@@ -869,8 +869,16 @@ void AST_$INVALIDATE_PAGE(aste_t *aste, uint32_t *segmap_entry, uint32_t ppn);
 void AST_$FREE_PAGES(aste_t *aste, int16_t start_page, int16_t end_page,
                      int16_t vol_index);
 void AST_$RELEASE_PAGES(aste_t *aste, int8_t return_to_pool);
+/*
+ * AST_$FETCH_PMAP_PAGE (0x00E041A8): the fourth parameter is a status
+ * longword passed BY VALUE - the routine hands the address of its own
+ * argument slot to NETWORK_$READ_AHEAD (`pea (0x12,A6)` 0x00E041F4) and
+ * tests that slot (`tst.l (0x12,A6)` 0x00E04222); its one caller,
+ * area_$rpmap_get, pushes `move.l (A2),-(SP)` (0x00E07566), the value of
+ * its status.  A read error is therefore never reported to the caller.
+ */
 void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf, uint16_t flags,
-                          status_$t *status);
+                          status_$t status);
 
 /*
  * MSTE (Memory Segment Table Entry) structure

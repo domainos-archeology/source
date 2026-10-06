@@ -112,10 +112,9 @@ void disk_$get_qblks_internal(int16_t count, int8_t mode, uint32_t *first_out,
                 if (PROC1_$DATA.type[PROC1_$CURRENT] == 5) {
                     break;
                 }
-                /* 0x00E3BEEC: the caller reserves an extra word above the
-                 * argument and pops it with the argument at 0x00E3BEF4
-                 * without ever reading it. */
-                disk_$grow_qblk_pool(count);
+                /* 0x00E3BEEC: `subq.l #0x2,SP` is the Pascal function's
+                 * result slot; the boolean it returns is never read. */
+                (void)disk_$grow_qblk_pool((uint16_t)count);
                 continue;  /* Re-check availability */
             }
             break;  /* Can't grow - must wait */

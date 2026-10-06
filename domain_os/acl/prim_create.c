@@ -132,7 +132,8 @@ void ACL_$PRIM_CREATE(void *acl_data, int16_t *data_len, uid_t *dir_uid,
     if (acl_attr.obj_flags[ACL_ATTR_OBJ_TYPE] == 0) {   /* 0x00E47AAA */
         /* Call internal creation helper */
         acl_$prim_create_internal(type, acl_data, *data_len,
-                                  (uint8_t *)acl_data + 2, 0, mapped_addr,
+                                  (uid_t *)(void *)((uint8_t *)acl_data + 2),
+                                  0, mapped_addr,
                                   &internal_image_len, status_ret);
     } else {
         /* Direct copy of ACL data */

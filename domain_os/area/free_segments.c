@@ -253,11 +253,11 @@ static void area_$free_slot_segments(area_$free_segs_frame_t *up,
             for (c = &AREA_$GLOBALS.rpmap_cache[0];
                  up->cell_counter <= AREA_FS_RPMAP_SLOTS;
                  up->cell_counter++, c++) {
-                if ((int16_t)c->word_04 == entry->remote_volx &&
-                    c->word_06 == n) {
+                if ((int16_t)c->volx == entry->remote_volx &&
+                    c->group == n) {
                     c->seq = 0;
-                    c->word_04 = 0;
-                    c->byte_08 = 0;
+                    c->volx = 0;
+                    c->dirty = 0;
                     break;
                 }
             }

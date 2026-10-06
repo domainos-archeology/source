@@ -194,10 +194,10 @@ TEST(rpmap_cache_slots_are_marked_empty)
 
     for (i = 0; i < AREA_DISKLESS_PAGE_COUNT; i++) {
         ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].seq);
-        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].word_04);
-        ASSERT_EQ(0xFFFF, AREA_$GLOBALS.rpmap_cache[i].word_06);
-        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].byte_08);
-        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].byte_09);
+        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].volx);
+        ASSERT_EQ(0xFFFF, AREA_$GLOBALS.rpmap_cache[i].group);
+        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].dirty);
+        ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[i].in_trans);
     }
     /* the trailing two bytes of each slot are never written */
     ASSERT_EQ(0xA5, AREA_$GLOBALS.rpmap_cache[0].reserved_0a[0]);

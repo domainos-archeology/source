@@ -42,7 +42,7 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
                             status_$t *status_ret)
 {
     int16_t image_len;      /* A6-0x02, acl_$image_internal's len_out */
-    int32_t image_flag;     /* A6-0x04, its flag_out */
+    int8_t  image_flag;     /* A6-0x04, its flag_out (one byte) */
 
     /* 0x00E48F6C never reads A6+0x0C. */
     (void)acl_type;
@@ -53,7 +53,7 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     /* 0x00E48F7C-0x00E48F94 */
     ML_$EXCLUSION_START(&ACL_$WIRED_DATA.exclusion_lock);
     ACL_$UNWIRED_DATA.locksmith_owner_pid = (int16_t)PROC1_$CURRENT;
-    ACL_$UNWIRED_DATA.locksmith_override  = true;            /* `st (0xbf8,A5)` */
+    ACL_$UNWIRED_DATA.locksmith_override = (int8_t)0xFF;          /* `st (0xbf8,A5)` */
 
     ML_$LOCK(ML_LOCK_ACL);                      /* 0x00E48F9C */
 
@@ -70,7 +70,7 @@ void ACL_$CONVERT_FROM_9ACL(uid_t *source_acl, uid_t *acl_type,
     ML_$UNLOCK(ML_LOCK_ACL);                    /* 0x00E48FCC */
 
     /* 0x00E48FD4-0x00E48FF2 */
-    ACL_$UNWIRED_DATA.locksmith_override = false;
+    ACL_$UNWIRED_DATA.locksmith_override = 0;
     ML_$EXCLUSION_STOP(&ACL_$WIRED_DATA.exclusion_lock);
     ACL_$UNWIRED_DATA.super_count[PROC1_$CURRENT]--;
 

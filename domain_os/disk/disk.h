@@ -394,12 +394,14 @@ typedef struct {
   int16_t (*spin_down)(uint16_t *controller_ptr);
   /* +0x04: shutdown(controller, unit); called by DISK_$SHUTDOWN (0xe3dc36) */
   void (*shutdown)(uint16_t controller, uint16_t unit);
-  /* +0x08: dinit(unit, controller, vol_idx_ptr, num_blocks_ptr,
-   * sec_per_track_ptr, num_heads_ptr, pvlabel_info); called by
-   * DISK_$MNT_DINIT (0x00E3DA74 - 0x00E3DA96) */
-  void (*dinit)(uint16_t unit, uint16_t controller, void *vol_idx_ptr,
-                void *num_blocks_ptr, void *sec_per_track_ptr,
-                void *num_heads_ptr, void *pvlabel_info);
+  /* +0x08: dinit(unit, controller, num_blocks_ptr, sec_per_track_ptr,
+   * num_heads_ptr, pvlabel_info, flags_ptr) - a function returning the
+   * status (FLP_$DINIT, WIN_$DINIT), which DISK_$MNT_DINIT leaves in D0
+   * for DISK_$PV_MOUNT_INTERNAL; called by DISK_$MNT_DINIT (0x00E3DA74 -
+   * 0x00E3DA96) */
+  status_$t (*dinit)(uint16_t unit, uint16_t controller, void *num_blocks_ptr,
+                     void *sec_per_track_ptr, void *num_heads_ptr,
+                     void *pvlabel_info, void *flags_ptr);
   void *_reserved3; /* +0x0c */
   /* +0x10: do_io(vol, req, param_3, result); called by DISK_$DO_IO
    * (0x00E3DAB4) with its own four arguments passed through */
@@ -505,8 +507,34 @@ _Static_assert(sizeof(disk_$per_proc_t) == 0x1C, "disk_$per_proc_t must be 28 by
 #define DISK_$DATA_SIZE 0xB90
 extern uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
-/* Device registration table at 0xe7ad5c (32 entries, 12 bytes each) */
-extern disk_device_entry_t DISK_$DEVICES[];
+/*
+ * DISK_$DEVICE_DATA - the second DISK_ module data block, `D E7AD5C DISK_
+ * size = 198` in the SAU2 map, with no interior symbols.  DISK_$REGISTER,
+ * DISK_$GET_DRTE, DISK_$SPIN_DOWN and DISK_$GET_STATS load it as their A5
+ * (`lea (0xe7ad5c).l,A5`): the 32-entry device registration table
+ * (DISK_$DEVICES, the tree's name - the map exports none) and, at +0x180,
+ * DISK_$GET_STATS' 22-byte statistics template (0x00E3DBBE
+ * `lea (0x180,A5),A1`).  The last two bytes have no reader.  All 0x198
+ * bytes are zero in the image (`gsk read 0x00E7AD5C 0x198`).
+ */
+#define DISK_$DEVICE_DATA_SIZE  0x198   /* map: DISK_ size = 198 */
+typedef struct disk_$device_data_t {
+    disk_device_entry_t devices[DISK_MAX_DEVICES];  /* +0x000 */
+    uint8_t             stats_template[0x16];       /* +0x180 */
+    uint8_t             pad_196[2];                 /* +0x196: no reader */
+} disk_$device_data_t;
+
+#if defined(ARCH_M68K)
+_Static_assert(__builtin_offsetof(disk_$device_data_t, stats_template) == 0x180,
+               "DISK_$DEVICE_DATA.stats_template at +0x180");
+_Static_assert(sizeof(disk_$device_data_t) == DISK_$DEVICE_DATA_SIZE,
+               "DISK_$DEVICE_DATA: map size 0x198");
+#endif
+
+MODULE_DATA_DECLARE(disk_$device_data_t, DISK_$DEVICE_DATA, 0x00E7AD5C);
+
+/* The device registration table at 0xE7AD5C (32 entries, 12 bytes each) */
+#define DISK_$DEVICES (DISK_$DEVICE_DATA.devices)
 
 /* Event counter for disk operations */
 extern void *DISK_$EC;
@@ -671,10 +699,13 @@ uint8_t DISK_$REGISTER(uint16_t *type, uint16_t *controller, uint16_t *units,
  * device_type / controller match the two words; NULL if none. */
 disk_device_entry_t *DISK_$GET_DRTE(uint16_t *ctype_ptr, uint16_t *cnum_ptr);
 /* DISK_$MNT_DINIT (0x00E3DA64): calls the driver's dinit slot with `unit`,
- * the entry's controller word and the five pointers.  See disk/mnt_dinit.c. */
-void DISK_$MNT_DINIT(uint16_t unit, void **dev_ptr, void *vol_idx_ptr,
-                     void *num_blocks_ptr, void *sec_per_track_ptr,
-                     void *num_heads_ptr, void *pvlabel_info);
+ * the entry's controller word and the five pointers, and returns what the
+ * driver returned (D0 is untouched after the `jsr (A1)`; every caller,
+ * DISK_$PV_MOUNT_INTERNAL 0x00E6C378/0x00E6C4B2/0x00E6C5FC, opens a result
+ * slot and stores D0 as its status).  See disk/mnt_dinit.c. */
+status_$t DISK_$MNT_DINIT(uint16_t unit, void **dev_ptr, void *num_blocks_ptr,
+                          void *sec_per_track_ptr, void *num_heads_ptr,
+                          void *pvlabel_info, void *flags_ptr);
 /*
  * DISK_$SHUTDOWN - Shut a disk device down through its driver
  *

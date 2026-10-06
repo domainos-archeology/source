@@ -99,7 +99,12 @@ area_$seg_table_t *area_$alloc_seg_table(int16_t asid, int16_t area_id,
                                           int16_t table_idx);
 
 /*
- * area_$free_seg_table - Free extended segment table entry
+ * area_$free_seg_table - return an overflow segment table to the pool
+ *
+ * Under ML_LOCK_AST: unmaps and frees the record's slot page (MMU_$VTOP /
+ * MMU_$REMOVE / MMAP_$FREE), unlinks it from seg_table_list[asid] (`prev`
+ * NIL = it is the head), clears its next and allocated fields and lowers
+ * the pool cursor to its index.  See area/free_seg_table.c.
  *
  * @param entry         Entry to free
  * @param prev          Previous entry in list
@@ -142,7 +147,7 @@ void area_$wait_pite_in_trans(void);
 
 /*
  * area_$rpmap_get (0x00E07370, 602 bytes; Ghidra FUN_00e07370, no map
- * symbol; NOT YET TRANSLATED, bead source-8xzg) - the RPMAP page-cache
+ * symbol; area/rpmap_get.c) - the RPMAP page-cache
  * manager: returns (A0) the cached 0x400-byte remote page-map page at
  * 0xEE4C00 + (slot - 1) * 0x400 that holds the eight segment maps of group
  * seg_idx >> 3 of `entry', reading it from the partner on a miss.  Frame:

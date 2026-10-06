@@ -12,7 +12,7 @@
  *   (0xe,A6)  has_stats  -> byte, cleared first (0x00E3DBBC)
  *   (0x12,A6) stats      -> 22-byte buffer
  *
- * The buffer is preloaded with the template at DISK_$DEVICES + 0x180
+ * The buffer is preloaded with the template at DISK_$DEVICE_DATA + 0x180
  * (five longwords and a word, 0x00E3DBC4 - 0x00E3DBCE), then the table
  * is searched (`moveq #0x1f` / dbf, stride 0x0c) for the first registered
  * entry (jump_table != 0) with matching type and controller.  If that
@@ -29,8 +29,8 @@ void DISK_$GET_STATS(int16_t ctype, int16_t cnum, int16_t unit,
                      uint8_t *has_stats, void *stats)
 {
     uint32_t *dst = (uint32_t *)stats;
-    const uint32_t *src = (const uint32_t *)((const uint8_t *)DISK_$DEVICES +
-                                             DISK_DEVICES_STATS_OFFSET);
+    const uint32_t *src =
+        (const uint32_t *)(const void *)DISK_$DEVICE_DATA.stats_template;
     int16_t i;
 
     /* 0x00E3DBBC */

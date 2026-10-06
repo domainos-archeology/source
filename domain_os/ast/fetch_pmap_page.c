@@ -11,7 +11,9 @@
  *   uid_info   (0x8,A6)   the 32-byte page request record READ_AHEAD takes
  *   output_buf (0xC,A6)   256 longwords out
  *   flags      (0x10,A6)  word, READ_AHEAD's page_size argument
- *   status     (0x12,A6)
+ *   status     (0x12,A6)  BY VALUE: the slot itself is READ_AHEAD's status
+ *                         (`pea (0x12,A6)` 0x00E041F4, `tst.l (0x12,A6)`
+ *                         0x00E04222), so nothing reaches the caller
  * Locals: (-0x80,A6) 32-longword ppn array (only [0] is used),
  *         (-0x84,A6) NETBUF_$GET_DAT's address out,
  *         (-0x8C,A6) ONE clock_t cell whose address is passed three times.
@@ -27,7 +29,7 @@
 #include "area/area.h"
 
 void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
-                          uint16_t flags, status_$t *status)
+                          uint16_t flags, status_$t status)
 {
     uint32_t ppn_array[32];     /* (-0x80,A6) */
     uint32_t buf_addr;          /* (-0x84,A6) */
@@ -53,10 +55,10 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
      */
     (void)NETWORK_$READ_AHEAD(&AREA_$PARTNER, uid_info, ppn_array, flags, 1,
                               0, 0, &clock_scratch, &clock_scratch,
-                              &clock_scratch, status);
+                              &clock_scratch, &status);
 
     /* 0x00E04222 */
-    if (*status == status_$ok) {
+    if (status == status_$ok) {
         /* 0x00E04228..0x00E0424C: map the page at 0xFF8C00 with flags 0x16 */
         ML_$LOCK(PMAP_LOCK_ID);
         MMU_$INSTALL(ppn_array[0], ARCH_PTR_TO_VA(AST_$ZERO_BUFF), 0x16);

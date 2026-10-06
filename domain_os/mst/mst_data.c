@@ -31,7 +31,8 @@
  *   MST_$PAGE_ALLOC_HINT:        0xE7CF3C (2 bytes)   - bitmap search hint
  *   MST_$MST_PAGES_LIMIT:        0xE7CF3E (2 bytes)   - map symbol
  *   MST_$MST_PAGES_WIRED:        0xE7CF40 (2 bytes)   - map symbol
- *   (unnamed word table)         0xE7CF42 (0x12 bytes) - see TODO below
+ *   (unread word)                0xE7CF42 (2 bytes)
+ *   mst_$prot_rights:            0xE7CF44 (0x10 bytes) - rights by prot & 7
  *
  * And the segment table itself lives in the uninitialised VM_TABLES area:
  *   MST:                         0xEE5800 (0xC00 bytes) - 0x600 words
@@ -350,9 +351,19 @@ uint16_t MST[MST_TABLE_ENTRIES] = { 0 };
 _Static_assert(sizeof(MST) == 0xC00, "MST is EE5800..EE63FF");
 
 /*
- * TODO(source-qmdl): 0xE7CF42..0xE7CF53, the last 0x12 bytes of the
- * MST_UNWIRED data segment, hold an unnamed nine-word table
- * { 0, 0, 1, 4, 5, 2, 3, 6, 7 } that no instruction in the image references
- * directly (`gsk xrefs to 0x00E7CF42` and 0x00E7CF46 find nothing - it can
- * only be reached through A5).  Not defined here until a use is found.
+ * mst_$prot_rights - the rights word FILE_$CHECK_PROT is asked for, by the
+ * low three bits of a mapping's protection word.  mst_$lookup_object reads
+ * it as `move.w (0x38,A5,D0w*0x1),(-0x4c,A6)` with D0 = (prot & 7) * 2 and
+ * A5 = 0xE7CF0C (0x00E43CE6-0x00E43CEC), so it is the eight words at
+ * 0xE7CF44..0xE7CF53, the end of the MST_UNWIRED segment (map size 0x48).
+ *
+ * Image bytes at 0xE7CF44: 00 00 00 01 00 04 00 05 00 02 00 03 00 06 00 07.
+ * (The word at 0xE7CF42, also zero, has no reader found yet.)
+ *
+ * Original address: 0xE7CF44 (0x10 bytes)
  */
+uint16_t mst_$prot_rights[MST_PROT_RIGHTS_COUNT] = {
+    0x0000, 0x0001, 0x0004, 0x0005, 0x0002, 0x0003, 0x0006, 0x0007
+};
+_Static_assert(sizeof(mst_$prot_rights) == 0x10,
+               "mst_$prot_rights is E7CF44..E7CF53");

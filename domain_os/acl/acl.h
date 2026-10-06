@@ -30,6 +30,7 @@
 #define status_$insufficient_rights_to_perform_operation 0x00230002
 #define status_$acl_exit_super_unbalanced                0x00230003  /* "exit_super called more often than enter_super" */
 #define status_$acl_wrong_type                           0x00230004  /* "wrong type - operation illegal on system objects" */
+#define status_$acl_is_full                              0x00230013  /* "ACL is full - no more entries may be added" */
 #define status_$acl_no_right_to_set_subsystem_data       0x00230010  /* "no right to set subsystem data or subsystem manager" */
 #define status_$acl_unimplemented_call                   0x0023001C  /* "attempt to issue unimplemented ACL call" */
 
@@ -553,7 +554,7 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
                              status_$t *status_ret);
 
 /*
- * ACL_$SET_DEF_ACL_CHECK (0x00E48BF8, not yet translated: source-lo9h) - may the caller
+ * ACL_$SET_DEF_ACL_CHECK (0x00E48BF8, acl/set_def_acl_check.c) - may the caller
  * set a default ACL on this directory?  Returns a Domain boolean in D0b.
  *
  * Frame read off the body: (0x08) dir_uid, copied as 8 bytes at 0x00E48C0E;
@@ -815,20 +816,6 @@ void ACL_$COPY(uid_t *source_acl_uid, uid_t *dest_uid, uid_t *source_type,
  */
 void ACL_$CONVERT_TO_10ACL(uid_t *source_acl, uid_t *dir_uid, uid_t *result_uid,
                            void *acl_data, status_$t *status_ret);
-
-/*
- * ACL_$GET_ACL_ATTRIBUTES - Get ACL attributes for a file
- *
- * Retrieves ACL attributes (format info, flags) for the specified file.
- *
- * Parameters:
- *   file_uid   - UID of file to query
- *   flags      - Query flags
- *   attrs_out  - Output: attribute buffer (12 bytes)
- *   status_ret - Output status code
- */
-void ACL_$GET_ACL_ATTRIBUTES(void *file_uid, int16_t flags, void *attrs_out,
-                              status_$t *status_ret);
 
 /*
  * ACL_$OVERRIDE_LOCAL_LOCKSMITH - Override local locksmith mode

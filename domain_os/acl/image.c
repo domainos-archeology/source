@@ -20,17 +20,12 @@
 #include "acl/acl_internal.h"
 #include "fim/fim.h"
 
-/* Forward declaration for internal image helper */
-void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t unknown_flag,
-                         void *param_4, void *param_5, void *param_6,
-                         void *local_flag, status_$t *status);
-
 void ACL_$IMAGE(void *source_uid, int16_t *buffer_len, int8_t *unknown_flag,
                 void *param_4, void *param_5, void *param_6, status_$t *status_ret)
 {
     uint8_t cleanup_buf[24];
     status_$t status;
-    uint8_t local_flag[2];
+    int8_t local_flag[2];
 
     /* Acquire lock #10 */
     ML_$LOCK(10);

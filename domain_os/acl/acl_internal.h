@@ -434,25 +434,60 @@ int16_t acl_$load_acl_image(uid_t *acl_uid, int8_t *cached_flag_ret,
 
 
 /*
+ * acl_$v4_image_hdr_t - the 0x34-byte head of a version-4 ACL image (the
+ * form an ACL object's page holds), as acl_$prim_create_internal writes it
+ * (0x00E451C8-0x00E4523A, 0x00E45384/0x00E45562/0x00E4574A,
+ * 0x00E458C8).  Its entries (acl_$v4_entry_t, 0x2C bytes) follow at +0x34.
+ * The same offsets as acl_$cache_slot_t's head; the three slot words at
+ * +0x22 are the 1-based entry numbers of the owner, group and org entries
+ * whose rights carry bit 5.  Packed: acl_type sits at +0x02.
+ */
+typedef struct __attribute__((packed)) acl_$v4_image_hdr_t {
+    uint16_t version;           /* 0x00: 4 (`move.w #0x4,(A1)`) */
+    uid_t    acl_type;          /* 0x02 */
+    uint32_t reserved_0a;       /* 0x0A */
+    uint16_t entry_count;       /* 0x0E */
+    uint16_t reserved_10;       /* 0x10 */
+    uid_t    required_uid;      /* 0x12 */
+    uid_t    subsys_uid;        /* 0x1A */
+    uint16_t owner_slot;        /* 0x22 */
+    uint16_t group_slot;        /* 0x24 */
+    uint16_t org_slot;          /* 0x26 */
+    int8_t   world_entry_present; /* 0x28 */
+    int8_t   unused_29;         /* 0x29 */
+    uint16_t reserved_2a[5];    /* 0x2A..0x33 */
+} acl_$v4_image_hdr_t;
+
+_Static_assert(__builtin_offsetof(acl_$v4_image_hdr_t, entry_count) == 0x0E, "v4_hdr.entry_count");
+_Static_assert(__builtin_offsetof(acl_$v4_image_hdr_t, required_uid) == 0x12, "v4_hdr.required_uid");
+_Static_assert(__builtin_offsetof(acl_$v4_image_hdr_t, owner_slot) == 0x22, "v4_hdr.owner_slot");
+_Static_assert(__builtin_offsetof(acl_$v4_image_hdr_t, org_slot) == 0x26, "v4_hdr.org_slot");
+_Static_assert(sizeof(acl_$v4_image_hdr_t) == 0x34, "sizeof acl_$v4_image_hdr_t");
+
+/*
  * acl_$prim_create_internal (0x00E4519C, 1864 bytes; was FUN_00e4519c).
  * Module-local - the ACL_ code segment starts at 0xE44C3C and the SAU2 map
- * exports no symbol at 0xE4519C - and reached with `bsr.w` from
- * ACL_$PRIM_CREATE (0x00E47ACA).
+ * exports no symbol at 0xE4519C - reached with `bsr.w` from ACL_$PRIM_CREATE
+ * (0x00E47ACA) and ACL_$SERVER (0x00E49716).  Builds the version-4 image an
+ * ACL object holds from a version-5 image and the 44-byte protection
+ * record: the source entries are merged with entries for the record's
+ * owner, group and org (each in place by UID order) and a world entry.
  *
  * Frame, from the callee's own reads:
- *   A6+0x08  acl_data      (A4)
- *   A6+0x0C  acl_header    pointer, copied to A6-0x14 and dereferenced
- *                          at 0x00E451C0 (`lea (0x12,A0),A2`)
- *   A6+0x10  data_len      word (`tst.w`, signed)
- *   A6+0x12  subsys_uid    pointer to the caller's acl_data+2
+ *   A6+0x08  prot          the protection record (A4)
+ *   A6+0x0C  src_image     the version-5 image, copied to A6-0x14
+ *   A6+0x10  src_len       word (`tst.w`, signed)
+ *   A6+0x12  acl_type      the ACL type UID (the caller's image +2)
  *   A6+0x16  flag          BYTE (D5)
  *   A6+0x18  image         the mapped 0x400-byte page, copied to A6-0x10
  *   A6+0x1C  image_len_ret out: WORD, 0x34 + entries*0x2C (0x00E458CE-0x00E458D8)
- *   A6+0x20  status
+ *   A6+0x20  status        written only on the "ACL is full" error
+ * See acl/prim_create_internal.c.
  */
-void acl_$prim_create_internal(void *acl_header, void *acl_data, int16_t data_len,
-                               void *subsys_uid, int8_t flag, void *image,
-                               int16_t *image_len_ret, status_$t *status_ret);
+void acl_$prim_create_internal(acl_$prot_data_t *prot, const void *src_image,
+                               int16_t src_len, uid_t *acl_type, int8_t flag,
+                               void *image, int16_t *image_len_ret,
+                               status_$t *status_ret);
 
 
 /*
@@ -993,24 +1028,20 @@ void ACL_$FREE_ASID(int16_t asid, status_$t *status_ret);
 int8_t acl_$is_process_type_2(int16_t pid);
 
 /*
- * acl_$image_internal - Internal image helper function
+ * acl_$image_internal (0x00E47B78, 638 bytes; module-local, no map symbol)
+ * - render the ACL object `source_uid` as an ACL image in `image_out`
+ * (capacity `buffer_len`), its 44-byte protection block in `data_out` and
+ * the "default / old-format image" flag byte in `flag_out`.  Remote ACLs go
+ * through REM_FILE_$ACL_IMAGE; local ones through the image cache
+ * (acl_$find_acl_slot) or, for UID_$NIL, the 0x34-byte default image.
  *
- * Creates an internal image/representation of ACL data.
- *
- * Parameters:
- *   source_uid - Source UID
- *   buffer_len - Length of output buffer
- *   flag       - Operation flag
- *   output_buf - Output buffer
- *   len_out    - Output: actual length
- *   data_out   - Output: data buffer
- *   flag_out   - Output: flag byte
- *   status     - Output status code
- *
- * Original address: 0x00E47B78
+ * Frame: (0x08) source_uid, (0x0C) buffer_len word, (0x0E) flag BYTE,
+ * (0x10) image_out, (0x14) len_out word, (0x18) data_out, (0x1C) flag_out
+ * byte, (0x20) status.  Emitted in acl/image_internal.c.
  */
-void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
-                         void *output_buf, void *len_out, void *data_out,
-                         void *flag_out, status_$t *status);
+void acl_$image_internal(uid_t *source_uid, int16_t buffer_len, int8_t flag,
+                         void *image_out, int16_t *len_out,
+                         acl_$prot_data_t *data_out, int8_t *flag_out,
+                         status_$t *status);
 
 #endif /* ACL_INTERNAL_H */

@@ -104,12 +104,13 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
     return 0;
 }
 
-void disk_$grow_qblk_pool(int16_t count)
+int8_t disk_$grow_qblk_pool(uint16_t count)
 {
     grow_calls++;
-    grow_last_count = count;
+    grow_last_count = (int16_t)count;
     *(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) =
         (int16_t)(*(int16_t *)(DISK_$DATA + DMOD_AVAIL_COUNT) + grow_adds_avail);
+    return 0;
 }
 
 /* ============================================================================

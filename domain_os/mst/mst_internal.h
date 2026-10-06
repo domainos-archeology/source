@@ -85,6 +85,11 @@
 extern uint32_t MST_$PAGE_AVAIL_BITMAP[MST_$PAGE_AVAIL_BITMAP_LONGS];
 extern uint16_t MST_$PAGE_ALLOC_HINT;    /* 0xE7CF3C: search hint (word) */
 
+/* 0xE7CF44 (A5+0x38): FILE_$CHECK_PROT rights by prot & 7, read by
+ * mst_$lookup_object (0x00E43CEC).  Defined in mst/mst_data.c. */
+#define MST_PROT_RIGHTS_COUNT 8
+extern uint16_t mst_$prot_rights[MST_PROT_RIGHTS_COUNT];
+
 #define status_$pmap_vm_resources_exhausted 0x0004000e
 
 /*
@@ -134,7 +139,7 @@ void *mst_$alloc_segs(uint32_t addr_hint, uid_t *uid, uint32_t start_va, uint32_
 
 /*
  * mst_$lookup_object (0x00E43CBE, 338 bytes; Ghidra FUN_00e43cbe, no map
- * symbol; NOT YET TRANSLATED - bead source-8xzg) - mst_$alloc_segs'
+ * symbol; mst/lookup_object.c) - mst_$alloc_segs'
  * named-object path: reads the object's attributes (0x00E04A00), refuses a
  * directory-like object for some rights (0xF0016), forms its location word
  * (local, or remote via 0x00E0F1E0), returns its length and checks the

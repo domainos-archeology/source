@@ -30,7 +30,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-disk_device_entry_t DISK_$DEVICES[DISK_MAX_DEVICES];
+MODULE_DATA_DEFINE(disk_$device_data_t, DISK_$DEVICE_DATA, 0x00E7AD5C);
 
 static int waits;
 static uint16_t wait_type;

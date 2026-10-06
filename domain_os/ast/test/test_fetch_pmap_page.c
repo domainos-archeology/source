@@ -123,12 +123,11 @@ TEST(success_copies_page_and_frees)
 {
     uint32_t out[256];
     uint8_t req[32];
-    status_$t status = 0x5555;
-
     memset(out, 0xEE, sizeof(out));
-    AST_$FETCH_PMAP_PAGE(req, out, 0x400, &status);
+    /* the status is a value parameter: any incoming value is overwritten
+     * by READ_AHEAD in the callee's own slot */
+    AST_$FETCH_PMAP_PAGE(req, out, 0x400, 0x5555);
 
-    ASSERT_EQ(status_$ok, status);
     ASSERT_EQ(1, alloc_count);
     ASSERT_EQ(1, alloc_min);
     ASSERT_EQ(0x321u << 10, rtn_dat_addr);
@@ -159,13 +158,10 @@ TEST(failure_returns_buffer_by_ppn)
 {
     uint32_t out[256];
     uint8_t req[32];
-    status_$t status = 0;
-
     ra_status = 0x000F0001;
     memset(out, 0xEE, sizeof(out));
-    AST_$FETCH_PMAP_PAGE(req, out, 0x400, &status);
+    AST_$FETCH_PMAP_PAGE(req, out, 0x400, 0);
 
-    ASSERT_EQ(0x000F0001, status);
     ASSERT_EQ(1, get_dat_calls);
     ASSERT_EQ(1, free_calls);
     ASSERT_EQ(0x77, free_vpn);

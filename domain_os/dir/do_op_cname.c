@@ -87,8 +87,8 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
     int16_t link_len = 0;     /* For type 4 entries */
     char *link_data = NULL;    /* For type 4 entries */
     uint8_t acl_attrs[8];
-    uint8_t acl_buf[40];
-    char acl_flag;
+    file_$obj_loc_t acl_loc;   /* A6-0x60 */
+    ast_$acl_attr_t acl_attr;  /* A6-0x40 */
 
     ACL_$ENTER_SUPER();
 
@@ -136,12 +136,20 @@ void dir_$do_op_cname(uid_t *uid, uint16_t req_version,
 
             /* For server processes (type 9), check ACL read-only flag */
             if ((int16_t)PROC1_$DATA.type[(int16_t)PROC1_$CURRENT] == 9) {
-                /* Clear bit 6 of flags */
-                /* Check ACL attributes */
-                ACL_$GET_ACL_ATTRIBUTES(&entry_uid, 0x80, acl_buf, status_ret);
-                if (*status_ret == status_$ok && (int8_t)acl_flag < 0) {
-                    /* Read-only entry */
-                    *status_ret = status_$naming_invalid_link_operation;
+                /* 0x00E519AA-0x00E519DA (a jump-table arm Ghidra has not
+                 * disassembled): the entry UID sits in a 0x20-byte object-
+                 * location record at A6-0x60 (uid at -0x58); bclr #6 of its
+                 * flags byte, AST_$GET_ACL_ATTRIBUTES(&loc, 0x80, &attr
+                 * (A6-0x40), status) at 0x00E519C0 - the AST routine at
+                 * 0x00E04AAA, not an ACL one - and a negative byte at
+                 * attr+0x29 (`tst.b (-0x17,A6)`) refuses the rename with
+                 * status 0x3000A. */
+                acl_loc.uid = entry_uid;
+                acl_loc.flags &= ~0x40;
+                AST_$GET_ACL_ATTRIBUTES(&acl_loc, 0x80, &acl_attr, status_ret);
+                if (*status_ret == status_$ok &&
+                    (int8_t)acl_attr.acl_data[0x1D] < 0) {
+                    *status_ret = status_$ast_only_local_access_allowed;
                     goto done;
                 }
             }

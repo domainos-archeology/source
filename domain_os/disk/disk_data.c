@@ -19,6 +19,41 @@
 uint8_t DISK_$DATA[DISK_$DATA_SIZE];
 
 /*
+ * DISK_$DEVICE_DATA - the device registration table (DISK_$DEVICES) and
+ * DISK_$GET_STATS' template (`D E7AD5C DISK_ size = 198`, disk/disk.h).
+ * Zero in the image; DISK_$REGISTER fills the table at boot.
+ *
+ * Original address: 0xE7AD5C
+ */
+MODULE_DATA_DEFINE(disk_$device_data_t, DISK_$DEVICE_DATA, 0x00E7AD5C);
+
+/*
+ * DISK_$MOUNT_DATA - the volume descriptor template and the two small
+ * shift tables (`D E826C4 DISK_ size = 64`, disk/disk_internal.h), with
+ * the image bytes:
+ *   +0x00 00000000 00000000 00000000 00000001
+ *   +0x10 00000000 00000000 00000000 00000000
+ *   +0x20 0001 0002 0004 0001 0000 0000 0001 0000
+ *   +0x30 .. +0x47 zero
+ *   +0x48 0000 0000 0001 0000 0002 0000 0000 0000 0003 0000
+ *   +0x5C 0001 0002 0004 0000
+ *
+ * Original address: 0xE826C4
+ */
+MODULE_DATA_DEFINE_INIT(disk_$mount_data_t, DISK_$MOUNT_DATA, 0x00E826C4, {
+    .vol_template = {
+        .addr_start     = 1,
+        .sec_per_track  = 1,
+        .num_heads      = 2,
+        .blocks_per_cyl = 4,
+        .bat_step       = 1,
+        .num_parts      = 1,
+    },
+    .log2_table = { 0, 0, 1, 0, 2, 0, 0, 0, 3, 0 },
+    .pow2_table = { 1, 2, 4, 0 },
+});
+
+/*
  * ml_$exclusion_t_00e7a274 - the disk module's second exclusion lock,
  * DISK_$DATA + 0xa8, taken around the raw-PPN path (see disk/io.c).  Zero in
  * the image.

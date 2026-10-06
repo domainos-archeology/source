@@ -35,12 +35,13 @@ static int calls;
 static uint16_t got_unit, got_ctrl;
 static void *got[5];
 
-static void mock_dinit(uint16_t unit, uint16_t controller, void *a, void *b,
-                       void *c, void *d, void *e)
+static status_$t mock_dinit(uint16_t unit, uint16_t controller, void *a, void *b,
+                            void *c, void *d, void *e)
 {
     calls++;
     got_unit = unit; got_ctrl = controller;
     got[0] = a; got[1] = b; got[2] = c; got[3] = d; got[4] = e;
+    return 0x00080123;
 }
 
 TEST(forwards_seven_arguments)
@@ -54,7 +55,7 @@ TEST(forwards_seven_arguments)
     jt.dinit = mock_dinit;
     dev.jump_table = &jt;
     dev.controller = 0x21;
-    DISK_$MNT_DINIT(3, &devp, &a, &b, &c, &d, &e);
+    ASSERT_EQ(0x00080123, DISK_$MNT_DINIT(3, &devp, &a, &b, &c, &d, &e));
     ASSERT_EQ(1, calls);
     ASSERT_EQ(3, got_unit);
     ASSERT_EQ(0x21, got_ctrl);

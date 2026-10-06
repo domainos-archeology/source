@@ -242,13 +242,13 @@ static void test_remote_forgets_rpmap_slot(void)
     e->remote_volx = 0x22;
     cell(0)->bits = 0;
     AREA_SLOT_STORE(cell(0), 0x55);
-    AREA_$GLOBALS.rpmap_cache[1].word_04 = 0x22;
-    AREA_$GLOBALS.rpmap_cache[1].word_06 = 0;
+    AREA_$GLOBALS.rpmap_cache[1].volx = 0x22;
+    AREA_$GLOBALS.rpmap_cache[1].group = 0;
     AREA_$GLOBALS.rpmap_cache[1].seq = 9;
     area_$free_segments(3, 0, 0x1F, -1, &st);
     ASSERT_EQ(0, get_calls);
     ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[1].seq);
-    ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[1].word_04);
+    ASSERT_EQ(0, AREA_$GLOBALS.rpmap_cache[1].volx);
     ASSERT_EQ(0, bats);
     ASSERT_EQ(0, AREA_SLOT_LONG(cell(0)) & AREA_SLOT_DADDR_MASK);
 }

@@ -53,9 +53,10 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *e) { (void)e; note("<"); }
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *e) { (void)e; note(">"); }
 void ML_$LOCK(int16_t id) { (void)id; note("L"); }
 void ML_$UNLOCK(int16_t id) { (void)id; note("U"); }
-void acl_$image_internal(void *source_uid, int16_t buffer_len, int8_t flag,
-                         void *output_buf, void *len_out, void *data_out,
-                         void *flag_out, status_$t *status)
+void acl_$image_internal(uid_t *source_uid, int16_t buffer_len, int8_t flag,
+                         void *output_buf, int16_t *len_out,
+                         acl_$prot_data_t *data_out, int8_t *flag_out,
+                         status_$t *status)
 {
     (void)source_uid; (void)data_out; (void)flag_out;
     note("I");

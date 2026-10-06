@@ -29,7 +29,7 @@ static int tests_failed = 0;
     } \
 } while (0)
 
-disk_device_entry_t DISK_$DEVICES[DISK_MAX_DEVICES];
+MODULE_DATA_DEFINE(disk_$device_data_t, DISK_$DEVICE_DATA, 0x00E7AD5C);
 
 #include "../register.c"
 
@@ -46,7 +46,7 @@ static void reset(void)
 {
     memset(DISK_$DEVICES, 0, sizeof DISK_$DEVICES);
     memset(&jt, 0, sizeof jt);
-    jt.dinit = (void (*)(uint16_t, uint16_t, void *, void *, void *, void *, void *))dummy;
+    jt.dinit = (status_$t (*)(uint16_t, uint16_t, void *, void *, void *, void *, void *))dummy;
     jt.do_io = (void (*)(void *, void *, void *, void *))dummy;
 }
 

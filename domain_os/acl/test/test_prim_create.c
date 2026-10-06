@@ -160,15 +160,15 @@ uint16_t AST_$PURIFY(uid_t *uid, uint16_t flags, int16_t segment,
 static int       internal_calls;
 static int16_t  *internal_len_ret;
 static void     *internal_header;
-void acl_$prim_create_internal(void *acl_header, void *acl_data,
-                               int16_t data_len, void *subsys_uid,
-                               int8_t flag, void *image,
-                               int16_t *image_len_ret, status_$t *status_ret)
+void acl_$prim_create_internal(acl_$prot_data_t *prot, const void *src_image,
+                               int16_t src_len, uid_t *acl_type, int8_t flag,
+                               void *image, int16_t *image_len_ret,
+                               status_$t *status_ret)
 {
     internal_calls++;
-    internal_header = acl_header;
+    internal_header = prot;
     internal_len_ret = image_len_ret;
-    (void)acl_data; (void)data_len; (void)subsys_uid; (void)flag; (void)image;
+    (void)src_image; (void)src_len; (void)acl_type; (void)flag; (void)image;
     if (image_len_ret != NULL) {
         *image_len_ret = 0x34;
     }

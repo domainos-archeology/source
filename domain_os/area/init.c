@@ -132,10 +132,10 @@ void AREA_$INIT(void)
 
             /* 0x00E2F49E-0x00E2F4B4 */
             AREA_$GLOBALS.rpmap_cache[i].seq     = 0;
-            AREA_$GLOBALS.rpmap_cache[i].word_04 = 0;
-            AREA_$GLOBALS.rpmap_cache[i].word_06 = AREA_RPMAP_SLOT_EMPTY;
-            AREA_$GLOBALS.rpmap_cache[i].byte_08 = 0;
-            AREA_$GLOBALS.rpmap_cache[i].byte_09 = 0;
+            AREA_$GLOBALS.rpmap_cache[i].volx = 0;
+            AREA_$GLOBALS.rpmap_cache[i].group = AREA_RPMAP_SLOT_EMPTY;
+            AREA_$GLOBALS.rpmap_cache[i].dirty = 0;
+            AREA_$GLOBALS.rpmap_cache[i].in_trans = 0;
 
             /* 0x00E2F4BA */
             va += AREA_RPMAP_PAGE_SIZE;

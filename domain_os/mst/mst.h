@@ -42,6 +42,8 @@
 #define status_$mst_invalid_length 0x00040002  /* "invalid length" (stcodes 40002) */
 #define status_$mst_object_is_not_mapped 0x00040007  /* "object is not mapped" (stcodes 40007) */
 #define status_$mst_insufficient_rights 0x00040009 /* "insufficient rights" (40009) */
+#define status_$mst_no_rights 0x00040008  /* "no rights" (40008) */
+#define status_$mst_wrong_type 0x0004000b /* "wrong type - can't map system objects" (4000b) */
 #define status_$mst_uid_mismatch 0x0004000d    /* "uid mismatch" (4000d) */
 
 /*
