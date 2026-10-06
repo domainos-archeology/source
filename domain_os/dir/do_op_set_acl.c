@@ -41,7 +41,7 @@
  * reached here by `pea (-0x1680,PC)` at 0x00E52C38 and is shared with
  * dir_$do_op_delete (0x00E51594) and dir_$write_def_prot (0x00E51F0C).
  */
-static const uint16_t DIR_PROT_TYPE_4 = 4;
+/* (the shared cell DIR_$CONST_FOUR_W, dir/dir_data.c) */
 
 void dir_$do_op_set_acl(uid_t *uid, uid_t *acl_uid, status_$t *status_ret)
 {
@@ -72,7 +72,7 @@ void dir_$do_op_set_acl(uid_t *uid, uid_t *acl_uid, status_$t *status_ret)
             ACL_$CONVERT_FUNKY_ACL(acl_uid, acl_data, &prot_info, &target_uid,
                                    status_ret);
             if (*status_ret == status_$ok) {
-                FILE_$SET_PROT(uid, (uint16_t *)&DIR_PROT_TYPE_4,
+                FILE_$SET_PROT(uid, (uint16_t *)&DIR_$CONST_FOUR_W,
                                acl_data, &prot_info, status_ret);
             }
         }

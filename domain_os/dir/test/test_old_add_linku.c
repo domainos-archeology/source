@@ -128,7 +128,7 @@ static uint16_t  ale_target_len_seen;
 static uint16_t  ale_name_len_seen;
 static status_$t ale_status;
 void dir_$old_add_link_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                             uint16_t name_len, void *target,
+                             uint16_t name_len, uint8_t *target,
                              uint16_t target_len, boolean is_root,
                              uint8_t *result, status_$t *status_ret)
 {

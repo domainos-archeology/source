@@ -3,8 +3,8 @@
  *
  * Manages the doubly-linked list of slots in old-format directory
  * buffers. Each slot has stride 0x96 (150 bytes). Slots have:
- *   +0x36A: prev link (uint16_t - slot index)
- *   +0x36C: next link (uint16_t - slot index)
+ *   +0x36A: next link (uint16_t - slot index)
+ *   +0x36C: prev link (uint16_t - slot index)
  *   +0x36E: chain entry count (uint8_t)
  *   +0x36F: slot type (uint8_t, 0=free, 1=active)
  *
@@ -31,18 +31,18 @@
  * Slot base = handle + slot_idx * OLD_DIR_SLOT_STRIDE
  */
 #define OLD_DIR_SLOT_STRIDE     0x96    /* 150 bytes per slot */
-#define OLD_DIR_SLOT_PREV       0x36A   /* Previous link in chain */
-#define OLD_DIR_SLOT_NEXT       0x36C   /* Next link in chain */
+#define OLD_DIR_SLOT_NEXT       0x36A   /* Next link in chain (0x36A, DIR_OLD_BLOCK_NEXT) */
+#define OLD_DIR_SLOT_PREV       0x36C   /* Previous link in chain (0x36C, DIR_OLD_BLOCK_PREV) */
 #define OLD_DIR_SLOT_CHAIN_CNT  0x36E   /* Number of chain entries */
 #define OLD_DIR_SLOT_TYPE       0x36F   /* Slot type: 0=free, 1=active */
 #define OLD_DIR_FREE_HEAD       0x0C    /* Free list head in buffer header */
-#define OLD_DIR_HASH_TAIL_BASE  0x3AA   /* Hash chain tail pointers base */
+#define OLD_DIR_HASH_HEAD_BASE  0x3AA   /* Hash chain head words (+0x3AA) */
 
 void dir_$old_free_slot(uint32_t handle, uint16_t hash, uint16_t slot_idx)
 {
     uint32_t slot_base;
-    uint16_t prev;
     uint16_t next;
+    uint16_t prev;
     uint16_t old_free_head;
 
     slot_base = handle + (uint32_t)slot_idx * OLD_DIR_SLOT_STRIDE;
@@ -57,28 +57,28 @@ void dir_$old_free_slot(uint32_t handle, uint16_t hash, uint16_t slot_idx)
             return;
         }
 
-        prev = *(uint16_t *)(slot_base + OLD_DIR_SLOT_PREV);
         next = *(uint16_t *)(slot_base + OLD_DIR_SLOT_NEXT);
+        prev = *(uint16_t *)(slot_base + OLD_DIR_SLOT_PREV);
 
-        /* If prev == next, this is the only entry - clear prev */
-        if (prev == next) {
-            prev = 0;
+        /* If next == prev, this is the only entry - clear next */
+        if (next == prev) {
+            next = 0;
         }
 
-        /* Update prev's next pointer */
-        if (prev != 0) {
-            *(uint16_t *)(handle + (uint32_t)prev * OLD_DIR_SLOT_STRIDE
-                          + OLD_DIR_SLOT_NEXT) = next;
-        }
-
-        /* Update next's prev pointer, or update hash tail if at end */
-        if (next == 0) {
-            /* This was the tail - update the hash chain tail pointer */
-            *(uint16_t *)(handle + (uint32_t)hash * 2
-                          + OLD_DIR_HASH_TAIL_BASE) = prev;
-        } else {
+        /* Update the successor's back link */
+        if (next != 0) {
             *(uint16_t *)(handle + (uint32_t)next * OLD_DIR_SLOT_STRIDE
                           + OLD_DIR_SLOT_PREV) = prev;
+        }
+
+        /* Update the predecessor, or the chain head when there is none */
+        if (prev == 0) {
+            /* No predecessor: the block was the chain head, so the head word takes its successor */
+            *(uint16_t *)(handle + (uint32_t)hash * 2
+                          + OLD_DIR_HASH_HEAD_BASE) = next;
+        } else {
+            *(uint16_t *)(handle + (uint32_t)prev * OLD_DIR_SLOT_STRIDE
+                          + OLD_DIR_SLOT_NEXT) = next;
         }
     }
 
@@ -88,7 +88,7 @@ void dir_$old_free_slot(uint32_t handle, uint16_t hash, uint16_t slot_idx)
      */
     old_free_head = *(uint16_t *)(handle + OLD_DIR_FREE_HEAD);
     *(uint16_t *)(handle + OLD_DIR_FREE_HEAD) = slot_idx;
-    *(uint16_t *)(slot_base + OLD_DIR_SLOT_PREV) = old_free_head;
-    *(uint16_t *)(slot_base + OLD_DIR_SLOT_NEXT) = 0;
+    *(uint16_t *)(slot_base + OLD_DIR_SLOT_NEXT) = old_free_head;
+    *(uint16_t *)(slot_base + OLD_DIR_SLOT_PREV) = 0;
     *(uint8_t *)(slot_base + OLD_DIR_SLOT_TYPE) = 0;
 }

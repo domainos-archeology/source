@@ -76,15 +76,19 @@ invalid_leaf:
     /* For soft links: check if total size exceeds page capacity */
     dir_insert_ctx_t ctx;
 
+    /* The nested dir_$alloc_overflow_page reads handle, link_len and
+     * link_data out of this frame ((0x8,A2), (0x1C,A2), (0x1E,A2)) and
+     * leaves the page it chose in the frame's -0xAA cell (ctx.overflow_page). */
+    ctx.handle = handle;
+    ctx.link_len = link_len;
+    ctx.link_data = link_data;
+
     if (entry_type == 4 && ((int32_t)name_len + (int32_t)link_len) > 0x1B1) {
-        /* Need overflow page for link data */
-        dir_$alloc_overflow_page(status_ret);
+        /* Need overflow page for link data (0x00E4FEAE-0x00E4FEB8) */
+        dir_$alloc_overflow_page(&ctx, status_ret);
         if (*status_ret != status_$ok) {
             return;
         }
-        /* TODO(source-qgq): overflow_page is set by alloc_overflow_page in the
-         * original code via a parent frame variable. Need to verify
-         * how the overflow page index is communicated. */
     } else {
         ctx.overflow_page = -1;
     }

@@ -263,7 +263,9 @@ typedef struct aote_t {
   uint16_t dta_low;      /* 0x44 */
   uint16_t unknown_46;   /* 0x46 */
 
-  uid_t mod_time;        /* 0x48: modification time (attr 5) */
+  uid_t dirptr;        /* 0x48: parent directory UID (attr 5): FILE_$SET_DIRPTR
+                          * (0x00E5E1B2) stores a uid_t through attribute 5 and
+                          * dir_$get_parent_uid (0x00E4D060) reads it for ".." */
   uint32_t blocks;       /* 0x50: block count (attr 0x0B) */
 
   /*
@@ -389,7 +391,7 @@ _Static_assert(offsetof(aote_t, dtm_high) == 0x28, "aote_t.dtm_high");
 _Static_assert(offsetof(aote_t, dtu_high) == 0x30, "aote_t.dtu_high");
 _Static_assert(offsetof(aote_t, dtv_high) == 0x38, "aote_t.dtv_high");
 _Static_assert(offsetof(aote_t, dta_high) == 0x40, "aote_t.dta_high");
-_Static_assert(offsetof(aote_t, mod_time) == 0x48, "aote_t.mod_time");
+_Static_assert(offsetof(aote_t, dirptr) == 0x48, "aote_t.dirptr");
 _Static_assert(offsetof(aote_t, blocks) == 0x50, "aote_t.blocks");
 _Static_assert(offsetof(aote_t, owner1) == 0x54, "aote_t.owner1");
 _Static_assert(offsetof(aote_t, owner2) == 0x5C, "aote_t.owner2");
@@ -989,7 +991,9 @@ typedef struct ast_$common_attr_t {
                                  *      in AST_$SET_ATTR_DISPATCH (0x00E04B00)
                                  *      writes it.  Which of the two is
                                  *      authoritative is bead source-traa. */
-    uid_t       mod_time;       /* 0x08 <- aote+0x48, attribute 5 */
+    uid_t       dirptr;         /* 0x08 <- aote+0x48, attribute 5: the parent
+                                 *      directory UID (FILE_$SET_DIRPTR sets it,
+                                 *      dir_$get_parent_uid consumes it) */
     uint32_t    blocks;         /* 0x10 <- aote+0x50, attribute 0x0B
                                  *      (0x00E04A36-0x00E04A42 copies 12 bytes
                                  *      from record+0x3C in one dbf loop) */
@@ -1013,7 +1017,7 @@ _Static_assert(offsetof(ast_$common_attr_t, sub_type)      == 0x01, "cattr.sub_t
 _Static_assert(offsetof(ast_$common_attr_t, attr_flags_hi) == 0x02, "cattr.attr_flags_hi");
 _Static_assert(offsetof(ast_$common_attr_t, attr_flags_lo) == 0x03, "cattr.attr_flags_lo");
 _Static_assert(offsetof(ast_$common_attr_t, length)        == 0x04, "cattr.length");
-_Static_assert(offsetof(ast_$common_attr_t, mod_time)      == 0x08, "cattr.mod_time");
+_Static_assert(offsetof(ast_$common_attr_t, dirptr)      == 0x08, "cattr.dirptr");
 _Static_assert(offsetof(ast_$common_attr_t, blocks)        == 0x10, "cattr.blocks");
 _Static_assert(offsetof(ast_$common_attr_t, refcount)      == 0x14, "cattr.refcount");
 _Static_assert(offsetof(ast_$common_attr_t, access_flags)  == 0x16, "cattr.access_flags");

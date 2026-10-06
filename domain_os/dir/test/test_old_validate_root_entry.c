@@ -60,7 +60,8 @@ static uid_t           *gen_dir_seen;
 static status_$t        gen_status;
 static dir_$old_entry_t gen_entry;
 void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
-                                 void *entry_ret, status_$t *status_ret)
+                                 dir_$old_entry_t *entry_ret,
+                                 status_$t *status_ret)
 {
     gen_calls++;
     gen_dir_seen = dir_uid;

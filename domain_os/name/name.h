@@ -514,17 +514,27 @@ void name_$old_add_link(uid_t *dir_uid, char *name, uint16_t name_len,
                         uid_t *file_uid, boolean hard_link,
                         status_$t *status_ret);
 
+/* The entry description both old-format lookups fill is dir_$old_entry_t
+ * (dir/dir.h): type word, UID at +2, extra longword at +0xA. */
+struct dir_$old_entry_t;
+
 /* name_$old_get_root_entry - Root directory entry lookup
+ * Frame: (0x08) dir_uid, (0x0C) name, (0x10) name_len word, (0x12)
+ * entry_ret, (0x16) status_ret.
  * Original address: 0x00E57F74 (name/old_get_root_entry.c)
  */
 void name_$old_get_root_entry(uid_t *dir_uid, char *name, uint16_t name_len,
-                              void *entry_ret, status_$t *status_ret);
+                              struct dir_$old_entry_t *entry_ret,
+                              status_$t *status_ret);
 
 /* name_$old_get_entry_nonroot - Non-root directory entry lookup
+ * Frame: (0x08) dir_uid, (0x0C) name, (0x10) name_len word, (0x12)
+ * entry_ret, (0x16) status_ret.
  * Original address: 0x00E57CE0 (name/old_get_entry_nonroot.c)
  */
 void name_$old_get_entry_nonroot(uid_t *dir_uid, char *name, uint16_t name_len,
-                                 void *entry_ret, status_$t *status_ret);
+                                 struct dir_$old_entry_t *entry_ret,
+                                 status_$t *status_ret);
 
 /* name_$old_add_entry - Name-level add directory entry
  * Original address: 0x00E56682 (name/old_add_entry.c)

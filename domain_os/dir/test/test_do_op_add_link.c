@@ -146,9 +146,9 @@ static void reset_mocks(void)
  * Mock function implementations
  * ================================================================ */
 
-void dir_$do_op_add_entry(uid_t *uid_arg, uint16_t type, void *name,
+void dir_$do_op_add_entry(uid_t *uid_arg, int16_t type, void *name,
                           uint16_t name_len, uint16_t entry_type,
-                          uint32_t extra, void *uid_data,
+                          uint32_t extra, uid_t *uid_data,
                           uint16_t target_len, uint32_t target_data,
                           void *result, status_$t *status_ret)
 {

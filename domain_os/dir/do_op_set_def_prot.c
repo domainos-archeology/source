@@ -50,7 +50,7 @@ void dir_$do_op_set_def_prot(uid_t *dir_uid, void *acl_type, void *prot_data,
     if (*status_ret == status_$ok) {
         /* Write default protection; flush_flag = 0xFF (true) */
         dir_$write_def_prot(local_handle, acl_type, prot_data, src_acl_uid,
-                            (char)0xFF, status_ret);
+                            (int8_t)0xFF, status_ret);
     }
 
     dir_$release_handle(&local_handle);

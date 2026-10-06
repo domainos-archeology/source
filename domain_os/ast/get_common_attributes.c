@@ -30,7 +30,7 @@
  */
 #define AST_ATTR_TYPE_WORDS     0x00    /* -0x90: obj_type/sub_type/flags */
 #define AST_ATTR_COUNTER_20     0x14    /* -0x7C: aote+0x20 */
-#define AST_ATTR_MOD_TIME       0x3C    /* -0x54: aote+0x48, 12 bytes */
+#define AST_ATTR_DIRPTR       0x3C    /* -0x54: aote+0x48, 12 bytes */
 #define AST_ATTR_REFCOUNT       0x74    /* -0x1C: aote+0x80 */
 #define AST_ATTR_ACCESS_FLAGS   0x65    /* -0x2B: aote+0x71 */
 
@@ -60,7 +60,7 @@ void AST_$GET_COMMON_ATTRIBUTES(file_$obj_loc_t *loc_rec, uint16_t flags,
     /* 0x00E04A36-0x00E04A42: `moveq #0xb` + dbf = 12 bytes, the modification
      * time (attribute 5) followed by the block count (attribute 0x0B). */
     for (i = 0; i < 12; i++) {
-        out[0x08 + i] = full_attrs[AST_ATTR_MOD_TIME + i];
+        out[0x08 + i] = full_attrs[AST_ATTR_DIRPTR + i];
     }
 
     /* 0x00E04A46: the object reference count, record+0x74 = aote+0x80. */

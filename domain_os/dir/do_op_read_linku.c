@@ -27,12 +27,6 @@
 
 #include "dir/dir_internal.h"
 
-/* dir_$map_link_page - Map a link data page
- * Maps the page and verifies it has entry_type == 2 (link data).
- * Returns pointer to page data + 1 (skipping type byte) in A0.
- */
-void *dir_$map_link_page(void *handle, uint16_t page_idx);
-
 /* Status code for link target truncated */
 #ifndef status_$naming_link_target_truncated
 #define status_$naming_link_target_truncated  0x000E002C

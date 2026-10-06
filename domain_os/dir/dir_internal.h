@@ -242,25 +242,28 @@ typedef struct __attribute__((packed, aligned(2))) dir_$req_word_name_t {
  * (0x00E4ADD6) and REM_NAME_$FIND_NETWORK (0x00E4AE84) fill in for
  * dir_$do_op_find_uid.  Its frame cell is A6-0x48 (`pea (-0x48,A6)` at
  * 0x00E4E632 and 0x00E4E65A); the consumers address
- *   (-0x46,A6) name_len, (-0x44,A6) name, (-0x24,A6) extra,
- *   (-0x1c,A6) node_id.
+ *   (-0x46,A6) name_len, (-0x44,A6) name, (-0x24,A6) uid (the object UID),
+ *   (-0x1c,A6) extra.  Same shape as dir_$rep_entry_t (dir/dir.h).
  */
 typedef struct __attribute__((packed, aligned(2))) dir_$find_uid_result_t {
     uint16_t word0;         /* 0x00: never read by dir_$do_op_find_uid */
     uint16_t name_len;      /* 0x02 */
     uint8_t  name[0x20];    /* 0x04 */
-    uint8_t  extra[8];      /* 0x24 */
-    uint32_t node_id;       /* 0x2C */
+    uid_t    uid;           /* 0x24: the object UID, dir_$do_op_add_entry's
+                             *       target_uid (`pea (-0x24,A6)' 0x00E4E6B6) */
+    uint32_t extra;         /* 0x2C: the entry's extra longword, passed as
+                             *       dir_$do_op_add_entry's extra and returned
+                             *       through extra_ret (`move.l (-0x1c,A6)') */
 } dir_$find_uid_result_t;
 
 _Static_assert(__builtin_offsetof(dir_$find_uid_result_t, name_len) == 0x02,
                "dir_$find_uid_result_t.name_len");
 _Static_assert(__builtin_offsetof(dir_$find_uid_result_t, name) == 0x04,
                "dir_$find_uid_result_t.name");
-_Static_assert(__builtin_offsetof(dir_$find_uid_result_t, extra) == 0x24,
+_Static_assert(__builtin_offsetof(dir_$find_uid_result_t, uid) == 0x24,
+               "dir_$find_uid_result_t.uid");
+_Static_assert(__builtin_offsetof(dir_$find_uid_result_t, extra) == 0x2C,
                "dir_$find_uid_result_t.extra");
-_Static_assert(__builtin_offsetof(dir_$find_uid_result_t, node_id) == 0x2C,
-               "dir_$find_uid_result_t.node_id");
 _Static_assert(sizeof(dir_$find_uid_result_t) == 0x30,
                "dir_$find_uid_result_t is 0x30 bytes");
 
@@ -522,6 +525,51 @@ _Static_assert(__builtin_offsetof(dir_page_hdr_t, next_page) == 0x0C, "dir_page_
 _Static_assert(__builtin_offsetof(dir_page_hdr_t, index_end) == 0x0E, "dir_page_hdr_t.index_end");
 _Static_assert(__builtin_offsetof(dir_page_hdr_t, heap_base) == 0x10, "dir_page_hdr_t.heap_base");
 #endif
+
+/*
+ * Fields of a B-tree leaf entry (the record an index word points at), as
+ * dir_$do_op_add_entry compares them (0x00E4FFAA-0x00E5003E).  The name's
+ * own offset depends on the type and comes from DIR_$NAME_OFFSET_TABLE
+ * (0, 4, 0x10, 0x14, 0xC for types 0..4).
+ *   type 2 (file):      uid at +0x04
+ *   type 3 (hard link): uid at +0x04, extra longword at +0x0C
+ *   type 4 (soft link): text length at +0x02, text page at +0x04 (0xFFFF =
+ *                       the text follows the name at +0x0C inline)
+ */
+#define DIR_ENTRY_TYPE_MASK     0x07    /* in byte +0x00 (`moveq #7; and.b (A2)') */
+#define DIR_ENTRY_NAME_LEN      0x01    /* byte */
+#define DIR_ENTRY_LINK_LEN      0x02    /* word, type 4 */
+#define DIR_ENTRY_UID           0x04    /* uid_t, types 2 and 3 */
+#define DIR_ENTRY_LINK_PAGE     0x04    /* word, type 4 */
+#define DIR_ENTRY_EXTRA         0x0C    /* longword, type 3 */
+#define DIR_ENTRY_LINK_NAME     0x0C    /* type 4: name, then inline text */
+#define DIR_ENTRY_LINK_INLINE   ((int16_t)-1)
+
+/*
+ * dir_$def_prot_t - one default-protection slot of a directory's ROOT page
+ *
+ * Page 0 carries two of them after the 0x12-byte header and the root-area
+ * length word: the default for new directories at page+0x1A (ACL_$DIR_ACL)
+ * and the default for new files at page+0x4E (ACL_$FILE_ACL).  Each is the
+ * 11-longword protection block followed by the source ACL's UID:
+ * dir_$read_def_prot copies `lea (0x1a,A0)' / `lea (0x4e,A0)' with an
+ * 11-longword dbf loop and then the UID from `lea (0x46,A0)' /
+ * `lea (0x7a,A0)' (0x00E51CA4-0x00E51CE0); dir_$write_def_prot writes the
+ * same cells.  Offsets are 2-byte aligned only, so the record is packed.
+ */
+#define DIR_DEF_PROT_LONGS      11
+typedef struct __attribute__((packed, aligned(2))) dir_$def_prot_t {
+    uint32_t prot[DIR_DEF_PROT_LONGS];  /* +0x00: 44 bytes */
+    uid_t    acl_uid;                   /* +0x2C */
+} dir_$def_prot_t;
+
+#define DIR_ROOT_DIR_DEF_PROT   0x1A    /* page 0: default for directories */
+#define DIR_ROOT_FILE_DEF_PROT  0x4E    /* page 0: default for files */
+
+_Static_assert(offsetof(dir_$def_prot_t, acl_uid) == 0x2C, "dir_$def_prot_t.acl_uid");
+_Static_assert(sizeof(dir_$def_prot_t) == 0x34, "dir_$def_prot_t must be 0x34 bytes");
+_Static_assert(DIR_ROOT_DIR_DEF_PROT + sizeof(dir_$def_prot_t) == DIR_ROOT_FILE_DEF_PROT,
+               "the two default-protection slots are adjacent");
 
 /*
  * dir_$page_path_t - one level of the root-to-leaf path dir_$find_entry
@@ -868,20 +916,8 @@ void dir_$find_uid_internal(uid_t *dir_uid, uid_t *target_uid, int8_t flag,
 /* dir_$old_unlink_entry: declared in dir/dir.h -- NAME_$OLD_DROP_ENTRY
  * (name/old_drop_entry.c) calls it. */
 
-/* dir_$old_find_entry - Find entry in directory by name
- *
- * Searches a directory for a named entry. First checks inline entries
- * (slots 1..N at 0x30-byte intervals), then uses a hash lookup to
- * search overflow chains. Returns the entry pointer, slot index,
- * and chain level.
- *
- * Returns: 0xFF (true) if found, 0 if not found
- *
- * Original address: 0x00E54B9E
- */
-int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
-                           int32_t *entry_ret, uint16_t *slot_idx,
-                           uint16_t *chain_level);
+/* dir_$old_find_entry: declared in dir/dir.h -- name_$old_get_entry_nonroot
+ * (name/old_get_entry_nonroot.c) calls it. */
 
 /* dir_$old_hash_name - Compute hash for directory entry name
  *
@@ -920,32 +956,7 @@ _Static_assert(offsetof(audit_$resolve_data_t, path) == 0x08,
 _Static_assert(sizeof(audit_$resolve_data_t) == 0x408,
                "audit_$resolve_data_t must be 0x408 bytes");
 
-/*
- * dir_$old_slot_t - one 0x30-byte entry slot of an old-format directory
- *
- * Recovered from the two search routines DIR_$OLD_FIND_UID and
- * DIR_$OLD_FIND_NET use (0x00E557D4, 0x00E559D6).  Inline slot i (1-based)
- * starts at dir + 0x30*i - 0x16 (the code holds A0 = dir + 0x30*i and reads
- * the name at -0x16, the extra longword at +0xA, the length at +0x10, the
- * type at +0x11 and the UID at +0x12); slot j of overflow block k starts at
- * dir + 0x96*k + 0x30*j + 0x340 (A0 = dir + 0x96*k + 0x30*j; +0x340 name,
- * +0x360 extra, +0x366 length, +0x367 type, +0x368 UID).  Inline slots sit
- * on 2-byte boundaries only, so the record is packed.
- */
-typedef struct __attribute__((packed)) dir_$old_slot_t {
-    uint8_t  name[0x20];        /* +0x00: the case-mapped name */
-    uint32_t extra;             /* +0x20: copied out as dir_$rep_entry_t.extra */
-    uint8_t  _24[2];            /* +0x24: not read by the search routines */
-    uint8_t  name_len;          /* +0x26 */
-    uint8_t  type;              /* +0x27: 1 = in use by an object */
-    uid_t    uid;               /* +0x28 */
-} dir_$old_slot_t;
-
-_Static_assert(offsetof(dir_$old_slot_t, extra) == 0x20, "dir_$old_slot_t.extra");
-_Static_assert(offsetof(dir_$old_slot_t, name_len) == 0x26, "dir_$old_slot_t.name_len");
-_Static_assert(offsetof(dir_$old_slot_t, type) == 0x27, "dir_$old_slot_t.type");
-_Static_assert(offsetof(dir_$old_slot_t, uid) == 0x28, "dir_$old_slot_t.uid");
-_Static_assert(sizeof(dir_$old_slot_t) == 0x30, "dir_$old_slot_t must be 0x30 bytes");
+/* dir_$old_slot_t is in dir/dir.h: name_$old_get_entry_nonroot reads it. */
 
 /* Old-format directory header words the slot searches read */
 #define DIR_OLD_HDR_INLINE_SLOTS    0x04    /* `tst.w (0x4,A2)' */
@@ -957,6 +968,77 @@ _Static_assert(sizeof(dir_$old_slot_t) == 0x30, "dir_$old_slot_t must be 0x30 by
 #define DIR_OLD_BLOCK_TYPE          0x36F   /* `move.b (0x36f,A1),D2b' */
 #define DIR_OLD_SLOT_STRIDE         0x30
 #define DIR_OLD_SLOT_IN_USE         1
+
+/*
+ * The rest of the old-format layout the slot allocators use
+ * (dir_$old_find_overflow_slot 0x00E54F8A, dir_$old_alloc_block 0x00E54E10,
+ * dir_$old_reclaim_block 0x00E54E62, the chain helpers 0x00E54D10 /
+ * 0x00E54D62, dir_$old_add_link_entry 0x00E5545C):
+ *
+ *   header +0x02  number of hash buckets (`divu.w (0x2,A2)')
+ *          +0x06  most blocks the directory may use (`cmp.w (0x6,A0)')
+ *          +0x0A  blocks handed out so far (high-water mark)
+ *          +0x0C  head of the free-block list, linked through +0x36A
+ *          +0x3AA hash-chain heads, one word per bucket (bucket 0 at +0x3AA)
+ *   block k (at dir + 0x96*k, k >= 1):
+ *          +0x36A next block in the chain (from the head, `(0x36a,A0)')
+ *          +0x36C previous block (0 at the head)
+ *          +0x36E slots in use (byte)
+ *          +0x36F block type: 0 free, 1 entries, 3 link text
+ *          +0x370 the three 0x30-byte slots, or 0x90 bytes of link text
+ *   slot j of block k: +0x24 flags, bit 7 of its first byte set = the entry
+ *          is never evicted to make room.  The image tests it as the sign of
+ *          the big-endian word (`tst.w (0x364,A0)' / `bmi') and clears it
+ *          with `bclr.b #0x7'; the C reads the byte so hosts of either
+ *          byte order agree.
+ */
+#define DIR_OLD_HDR_BUCKETS         0x02
+/* +0x16 counts the entries in use (dir_$old_add_entry increments it);
+ * +0x18 is the word dir_$old_add_entry compares it with before adding. */
+#define DIR_OLD_HDR_ENTRIES         0x16
+#define DIR_OLD_HDR_ENTRIES_18      0x18
+/* The info block (DIR_$OLD_READ_INFOBLK / DIR_$OLD_WRITE_INFOBLK): lengths
+ * at +0x37C / +0x37E and up to 40 bytes at +0x382.  dir_$old_create_obj
+ * stores 0x10 in both lengths (`move.l #0x100010,(0x37c,A2)') and reads a
+ * parent's first 16 bytes as two default-ACL UIDs: directories at +0x382,
+ * files at +0x38A. */
+#define DIR_OLD_HDR_INFO_WRITE_LEN  0x37C
+#define DIR_OLD_HDR_INFO_READ_LEN   0x37E
+#define DIR_OLD_HDR_INFO_DATA       0x382
+#define DIR_OLD_INFO_DIR_ACL        0x382   /* uid_t */
+#define DIR_OLD_INFO_FILE_ACL       0x38A   /* uid_t */
+#define DIR_OLD_HDR_MAX_BLOCKS      0x06
+#define DIR_OLD_HDR_FREE_BLOCK      0x0C
+#define DIR_OLD_HASH_HEADS          0x3AA
+#define DIR_OLD_BLOCK_NEXT          0x36A
+#define DIR_OLD_BLOCK_PREV          0x36C
+#define DIR_OLD_BLOCK_USED          0x36E
+#define DIR_OLD_BLOCK_TEXT          0x370
+#define DIR_OLD_BLOCK_TEXT_MAX      0x90
+#define DIR_OLD_BLOCK_LINK_TEXT     3
+#define DIR_OLD_SLOT_FLAGS          0x24    /* in dir_$old_slot_t */
+#define DIR_OLD_SLOT_NO_EVICT       0x80    /* in the flags' first byte */
+
+/* Block k of an old-format directory, and word fields of the layout */
+#define DIR_OLD_BLOCK(dir, k) \
+    ((uint8_t *)(dir) + DIR_OLD_BLOCK_STRIDE * (uint32_t)(uint16_t)(k))
+#define DIR_OLD_W(p, off)       (*(uint16_t *)((uint8_t *)(p) + (off)))
+#define DIR_OLD_HASH_HEAD(dir, h) \
+    DIR_OLD_W((dir), DIR_OLD_HASH_HEADS + 2 * (uint32_t)(uint16_t)(h))
+/* Slot j (1-based) of block k: the name starts at block + 0x30*j + 0x340 */
+#define DIR_OLD_BLOCK_SLOT(dir, k, j) \
+    ((dir_$old_slot_t *)(DIR_OLD_BLOCK((dir), (k)) + \
+        DIR_OLD_SLOT_STRIDE * (uint32_t)(uint16_t)(j) + DIR_OLD_BLOCK_SLOT_BASE))
+
+/* The image addresses slot j's fields as (0x364 / 0x367, block + 0x30*j) */
+_Static_assert(DIR_OLD_BLOCK_SLOT_BASE + DIR_OLD_SLOT_FLAGS == 0x364,
+               "slot flags at block + 0x30*j + 0x364");
+_Static_assert(DIR_OLD_BLOCK_SLOT_BASE + offsetof(dir_$old_slot_t, type) == 0x367,
+               "slot type at block + 0x30*j + 0x367");
+_Static_assert(DIR_OLD_BLOCK_SLOT_BASE + DIR_OLD_SLOT_STRIDE == DIR_OLD_BLOCK_TEXT,
+               "slot 1 starts where link text starts");
+_Static_assert(DIR_OLD_BLOCK_TEXT + DIR_OLD_BLOCK_TEXT_MAX == 0x400,
+               "link text fills a block's three slots");
 
 /*
  * dir_$old_link_refs_t - the 8-byte block dir_$old_delete_entry lifts out of
@@ -972,8 +1054,11 @@ _Static_assert(sizeof(dir_$old_slot_t) == 0x30, "dir_$old_slot_t must be 0x30 by
  * (source-v76f)
  */
 typedef struct dir_$old_link_refs_t {
-    uint16_t    reserved_00;    /* +0x00: entry+0x12 / +0x368, copied but
-                                 *        never read back */
+    uint16_t    text_len;       /* +0x00: entry+0x12 / +0x368: the link
+                                 *        text's length (dir_$old_add_link_entry
+                                 *        stores it, `move.w D5w,(-0x10,A6)' at
+                                 *        0x00E55570); copied but not read back
+                                 *        by dir_$old_delete_entry */
     uint16_t    block1;         /* +0x02: entry+0x14 / +0x36A */
     uint16_t    block2;         /* +0x04: entry+0x16 / +0x36C */
     uint16_t    reserved_06;    /* +0x06: entry+0x18 / +0x36E, likewise */
@@ -1013,6 +1098,10 @@ void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
  * the target text into the overflow blocks, then adds the entry
  * via dir_$old_add_entry with type 3. On failure, frees allocated blocks.
  *
+ * Frame: (0x08) dir_uid, (0x0C) handle, (0x10) name, (0x14) name_len,
+ * (0x16) target, (0x1A) target_len, (0x1C) replace_flag byte, (0x1E)
+ * result, (0x22) status_ret.
+ *
  * Original address: 0x00E5545C
  * Size: 384 bytes
  */
@@ -1021,9 +1110,9 @@ void dir_$old_delete_entry(uint32_t handle, uint16_t slot_idx,
  * it to dir_$old_add_entry the same way (`move.b (0x1c,A6),-(SP)` at
  * 0x00E5558C), landing in the EVEN (high) byte of a 2-byte slot. */
 void dir_$old_add_link_entry(uid_t *dir_uid, uint32_t handle, uint8_t *name,
-                             uint16_t name_len, void *target, uint16_t target_len,
-                             boolean is_root, uint8_t *result,
-                             status_$t *status_ret);
+                             uint16_t name_len, uint8_t *target,
+                             uint16_t target_len, boolean replace_flag,
+                             uint8_t *result, status_$t *status_ret);
 
 /* dir_$old_read_link_data - Read link target data from overflow blocks
  *
@@ -1051,10 +1140,14 @@ void dir_$old_read_link_data(uint32_t handle, void *link_desc,
  * 6. AST_$COND_FLUSH - flush changes
  * On failure: truncates/deletes the created file, sets error bit.
  *
+ * Frame: (0x08) parent_uid, (0x0C) handle (the parent's mapped directory),
+ * (0x10) type word (also handed to ACL_$DEFAULT_ACL by address), (0x12)
+ * new_dir_uid, (0x16) status_ret.
+ *
  * Original address: 0x00E54546
  * Size: 488 bytes
  */
-void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
+void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, int16_t type,
                          uid_t *new_dir_uid, status_$t *status_ret);
 
 /* dir_$old_free_slot - Release/free overflow slot in directory buffer
@@ -1098,15 +1191,20 @@ int8_t dir_$old_find_overflow_slot(uint32_t handle, uint16_t hash,
                                     int8_t flags, uint16_t *bucket_out,
                                     uint16_t *sub_slot_out);
 
-/* FUN_00e54e10 - Allocate overflow slot from free list
- * Original address: 0x00E54E10
+/* dir_$old_alloc_block - take a block of an old-format directory from its
+ * free list, else the next never-used one; 0 when the directory is at its
+ * block limit.  Frame: (0x08) handle.  Result in D0w.
+ * Original address: 0x00E54E10 (82 bytes; was FUN_00e54e10)
  */
-uint16_t FUN_00e54e10(uint32_t handle);
+uint16_t dir_$old_alloc_block(uint32_t handle);
 
-/* FUN_00e54e62 - Allocate overflow slot with hash hint
- * Original address: 0x00E54E62
+/* dir_$old_reclaim_block - evict a whole block of plain entries from a hash
+ * chain other than `hash' and hand it out again.  Frame: (0x08) handle,
+ * (0x0C) hash word.  Result in D0w; see the file for the value it leaves
+ * when nothing could be evicted.
+ * Original address: 0x00E54E62 (294 bytes; was FUN_00e54e62)
  */
-uint16_t FUN_00e54e62(uint32_t handle, uint16_t hash_hint);
+uint16_t dir_$old_reclaim_block(uint32_t handle, uint16_t hash);
 
 /* dir_$old_init_buf - Initialize directory buffer
  *
@@ -1309,15 +1407,26 @@ void dir_$release_wire(void *handle);
  */
 void dir_$release_handle(void *handle_ptr);
 
-/* dir_$alloc_overflow_page - Allocate overflow page for link data
+/* dir_$alloc_overflow_page - Allocate a page for a long link's text
+ *
+ * A nested procedure of dir_$add_entry: its one argument is status_ret
+ * (0x8,A6); the handle (0x8,A2), link_len (0x1C,A2), link_data (0x1E,A2)
+ * and the overflow_page result (-0xAA,A2) are the parent's, reached through
+ * the static link `movea.l (A6),A2' - here ctx->handle, ctx->link_len,
+ * ctx->link_data and ctx->overflow_page.
  * Original address: 0x00E4E960
  */
-void dir_$alloc_overflow_page(status_$t *status_ret);
+void dir_$alloc_overflow_page(dir_insert_ctx_t *ctx, status_$t *status_ret);
 
-/* dir_$next_page - Advance to the next page in B-tree traversal
+/* dir_$next_page - Advance to the next leaf page in B-tree traversal
+ *
+ * Frame: (0x08) handle, (0x0C) depth word, (0x0E) path (the 1-based
+ * dir_$page_path_t array dir_$find_entry filled: level N at path[N-1]),
+ * (0x12) page_ret (0xFFFF when the walk is done).
  * Original address: 0x00E4D7B0
  */
-void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
+void dir_$next_page(void *handle, int16_t depth, dir_$page_path_t *path,
+                    uint16_t *page_ret);
 
 /* dir_$map_link_page - Map a link overflow page
  * Original address: 0x00E4D572
@@ -1329,11 +1438,17 @@ void *dir_$map_link_page(void *handle, uint16_t page_idx);
  */
 void dir_$get_parent_uid(uid_t *uid, status_$t *status_ret);
 
-/* dir_$read_def_prot - Read default protection from directory page
+/* dir_$read_def_prot - Read a default protection from the root page
+ *
+ * Frame (0x00E51C72-0x00E51C7E): (0x08) handle, (0x0C) acl_type (A3),
+ * (0x10) prot_buf (D2, 11 longwords), (0x14) acl_uid_ret (D3), (0x18)
+ * status_ret (A2).  ACL_$DIR_ACL / ACL_$FILE_ACL select the slot at page
+ * 0 + 0x1A / 0x4E; any other type is status_$naming_bad_type.
  * Original address: 0x00E51C6A
  */
-void dir_$read_def_prot(uint32_t handle, void *acl_type,
-                        void *prot_buf, void *acl_uid, status_$t *status_ret);
+void dir_$read_def_prot(uint32_t handle, uid_t *acl_type,
+                        uint32_t *prot_buf, uid_t *acl_uid_ret,
+                        status_$t *status_ret);
 
 /* dir_$write_def_prot - Write default protection to directory page
  *
@@ -1350,9 +1465,9 @@ void dir_$read_def_prot(uint32_t handle, void *acl_type,
  *
  * Original address: 0x00E51E18
  */
-void dir_$write_def_prot(uint32_t handle, void *acl_type,
-                         void *prot_data, void *src_acl_uid, char flush_flag,
-                         status_$t *status_ret);
+void dir_$write_def_prot(uint32_t handle, uid_t *acl_type,
+                         uint32_t *prot_data, uid_t *src_acl_uid,
+                         int8_t flush_flag, status_$t *status_ret);
 
 /* dir_$remove_entry_from_page (0x00E50D5E) is a nested Pascal subprocedure of
  * dir_$remove_entry: 0x00E5108E hands it the parent frame in A1 and it reaches
@@ -1488,9 +1603,36 @@ void DIR_$OLD_CLEANUP(void);
  *
  * Original address: 0x00E579C0
  */
-void dir_$old_read_entries(uid_t *uid, void *param_2, uint32_t param_3,
-                           uint32_t param_4, void *param_5, void *param_6,
-                           status_$t *status_ret);
+/*
+ * dir_$old_readu_rec_t - one record dir_$old_read_entries packs into the
+ * caller's buffer (0x00E57AA4-0x00E57AFE / 0x00E57BC4-0x00E57C1E).  Records
+ * are (0x1A + name_len) & ~3 bytes long and sit back to back; the name is
+ * followed by a NUL.  `cursor' is the {sub-slot, index} position of the
+ * entry itself (`move.l (A1),(0x10,A0)' after storing D5/D4 there).
+ */
+typedef struct __attribute__((packed, aligned(2))) dir_$old_readu_rec_t {
+    uint16_t size;          /* +0x00 */
+    uint16_t type;          /* +0x02: the slot's type byte */
+    uid_t    uid;           /* +0x04 */
+    uint32_t extra;         /* +0x0C */
+    uint16_t cursor[2];     /* +0x10 */
+    uint16_t name_len;      /* +0x14 */
+    uint8_t  name[];        /* +0x16 */
+} dir_$old_readu_rec_t;
+
+_Static_assert(offsetof(dir_$old_readu_rec_t, type) == 0x02, "old_readu_rec.type");
+_Static_assert(offsetof(dir_$old_readu_rec_t, uid) == 0x04, "old_readu_rec.uid");
+_Static_assert(offsetof(dir_$old_readu_rec_t, extra) == 0x0C, "old_readu_rec.extra");
+_Static_assert(offsetof(dir_$old_readu_rec_t, cursor) == 0x10, "old_readu_rec.cursor");
+_Static_assert(offsetof(dir_$old_readu_rec_t, name_len) == 0x14, "old_readu_rec.name_len");
+_Static_assert(offsetof(dir_$old_readu_rec_t, name) == 0x16, "old_readu_rec.name");
+
+/* Frame: (0x08) uid, (0x0C) cursor (two words {sub-slot, index}, in/out),
+ * (0x10) max_entries, (0x14) buf_size (bytes), (0x18) buf, (0x1C)
+ * count_ret, (0x20) status_ret. */
+void dir_$old_read_entries(uid_t *uid, uint16_t *cursor, uint32_t max_entries,
+                           uint32_t buf_size, uint8_t *buf,
+                           uint32_t *count_ret, status_$t *status_ret);
 
 /*
  * ============================================================================
@@ -2041,6 +2183,12 @@ extern uint32_t DIR_$CONST_ZERO_L;
 /* 0x00E4B444, word 0x0001 - MST remap / ACL check parameter, read as a
  * word (`btst.b #0,(1,A0)` in FILE_$GET_ATTRIBUTES at 0x00E5D99E). */
 extern uint16_t DIR_$CONST_ONE_W;
+/* 0x00E515BA, word 0x0004, after dir_$do_op_delete's `rts' (bytes 00 04).
+ * Three `pea (d,PC)' readers: FILE_$UNLOCK_D's lock mode in
+ * dir_$do_op_delete, FILE_$SET_PROT's protection type in
+ * dir_$do_op_set_acl (0x00E52C38), and ACL_$SET_DEF_ACL_CHECK's fourth
+ * argument in dir_$write_def_prot (0x00E51F0C). */
+extern const uint16_t DIR_$CONST_FOUR_W;
 /* 0x00E4BC24, byte 0xFF: ACL_$RIGHTS' shared `ignore_super` argument. */
 extern boolean DIR_$CONST_TRUE_B;
 
@@ -2154,13 +2302,19 @@ void dir_$do_op_add_link(uid_t *uid, void *name, uint16_t name_len, uid_t *file_
  * and current process type is 9, compares existing entry to verify match
  * (idempotent add). Updates root hints when adding to NAME_$ROOT_UID.
  *
+ * Frame (0x00E4FEFA-0x00E4FF16): (0x08) uid, (0x0C) rights word for
+ * dir_$open_dir, (0x0E) name, (0x12) name_len, (0x14) entry_type, (0x16)
+ * extra, (0x1A) target_uid, (0x1E) link_len, (0x20) link_data (a VA; only
+ * read for type 4), (0x24) volume_ret (a word), (0x28) status_ret.
+ *
  * Original address: 0x00E4FEF2
  * Size: 454 bytes
  */
-void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name, uint16_t name_len,
-                          uint16_t entry_type, uint32_t extra, void *uid_data,
-                          uint16_t target_len, uint32_t target_data,
-                          void *result, status_$t *status_ret);
+void dir_$do_op_add_entry(uid_t *uid, int16_t rights, void *name,
+                          uint16_t name_len, uint16_t entry_type,
+                          uint32_t extra, uid_t *target_uid,
+                          uint16_t link_len, uint32_t link_data,
+                          void *volume_ret, status_$t *status_ret);
 /* dir_$do_op_delete - DO_OP handler for delete/drop operations
  *
  * Server-side handler for delete file (ops 0x2E, 0x36) and drop hard link
@@ -2539,40 +2693,7 @@ void dir_$purify_split_pages(dir_insert_ctx_t *ctx, status_$t *status_ret);
  */
 void dir_$finalize_split(dir_insert_ctx_t *ctx, status_$t *status_ret);
 
-/*
- * dir_$rep_entry_t - the record REM_NAME_$GET_ENTRY (0x00E4AD18) fills
- *
- * Recovered from DIR_$OLD_VALIDATE_ROOT_ENTRY's frame at A6-0x58
- * (0x00E58102), which is the only consumer in this tree.  The fields it
- * touches:
- *   +0x02  the case-mapped name's length - UNMAP_CASE's in-length VAR
- *          argument at 0x00E581AE (`pea (-0x56,A6)`)
- *   +0x04  the case-mapped name itself - UNMAP_CASE's input at 0x00E581B2
- *          (`pea (-0x54,A6)`); 0x20 bytes, the size the max-out-length cell
- *          0x00E544AE names
- *   +0x24  the object UID, compared against the local entry's at 0x00E58126
- *          and handed to name_$old_add_entry at 0x00E581C4
- *   +0x2C  the entry's extra longword, compared at 0x00E58138 and passed as
- *          name_$old_add_entry's flags at 0x00E581C0
- * The record runs A6-0x58..A6-0x29, i.e. 0x30 bytes.
- */
-/* Every field already lands on its natural boundary, so the record needs no
- * packing; the _Static_asserts below pin the offsets to the image's. */
-typedef struct dir_$rep_entry_t {
-    uint16_t hdr;               /* 0x00: not read by this caller */
-    uint16_t name_len;          /* 0x02 */
-    uint8_t  name[0x20];        /* 0x04 */
-    uid_t    uid;               /* 0x24 */
-    uint32_t extra;             /* 0x2C */
-} dir_$rep_entry_t;
-
-#if defined(ARCH_M68K)
-_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name_len) == 0x02, "dir_$rep_entry_t.name_len");
-_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name) == 0x04, "dir_$rep_entry_t.name");
-_Static_assert(__builtin_offsetof(dir_$rep_entry_t, uid) == 0x24, "dir_$rep_entry_t.uid");
-_Static_assert(__builtin_offsetof(dir_$rep_entry_t, extra) == 0x2C, "dir_$rep_entry_t.extra");
-_Static_assert(sizeof(dir_$rep_entry_t) == 0x30, "sizeof dir_$rep_entry_t");
-#endif
+/* dir_$rep_entry_t is in dir/dir.h: name_$old_get_root_entry reads it. */
 
 /*
  * ============================================================================
@@ -2590,7 +2711,11 @@ _Static_assert(sizeof(dir_$rep_entry_t) == 0x30, "sizeof dir_$rep_entry_t");
 extern int16_t  DIR_$READU_ATTR_SIZE;   /* 0xE4DFFA: word 0x0090 - FILE_$GET_ATTRIBUTES size_ptr
                                  * (`cmpi.w #0x90,(A0)` at 0x00E5D9F6) */
 extern uint8_t  DIR_$READU_NUL_NAME;   /* 0xE4DFFC: NUL byte used as the 1-char name "\0" */
-extern uint8_t  DIR_$CASE_FOLD_BITMAP; /* 0xE4CD84: case-folding character bitmap (07 ff ff fe ...) */
+/* 0xE4CD84: the Pascal set ['A'..'Z'] over chars 0..0x5F that the
+ * replicated-root readers fold to lower case; char c is bit (c & 7) of byte
+ * (0x5F - c) >> 3.  12 bytes, defined in dir/lookup_entry.c. */
+#define DIR_CASE_FOLD_BITMAP_SIZE 12
+extern const uint8_t DIR_$CASE_FOLD_BITMAP[DIR_CASE_FOLD_BITMAP_SIZE];
 /* 0x00E4B448 (longword 0x00008000, MST_$REMAP_PRIVI's config2/config3) has
  * dir_$map_page as its only reader and is a file static there. */
 extern const int32_t DIR_$ONE_PAGE_L; /* 0xE52040: 0x00000400 - one page; FILE_$FW_PARTIAL byte

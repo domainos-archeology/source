@@ -44,7 +44,7 @@
 #define ATTR_TYPE_DIRTY          0x02  /* set bit 2 of aote_t.attr_flags_hi */
 #define ATTR_TYPE_ACL_UID        0x03
 #define ATTR_TYPE_CREATION_TIME  0x04
-#define ATTR_TYPE_MOD_TIME       0x05
+#define ATTR_TYPE_DIRPTR       0x05
 #define ATTR_TYPE_ADD_REFCOUNT   0x06
 #define ATTR_TYPE_SUB_REFCOUNT   0x07
 #define ATTR_TYPE_SET_REFCOUNT   0x08
@@ -76,7 +76,7 @@
 #define ATTR_SET_BASIC 0x00003FFFu
 
 /*
- * aote_t.attr_flags_lo bit 1 marks a "special" object: only MOD_TIME and
+ * aote_t.attr_flags_lo bit 1 marks a "special" object: only DIRPTR and
  * BLOCKS may be set on it (0xE04B46: btst.b #0x1,(0xf,A2)).
  */
 #define AOTE_ATTR_SPECIAL 0x02
@@ -177,10 +177,10 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         goto invalid_attr;                                  /* 0xE04B42 -> 0xE050F4 */
     }
 
-    /* 0xE04B46: special objects accept only MOD_TIME and BLOCKS. */
+    /* 0xE04B46: special objects accept only DIRPTR and BLOCKS. */
     if ((aote->attr_flags_lo & AOTE_ATTR_SPECIAL) != 0) {
-        if (attr_type == ATTR_TYPE_MOD_TIME) {              /* 0xE04B50 */
-            aote->mod_time = *(uid_t *)value;               /* 0xE04B5C */
+        if (attr_type == ATTR_TYPE_DIRPTR) {              /* 0xE04B50 */
+            aote->dirptr = *(uid_t *)value;               /* 0xE04B5C */
         } else if (attr_type == ATTR_TYPE_BLOCKS) {         /* 0xE04B68 */
             aote->blocks = *(uint32_t *)value;              /* 0xE04B74 */
         } else {
@@ -235,8 +235,8 @@ static void ast_$set_attr_dispatch(uint16_t attr_type, void *value,
         aote->dtc = *(uid_t *)value;
         break;
 
-    case ATTR_TYPE_MOD_TIME:                                /* 0xE04CD4 */
-        aote->mod_time = *(uid_t *)value;
+    case ATTR_TYPE_DIRPTR:                                /* 0xE04CD4 */
+        aote->dirptr = *(uid_t *)value;
         break;
 
     case ATTR_TYPE_ADD_REFCOUNT:                            /* 0xE04CE4 */

@@ -76,10 +76,9 @@ static const int16_t dir_$do_op_delete_acl_opts_00e505c4 = -1;
 static uid_t *dir_$do_op_delete_acl_ctx_00e4f33c;
 
 /*
- * 0x00E515BA, the word immediately after this function: FILE_$UNLOCK_D's
- * lock_mode argument.  Raw bytes 00 04.
+ * 0x00E515BA, the word immediately after this function, is FILE_$UNLOCK_D's
+ * lock_mode argument: the shared cell DIR_$CONST_FOUR_W (dir/dir_data.c).
  */
-static const uint16_t dir_$do_op_delete_unlock_mode_00e515ba = 4;
 
 /*
  * Bits of the rights word ACL_$RIGHTS returns that this function tests
@@ -374,7 +373,7 @@ remove_entry:                                           /* 0x00E51530 */
      * is discarded; the caller keeps the removal's status. */
     if (obj_locked < 0) {
         FILE_$UNLOCK_D(&loc.uid, &lock_slot,
-                       (uint16_t *)&dir_$do_op_delete_unlock_mode_00e515ba,
+                       (uint16_t *)&DIR_$CONST_FOUR_W,
                        &ast_status);
     }
     return;                                             /* 0x00E515B0 */

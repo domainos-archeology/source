@@ -525,7 +525,7 @@ TEST(out_of_range_attr_type_is_invalid)
     ASSERT_EQ(status_$ast_incompatible_request, status);
 }
 
-/* 0xE04B46: a special object accepts MOD_TIME and BLOCKS and nothing else. */
+/* 0xE04B46: a special object accepts DIRPTR and BLOCKS and nothing else. */
 TEST(special_object_rejects_other_attrs)
 {
     status_$t status = 0xFFFFFFFF;

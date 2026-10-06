@@ -227,7 +227,8 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
                 dir_$do_op_add_entry(&local_uid, 2, req + 0x9c,
                              *((uint16_t *)(req + 0x8e)),
                              3, *((uint32_t *)(req + 0x98)),
-                             req + 0x90, 0, (uint32_t)(uintptr_t)dir_$find_entry,
+                             (uid_t *)(req + 0x90), 0,
+                             (uint32_t)(uintptr_t)dir_$find_entry,
                              result_buf, &resp->status);
             }
             if ((int8_t)AUDIT_$ENABLED < 0) {
@@ -382,7 +383,10 @@ void DIR_$DO_OP(void *request, int16_t req_size, int16_t resp_size,
         case 0x3C: /* Add link */
             dir_$do_op_add_entry(&local_uid, 2, req + 0x96,
                          *((uint16_t *)(req + 0x8e)),
-                         4, 0, &DIR_$CONST_ZERO_L,
+                         4, 0,
+                         /* `pea (-0x1290,PC)' 0x00E4C5CA: DIR_$CONST_ZERO_L
+                          * stands in for the unused target UID */
+                         (uid_t *)&DIR_$CONST_ZERO_L,
                          *((uint16_t *)(req + 0x90)),
                          *((uint32_t *)(req + 0x92)),
                          result_buf, &resp->status);

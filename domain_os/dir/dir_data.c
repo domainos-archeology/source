@@ -168,6 +168,10 @@ uint32_t DIR_$CONST_ZERO_L = 0;
 /* 0x00E4B444, after the `rts` at 0x00E4B442.  Bytes 00 01. */
 uint16_t DIR_$CONST_ONE_W = 1;
 
+/* 0x00E515BA, after the `rts' at 0x00E515B8.  Bytes 00 04.  Shared by
+ * dir_$do_op_delete, dir_$do_op_set_acl and dir_$write_def_prot. */
+const uint16_t DIR_$CONST_FOUR_W = 4;
+
 /* 0x00E4BC24, byte 0xFF (followed by a 0x00 filler byte).  ACL_$RIGHTS'
  * `ignore_super` argument - TRUE, i.e. the super-user bypass is suppressed.
  * Every DIR call site reaches this ONE cell with `pea (d,PC)`:

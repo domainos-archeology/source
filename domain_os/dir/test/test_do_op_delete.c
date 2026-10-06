@@ -238,6 +238,9 @@ void FILE_$DELETE_OBJ(uid_t *file_uid, int8_t force, void *param_3,
 /* ------------------------------------------------------------------ */
 
 
+/* 0x00E515BA, the shared word 4 (dir/dir_data.c) */
+const uint16_t DIR_$CONST_FOUR_W = 4;
+
 #include "../do_op_delete.c"
 
 /* ------------------------------------------------------------------ */

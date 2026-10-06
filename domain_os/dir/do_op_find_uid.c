@@ -171,7 +171,8 @@ void dir_$do_op_find_uid(uid_t *uid, uid_t *target_uid, int8_t flag,
         if (found < 0) goto found_entry;
 
         /* Move to next page */
-        dir_$next_page((void *)local_handle[0], depth, extra_array + 2,
+        dir_$next_page((void *)local_handle[0], depth,
+                       (dir_$page_path_t *)(extra_array + 2),
                        &page_idx);
         if (page_idx == (uint16_t)-1) break;
         page_data = (uint8_t *)dir_$map_page((void *)local_handle[0], page_idx);
@@ -232,7 +233,7 @@ found_entry:
 
                             if (char_val < 0x60 && offset >= 0) {
                                 uint16_t byte_idx = (uint16_t)offset >> 3;
-                                if ((*(&DIR_$CASE_FOLD_BITMAP + byte_idx) &
+                                if ((DIR_$CASE_FOLD_BITMAP[byte_idx] &
                                     (1 << (ch & 7))) != 0) {
                                     result.name[j - 1] = ch + 0x20;
                                 }
@@ -246,7 +247,7 @@ found_entry:
                 /* 0x00E4E6A8-0x00E4E6CE: eleven arguments; the tenth is the
                  * A6-0x86 cell, NOT the REM_NAME result record. */
                 dir_$do_op_add_entry(uid, 0, result.name, result.name_len,
-                                     3, result.node_id, result.extra,
+                                     3, result.extra, &result.uid,
                                      0, (uint32_t)(uintptr_t)dir_$find_entry,
                                      add_entry_arg10, &local_status);
 
@@ -255,14 +256,14 @@ found_entry:
                     dir_$do_op_drop_entry(uid, 0, result.name, result.name_len,
                                           3, drop_buf, &local_status);
                     dir_$do_op_add_entry(uid, 0, result.name, result.name_len,
-                                         3, result.node_id, result.extra,
+                                         3, result.extra, &result.uid,
                                          0, (uint32_t)(uintptr_t)dir_$find_entry,
                                          add_entry_arg10, &local_status);
                 }
 
                 /* Return results */
                 if (flag < 0) {
-                    *extra_ret = result.node_id;
+                    *extra_ret = result.extra;
                 } else {
                     *name_len_ret = result.name_len;
                     uint16_t ci = *name_len_ret - 1;

@@ -116,11 +116,11 @@ static uint16_t  create_type_seen;
 static uid_t    *create_uid_seen;
 static uint32_t  create_handle_seen;
 static status_$t create_status;
-void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, uint16_t type,
+void dir_$old_create_obj(uid_t *parent_uid, uint32_t handle, int16_t type,
                          uid_t *new_dir_uid, status_$t *status_ret)
 {
     create_calls++;
-    create_type_seen = type;
+    create_type_seen = (uint16_t)type;
     create_uid_seen = new_dir_uid;
     create_handle_seen = handle;
     (void)parent_uid;

@@ -34,6 +34,18 @@
 
 #include "dir/dir_internal.h"
 
+/*
+ * DIR_$CASE_FOLD_BITMAP - 0x00E4CD84, the 12 bytes after this routine's
+ * `rts' (0x00E4CD82), before dir_$get_entry_cached at 0x00E4CD90.  Three
+ * readers reach it with `lea (d,PC),A0': this routine (0x00E4CCFE),
+ * 0x00E4E11C and dir_$do_op_find_uid (0x00E4E692).  Image bytes
+ * (`gsk read 0xE4CD84 12`): 07 ff ff fe 00 00 00 00 00 00 00 00 - the set
+ * ['A'..'Z'] over chars 0..0x5F.
+ */
+const uint8_t DIR_$CASE_FOLD_BITMAP[DIR_CASE_FOLD_BITMAP_SIZE] = {
+    0x07, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                        uint16_t *type_ret, uid_t *uid_ret,
                        uint32_t *extra_ret, uint8_t *found_ret,
@@ -166,7 +178,7 @@ void dir_$lookup_entry(uid_t *uid, void *name, uint16_t name_len,
                             /* 0x00E4CCFC-0x00E4CD02: bit (ch & 7) of
                              * DIR_$CASE_FOLD_BITMAP[(0x5F - ch) >> 3]. */
                             int16_t byte_idx = (int16_t)(diff >> 3);
-                            if (((&DIR_$CASE_FOLD_BITMAP)[byte_idx] &
+                            if ((DIR_$CASE_FOLD_BITMAP[byte_idx] &
                                  (1u << (rep.name[j - 1] & 7))) != 0) {
                                 /* 0x00E4CD08-0x00E4CD0A: `add.b #0x20`. */
                                 rep.name[j - 1] =

@@ -553,6 +553,20 @@ void ACL_$CONVERT_FUNKY_ACL(void *acl_uid, void *acl_data_out,
                              status_$t *status_ret);
 
 /*
+ * ACL_$SET_DEF_ACL_CHECK (0x00E48BF8, not yet translated: source-lo9h) - may the caller
+ * set a default ACL on this directory?  Returns a Domain boolean in D0b.
+ *
+ * Frame read off the body: (0x08) dir_uid, copied as 8 bytes at 0x00E48C0E;
+ * (0x10) acl_uid, compared with the nil-ACL UID at 0x00E1737C and handed to
+ * the rights check at 0x00E48C82; (0x18) acl_type, compared at 0x00E48CA0;
+ * (0x1C) status_ret.  (0x0C) and (0x14) are never read; dir_$write_def_prot
+ * passes the protection block and the shared word 4 (0x00E515BA) there.
+ */
+int8_t ACL_$SET_DEF_ACL_CHECK(uid_t *dir_uid, void *prot_data, uid_t *acl_uid,
+                              const uint16_t *unused_4, uid_t *acl_type,
+                              status_$t *status_ret);
+
+/*
  * ============================================================================
  * Project List Management
  * ============================================================================

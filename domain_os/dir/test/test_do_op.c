@@ -252,9 +252,9 @@ void dir_$do_op_add_bak(uid_t *uid, uint16_t type, void *name_ptr,
                         status_$t *st)
 { (void)uid;(void)type;(void)name_ptr;(void)name_len;(void)uid_data;(void)result_uid; OK(st); }
 
-void dir_$do_op_add_entry(uid_t *uid, uint16_t type, void *name,
+void dir_$do_op_add_entry(uid_t *uid, int16_t type, void *name,
                           uint16_t name_len, uint16_t entry_type,
-                          uint32_t extra, void *uid_data, uint16_t target_len,
+                          uint32_t extra, uid_t *uid_data, uint16_t target_len,
                           uint32_t target_data, void *result, status_$t *st)
 { (void)uid;(void)type;(void)name;(void)name_len;(void)entry_type;(void)extra;
   (void)uid_data;(void)target_len;(void)target_data;(void)result; OK(st); }

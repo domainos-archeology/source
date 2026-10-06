@@ -679,6 +679,33 @@ void DIR_$OLD_SET_DEFAULT_ACL(uid_t *dir_uid, uid_t *acl_type, uid_t *acl_uid,
                               status_$t *status_ret);
 
 /*
+ * dir_$old_slot_t - one 0x30-byte entry slot of an old-format directory
+ *
+ * Recovered from the two search routines DIR_$OLD_FIND_UID and
+ * DIR_$OLD_FIND_NET use (0x00E557D4, 0x00E559D6).  Inline slot i (1-based)
+ * starts at dir + 0x30*i - 0x16 (the code holds A0 = dir + 0x30*i and reads
+ * the name at -0x16, the extra longword at +0xA, the length at +0x10, the
+ * type at +0x11 and the UID at +0x12); slot j of overflow block k starts at
+ * dir + 0x96*k + 0x30*j + 0x340 (A0 = dir + 0x96*k + 0x30*j; +0x340 name,
+ * +0x360 extra, +0x366 length, +0x367 type, +0x368 UID).  Inline slots sit
+ * on 2-byte boundaries only, so the record is packed.
+ */
+typedef struct __attribute__((packed)) dir_$old_slot_t {
+    uint8_t  name[0x20];        /* +0x00: the case-mapped name */
+    uint32_t extra;             /* +0x20: copied out as dir_$rep_entry_t.extra */
+    uint8_t  _24[2];            /* +0x24: not read by the search routines */
+    uint8_t  name_len;          /* +0x26 */
+    uint8_t  type;              /* +0x27: 1 = in use by an object */
+    uid_t    uid;               /* +0x28 */
+} dir_$old_slot_t;
+
+_Static_assert(offsetof(dir_$old_slot_t, extra) == 0x20, "dir_$old_slot_t.extra");
+_Static_assert(offsetof(dir_$old_slot_t, name_len) == 0x26, "dir_$old_slot_t.name_len");
+_Static_assert(offsetof(dir_$old_slot_t, type) == 0x27, "dir_$old_slot_t.type");
+_Static_assert(offsetof(dir_$old_slot_t, uid) == 0x28, "dir_$old_slot_t.uid");
+_Static_assert(sizeof(dir_$old_slot_t) == 0x30, "dir_$old_slot_t must be 0x30 bytes");
+
+/*
  * The record DIR_$OLD_GET_ENTRYU fills.  NAME_$OLD_DELETE_ENTRYU reads its
  * first two fields: the entry type word at +0x00 (`move.w (-0xc8,A6),D0w` at
  * 0x00E56B44) and the object UID at +0x02 (`lea (-0xc6,A6),A0` at
@@ -691,14 +718,64 @@ typedef struct __attribute__((packed)) dir_$old_entry_t {
     uint32_t extra;     /* 0x0A: `move.l (0x20,A0),(0xa,A4)` at 0x00E57EC0 */
 } dir_$old_entry_t;
 
-#if defined(ARCH_M68K)
 _Static_assert(__builtin_offsetof(dir_$old_entry_t, uid) == 0x02, "dir_$old_entry_t.uid");
 _Static_assert(__builtin_offsetof(dir_$old_entry_t, extra) == 0x0A, "dir_$old_entry_t.extra");
 _Static_assert(sizeof(dir_$old_entry_t) == 0x0E, "sizeof dir_$old_entry_t");
-#endif
 
 void DIR_$OLD_GET_ENTRYU(uid_t *dir_uid, char *name, uint16_t *name_len,
                          void *entry_ret, status_$t *status_ret);
+
+/*
+ * dir_$rep_entry_t - the record REM_NAME_$GET_ENTRY (0x00E4AD18) fills
+ *
+ * Recovered from DIR_$OLD_VALIDATE_ROOT_ENTRY's frame at A6-0x58
+ * (0x00E58102), which is the only consumer in this tree.  The fields it
+ * touches:
+ *   +0x02  the case-mapped name's length - UNMAP_CASE's in-length VAR
+ *          argument at 0x00E581AE (`pea (-0x56,A6)`)
+ *   +0x04  the case-mapped name itself - UNMAP_CASE's input at 0x00E581B2
+ *          (`pea (-0x54,A6)`); 0x20 bytes, the size the max-out-length cell
+ *          0x00E544AE names
+ *   +0x24  the object UID, compared against the local entry's at 0x00E58126
+ *          and handed to name_$old_add_entry at 0x00E581C4
+ *   +0x2C  the entry's extra longword, compared at 0x00E58138 and passed as
+ *          name_$old_add_entry's flags at 0x00E581C0
+ * The record runs A6-0x58..A6-0x29, i.e. 0x30 bytes.
+ * name_$old_get_root_entry (0x00E57F74, record at A6-0x40) also reads +0x00
+ * as the entry type (`cmpi.w #0x1,D0w' at 0x00E57FE2, copied to its
+ * dir_$old_entry_t) and copies +0x24..+0x2F as that record's UID and extra.
+ */
+/* Every field already lands on its natural boundary, so the record needs no
+ * packing; the _Static_asserts below pin the offsets to the image's. */
+typedef struct dir_$rep_entry_t {
+    uint16_t hdr;               /* 0x00: the entry type */
+    uint16_t name_len;          /* 0x02 */
+    uint8_t  name[0x20];        /* 0x04 */
+    uid_t    uid;               /* 0x24 */
+    uint32_t extra;             /* 0x2C */
+} dir_$rep_entry_t;
+
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name_len) == 0x02, "dir_$rep_entry_t.name_len");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, name) == 0x04, "dir_$rep_entry_t.name");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, uid) == 0x24, "dir_$rep_entry_t.uid");
+_Static_assert(__builtin_offsetof(dir_$rep_entry_t, extra) == 0x2C, "dir_$rep_entry_t.extra");
+_Static_assert(sizeof(dir_$rep_entry_t) == 0x30, "sizeof dir_$rep_entry_t");
+
+/* dir_$old_find_entry - Find entry in directory by name
+ *
+ * Searches a directory for a named entry. First checks inline entries
+ * (slots 1..N at 0x30-byte intervals), then uses a hash lookup to
+ * search overflow chains. Returns the entry pointer, slot index,
+ * and chain level.
+ *
+ * Returns: 0xFF (true) if found, 0 if not found.  *entry_ret is the VA
+ * of the entry's dir_$old_slot_t.
+ *
+ * Original address: 0x00E54B9E
+ */
+int8_t dir_$old_find_entry(uint32_t handle, uint8_t *name, uint16_t name_len,
+                           int32_t *entry_ret, uint16_t *slot_idx,
+                           uint16_t *chain_level);
 
 /* dir_$old_unlink_entry - Find and remove directory entry by name
  *

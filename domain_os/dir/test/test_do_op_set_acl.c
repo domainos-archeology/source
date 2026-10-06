@@ -190,6 +190,9 @@ void audit_$log_prot_op(status_$t status, uid_t *uid, void *prot_data,
  * Code under test
  * ================================================================ */
 
+/* 0x00E515BA, the shared word 4 (dir/dir_data.c) */
+const uint16_t DIR_$CONST_FOUR_W = 4;
+
 #include "../do_op_set_acl.c"
 
 /* A funky UID whose selector bits (high word of .low, & 0xFF0, >>4, & 0xE0)

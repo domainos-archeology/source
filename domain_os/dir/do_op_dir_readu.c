@@ -53,9 +53,6 @@
 
 /* DIR_$READU_NUL_NAME - NUL byte used as 1-char name for dir_$find_entry("\0", 1) */
 
-/* dir_$next_page - Advance to the next page in B-tree traversal */
-void dir_$next_page(void *handle, int16_t depth, void *extra, uint16_t *page_ret);
-
 /* Name offset table */
 
 void dir_$do_op_dir_readu(uid_t *uid, int16_t version, char *name,
@@ -471,7 +468,8 @@ start_named_search:
                 break;
             }
         }
-        dir_$next_page((void *)local_handle, depth, extra_array + 2, &page_idx);
+        dir_$next_page((void *)local_handle, depth,
+                       (dir_$page_path_t *)(extra_array + 2), &page_idx);
         if (page_idx == 0xFFFF) break;  /* No more pages */
         entry_idx = 1;
     }
