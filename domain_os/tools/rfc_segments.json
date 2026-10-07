@@ -1,0 +1,2563 @@
+{
+ "image": "/Users/toshok/src/domainos-archeology/sr10.2-install/install/ri.apollo.os.v.10.2/sau2/domain_os",
+ "size": 612174,
+ "header": {
+  "load": "0x101400",
+  "start": "0x101424",
+  "machine": "0x2",
+  "header_word_10": "0x0"
+ },
+ "info": {
+  "kernel_offset": "0xc00",
+  "data_va": "0xe78400",
+  "kernel_va": "0xe00800",
+  "magic": "0xfeed2b03",
+  "split_ppn": "0x55f",
+  "move_to_ppn": "0x600"
+ },
+ "cold_constants": {
+  "reloc_va": "0xe88834",
+  "kernel_va": "0xe00800",
+  "kernel_low": "0x102000",
+  "split_low": "0x157c00",
+  "move_to_phys": "0x180000",
+  "os_page_end": "0xec4800",
+  "mmap_va": "0xeb4800",
+  "pttx_va": "0xec2800",
+  "initial_sp": "0xeb2000",
+  "entry": "0xe337f4"
+ },
+ "file_regions": [
+  {
+   "name": "RFC header",
+   "low": "0x101400",
+   "size": "0xc"
+  },
+  {
+   "name": "info block",
+   "low": "0x10140c",
+   "size": "0x18"
+  },
+  {
+   "name": "COLD code+data",
+   "low": "0x101424",
+   "end": "0x101c00",
+   "note": "map: D22 COLD size 7FC; 0x101BFC..0x101C00 is the stack top pad"
+  },
+  {
+   "name": "DUMP",
+   "low": "0x101c00",
+   "va": "0xE00400",
+   "size": "0x400",
+   "phys_runtime": "0x100C00 (copied by COLD 0x10154E)"
+  },
+  {
+   "name": "kernel",
+   "low": "0x102000",
+   "end": "0x18a034",
+   "va": "0xe00800",
+   "va_end": "0xe88834",
+   "va_minus_low": "0xcfe800"
+  },
+  {
+   "name": "RELOC",
+   "low": "0x18a034",
+   "end": "0x196b4e",
+   "entries": 10960,
+   "table_end": "0x194b76",
+   "zero_pad": "0x1fd8"
+  }
+ ],
+ "mmu_map_table": [
+  {
+   "at": "0x101850",
+   "count": 15,
+   "ppn": "0x1",
+   "phys": "0x400",
+   "va": "0x400",
+   "va_flags": "0x0",
+   "prot": "0x130",
+   "bytes": "0x3c00"
+  },
+  {
+   "at": "0x10185a",
+   "count": 8,
+   "ppn": "0x50",
+   "phys": "0x14000",
+   "va": "0x4000",
+   "va_flags": "0x0",
+   "prot": "0x130",
+   "bytes": "0x2000"
+  },
+  {
+   "at": "0x101864",
+   "count": 16,
+   "ppn": "0x10",
+   "phys": "0x4000",
+   "va": "0xffb800",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x4000"
+  },
+  {
+   "at": "0x10186e",
+   "count": 1,
+   "ppn": "0x20",
+   "phys": "0x8000",
+   "va": "0xffb400",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x101878",
+   "count": 1,
+   "ppn": "0x21",
+   "phys": "0x8400",
+   "va": "0xffb000",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x101882",
+   "count": 1,
+   "ppn": "0x22",
+   "phys": "0x8800",
+   "va": "0xffac00",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x10188c",
+   "count": 1,
+   "ppn": "0x27",
+   "phys": "0x9c00",
+   "va": "0xffa800",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x101896",
+   "count": 1,
+   "ppn": "0x26",
+   "phys": "0x9800",
+   "va": "0xff9c00",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018a0",
+   "count": 1,
+   "ppn": "0x25",
+   "phys": "0x9400",
+   "va": "0xff9800",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018aa",
+   "count": 1,
+   "ppn": "0x24",
+   "phys": "0x9000",
+   "va": "0xffa000",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018b4",
+   "count": 128,
+   "ppn": "0x80",
+   "phys": "0x20000",
+   "va": "0xfc0000",
+   "va_flags": "0x0",
+   "prot": "0x160",
+   "bytes": "0x20000"
+  },
+  {
+   "at": "0x1018be",
+   "count": 1,
+   "ppn": "0x400",
+   "phys": "0x100000",
+   "va": "0xe00000",
+   "va_flags": "0x4",
+   "prot": "0x170",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018c8",
+   "count": 1,
+   "ppn": "0x403",
+   "phys": "0x100c00",
+   "va": "0xe00400",
+   "va_flags": "0x4",
+   "prot": "0x170",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018d2",
+   "count": 1,
+   "ppn": "0x404",
+   "phys": "0x101000",
+   "va": "0x0",
+   "va_flags": "0x4",
+   "prot": "0x170",
+   "bytes": "0x400"
+  },
+  {
+   "at": "0x1018dc",
+   "count": 2,
+   "ppn": "0x405",
+   "phys": "0x101400",
+   "va": "0x101400",
+   "va_flags": "0x3",
+   "prot": "0x170",
+   "bytes": "0x800"
+  },
+  {
+   "at": "0x1018e6",
+   "count": 343,
+   "ppn": "0x408",
+   "phys": "0x102000",
+   "va": "0xe00800",
+   "va_flags": "0x4",
+   "prot": "0x170",
+   "bytes": "0x55c00"
+  },
+  {
+   "at": "0x1018f0",
+   "count": 441,
+   "ppn": "0x600",
+   "phys": "0x180000",
+   "va": "0xe56400",
+   "va_flags": "0x4",
+   "prot": "0x170",
+   "bytes": "0x6e400"
+  }
+ ],
+ "reloc": {
+  "entries": 10960,
+  "window_counts": {
+   "E00000..FA0000 +2F00000": 10639,
+   "none": 51,
+   "CC0000..E00000 +2E00000": 56,
+   "FA0000..4000000 +3000000": 205,
+   "700000..800000 -300000": 9
+  },
+  "cells_below_kernel": [
+   "0x101410",
+   "0x101414",
+   "0x101426",
+   "0x101496",
+   "0x10149c",
+   "0x1014da",
+   "0x1014e8",
+   "0x101546",
+   "0x101592",
+   "0x1015a2",
+   "0x1015da",
+   "0x1015e6",
+   "0x10167c",
+   "0x10168a",
+   "0x101698",
+   "0x1016a0",
+   "0x1016ae",
+   "0x1016b8",
+   "0x1016c4",
+   "0x1016ca",
+   "0x1016d2",
+   "0x1016e4",
+   "0x1016fa",
+   "0x101708",
+   "0x101726",
+   "0x10175c",
+   "0x10176a",
+   "0x1017a2",
+   "0x101868",
+   "0x101872",
+   "0x10187c",
+   "0x101886",
+   "0x101890",
+   "0x10189a",
+   "0x1018a4",
+   "0x1018ae",
+   "0x1018b8",
+   "0x1018c2",
+   "0x1018cc",
+   "0x1018ea",
+   "0x1018f4",
+   "0x101c0c",
+   "0x101c50",
+   "0x101cbe",
+   "0x101d2a",
+   "0x101d42",
+   "0x101d4e"
+  ]
+ },
+ "map_segments": [
+  {
+   "name": "TRAP_PAGE",
+   "kind": "D",
+   "num": 37,
+   "va": "0x0",
+   "size": "0x400",
+   "map_loaded_at": "0x0",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "PROT",
+   "kind": "D",
+   "num": 2,
+   "va": "0x0",
+   "size": "0x0",
+   "map_loaded_at": "0x0",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "ABSOLUTE",
+   "kind": "D",
+   "num": 40,
+   "va": "0x0",
+   "size": "0x0",
+   "map_loaded_at": "0x0",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "COLD",
+   "kind": "D",
+   "num": 22,
+   "va": "0x101400",
+   "size": "0x7fc",
+   "map_loaded_at": "0x101400",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "PTT",
+   "kind": "D",
+   "num": 54,
+   "va": "0x700000",
+   "size": "0x0",
+   "map_loaded_at": "0x700000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "UNWIRED_STACKS",
+   "kind": "D",
+   "num": 96,
+   "va": "0xd00000",
+   "size": "0x50000",
+   "map_loaded_at": "0xd00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "OS_LOW",
+   "kind": "D",
+   "num": 92,
+   "va": "0xd00000",
+   "size": "0x0",
+   "map_loaded_at": "0xd00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "GLOBAL_B_",
+   "kind": "D",
+   "num": 94,
+   "va": "0xd00000",
+   "size": "0x0",
+   "map_loaded_at": "0xd00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "DISK_BUFFERS",
+   "kind": "D",
+   "num": 46,
+   "va": "0xd50000",
+   "size": "0x14c00",
+   "map_loaded_at": "0xd50000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "NETPOOL",
+   "kind": "D",
+   "num": 1,
+   "va": "0xd64c00",
+   "size": "0x30000",
+   "map_loaded_at": "0xd64c00",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "PBU_TABLES",
+   "kind": "D",
+   "num": 70,
+   "va": "0xd64c00",
+   "size": "0x0",
+   "map_loaded_at": "0xd64c00",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "OS_BUFFERS_END",
+   "kind": "D",
+   "num": 97,
+   "va": "0xd64c00",
+   "size": "0x0",
+   "map_loaded_at": "0xd64c00",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "AREA_PAGES",
+   "kind": "D",
+   "num": 99,
+   "va": "0xd94c00",
+   "size": "0xfc00",
+   "map_loaded_at": "0xd94c00",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "OS_LOW_END_",
+   "kind": "D",
+   "num": 93,
+   "va": "0xda4800",
+   "size": "0x0",
+   "map_loaded_at": "0xda4800",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "OS_BEGIN",
+   "kind": "D",
+   "num": 95,
+   "va": "0xe00000",
+   "size": "0x0",
+   "map_loaded_at": "0xe00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "MD_DATA",
+   "kind": "D",
+   "num": 38,
+   "va": "0xe00000",
+   "size": "0x0",
+   "map_loaded_at": "0xe00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "CRASH_RECORD",
+   "kind": "D",
+   "num": 41,
+   "va": "0xe00000",
+   "size": "0xc",
+   "map_loaded_at": "0xe00000",
+   "where": "absolute (loaded at = VA, not in file)"
+  },
+  {
+   "name": "DUMP",
+   "kind": "D",
+   "num": 23,
+   "va": "0xe00400",
+   "size": "0x400",
+   "map_loaded_at": "0x101c00",
+   "where": "file",
+   "low": "0x101c00",
+   "file_offset": "0x800",
+   "phys_runtime": "0x101c00",
+   "map_agrees": true
+  },
+  {
+   "name": "WIRED_PROC",
+   "kind": "I",
+   "num": 4,
+   "va": "0xe00800",
+   "size": "0x1d0f4",
+   "map_loaded_at": "0x102000",
+   "where": "file",
+   "low": "0x102000",
+   "file_offset": "0xc00",
+   "phys_runtime": "0x102000",
+   "map_agrees": true
+  },
+  {
+   "name": "OS_PROC",
+   "kind": "I",
+   "num": 3,
+   "va": "0xe00800",
+   "size": "0x0",
+   "map_loaded_at": "0x102000",
+   "where": "file",
+   "low": "0x102000",
+   "file_offset": "0xc00",
+   "phys_runtime": "0x102000",
+   "map_agrees": true
+  },
+  {
+   "name": "WIRED_DATA",
+   "kind": "D",
+   "num": 24,
+   "va": "0xe1dc00",
+   "size": "0x104a0",
+   "map_loaded_at": "0x11f400",
+   "where": "file",
+   "low": "0x11f400",
+   "file_offset": "0x1e000",
+   "phys_runtime": "0x11f400",
+   "map_agrees": true
+  },
+  {
+   "name": "NET_PORT_TABLE",
+   "kind": "D",
+   "num": 28,
+   "va": "0xe2e0a0",
+   "size": "0x2e0",
+   "map_loaded_at": "0x12f8a0",
+   "where": "file",
+   "low": "0x12f8a0",
+   "file_offset": "0x2e4a0",
+   "phys_runtime": "0x12f8a0",
+   "map_agrees": true
+  },
+  {
+   "name": "DCTE_START",
+   "kind": "D",
+   "num": 44,
+   "va": "0xe2e0a0",
+   "size": "0x0",
+   "map_loaded_at": "0x12f8a0",
+   "where": "file",
+   "low": "0x12f8a0",
+   "file_offset": "0x2e4a0",
+   "phys_runtime": "0x12f8a0",
+   "map_agrees": true
+  },
+  {
+   "name": "DCTES",
+   "kind": "D",
+   "num": 45,
+   "va": "0xe2e0a0",
+   "size": "0x0",
+   "map_loaded_at": "0x12f8a0",
+   "where": "file",
+   "low": "0x12f8a0",
+   "file_offset": "0x2e4a0",
+   "phys_runtime": "0x12f8a0",
+   "map_agrees": true
+  },
+  {
+   "name": "DCTE_END",
+   "kind": "D",
+   "num": 43,
+   "va": "0xe2e0a0",
+   "size": "0x0",
+   "map_loaded_at": "0x12f8a0",
+   "where": "file",
+   "low": "0x12f8a0",
+   "file_offset": "0x2e4a0",
+   "phys_runtime": "0x12f8a0",
+   "map_agrees": true
+  },
+  {
+   "name": "REM_FILE_$DATA",
+   "kind": "D",
+   "num": 33,
+   "va": "0xe2e380",
+   "size": "0x7c",
+   "map_loaded_at": "0x12fb80",
+   "where": "file",
+   "low": "0x12fb80",
+   "file_offset": "0x2e780",
+   "phys_runtime": "0x12fb80",
+   "map_agrees": true
+  },
+  {
+   "name": "SMD_$WIRED_DATA",
+   "kind": "D",
+   "num": 35,
+   "va": "0xe2e3fc",
+   "size": "0x13c",
+   "map_loaded_at": "0x12fbfc",
+   "where": "file",
+   "low": "0x12fbfc",
+   "file_offset": "0x2e7fc",
+   "phys_runtime": "0x12fbfc",
+   "map_agrees": true
+  },
+  {
+   "name": "PAGE_INIT",
+   "kind": "D",
+   "num": 27,
+   "va": "0xe2e800",
+   "size": "0x480",
+   "map_loaded_at": "0x130000",
+   "where": "file",
+   "low": "0x130000",
+   "file_offset": "0x2ec00",
+   "phys_runtime": "0x130000",
+   "map_agrees": true
+  },
+  {
+   "name": "OS_INIT_PROC",
+   "kind": "I",
+   "num": 5,
+   "va": "0xe2f000",
+   "size": "0x5f14",
+   "map_loaded_at": "0x130800",
+   "where": "file",
+   "low": "0x130800",
+   "file_offset": "0x2f400",
+   "phys_runtime": "0x130800",
+   "map_agrees": true
+  },
+  {
+   "name": "OS_INIT_DATA",
+   "kind": "D",
+   "num": 25,
+   "va": "0xe35000",
+   "size": "0x380",
+   "map_loaded_at": "0x136800",
+   "where": "file",
+   "low": "0x136800",
+   "file_offset": "0x35400",
+   "phys_runtime": "0x136800",
+   "map_agrees": true
+  },
+  {
+   "name": ".TEXT",
+   "kind": "I",
+   "num": 1,
+   "va": "0xe38000",
+   "size": "0x39d7c",
+   "map_loaded_at": "0x139800",
+   "where": "file",
+   "low": "0x139800",
+   "file_offset": "0x38400",
+   "phys_runtime": "0x139800",
+   "map_agrees": true
+  },
+  {
+   "name": "PROCEDURE$",
+   "kind": "I",
+   "num": 7,
+   "va": "0xe71d7c",
+   "size": "0x970",
+   "map_loaded_at": "0x17357c",
+   "where": "file",
+   "low": "0x17357c",
+   "file_offset": "0x7217c",
+   "phys_runtime": "0x19b97c",
+   "map_agrees": true
+  },
+  {
+   "name": "PROC2_CREATE_PRO",
+   "kind": "I",
+   "num": 11,
+   "va": "0xe726ec",
+   "size": "0x1cac",
+   "map_loaded_at": "0x173eec",
+   "where": "file",
+   "low": "0x173eec",
+   "file_offset": "0x72aec",
+   "phys_runtime": "0x19c2ec",
+   "map_agrees": true
+  },
+  {
+   "name": "PROC2_DELETE_PRO",
+   "kind": "I",
+   "num": 10,
+   "va": "0xe74398",
+   "size": "0xf44",
+   "map_loaded_at": "0x175b98",
+   "where": "file",
+   "low": "0x175b98",
+   "file_offset": "0x74798",
+   "phys_runtime": "0x19df98",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR4_WIRED_PRO",
+   "kind": "I",
+   "num": 13,
+   "va": "0xe752dc",
+   "size": "0x4",
+   "map_loaded_at": "0x176adc",
+   "where": "file",
+   "low": "0x176adc",
+   "file_offset": "0x756dc",
+   "phys_runtime": "0x19eedc",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR5_WIRED_PRO",
+   "kind": "I",
+   "num": 14,
+   "va": "0xe752e0",
+   "size": "0x4",
+   "map_loaded_at": "0x176ae0",
+   "where": "file",
+   "low": "0x176ae0",
+   "file_offset": "0x756e0",
+   "phys_runtime": "0x19eee0",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR6_WIRED_PRO",
+   "kind": "D",
+   "num": 72,
+   "va": "0xe752e4",
+   "size": "0x4",
+   "map_loaded_at": "0x176ae4",
+   "where": "file",
+   "low": "0x176ae4",
+   "file_offset": "0x756e4",
+   "phys_runtime": "0x19eee4",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR7_WIRED_PRO",
+   "kind": "I",
+   "num": 15,
+   "va": "0xe752e8",
+   "size": "0x4",
+   "map_loaded_at": "0x176ae8",
+   "where": "file",
+   "low": "0x176ae8",
+   "file_offset": "0x756e8",
+   "phys_runtime": "0x19eee8",
+   "map_agrees": true
+  },
+  {
+   "name": "MONO_WIRED_PROC",
+   "kind": "D",
+   "num": 79,
+   "va": "0xe752ec",
+   "size": "0x4",
+   "map_loaded_at": "0x176aec",
+   "where": "file",
+   "low": "0x176aec",
+   "file_offset": "0x756ec",
+   "phys_runtime": "0x19eeec",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_PROC",
+   "kind": "I",
+   "num": 8,
+   "va": "0xe75400",
+   "size": "0x2b34",
+   "map_loaded_at": "0x176c00",
+   "where": "file",
+   "low": "0x176c00",
+   "file_offset": "0x75800",
+   "phys_runtime": "0x19f000",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_PROC_START",
+   "kind": "D",
+   "num": 58,
+   "va": "0xe75400",
+   "size": "0x0",
+   "map_loaded_at": "0x176c00",
+   "where": "file",
+   "low": "0x176c00",
+   "file_offset": "0x75800",
+   "phys_runtime": "0x19f000",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_PROC_END",
+   "kind": "D",
+   "num": 57,
+   "va": "0xe77f34",
+   "size": "0x0",
+   "map_loaded_at": "0x179734",
+   "where": "file",
+   "low": "0x179734",
+   "file_offset": "0x78334",
+   "phys_runtime": "0x1a1b34",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_PROC_START",
+   "kind": "D",
+   "num": 51,
+   "va": "0xe78000",
+   "size": "0x4",
+   "map_loaded_at": "0x179800",
+   "where": "file",
+   "low": "0x179800",
+   "file_offset": "0x78400",
+   "phys_runtime": "0x1a1c00",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_PROC",
+   "kind": "I",
+   "num": 6,
+   "va": "0xe78004",
+   "size": "0x10",
+   "map_loaded_at": "0x179804",
+   "where": "file",
+   "low": "0x179804",
+   "file_offset": "0x78404",
+   "phys_runtime": "0x1a1c04",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_PROC_END",
+   "kind": "D",
+   "num": 50,
+   "va": "0xe78014",
+   "size": "0x4",
+   "map_loaded_at": "0x179814",
+   "where": "file",
+   "low": "0x179814",
+   "file_offset": "0x78414",
+   "phys_runtime": "0x1a1c14",
+   "map_agrees": true
+  },
+  {
+   "name": "OS_PROC_END",
+   "kind": "I",
+   "num": 19,
+   "va": "0xe78018",
+   "size": "0x4",
+   "map_loaded_at": "0x179818",
+   "where": "file",
+   "low": "0x179818",
+   "file_offset": "0x78418",
+   "phys_runtime": "0x1a1c18",
+   "map_agrees": true
+  },
+  {
+   "name": ".DATA",
+   "kind": "D",
+   "num": 21,
+   "va": "0xe78400",
+   "size": "0xd308",
+   "map_loaded_at": "0x179c00",
+   "where": "file",
+   "low": "0x179c00",
+   "file_offset": "0x78800",
+   "phys_runtime": "0x1a2000",
+   "map_agrees": true
+  },
+  {
+   "name": "OS_DATA",
+   "kind": "D",
+   "num": 39,
+   "va": "0xe78400",
+   "size": "0x0",
+   "map_loaded_at": "0x179c00",
+   "where": "file",
+   "low": "0x179c00",
+   "file_offset": "0x78800",
+   "phys_runtime": "0x1a2000",
+   "map_agrees": true
+  },
+  {
+   "name": "DATA$",
+   "kind": "D",
+   "num": 29,
+   "va": "0xe85708",
+   "size": "0x10",
+   "map_loaded_at": "0x186f08",
+   "where": "file",
+   "low": "0x186f08",
+   "file_offset": "0x85b08",
+   "phys_runtime": "0x1af308",
+   "map_agrees": true
+  },
+  {
+   "name": "PCHIST_UNWIRED_D",
+   "kind": "D",
+   "num": 32,
+   "va": "0xe85718",
+   "size": "0x938",
+   "map_loaded_at": "0x186f18",
+   "where": "file",
+   "low": "0x186f18",
+   "file_offset": "0x85b18",
+   "phys_runtime": "0x1af318",
+   "map_agrees": true
+  },
+  {
+   "name": "PROC2_CREATE_DAT",
+   "kind": "D",
+   "num": 66,
+   "va": "0xe86050",
+   "size": "0xc",
+   "map_loaded_at": "0x187850",
+   "where": "file",
+   "low": "0x187850",
+   "file_offset": "0x86450",
+   "phys_runtime": "0x1afc50",
+   "map_agrees": true
+  },
+  {
+   "name": "PROC2_DELETE_DAT",
+   "kind": "D",
+   "num": 31,
+   "va": "0xe8605c",
+   "size": "0xc",
+   "map_loaded_at": "0x18785c",
+   "where": "file",
+   "low": "0x18785c",
+   "file_offset": "0x8645c",
+   "phys_runtime": "0x1afc5c",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_DATA",
+   "kind": "D",
+   "num": 30,
+   "va": "0xe86400",
+   "size": "0x5d0",
+   "map_loaded_at": "0x187c00",
+   "where": "file",
+   "low": "0x187c00",
+   "file_offset": "0x86800",
+   "phys_runtime": "0x1b0000",
+   "map_agrees": true
+  },
+  {
+   "name": "IIC_AQWRD_PROC",
+   "kind": "I",
+   "num": 18,
+   "va": "0xe86400",
+   "size": "0x0",
+   "map_loaded_at": "0x187c00",
+   "where": "file",
+   "low": "0x187c00",
+   "file_offset": "0x86800",
+   "phys_runtime": "0x1b0000",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_DATA_START",
+   "kind": "D",
+   "num": 56,
+   "va": "0xe86400",
+   "size": "0x0",
+   "map_loaded_at": "0x187c00",
+   "where": "file",
+   "low": "0x187c00",
+   "file_offset": "0x86800",
+   "phys_runtime": "0x1b0000",
+   "map_agrees": true
+  },
+  {
+   "name": "IIC_AQWRD_DATA",
+   "kind": "D",
+   "num": 88,
+   "va": "0xe86400",
+   "size": "0x0",
+   "map_loaded_at": "0x187c00",
+   "where": "file",
+   "low": "0x187c00",
+   "file_offset": "0x86800",
+   "phys_runtime": "0x1b0000",
+   "map_agrees": true
+  },
+  {
+   "name": "RING_DATA_END",
+   "kind": "D",
+   "num": 55,
+   "va": "0xe869d0",
+   "size": "0x0",
+   "map_loaded_at": "0x1881d0",
+   "where": "file",
+   "low": "0x1881d0",
+   "file_offset": "0x86dd0",
+   "phys_runtime": "0x1b05d0",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_DATA_START",
+   "kind": "D",
+   "num": 49,
+   "va": "0xe86c00",
+   "size": "0x4",
+   "map_loaded_at": "0x188400",
+   "where": "file",
+   "low": "0x188400",
+   "file_offset": "0x87000",
+   "phys_runtime": "0x1b0800",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_DATA",
+   "kind": "D",
+   "num": 47,
+   "va": "0xe86c04",
+   "size": "0x0",
+   "map_loaded_at": "0x188404",
+   "where": "file",
+   "low": "0x188404",
+   "file_offset": "0x87004",
+   "phys_runtime": "0x1b0804",
+   "map_agrees": true
+  },
+  {
+   "name": "ETHER_DATA_END",
+   "kind": "D",
+   "num": 48,
+   "va": "0xe86c04",
+   "size": "0x4",
+   "map_loaded_at": "0x188404",
+   "where": "file",
+   "low": "0x188404",
+   "file_offset": "0x87004",
+   "phys_runtime": "0x1b0804",
+   "map_agrees": true
+  },
+  {
+   "name": "RTWIRED_CODE",
+   "kind": "I",
+   "num": 12,
+   "va": "0xe87000",
+   "size": "0xd68",
+   "map_loaded_at": "0x188800",
+   "where": "file",
+   "low": "0x188800",
+   "file_offset": "0x87400",
+   "phys_runtime": "0x1b0c00",
+   "map_agrees": true
+  },
+  {
+   "name": "RTWIRED_DATA",
+   "kind": "D",
+   "num": 34,
+   "va": "0xe87d68",
+   "size": "0x4c0",
+   "map_loaded_at": "0x189568",
+   "where": "file",
+   "low": "0x189568",
+   "file_offset": "0x88168",
+   "phys_runtime": "0x1b1968",
+   "map_agrees": true
+  },
+  {
+   "name": "PBU_WIRED_PROC",
+   "kind": "I",
+   "num": 16,
+   "va": "0xe88400",
+   "size": "0x60",
+   "map_loaded_at": "0x189c00",
+   "where": "file",
+   "low": "0x189c00",
+   "file_offset": "0x88800",
+   "phys_runtime": "0x1b2000",
+   "map_agrees": true
+  },
+  {
+   "name": "PBU_PAGE",
+   "kind": "D",
+   "num": 85,
+   "va": "0xe88400",
+   "size": "0x0",
+   "map_loaded_at": "0x189c00",
+   "where": "file",
+   "low": "0x189c00",
+   "file_offset": "0x88800",
+   "phys_runtime": "0x1b2000",
+   "map_agrees": true
+  },
+  {
+   "name": "MT_PAGE",
+   "kind": "D",
+   "num": 87,
+   "va": "0xe88400",
+   "size": "0x0",
+   "map_loaded_at": "0x189c00",
+   "where": "file",
+   "low": "0x189c00",
+   "file_offset": "0x88800",
+   "phys_runtime": "0x1b2000",
+   "map_agrees": true
+  },
+  {
+   "name": "PBU_WIRED_DATA",
+   "kind": "D",
+   "num": 86,
+   "va": "0xe88460",
+   "size": "0x300",
+   "map_loaded_at": "0x189c60",
+   "where": "file",
+   "low": "0x189c60",
+   "file_offset": "0x88860",
+   "phys_runtime": "0x1b2060",
+   "map_agrees": true
+  },
+  {
+   "name": "SCSI_WIRED_PROC",
+   "kind": "I",
+   "num": 17,
+   "va": "0xe88800",
+   "size": "0x4",
+   "map_loaded_at": "0x18a000",
+   "where": "file",
+   "low": "0x18a000",
+   "file_offset": "0x88c00",
+   "phys_runtime": "0x1b2400",
+   "map_agrees": true
+  },
+  {
+   "name": "SCSI_WIRED_DATA",
+   "kind": "D",
+   "num": 36,
+   "va": "0xe88804",
+   "size": "0x4",
+   "map_loaded_at": "0x18a004",
+   "where": "file",
+   "low": "0x18a004",
+   "file_offset": "0x88c04",
+   "phys_runtime": "0x1b2404",
+   "map_agrees": true
+  },
+  {
+   "name": "MONO_$WIRED_DATA",
+   "kind": "D",
+   "num": 80,
+   "va": "0xe88808",
+   "size": "0x4",
+   "map_loaded_at": "0x18a008",
+   "where": "file",
+   "low": "0x18a008",
+   "file_offset": "0x88c08",
+   "phys_runtime": "0x1b2408",
+   "map_agrees": true
+  },
+  {
+   "name": "MONO_END_DATA",
+   "kind": "D",
+   "num": 81,
+   "va": "0xe8880c",
+   "size": "0x4",
+   "map_loaded_at": "0x18a00c",
+   "where": "file",
+   "low": "0x18a00c",
+   "file_offset": "0x88c0c",
+   "phys_runtime": "0x1b240c",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR4_$WIRED_DA",
+   "kind": "D",
+   "num": 75,
+   "va": "0xe88810",
+   "size": "0x4",
+   "map_loaded_at": "0x18a010",
+   "where": "file",
+   "low": "0x18a010",
+   "file_offset": "0x88c10",
+   "phys_runtime": "0x1b2410",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR4_END_DATA",
+   "kind": "D",
+   "num": 76,
+   "va": "0xe88814",
+   "size": "0x4",
+   "map_loaded_at": "0x18a014",
+   "where": "file",
+   "low": "0x18a014",
+   "file_offset": "0x88c14",
+   "phys_runtime": "0x1b2414",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR5_$WIRED_DA",
+   "kind": "D",
+   "num": 77,
+   "va": "0xe88818",
+   "size": "0x4",
+   "map_loaded_at": "0x18a018",
+   "where": "file",
+   "low": "0x18a018",
+   "file_offset": "0x88c18",
+   "phys_runtime": "0x1b2418",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR5_END_DATA",
+   "kind": "D",
+   "num": 78,
+   "va": "0xe8881c",
+   "size": "0x4",
+   "map_loaded_at": "0x18a01c",
+   "where": "file",
+   "low": "0x18a01c",
+   "file_offset": "0x88c1c",
+   "phys_runtime": "0x1b241c",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR6_$WIRED_DA",
+   "kind": "D",
+   "num": 73,
+   "va": "0xe88820",
+   "size": "0x4",
+   "map_loaded_at": "0x18a020",
+   "where": "file",
+   "low": "0x18a020",
+   "file_offset": "0x88c20",
+   "phys_runtime": "0x1b2420",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR6_END_DATA",
+   "kind": "D",
+   "num": 74,
+   "va": "0xe88824",
+   "size": "0x4",
+   "map_loaded_at": "0x18a024",
+   "where": "file",
+   "low": "0x18a024",
+   "file_offset": "0x88c24",
+   "phys_runtime": "0x1b2424",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR7_$WIRED_DA",
+   "kind": "D",
+   "num": 83,
+   "va": "0xe88828",
+   "size": "0x4",
+   "map_loaded_at": "0x18a028",
+   "where": "file",
+   "low": "0x18a028",
+   "file_offset": "0x88c28",
+   "phys_runtime": "0x1b2428",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR7_STATIC",
+   "kind": "D",
+   "num": 82,
+   "va": "0xe8882c",
+   "size": "0x4",
+   "map_loaded_at": "0x18a02c",
+   "where": "file",
+   "low": "0x18a02c",
+   "file_offset": "0x88c2c",
+   "phys_runtime": "0x1b242c",
+   "map_agrees": true
+  },
+  {
+   "name": "COLOR7_END_DATA",
+   "kind": "D",
+   "num": 84,
+   "va": "0xe88830",
+   "size": "0x4",
+   "map_loaded_at": "0x18a030",
+   "where": "file",
+   "low": "0x18a030",
+   "file_offset": "0x88c30",
+   "phys_runtime": "0x1b2430",
+   "map_agrees": true
+  },
+  {
+   "name": "ACL_$DATA",
+   "kind": "D",
+   "num": 69,
+   "va": "0xe88834",
+   "size": "0xad98",
+   "map_loaded_at": "0x196b4e",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1b2434",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "RELOC",
+   "kind": "I",
+   "num": 20,
+   "va": "0xe88834",
+   "size": "0x0",
+   "map_loaded_at": "0x18a034",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1b2434",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "FILE_$LOT_DATA",
+   "kind": "D",
+   "num": 71,
+   "va": "0xe935cc",
+   "size": "0x1086c",
+   "map_loaded_at": "0x1a18e6",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1bd1cc",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "RINGLOG_$DATA",
+   "kind": "D",
+   "num": 53,
+   "va": "0xea3e38",
+   "size": "0x11fc",
+   "map_loaded_at": "0x1b2152",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1cda38",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "XPD_$DATA",
+   "kind": "D",
+   "num": 68,
+   "va": "0xea5034",
+   "size": "0x4e8",
+   "map_loaded_at": "0x1b334e",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1cec34",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "PROC2_$DATA",
+   "kind": "D",
+   "num": 67,
+   "va": "0xea551c",
+   "size": "0x4168",
+   "map_loaded_at": "0x1b3836",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1cf11c",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "OS_DATA_END",
+   "kind": "D",
+   "num": 91,
+   "va": "0xea9684",
+   "size": "0x0",
+   "map_loaded_at": "0x1b799e",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1d3284",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "PAGE",
+   "kind": "D",
+   "num": 64,
+   "va": "0xeb0000",
+   "size": "0x2c00",
+   "map_loaded_at": "0x1be31a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1d9c00",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "OS_PAGE",
+   "kind": "D",
+   "num": 90,
+   "va": "0xeb0000",
+   "size": "0x0",
+   "map_loaded_at": "0x1be31a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1d9c00",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "VTOC_CACHE",
+   "kind": "D",
+   "num": 65,
+   "va": "0xeb2c00",
+   "size": "0x1940",
+   "map_loaded_at": "0x1c0f1a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1dc800",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "OS_PMAPS",
+   "kind": "D",
+   "num": 42,
+   "va": "0xeb4800",
+   "size": "0x10000",
+   "map_loaded_at": "0x1c2b1a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1de400",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "AUDIT_LIST",
+   "kind": "D",
+   "num": 89,
+   "va": "0xec4800",
+   "size": "0xc00",
+   "map_loaded_at": "0x1d2b1a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1ee400",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "AST_AOT",
+   "kind": "D",
+   "num": 0,
+   "va": "0xec5400",
+   "size": "0xf960",
+   "map_loaded_at": "0x1d371a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1ef000",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "VM_TABLES",
+   "kind": "D",
+   "num": 98,
+   "va": "0xed5000",
+   "size": "0x7ac00",
+   "map_loaded_at": "0x1e331a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x1fec00",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  },
+  {
+   "name": "IODEFS_GUARD",
+   "kind": "D",
+   "num": 52,
+   "va": "0xf4fc00",
+   "size": "0x0",
+   "map_loaded_at": "0x25df1a",
+   "where": "bss (not in file; RAM after the image, never zeroed by COLD)",
+   "phys_runtime": "0x279800",
+   "map_loaded_at_note": "binder stream position = VA - 0xcfe800 + RELOC size"
+  }
+ ],
+ "asm_ref_hits": {
+  "total": 124,
+  "ok": 124,
+  "runs": [
+   {
+    "va": "0xe242d4",
+    "len": 14,
+    "low_expected": "0x125ad4",
+    "found": [
+     "0x125ad4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe242e2",
+    "len": 2,
+    "low_expected": "0x125ae2",
+    "found": [
+     "0x101660",
+     "0x10181a",
+     "0x101e18",
+     "0x101eda"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe0a314",
+    "len": 20,
+    "low_expected": "0x10bb14",
+    "found": [
+     "0x10bb14"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e048",
+    "len": 22,
+    "low_expected": "0x12f848",
+    "found": [
+     "0x12f848"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e018",
+    "len": 26,
+    "low_expected": "0x12f818",
+    "found": [
+     "0x12f818"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe206ee",
+    "len": 20,
+    "low_expected": "0x121eee",
+    "found": [
+     "0x121eee"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20702",
+    "len": 22,
+    "low_expected": "0x121f02",
+    "found": [
+     "0x121f02"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20728",
+    "len": 172,
+    "low_expected": "0x121f28",
+    "found": [
+     "0x121f28"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20718",
+    "len": 16,
+    "low_expected": "0x121f18",
+    "found": [
+     "0x121f18"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe218ca",
+    "len": 6,
+    "low_expected": "0x1230ca",
+    "found": [
+     "0x1230ca"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe218e8",
+    "len": 486,
+    "low_expected": "0x1230e8",
+    "found": [
+     "0x1230e8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21634",
+    "len": 40,
+    "low_expected": "0x122e34",
+    "found": [
+     "0x122e34"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe22890",
+    "len": 48,
+    "low_expected": "0x124090",
+    "found": [
+     "0x124090"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe1e864",
+    "len": 300,
+    "low_expected": "0x120064",
+    "found": [
+     "0x120064"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe22866",
+    "len": 46,
+    "low_expected": "0x124066",
+    "found": [
+     "0x124066"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe228bc",
+    "len": 76,
+    "low_expected": "0x1240bc",
+    "found": [
+     "0x1240bc"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21828",
+    "len": 104,
+    "low_expected": "0x123028",
+    "found": [
+     "0x123028"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21acc",
+    "len": 68,
+    "low_expected": "0x1232cc",
+    "found": [
+     "0x1232cc"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21b80",
+    "len": 48,
+    "low_expected": "0x123380",
+    "found": [
+     "0x123380"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21dc2",
+    "len": 196,
+    "low_expected": "0x1235c2",
+    "found": [
+     "0x1235c2"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21bb0",
+    "len": 132,
+    "low_expected": "0x1233b0",
+    "found": [
+     "0x1233b0"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21e86",
+    "len": 154,
+    "low_expected": "0x123686",
+    "found": [
+     "0x123686"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21cd4",
+    "len": 116,
+    "low_expected": "0x1234d4",
+    "found": [
+     "0x1234d4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21c34",
+    "len": 160,
+    "low_expected": "0x123434",
+    "found": [
+     "0x123434"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe214a8",
+    "len": 12,
+    "low_expected": "0x122ca8",
+    "found": [
+     "0x122ca8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2277c",
+    "len": 234,
+    "low_expected": "0x123f7c",
+    "found": [
+     "0x123f7c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2158a",
+    "len": 14,
+    "low_expected": "0x122d8a",
+    "found": [
+     "0x122d8a"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21f84",
+    "len": 98,
+    "low_expected": "0x123784",
+    "found": [
+     "0x123784"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21672",
+    "len": 12,
+    "low_expected": "0x122e72",
+    "found": [
+     "0x122e72"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21530",
+    "len": 92,
+    "low_expected": "0x122d30",
+    "found": [
+     "0x122d30"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe217b6",
+    "len": 30,
+    "low_expected": "0x122fb6",
+    "found": [
+     "0x122fb6"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2165c",
+    "len": 22,
+    "low_expected": "0x122e5c",
+    "found": [
+     "0x122e5c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21688",
+    "len": 302,
+    "low_expected": "0x122e88",
+    "found": [
+     "0x122e88"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2167e",
+    "len": 10,
+    "low_expected": "0x122e7e",
+    "found": [
+     "0x122e7e"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe217d4",
+    "len": 80,
+    "low_expected": "0x122fd4",
+    "found": [
+     "0x122fd4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21f20",
+    "len": 100,
+    "low_expected": "0x123720",
+    "found": [
+     "0x123720"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21890",
+    "len": 58,
+    "low_expected": "0x123090",
+    "found": [
+     "0x1018fa",
+     "0x1018fb",
+     "0x10193b",
+     "0x10193c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2146c",
+    "len": 50,
+    "low_expected": "0x122c6c",
+    "found": [
+     "0x122c6c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21d48",
+    "len": 122,
+    "low_expected": "0x123548",
+    "found": [
+     "0x123548"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe21b10",
+    "len": 112,
+    "low_expected": "0x123310",
+    "found": [
+     "0x123310"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe218d0",
+    "len": 24,
+    "low_expected": "0x1230d0",
+    "found": [
+     "0x1230d0"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e846",
+    "len": 24,
+    "low_expected": "0x130046",
+    "found": [
+     "0x130046"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe29138",
+    "len": 96,
+    "low_expected": "0x12a938",
+    "found": [
+     "0x12a938"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e85c",
+    "len": 1060,
+    "low_expected": "0x13005c",
+    "found": [
+     "0x13005c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e800",
+    "len": 34,
+    "low_expected": "0x130000",
+    "found": [
+     "0x130000"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2e826",
+    "len": 32,
+    "low_expected": "0x130026",
+    "found": [
+     "0x130026"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe1e700",
+    "len": 194,
+    "low_expected": "0x11ff00",
+    "found": [
+     "0x11ff00"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe1e7b8",
+    "len": 112,
+    "low_expected": "0x11ffb8",
+    "found": [
+     "0x11ffb8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe1e82a",
+    "len": 58,
+    "low_expected": "0x12002a",
+    "found": [
+     "0x12002a"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe1e9f4",
+    "len": 212,
+    "low_expected": "0x1201f4",
+    "found": [
+     "0x1201f4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20bb6",
+    "len": 8,
+    "low_expected": "0x1223b6",
+    "found": [
+     "0x1223b6"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20bbe",
+    "len": 6,
+    "low_expected": "0x1223be",
+    "found": [
+     "0x1223be"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2429e",
+    "len": 2,
+    "low_expected": "0x125a9e",
+    "found": [
+     "0x101660",
+     "0x10181a",
+     "0x101e18",
+     "0x101eda"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2425a",
+    "len": 20,
+    "low_expected": "0x125a5a",
+    "found": [
+     "0x125a5a"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23d38",
+    "len": 48,
+    "low_expected": "0x125538",
+    "found": [
+     "0x125538"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe24048",
+    "len": 94,
+    "low_expected": "0x125848",
+    "found": [
+     "0x125848"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe24204",
+    "len": 42,
+    "low_expected": "0x125a04",
+    "found": [
+     "0x125a04"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23fde",
+    "len": 116,
+    "low_expected": "0x1257de",
+    "found": [
+     "0x1257de"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23f82",
+    "len": 100,
+    "low_expected": "0x125782",
+    "found": [
+     "0x125782"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2409c",
+    "len": 118,
+    "low_expected": "0x12589c",
+    "found": [
+     "0x12589c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23dcc",
+    "len": 108,
+    "low_expected": "0x1255cc",
+    "found": [
+     "0x1255cc"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe242a0",
+    "len": 54,
+    "low_expected": "0x125aa0",
+    "found": [
+     "0x125aa0"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe24280",
+    "len": 12,
+    "low_expected": "0x125a80",
+    "found": [
+     "0x125a80"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2428c",
+    "len": 18,
+    "low_expected": "0x125a8c",
+    "found": [
+     "0x125a8c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe241b8",
+    "len": 62,
+    "low_expected": "0x1259b8",
+    "found": [
+     "0x1259b8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23d64",
+    "len": 54,
+    "low_expected": "0x125564",
+    "found": [
+     "0x125564"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23f0c",
+    "len": 124,
+    "low_expected": "0x12570c",
+    "found": [
+     "0x12570c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23d92",
+    "len": 66,
+    "low_expected": "0x125592",
+    "found": [
+     "0x125592"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe23e38",
+    "len": 222,
+    "low_expected": "0x125638",
+    "found": [
+     "0x125638"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe241f4",
+    "len": 18,
+    "low_expected": "0x1259f4",
+    "found": [
+     "0x1259f4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2422a",
+    "len": 48,
+    "low_expected": "0x125a2a",
+    "found": [
+     "0x125a2a"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2426e",
+    "len": 18,
+    "low_expected": "0x125a6e",
+    "found": [
+     "0x125a6e"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2410e",
+    "len": 180,
+    "low_expected": "0x12590e",
+    "found": [
+     "0x12590e"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe11ef0",
+    "len": 20,
+    "low_expected": "0x1136f0",
+    "found": [
+     "0x1136f0"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe24c60",
+    "len": 22,
+    "low_expected": "0x126460",
+    "found": [
+     "0x126460"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2446c",
+    "len": 132,
+    "low_expected": "0x125c6c",
+    "found": [
+     "0x125c6c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe24468",
+    "len": 4,
+    "low_expected": "0x125c68",
+    "found": [
+     "0x10140a",
+     "0x10142c",
+     "0x101614",
+     "0x101668"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20b92",
+    "len": 100,
+    "low_expected": "0x122392",
+    "found": [
+     "0x122392"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20b56",
+    "len": 14,
+    "low_expected": "0x122356",
+    "found": [
+     "0x122356"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe209ee",
+    "len": 14,
+    "low_expected": "0x1221ee",
+    "found": [
+     "0x1221ee"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20a18",
+    "len": 146,
+    "low_expected": "0x122218",
+    "found": [
+     "0x122218"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20aa4",
+    "len": 64,
+    "low_expected": "0x1222a4",
+    "found": [
+     "0x1222a4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe208f6",
+    "len": 188,
+    "low_expected": "0x1220f6",
+    "found": [
+     "0x1220f6"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20f12",
+    "len": 90,
+    "low_expected": "0x122712",
+    "found": [
+     "0x122712"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20f0c",
+    "len": 6,
+    "low_expected": "0x12270c",
+    "found": [
+     "0x12270c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe206d2",
+    "len": 28,
+    "low_expected": "0x121ed2",
+    "found": [
+     "0x121ed2"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe207d4",
+    "len": 78,
+    "low_expected": "0x121fd4",
+    "found": [
+     "0x121fd4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20820",
+    "len": 96,
+    "low_expected": "0x122020",
+    "found": [
+     "0x122020"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20ae4",
+    "len": 50,
+    "low_expected": "0x1222e4",
+    "found": [
+     "0x1222e4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20b56",
+    "len": 12,
+    "low_expected": "0x122356",
+    "found": [
+     "0x122356"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe20de4",
+    "len": 4,
+    "low_expected": "0x1225e4",
+    "found": [
+     "0x1225e4",
+     "0x179c04"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2dfa0",
+    "len": 56,
+    "low_expected": "0x12f7a0",
+    "found": [
+     "0x12f7a0"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2dfd8",
+    "len": 52,
+    "low_expected": "0x12f7d8",
+    "found": [
+     "0x12f7d8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15d12",
+    "len": 12,
+    "low_expected": "0x117512",
+    "found": [
+     "0x117512"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2722c",
+    "len": 88,
+    "low_expected": "0x128a2c",
+    "found": [
+     "0x128a2c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe27218",
+    "len": 18,
+    "low_expected": "0x128a18",
+    "found": [
+     "0x128a18"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15b90",
+    "len": 222,
+    "low_expected": "0x117390",
+    "found": [
+     "0x117390"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2720e",
+    "len": 10,
+    "low_expected": "0x128a0e",
+    "found": [
+     "0x128a0e"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe26f20",
+    "len": 750,
+    "low_expected": "0x128720",
+    "found": [
+     "0x128720"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15cce",
+    "len": 68,
+    "low_expected": "0x1174ce",
+    "found": [
+     "0x1174ce"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe272b2",
+    "len": 10,
+    "low_expected": "0x128ab2",
+    "found": [
+     "0x128ab2"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15c9c",
+    "len": 50,
+    "low_expected": "0x11749c",
+    "found": [
+     "0x11749c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe272a8",
+    "len": 10,
+    "low_expected": "0x128aa8",
+    "found": [
+     "0x128aa8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15c68",
+    "len": 52,
+    "low_expected": "0x117468",
+    "found": [
+     "0x117468"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe272bc",
+    "len": 10,
+    "low_expected": "0x128abc",
+    "found": [
+     "0x128abc"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe15d1e",
+    "len": 108,
+    "low_expected": "0x11751e",
+    "found": [
+     "0x11751e"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe81916",
+    "len": 42,
+    "low_expected": "0x183116",
+    "found": [
+     "0x183116"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe819e2",
+    "len": 214,
+    "low_expected": "0x1831e2",
+    "found": [
+     "0x1831e2"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe81ab2",
+    "len": 174,
+    "low_expected": "0x1832b2",
+    "found": [
+     "0x1832b2"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe81b72",
+    "len": 132,
+    "low_expected": "0x183372",
+    "found": [
+     "0x183372"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe81b54",
+    "len": 30,
+    "low_expected": "0x183354",
+    "found": [
+     "0x183354"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b044",
+    "len": 24,
+    "low_expected": "0x17c844",
+    "found": [
+     "0x17c844"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b05c",
+    "len": 56,
+    "low_expected": "0x17c85c",
+    "found": [
+     "0x17c85c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b094",
+    "len": 68,
+    "low_expected": "0x17c894",
+    "found": [
+     "0x17c894"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b0d8",
+    "len": 72,
+    "low_expected": "0x17c8d8",
+    "found": [
+     "0x17c8d8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b120",
+    "len": 92,
+    "low_expected": "0x17c920",
+    "found": [
+     "0x17c920"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b17c",
+    "len": 92,
+    "low_expected": "0x17c97c",
+    "found": [
+     "0x17c97c"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b1d8",
+    "len": 104,
+    "low_expected": "0x17c9d8",
+    "found": [
+     "0x17c9d8"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe7b240",
+    "len": 158,
+    "low_expected": "0x17ca40",
+    "found": [
+     "0x17ca40"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2b130",
+    "len": 352,
+    "low_expected": "0x12c930",
+    "found": [
+     "0x12c930"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2af8a",
+    "len": 22,
+    "low_expected": "0x12c78a",
+    "found": [
+     "0x12c78a"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe6b0a4",
+    "len": 24,
+    "low_expected": "0x16c8a4",
+    "found": [
+     "0x16c8a4"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2b850",
+    "len": 34,
+    "low_expected": "0x12d050",
+    "found": [
+     "0x12d050"
+    ],
+    "ok": true
+   },
+   {
+    "va": "0xe2b872",
+    "len": 42,
+    "low_expected": "0x12d072",
+    "found": [
+     "0x12d072"
+    ],
+    "ok": true
+   }
+  ]
+ }
+}
