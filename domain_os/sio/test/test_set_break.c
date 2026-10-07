@@ -19,7 +19,7 @@ uint32_t SIO_$SPIN_LOCK;
 
 static int lock_calls, unlock_calls; static void *lock_arg, *unlock_arg; static ml_$spin_token_t unlock_token;
 ml_$spin_token_t ML_$SPIN_LOCK(void *lock) { lock_calls++; lock_arg = lock; return 0x4321; }
-void ML_$SPIN_UNLOCK(void *lock, ml_$spin_token_t token) { unlock_calls++; unlock_arg = lock; unlock_token = token; }
+void (ML_$SPIN_UNLOCK)(void *lock, uint32_t token_slot) { ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token; unlock_calls++; unlock_arg = lock; unlock_token = token; }
 
 static int sb_calls; static m68k_ptr_t sb_ctx; static int8_t sb_enable; static int sb_unlocks_seen;
 static void mock_set_break(m68k_ptr_t ctx, int8_t enable)

@@ -96,7 +96,7 @@ int16_t NETWORK_$READ_AHEAD(void *net_info, void *uid, uint32_t *ppn_array,
 }
 
 static uint32_t install_ppn, install_va, install_flags;
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     install_ppn = ppn; install_va = va; install_flags = flags;
 }

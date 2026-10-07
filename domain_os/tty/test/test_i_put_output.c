@@ -5,7 +5,7 @@
 uint32_t TTY_$SPIN_LOCK;
 static int lock_calls, unlock_calls;
 ml_$spin_token_t ML_$SPIN_LOCK(void *lockp) { (void)lockp; lock_calls++; return 7; }
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t t) { (void)lockp; (void)t; unlock_calls++; }
+void (ML_$SPIN_UNLOCK)(void *lockp, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)lockp; (void)t; unlock_calls++; }
 
 static uint32_t flags_seen;
 uint16_t tty_$i_put_chars(tty_desc_t *tty, const uint8_t *buf, uint32_t flags)

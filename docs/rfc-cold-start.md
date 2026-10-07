@@ -907,3 +907,29 @@ way (MMU_$CLR_USED, MMU_$INSTALL_ASID, PROC1_$SET_LOCK, FIM_$FP_INIT,
 MMU_$INSTALL's asid/prot slot, ...).  The asm stays; the C side has to
 build the Pascal layout (a packing macro, slot-typed prototypes).  Next
 stop after that fix is unknown.
+
+**Calling convention of hand-assembled routines (source-nxtd).**  Fixed on
+the C side, the asm untouched: `arch/arch.h` packs 16-bit (and 8-bit)
+parameters into the Domain Pascal layout (`ARCH_PASCAL_WORD_SLOT`,
+`ARCH_PASCAL_WORD_PAIR_SLOT`, straddled longwords) and each owner's header
+wraps the routine in a same-name macro; the convention, every routine's
+frame and the exceptions are in [pascal-abi.md](pascal-abi.md).  The same
+applies in reverse to C functions hand assembly calls with `move.w`
+pushes (PROC1_$SET_TS from EC_$ADVANCE's interrupt path).
+
+**Run 3.**  OS_$INIT -> MMU_$INIT -> MMAP_$INIT -> MST_$INIT -> TIME_$INIT
+-> PROC1_$INIT: the spin-unlock stop is gone.  Next stop: a bus error
+(format 8, SR 0x2709, PC 0xE1DA9A = proc1_$add_ready_body_int+0x12,
+`cmp.l (0x40,A0),D1`, fault address 0xE9) reached from PROC1_$INIT
+(return 0xE27504) through PROC1_$SET_TYPE: the ready-list walk starts at
+PROC1_$READY_PCB, which our proc1/proc1_data.c defines as NULL.  In the
+image the PROC1_ASM block carries initialised sentinels: 0xE1EBD2 and
+0xE1EBD6 hold 0x00E1EC3A, PROC1_$READY_PCB (0xE1EC3A) and 0xE1EC3E hold
+0x00E1EBD2, and the words at 0xE1EC16..0xE1EC2C are 0x0001, 0x0001,
+0xFFFF, ..., 0x0010, 0x0008, 0x0001, 0x0010.  Read with `proc1_t` (0x68
+bytes) that is one initialised sentinel PCB at 0xE1EBD2 (pid 1, asid 1,
+vtimer -1, state 0x10, priority word 0x0008, inh_count 1, sw_bsr 0x10)
+followed at 0xE1EC3A by an all-zero node whose link field *is*
+PROC1_$READY_PCB, the two linked in a ring; PROC1_$READY_COUNT (0xE1EBD0)
+starts at 1.  The zero node's 0 locks / 0 state end every insertion walk.
+Not a calling-convention problem; tracked as source-33u1.

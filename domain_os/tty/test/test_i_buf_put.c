@@ -20,8 +20,9 @@ ml_$spin_token_t ML_$SPIN_LOCK(void *lockp)
     lock_calls++;
     return (ml_$spin_token_t)0x2700;
 }
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token)
+void (ML_$SPIN_UNLOCK)(void *lockp, uint32_t token_slot)
 {
+    ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token;
     unlock_ptr_seen = lockp;
     unlock_token_seen = (unsigned long)token;
     lock_depth--;

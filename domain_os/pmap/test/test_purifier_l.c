@@ -140,7 +140,7 @@ int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
 void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; }
 void ML_$LOCK(int16_t id) { (void)id; }
 void ML_$UNLOCK(int16_t id) { (void)id; }
-void PROC1_$SET_LOCK(uint16_t id) { (void)id; }
+void (PROC1_$SET_LOCK)(uint32_t id_slot) { uint16_t id = (uint16_t)ARCH_PASCAL_SLOT_WORD(id_slot); (void)id; (void)id; }
 void PMAP_$INIT_TIMERS(void) { }
 void CAL_$SHUTDOWN(status_$t *st) { (void)st; }
 void CRASH_SYSTEM(const status_$t *st) { (void)st; }

@@ -28,9 +28,11 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
-                         uint32_t *ppn_array, uint16_t *removed_count)
+void (MMU_$REMOVE_VIRTUAL)(uint32_t va, uint32_t count_asid_slot,
+                           uint32_t *ppn_array, uint16_t *removed_count)
 {
+    uint16_t count = ARCH_PASCAL_SLOT_WORD(count_asid_slot);   /* (0x2C,SP) */
+    uint16_t asid = ARCH_PASCAL_SLOT_WORD2(count_asid_slot);   /* (0x2E,SP) */
     uint16_t saved_sr;              /* D6 */
     uint32_t d4;                    /* D4: key in the low word */
     uint32_t ptt_off;               /* A2 - 0x700000 */

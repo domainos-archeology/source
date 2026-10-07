@@ -58,7 +58,7 @@ static uint32_t install_ppn[MAX_CALLS];
 static uint32_t install_va[MAX_CALLS];
 static uint32_t install_flags[MAX_CALLS];
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     if (n_install < MAX_CALLS) {
         install_ppn[n_install] = ppn;

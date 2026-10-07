@@ -278,11 +278,11 @@ illegal:
     return 0;
 
 install:
-    /* 0x00E0E06C-0x00E0E088: flags longword = asid word : protection word */
-    MMU_$INSTALL_LIST(count, ppn_list, virtual_addr,
-                      ((uint32_t)asid << 16) |
-                      (uint32_t)((uint16_t)(mste->flags & MSTE_FLAG_PROT_MASK) >>
-                                 MSTE_FLAG_PROT_SHIFT));
+    /* 0x00E0E06C-0x00E0E088: `move.w prot; move.w asid; move.l va;
+     * pea list; move.w count' (mmu/mmu.h, MMU_$INSTALL_LIST) */
+    MMU_$INSTALL_LIST(count, ppn_list, virtual_addr, asid,
+                      (uint16_t)(mste->flags & MSTE_FLAG_PROT_MASK) >>
+                          MSTE_FLAG_PROT_SHIFT);
     if (wire_flag != 0) {
         MMAP_$WIRE(ppn_list[0]);         /* 0x00E0E090 */
     }

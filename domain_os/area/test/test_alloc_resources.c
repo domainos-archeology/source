@@ -63,7 +63,7 @@ void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
     *status = status_$ok;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     (void)ppn;
     install_va[install_calls++ & 31] = va;

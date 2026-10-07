@@ -94,7 +94,7 @@ void DISK_$DO_IO(void *dev, void *req, void *tail, void *result)
     *(int8_t *)result = do_io_queued;
 }
 
-void MMU_$MCR_CHANGE(uint16_t bit) { (void)bit; n_mcr++; }
+void (MMU_$MCR_CHANGE)(uint32_t bit_slot) { uint16_t bit = (uint16_t)ARCH_PASCAL_SLOT_WORD(bit_slot); (void)bit; (void)bit; n_mcr++; }
 
 void disk_$wait_io(uint16_t mask, int32_t *io_wait, int32_t *err_wait)
 {

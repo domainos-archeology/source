@@ -28,12 +28,12 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t asid_prot_slot)
 {
     uint16_t saved_sr;              /* D6 */
     uint32_t packed;                /* D4 */
-    uint8_t prot = (uint8_t)(flags & 0xFF);          /* (0x33,SP) */
-    uint8_t asid = (uint8_t)((flags >> 16) & 0xFF);  /* (0x31,SP) */
+    uint8_t prot = (uint8_t)ARCH_PASCAL_SLOT_WORD2(asid_prot_slot); /* (0x33,SP) */
+    uint8_t asid = (uint8_t)ARCH_PASCAL_SLOT_WORD(asid_prot_slot);  /* (0x31,SP) */
 
     /* 0x00E24054 - 0x00E24072 */
     packed = va << (MMU_$PTT_SHIFT & 0x3F);

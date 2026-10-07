@@ -20,8 +20,9 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$REMOVE_ASID(uint16_t asid)
+void (MMU_$REMOVE_ASID)(uint32_t asid_slot)
 {
+    uint16_t asid = ARCH_PASCAL_SLOT_WORD(asid_slot);   /* (0x20,SP) after the movem */
     uint32_t idx;                   /* A3 as a PFT index */
     uint16_t d5;                    /* D5: dbeq / dbf counter */
     uint32_t d7;                    /* D7: the rotated asid */

@@ -98,7 +98,7 @@ void WP_$CALLOC(uint32_t *page_out, status_$t *status)
     calloc_calls++;
 }
 
-void MMU_$INSTALL(uint32_t page, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t page, uint32_t va, uint32_t flags)
 {
     if (install_calls < MAX_CALLS) {
         install_page[install_calls]  = page;

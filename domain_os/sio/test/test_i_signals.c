@@ -33,7 +33,7 @@ void EC_$INIT(ec_$eventcount_t *ec) { ec_init_calls++; ec_init_arg = ec; }
 
 static int lock_calls, unlock_calls; static void *lock_arg; static ml_$spin_token_t unlock_token;
 ml_$spin_token_t ML_$SPIN_LOCK(void *lock) { lock_calls++; lock_arg = lock; return 0x4321; }
-void ML_$SPIN_UNLOCK(void *lock, ml_$spin_token_t token) { unlock_calls++; (void)lock; unlock_token = token; }
+void (ML_$SPIN_UNLOCK)(void *lock, uint32_t token_slot) { ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token; unlock_calls++; (void)lock; unlock_token = token; }
 
 static short real_line_ret; static status_$t real_line_status; static short real_line_arg;
 short TERM_$GET_REAL_LINE(short line_num, status_$t *status_ret)

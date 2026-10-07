@@ -60,7 +60,7 @@ static void area_$wire_table_page(uint32_t va)
     MMU_$VTOP(va, &status);
     if (status != status_$ok) {
         WP_$CALLOC(&ppn, &status);
-        MMU_$INSTALL(ppn, va, AREA_TABLE_MMU_FLAGS);
+        MMU_$INSTALL(ppn, va, 0, AREA_TABLE_MMU_FLAGS);
     }
 }
 

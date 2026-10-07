@@ -83,7 +83,7 @@ static int n_crash; static status_$t crash_status;
 void CRASH_SYSTEM(const status_$t *s) { n_crash++; crash_status = *s; }
 
 static int n_install_asid; static uint16_t installed_asid;
-void MMU_$INSTALL_ASID(uint16_t a) { n_install_asid++; installed_asid = a; }
+void (MMU_$INSTALL_ASID)(uint32_t a_slot) { uint16_t a = (uint16_t)ARCH_PASCAL_SLOT_WORD(a_slot); (void)a; n_install_asid++; installed_asid = a; }
 
 static int8_t inhibit_result;
 int8_t PROC1_$INHIBIT_CHECK(proc1_t *p) { (void)p; return inhibit_result; }

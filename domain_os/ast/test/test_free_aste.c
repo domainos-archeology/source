@@ -60,8 +60,9 @@ void EC_$ADVANCE(ec_$eventcount_t *ec) { advance_calls++; advance_ec = ec; }
 static int       remove_list_calls;
 static uint32_t *remove_list_array;
 static uint16_t  remove_list_count;
-void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
+void (MMU_$REMOVE_LIST)(uint32_t *ppn_array, uint32_t count_slot)
 {
+    uint16_t count = (uint16_t)ARCH_PASCAL_SLOT_WORD(count_slot); (void)count;
     remove_list_calls++;
     remove_list_array = ppn_array;
     remove_list_count = count;

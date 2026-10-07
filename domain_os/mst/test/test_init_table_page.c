@@ -72,7 +72,7 @@ void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
     *status = mock_calloc_status;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     mock_install_calls++;
     mock_install_ppn = ppn;

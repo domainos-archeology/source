@@ -146,7 +146,7 @@ map_pages:
         }
 
         /* 0x00E150CC..0x00E150E6: MMU_$INSTALL(page, result - rounded, 0x16) */
-        MMU_$INSTALL(page, result - (uint32_t)rounded, PROC1_STACK_MMU_FLAGS);
+        MMU_$INSTALL(page, result - (uint32_t)rounded, 0, PROC1_STACK_MMU_FLAGS);
 
         /* 0x00E150EA: subi.w #0x400,D2w / bne */
         rounded = (uint16_t)(rounded - PROC1_STACK_PAGE);

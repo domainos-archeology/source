@@ -56,8 +56,9 @@ ml_$spin_token_t ML_$SPIN_LOCK(void *lockp)
     return 0x1234;
 }
 
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token)
+void (ML_$SPIN_UNLOCK)(void *lockp, uint32_t token_slot)
 {
+    ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token;
     (void)lockp;
     if (token == 0x1234) unlock_calls++;
 }

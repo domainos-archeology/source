@@ -329,33 +329,85 @@ void MMU_$INIT(void);
 /* Remove a mapping for a physical page number */
 void MMU_$REMOVE(uint32_t ppn);
 
-/* Remove mappings for a list of physical pages */
-void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count);
+/*
+ * Word and byte parameters of the hand-assembled MMU_ASM routines
+ * (the mmu/sau2 .s files) are Pascal 2-byte stack slots; each prototype below takes
+ * the gcc slots that reproduce the Pascal frame and a same-name macro packs
+ * the natural arguments (arch/arch.h, "Pascal parameter slots",
+ * source-nxtd).  Offsets are from SP at entry (return address at 0).
+ * Host models (the mmu .c files) define the parenthesised name and unpack.
+ */
 
-/* Remove virtual address mappings */
-void MMU_$REMOVE_VIRTUAL(uint32_t va, uint16_t count, uint16_t asid,
+/* Remove mappings for a list of physical pages.
+ * Pascal frame (0xE23D92, after the 0x1C-byte movem: (0x20)/(0x24,SP)):
+ *   (4) ppn_array.l, (8) count.w; callers `subq.l #2,sp; move.w count;
+ *   pea array'.  gcc slot 2 = count in its first word. */
+void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint32_t count_slot);
+#define MMU_$REMOVE_LIST(ppn_array, count) \
+    (MMU_$REMOVE_LIST)((ppn_array), ARCH_PASCAL_WORD_SLOT(count))
+
+/* Remove virtual address mappings.
+ * Pascal frame (0xE23E38, after the 0x24-byte movem: (0x28..0x34,SP)):
+ *   (4) va.l, (8) count.w, (0xA) asid.w, (0xC) ppn_array, (0x10)
+ *   removed_count.  gcc slot 2 = count then asid (one pair slot). */
+void MMU_$REMOVE_VIRTUAL(uint32_t va, uint32_t count_asid_slot,
                          uint32_t *ppn_array, uint16_t *removed_count);
+#define MMU_$REMOVE_VIRTUAL(va, count, asid, ppn_array, removed_count) \
+    (MMU_$REMOVE_VIRTUAL)((va), ARCH_PASCAL_WORD_PAIR_SLOT(count, asid), \
+                          (ppn_array), (removed_count))
 
-/* Remove all mappings for an address space ID */
-void MMU_$REMOVE_ASID(uint16_t asid);
+/* Remove all mappings for an address space ID.
+ * Pascal frame (0xE23F0C, after the 0x1C-byte movem: (0x20,SP)):
+ *   (4) asid.w.  gcc slot 1 = asid in its first word. */
+void MMU_$REMOVE_ASID(uint32_t asid_slot);
+#define MMU_$REMOVE_ASID(asid) (MMU_$REMOVE_ASID)(ARCH_PASCAL_WORD_SLOT(asid))
 
 /*
- * MMU install flags packing macro
- * The flags parameter encodes ASID and protection bits in a packed format:
- *   - Byte 1 (bits 16-23): ASID
- *   - Byte 3 (bits 0-7): Protection bits
+ * MMU_$INSTALL / MMU_$INSTALL_PRIVATE - one translation.
+ * Pascal frame (0xE24048 / 0xE23F82, after the 0x24-byte movem:
+ * (0x28..0x33,SP)):
+ *   (4) ppn.l, (8) va.l, (0xC) asid.w, (0xE) prot.w
+ * the routine reading the LOW byte of each word (`move.b (0x33,sp)' =
+ * prot, `move.b (0x31,sp)' = asid).  The image's callers push either
+ * `move.w prot; move.w asid' (e.g. AST_$COPY_AREA, call 0xE03BDC: prot 0x16,
+ * asid PROC1_$AS_ID) or the constant pair as one longword (`pea (0x16).w'
+ * = asid 0, prot 0x16).  gcc slot 3 = asid then prot (one pair slot).
  */
-#define MMU_FLAGS(asid, prot) (((uint32_t)(asid) << 16) | (uint32_t)(prot))
+void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t asid_prot_slot);
+#define MMU_$INSTALL_PRIVATE(ppn, va, asid, prot) \
+    (MMU_$INSTALL_PRIVATE)((ppn), (va), ARCH_PASCAL_WORD_PAIR_SLOT(asid, prot))
 
-/* Install a mapping (private, no global bit) */
-void MMU_$INSTALL_PRIVATE(uint32_t ppn, uint32_t va, uint32_t flags);
+/*
+ * MMU_$INSTALL_LIST - a run of pages.
+ * Pascal frame (0xE23FDE, after the 0x28-byte movem: (0x2C..0x39,SP)):
+ *   (4) count.w, (6) ppn_array.l, (0xA) va.l, (0xE) asid.w, (0x10) prot.w
+ * - the count word is NOT padded (callers: `move.w prot; move.w asid;
+ * move.l va; pea array; move.w count', AST_$COPY_AREA, call 0xE03B42), so the
+ * two longwords straddle gcc's slots:
+ *   slot 1 = count | array.hi    slot 2 = array.lo | va.hi
+ *   slot 3 = va.lo | asid        slot 4 = prot | (pad)
+ * mmu_$install_list_slots packs them; the macro evaluates each argument
+ * once.
+ */
+void MMU_$INSTALL_LIST(uint32_t count_array_slot, uint32_t array_va_slot,
+                       uint32_t va_asid_slot, uint32_t prot_slot);
+static inline void mmu_$install_list_slots(uint16_t count, uint32_t array_va,
+                                           uint32_t va, uint16_t asid,
+                                           uint16_t prot)
+{
+    (MMU_$INSTALL_LIST)(ARCH_PASCAL_WORD_PAIR_SLOT(count, array_va >> 16),
+                        ARCH_PASCAL_WORD_PAIR_SLOT(array_va, va >> 16),
+                        ARCH_PASCAL_WORD_PAIR_SLOT(va, asid),
+                        ARCH_PASCAL_WORD_SLOT(prot));
+}
+#define MMU_$INSTALL_LIST(count, ppn_array, va, asid, prot)                  \
+    mmu_$install_list_slots((count), ARCH_PTR_TO_VA(ppn_array), (va),        \
+                            (asid), (prot))
 
-/* Install mappings for a list of physical pages */
-void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va,
-                       uint32_t flags);
-
-/* Install a mapping with global bit */
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags);
+/* Install a mapping with global bit (frame: see MMU_$INSTALL_PRIVATE) */
+void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t asid_prot_slot);
+#define MMU_$INSTALL(ppn, va, asid, prot) \
+    (MMU_$INSTALL)((ppn), (va), ARCH_PASCAL_WORD_PAIR_SLOT(asid, prot))
 
 /* Translate virtual address to physical page number */
 uint32_t MMU_$VTOP(uint32_t va, status_$t *status);
@@ -363,16 +415,36 @@ uint32_t MMU_$VTOP(uint32_t va, status_$t *status);
 /* Translate physical page number to virtual address */
 uint32_t MMU_$PTOV(uint32_t ppn);
 
-/* Set the Control/Status Register (CSR) privilege bits */
-void MMU_$SET_CSR(uint16_t csr_val);
+/* Set the Control/Status Register (CSR) privilege bits.
+ * Pascal frame (0xE241F4 `move.b (5,sp),(a0)'): (4) csr_val.w, of which
+ * only the low byte (5) is read.  gcc slot 1 = the word in its first
+ * word, so the byte lands at (5,SP). */
+void MMU_$SET_CSR(uint32_t csr_val_slot);
+#define MMU_$SET_CSR(csr_val) (MMU_$SET_CSR)(ARCH_PASCAL_WORD_SLOT(csr_val))
 
-/* Install an Address Space ID (switch address spaces) */
-void MMU_$INSTALL_ASID(uint16_t asid);
+/* Install an Address Space ID (switch address spaces).
+ * Pascal frame (0xE24204 `move.w (4,sp),d1'): (4) asid.w; callers
+ * `subq.l #2,sp; move.w asid' (call 0xE14910).  gcc slot 1 = asid first. */
+void MMU_$INSTALL_ASID(uint32_t asid_slot);
+#define MMU_$INSTALL_ASID(asid) (MMU_$INSTALL_ASID)(ARCH_PASCAL_WORD_SLOT(asid))
 
-/* Set protection bits for a physical page */
-uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot);
+/* Set protection bits for a physical page; returns the old word in D0.w.
+ * Pascal frame (0xE2422A, after one saved register: (8)/(0xC,SP)):
+ *   (4) ppn.l, (8) prot.w; callers `subq.l #2,sp; move.w #prot;
+ *   move.l ppn' (call 0xE33BBA).  gcc slot 2 = prot first. */
+uint16_t MMU_$SET_PROT(uint32_t ppn, uint32_t prot_slot);
+#define MMU_$SET_PROT(ppn, prot) \
+    (MMU_$SET_PROT)((ppn), ARCH_PASCAL_WORD_SLOT(prot))
 
-/* Clear the "used/referenced" bit for a physical page */
+/*
+ * Clear the "used/referenced" bit for a physical page.
+ * NOT slot-packed: the routine (0xE2425A) reads the WORD at (4,SP), and
+ * both image callers (CHKSUM 0xE0A2FC, NETWORK_$GET_CHKSUM's page_chksum
+ * 0xE0F366) push the ppn as a LONGWORD (`move.l'), so the image clears the
+ * PFT entry indexed by the ppn's HIGH word (0 for every real ppn).  A gcc
+ * longword reproduces that exactly; packing would "fix" the image.
+ * TODO(source-qhu6): image quirk preserved; see mmu/clr_used.c.
+ */
 void MMU_$CLR_USED(uint32_t ppn);
 
 /* Set the MMU system revision from hardware */
@@ -397,8 +469,12 @@ extern uint16_t MMU_$INIT_BSR;
  */
 void MMU_$CACHE_INHIBIT_VA(uint32_t va);
 
-/* Toggle MCR (Memory Control Register) bits */
-void MMU_$MCR_CHANGE(uint16_t bit);
+/* Toggle MCR (Memory Control Register) bits.
+ * Pascal frame (0xE242A0 `sub.w (4,sp),d0' / `move.w (4,sp),d0'):
+ * (4) bit.w; callers `subq.l #2,sp; move.w #n' (call 0xE3D182).  gcc slot 1 =
+ * bit first. */
+void MMU_$MCR_CHANGE(uint32_t bit_slot);
+#define MMU_$MCR_CHANGE(bit) (MMU_$MCR_CHANGE)(ARCH_PASCAL_WORD_SLOT(bit))
 
 /* Translate VA to PA, crash if translation fails */
 uint32_t mmu_$vtop_or_crash(uint32_t va);

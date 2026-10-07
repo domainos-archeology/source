@@ -23,8 +23,9 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$MCR_CHANGE(uint16_t bit)
+void (MMU_$MCR_CHANGE)(uint32_t bit_slot)
 {
+    uint16_t bit = ARCH_PASCAL_SLOT_WORD(bit_slot);      /* (4,SP) */
     if (M68020_IS_020_B()) {                                        /* 0x00E242A4 */
         MMU_MCR_M68020 ^= (uint8_t)(1u << ((0x0B - bit) & 7));     /* 0x00E242AA */
     } else {

@@ -39,10 +39,18 @@ static uint16_t ii_pid;
 static void *ii_base, *ii_top;
 static uint16_t *ii_usr; static uint32_t *ii_upc, *ii_usb, *ii_usp;
 
-void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
-                         uint16_t *usr_ret, uint32_t *upc_ret,
-                         uint32_t *usb_ret, uint32_t *usp_ret)
+/* The Pascal frame packs pid.w and six unpadded longwords into seven gcc
+ * slots (proc1/proc1.h); unpack them the way the asm reads them. */
+void (PROC1_$GET_INFO_INT)(uint32_t s1, uint32_t s2, uint32_t s3, uint32_t s4,
+                           uint32_t s5, uint32_t s6, uint32_t s7)
 {
+    uint16_t pid = ARCH_PASCAL_SLOT_WORD(s1);
+    void *stack_base = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s1, s2));
+    void *stack_top = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s2, s3));
+    uint16_t *usr_ret = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s3, s4));
+    uint32_t *upc_ret = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s4, s5));
+    uint32_t *usb_ret = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s5, s6));
+    uint32_t *usp_ret = ARCH_VA_TO_PTR(ARCH_PASCAL_SLOTS_LONG(s6, s7));
     n_info_int++;
     ii_pid = pid; ii_base = stack_base; ii_top = stack_top;
     ii_usr = usr_ret; ii_upc = upc_ret; ii_usb = usb_ret; ii_usp = usp_ret;
@@ -159,9 +167,12 @@ static void test_info_other_process_with_stack(void)
     status_$t st;
     int16_t pid = 7;
 
-    ARCH_HOST_VA_BASE = (uintptr_t)arena;
+    /* every pointer crosses the call as a 32-bit VA (the straddled Pascal
+     * longwords): base the window below both the arena and `info' */
+    ARCH_HOST_VA_BASE = (uintptr_t)arena < (uintptr_t)&info
+                            ? (uintptr_t)arena : (uintptr_t)&info;
     pcb_table[7].pri_max = PROC1_FLAG_BOUND;
-    PROC1_$DATA.os_stack_base[7] = 0x1800;
+    PROC1_$DATA.os_stack_base[7] = ARCH_PTR_TO_VA(arena + 0x1800);
     PROC1_$GET_INFO(&pid, &info, &st);
     ARCH_HOST_VA_BASE = 0;
 

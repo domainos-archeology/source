@@ -99,7 +99,7 @@ uint16_t MMAP_$ALLOC_FREE(uint32_t *vpn_array, uint16_t count)
     return 1;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     (void)ppn;
     (void)flags;

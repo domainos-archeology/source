@@ -92,7 +92,7 @@ static status_$t ast_touch_status;
 static uint8_t ast_touch_wire_seen;
 static int install_calls;
 static uint16_t install_count;
-static uint32_t install_va, install_flags, install_ppn0;
+static uint32_t install_va, install_flags;
 
 void ML_$LOCK(int16_t id) { lock_calls++; last_lock = id; }
 void ML_$UNLOCK(int16_t id) { unlock_calls++; last_unlock = id; }
@@ -164,13 +164,22 @@ uint16_t AST_$TOUCH(aste_t *aste, uint32_t mode, uint16_t page, uint16_t count,
     return ast_touch_result;
 }
 
-void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags)
+/* Pascal frame unpacked as the asm reads it (mmu/mmu.h); the flags value
+ * recorded is the asid word : prot word pair the image's code tests. */
+void (MMU_$INSTALL_LIST)(uint32_t count_array_slot, uint32_t array_va_slot,
+                         uint32_t va_asid_slot, uint32_t prot_slot)
 {
+    uint16_t count = ARCH_PASCAL_SLOT_WORD(count_array_slot);
+    /* ppn_array (ARCH_PASCAL_SLOTS_LONG(count_array_slot, array_va_slot))
+     * points at MST_$TOUCH's stack, which a 64-bit host cannot rebuild
+     * from the 32-bit VA the Pascal frame carries; it is not inspected. */
+    uint32_t va = ARCH_PASCAL_SLOTS_LONG(array_va_slot, va_asid_slot);
+    uint32_t flags = ARCH_PASCAL_WORD_PAIR_SLOT(
+        ARCH_PASCAL_SLOT_WORD2(va_asid_slot), ARCH_PASCAL_SLOT_WORD(prot_slot));
     install_calls++;
     install_count = count;
     install_va = va;
     install_flags = flags;
-    install_ppn0 = ppn_array[0];
 }
 
 #include "../touch.c"

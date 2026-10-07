@@ -7,7 +7,7 @@ void TTY_$I_DXM_SIGNAL(tty_signal_entry_t **e) { (void)e; }
 dxm_$callback_t dxm_$callback_cell(dxm_$callback_fn_t fn) { return (dxm_$callback_t)(fn != NULL); }
 static int lock_depth;
 ml_$spin_token_t ML_$SPIN_LOCK(void *lockp) { (void)lockp; lock_depth++; logf_call("lock;"); return 1; }
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t t) { (void)lockp; (void)t; lock_depth--; logf_call("unlock;"); }
+void (ML_$SPIN_UNLOCK)(void *lockp, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)lockp; (void)t; lock_depth--; logf_call("unlock;"); }
 void TTY_$I_ADVANCE_EC(m68k_ptr_t ec) { logf_call("advance(%lx);", (unsigned long)ec); }
 void TTY_$I_SET_DFL_FUNCS(tty_desc_t *t, char use_dfl) { (void)t; logf_call("dfl(%02x);", (uint8_t)use_dfl); }
 

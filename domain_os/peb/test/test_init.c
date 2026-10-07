@@ -109,7 +109,7 @@ int8_t io_$probe(void *type, void *addr, void *result)
     return probe_return;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     if (install_calls < MAX_CALLS) {
         install_ppn[install_calls]   = ppn;

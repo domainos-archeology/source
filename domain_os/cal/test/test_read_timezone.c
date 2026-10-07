@@ -30,15 +30,17 @@ static int set_lock_calls, clr_lock_calls;
 static uint16_t last_lock_id;
 static int lock_held;
 
-void PROC1_$SET_LOCK(uint16_t lock_id)
+void (PROC1_$SET_LOCK)(uint32_t lock_id_slot)
 {
+    uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id;
     set_lock_calls++;
     last_lock_id = lock_id;
     lock_held++;
 }
 
-void PROC1_$CLR_LOCK(uint16_t lock_id)
+void (PROC1_$CLR_LOCK)(uint32_t lock_id_slot)
 {
+    uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id;
     clr_lock_calls++;
     last_lock_id = lock_id;
     lock_held--;

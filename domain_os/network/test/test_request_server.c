@@ -80,7 +80,7 @@ static status_$t adv_status;
 static uint16_t sendp_result[4];
 
 ml_$spin_token_t ML_$SPIN_LOCK(void *l) { (void)l; return 1; }
-void ML_$SPIN_UNLOCK(void *l, ml_$spin_token_t t) { (void)l; (void)t; }
+void (ML_$SPIN_UNLOCK)(void *l, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)l; (void)t; }
 uint32_t MMAP_$REMOTE_POOL(uint32_t p) { return p; }
 int8_t SOCK_$OPEN(uint16_t s, uint32_t a, uint32_t b) { (void)s; (void)a; (void)b; open_calls++; return -1; }
 void RIP_$STD_OPEN(void) { std_rip++; }

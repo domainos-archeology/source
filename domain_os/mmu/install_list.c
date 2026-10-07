@@ -30,13 +30,20 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$INSTALL_LIST(uint16_t count, uint32_t *ppn_array, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL_LIST)(uint32_t count_array_slot, uint32_t array_va_slot,
+                         uint32_t va_asid_slot, uint32_t prot_slot)
 {
+    /* the unpadded Pascal frame (mmu/mmu.h): (0x2C) count.w, (0x2E)
+     * ppn_array, (0x32) va, (0x36) asid.w, (0x38) prot.w */
+    uint16_t count = ARCH_PASCAL_SLOT_WORD(count_array_slot);
+    uint32_t *ppn_array = (uint32_t *)ARCH_VA_TO_PTR(
+        ARCH_PASCAL_SLOTS_LONG(count_array_slot, array_va_slot));
+    uint32_t va = ARCH_PASCAL_SLOTS_LONG(array_va_slot, va_asid_slot);
     uint16_t saved_sr;              /* D6 */
     uint32_t packed;                /* D5 */
     uint16_t n;                     /* D7 */
-    uint8_t prot = (uint8_t)(flags & 0xFF);          /* (0x39,SP) */
-    uint8_t asid = (uint8_t)((flags >> 16) & 0xFF);  /* (0x37,SP) */
+    uint8_t prot = (uint8_t)ARCH_PASCAL_SLOT_WORD(prot_slot);          /* (0x39,SP) */
+    uint8_t asid = (uint8_t)ARCH_PASCAL_SLOT_WORD2(va_asid_slot);      /* (0x37,SP) */
 
     /* 0x00E23FEA - 0x00E23FF0 */
     n = (uint16_t)(count - 1);

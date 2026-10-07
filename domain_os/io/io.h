@@ -226,7 +226,23 @@ extern void *IO_$SAVED_OS_SP;
  *
  * Original address: 0x00e2e800
  */
-void IO_$TRAP(int16_t m68k_vector_num, void *handler_addr);
+void IO_$TRAP(uint32_t vector_handler_slot, uint32_t handler_pad_slot);
+/*
+ * Pascal frame (io/sau2/trap.s 0xE2E800 `move.w (4,sp),d0;
+ * movea.l (6,sp),a0'): (4) m68k_vector_num.w, (6) handler_addr.l
+ * UNPADDED; the image's callers (SYSBUS_$INIT, call 0xE0AB40) push
+ * `subq.l #2,sp; move.l #handler; move.w #vector'.  The handler straddles
+ * two gcc slots (arch/arch.h "Pascal parameter slots", source-nxtd):
+ *   slot 1 = vector | handler.hi,  slot 2 = handler.lo | (pad)
+ * io_$trap_slots packs them; the macro evaluates each argument once.
+ */
+static inline void io_$trap_slots(uint16_t vector, uint32_t handler_va)
+{
+    (IO_$TRAP)(ARCH_PASCAL_WORD_PAIR_SLOT(vector, handler_va >> 16),
+               ARCH_PASCAL_WORD_SLOT(handler_va));
+}
+#define IO_$TRAP(m68k_vector_num, handler_addr) \
+    io_$trap_slots((m68k_vector_num), ARCH_PTR_TO_VA(handler_addr))
 
 /*
  * IO_$USE_INT_STACK - Switch from OS stack to interrupt stack

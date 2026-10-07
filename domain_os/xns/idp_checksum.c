@@ -40,8 +40,9 @@
  *
  * @return Checksum, in D0.w
  */
-uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count)
+uint16_t (XNS_IDP_$CHECKSUM)(uint16_t *data, uint32_t word_count_slot)
 {
+    int16_t word_count = (int16_t)ARCH_PASCAL_SLOT_WORD(word_count_slot); /* 8(SP) */
     uint16_t sum = 0;                                /* moveq #0,D0        */
     uint16_t count = (uint16_t)(word_count - 1);     /* subq.w #1,D1       */
 
@@ -71,8 +72,10 @@ uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count)
  *
  * @return Updated checksum, in D0.w
  */
-int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset)
+int16_t (XNS_IDP_$HOP_AND_SUM)(uint32_t sum_hop_slot)
 {
+    uint16_t current_sum = ARCH_PASCAL_SLOT_WORD(sum_hop_slot);           /* 4(SP) */
+    int16_t hop_offset = (int16_t)ARCH_PASCAL_SLOT_WORD2(sum_hop_slot); /* 6(SP) */
     uint16_t rotation = (uint16_t)(((int16_t)(hop_offset - 3) >> 1) & 0x0F);
     uint16_t contribution = 0x100;                   /* move.w #0x100,D0   */
     uint32_t wide;

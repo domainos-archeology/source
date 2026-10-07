@@ -70,7 +70,7 @@ area_$seg_table_t *area_$alloc_seg_table(int16_t asid, int16_t area_id,
     page = AREA_PIT_PAGES_VA +
            (uint32_t)((int32_t)(int16_t)AREA_$GLOBALS.format.seg_table_next << 10);
     WP_$CALLOC(&ppn, &st);
-    MMU_$INSTALL(ppn, page, AREA_SEG_TABLE_PAGE_PROT);
+    MMU_$INSTALL(ppn, page, 0, AREA_SEG_TABLE_PAGE_PROT);
 
     /* 0x00E09DA4-0x00E09DC2 */
     AREA_$GLOBALS.format.seg_table_count++;

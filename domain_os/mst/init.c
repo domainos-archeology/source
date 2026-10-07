@@ -75,7 +75,7 @@ static uint32_t mst_init_page(uint32_t va)
     }
 
     /* 0x00E30AE2..0x00E30AEA: MMU_$INSTALL(ppn[0], va, 0x16) */
-    MMU_$INSTALL(ppn[0], va, 0x16);
+    MMU_$INSTALL(ppn[0], va, 0, 0x16);
 
     /* 0x00E30AF4 `move.w #0xff,D0w` / `clr.l (A2)+` / `dbf`: 256 longwords */
     p = (uint32_t *)ARCH_VA_TO_PTR(va);

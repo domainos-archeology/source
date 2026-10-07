@@ -128,7 +128,7 @@ void AREA_$INIT(void)
             /* 0x00E2F48A-0x00E2F49A: MMU_$INSTALL(page, va, flags), the page
              * number read back out of the cell WP_$CALLOC just filled. */
             MMU_$INSTALL(AREA_$GLOBALS.rpmap_page[i], page_va,
-                         AREA_RPMAP_MMU_FLAGS);
+                         0, AREA_RPMAP_MMU_FLAGS);
 
             /* 0x00E2F49E-0x00E2F4B4 */
             AREA_$GLOBALS.rpmap_cache[i].seq     = 0;

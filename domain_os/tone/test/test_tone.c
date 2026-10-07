@@ -44,8 +44,8 @@ static int log_n;
 static void logc(char c) { if (log_n < 15) { log_buf[log_n++] = c; log_buf[log_n] = 0; } }
 
 static uint16_t lock_id;
-void PROC1_$SET_LOCK(uint16_t id) { lock_id = id; logc('L'); }
-void PROC1_$CLR_LOCK(uint16_t id) { lock_id = id; logc('U'); }
+void (PROC1_$SET_LOCK)(uint32_t id_slot) { uint16_t id = (uint16_t)ARCH_PASCAL_SLOT_WORD(id_slot); (void)id; lock_id = id; logc('L'); }
+void (PROC1_$CLR_LOCK)(uint32_t id_slot) { uint16_t id = (uint16_t)ARCH_PASCAL_SLOT_WORD(id_slot); (void)id; lock_id = id; logc('U'); }
 
 static sio2681_channel_t **tone_cell;
 static sio2681_channel_t *tone_channel;

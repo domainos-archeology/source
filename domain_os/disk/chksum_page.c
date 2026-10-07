@@ -48,14 +48,14 @@ uint16_t disk_$chksum_page(uint32_t *ppn)
     old_va = MMU_$PTOV(page);
 
     /* 0x00E0A2AE-0x00E0A2C2 */
-    MMU_$INSTALL(page, DISK_CHKSUM_SCRATCH_VA, DISK_CHKSUM_MMU_FLAGS);
+    MMU_$INSTALL(page, DISK_CHKSUM_SCRATCH_VA, 0, DISK_CHKSUM_MMU_FLAGS);
 
     /* 0x00E0A2C6-0x00E0A2D4 */
     sum = CHKSUM_$GET_CHKSUM((const void *)DISK_CHKSUM_SCRATCH_VA);
 
     /* 0x00E0A2D6-0x00E0A2FA */
     if (old_va != 0) {
-        MMU_$INSTALL(page, old_va, DISK_CHKSUM_MMU_FLAGS); /* 0x00E0A2E4 */
+        MMU_$INSTALL(page, old_va, 0, DISK_CHKSUM_MMU_FLAGS); /* 0x00E0A2E4 */
     } else {
         MMU_$REMOVE(page); /* 0x00E0A2F4 */
     }

@@ -73,7 +73,13 @@ void SET_LITES_LOC(int32_t *loc_p);
  *
  * Original address: 0x00E1E9F4
  */
-void DISP_LITES(uint16_t pattern, uint16_t y_pos);
+void DISP_LITES(uint32_t pattern_y_slot);
+/* Pascal frame (misc/sau2/disp_lites.s 0xE1E9F4, after the 0x10-byte
+ * movem: (0x14)/(0x16,SP)): (4) pattern.w, (6) y_pos.w; the only caller,
+ * SMD_$LITES (call 0xE1D8CC), pushes `move.w y; move.w pattern'.  gcc
+ * slot 1 = pattern then y_pos (one pair slot (arch/arch.h "Pascal parameter slots", source-nxtd)). */
+#define DISP_LITES(pattern, y_pos) \
+    (DISP_LITES)(ARCH_PASCAL_WORD_PAIR_SLOT(pattern, y_pos))
 
 /*
  * GET_BUILD_TIME - Get kernel build version string

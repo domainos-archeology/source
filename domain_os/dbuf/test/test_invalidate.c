@@ -39,7 +39,7 @@ uint16_t DBUF_$TROUBLE;
 
 static int spin_locks, spin_unlocks, advances;
 ml_$spin_token_t ML_$SPIN_LOCK(void *p) { (void)p; spin_locks++; return 1; }
-void ML_$SPIN_UNLOCK(void *p, ml_$spin_token_t t) { (void)p; (void)t; spin_unlocks++; }
+void (ML_$SPIN_UNLOCK)(void *p, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)p; (void)t; spin_unlocks++; }
 void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; advances++; }
 
 #include "../invalidate.c"

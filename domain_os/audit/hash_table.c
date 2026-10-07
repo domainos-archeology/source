@@ -89,7 +89,7 @@ void *audit_$alloc(uint16_t size, status_$t *status_ret)
         }
 
         MMU_$INSTALL(ppn, AUDIT_$DATA.pool_limit,
-                     AUDIT_POOL_MMU_FLAGS);     /* 0x00E71262 */
+                     0, AUDIT_POOL_MMU_FLAGS);     /* 0x00E71262 */
 
         AUDIT_$DATA.pool_limit += AUDIT_POOL_PAGE_SIZE;  /* 0x00E7126C */
     }

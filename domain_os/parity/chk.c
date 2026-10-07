@@ -23,8 +23,8 @@ int8_t PARITY_$CHK(void)
     int8_t did_install;          /* True if we installed a temporary mapping */
     int8_t is_sau1;              /* True if SAU1 (68020-based), false for SAU2 */
     uint32_t err_status_long;    /* Full status from hardware */
-    uint16_t saved_prot;         /* Original protection bits */
-    uint16_t saved_asid;         /* Original ASID */
+    uint16_t saved_asid;         /* D5: the PFT entry's ASID (byte 0 bits 7..1) */
+    uint16_t saved_prot;         /* (-0x1C,A6): its protection (word 0 bits 8..4) */
     uint16_t word_index;         /* Index of bad word in page */
     uint16_t byte_offset;        /* Byte offset adjustment */
     uint16_t err_data;           /* Data read from error location */
@@ -133,14 +133,17 @@ int8_t PARITY_$CHK(void)
      * PMAPE is at base + (ppn * 4), with protection in bits 1-8 and ASID in bits 4-8.
      */
     pmape_ptr = (uint32_t*)((char*)PFT_BASE + (FIM_$WIRED_DATA.parity.err_ppn << 2));
-    saved_prot = (*(uint8_t*)pmape_ptr >> 1) & 0x7F;
-    saved_asid = (*pmape_ptr & PFT_PROT_MASK) >> PFT_PROT_SHIFT;
+    /* 0x00E0AF84..0x00E0AF8E: D5 = (byte 0 & 0xFE) >> 1 - the ASID */
+    saved_asid = (uint16_t)(((*pmape_ptr >> 24) & 0xFE) >> 1);
+    /* 0x00E0AF8A..0x00E0AF94: (word 0 & 0x1F0) >> 4 - the protection, read
+     * from the entry's FIRST word (`and.w (A0),D1') */
+    saved_prot = (uint16_t)(((*pmape_ptr >> 16) & PFT_PROT_MASK) >> PFT_PROT_SHIFT);
 
     /*
      * Install the error page at scratch location to read it safely.
      * Protection 0x16 = supervisor read/write.
      */
-    MMU_$INSTALL(FIM_$WIRED_DATA.parity.err_ppn, (uint32_t)PARITY_SCRATCH_PAGE, PARITY_SCRATCH_PROT);
+    MMU_$INSTALL(FIM_$WIRED_DATA.parity.err_ppn, (uint32_t)PARITY_SCRATCH_PAGE, 0, PARITY_SCRATCH_PROT);
     did_install = -1;
     byte_offset = 0;
 
@@ -248,10 +251,10 @@ handle_error:
         did_install = 0;
     } else {
         /*
-         * Page was handled. If it was read-only (saved_prot == 0),
-         * crash since we can't reinstall it properly.
+         * Page was handled.  0x00E0B0BC `tst.w D5': crash if the saved
+         * ASID is 0.
          */
-        if (saved_prot == 0) {
+        if (saved_asid == 0) {
             CRASH_SYSTEM(&Fault_Memory_Parity_Err);
         }
 
@@ -287,8 +290,10 @@ finish:
             MMU_$REMOVE(FIM_$WIRED_DATA.parity.err_ppn);
         } else {
             /* Restore original mapping with saved protection */
+            /* 0x00E0B130..0x00E0B13E: `move.w (-0x1C,A6) (prot); move.w D5
+             * (asid)' - the asid/prot pair slot (mmu/mmu.h) */
             MMU_$INSTALL(FIM_$WIRED_DATA.parity.err_ppn, FIM_$WIRED_DATA.parity.err_va,
-                         ((uint32_t)saved_prot << 8) | saved_asid);
+                         saved_asid, saved_prot);
         }
     }
 

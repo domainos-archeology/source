@@ -52,7 +52,7 @@ static status_$t read_status, write_status;
 static int wait_sets_free;      /* EC_$WAIT mock frees entry 0 */
 
 ml_$spin_token_t ML_$SPIN_LOCK(void *p) { (void)p; spin_locks++; return 0x2100; }
-void ML_$SPIN_UNLOCK(void *p, ml_$spin_token_t t) { (void)p; (void)t; spin_unlocks++; }
+void (ML_$SPIN_UNLOCK)(void *p, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)p; (void)t; spin_unlocks++; }
 void EC_$ADVANCE(ec_$eventcount_t *ec) { advances++; ec->value++; }
 int16_t EC_$WAIT(ec_$wait_ecs_t ecs, ec_$wait_vals_t vals)
 {

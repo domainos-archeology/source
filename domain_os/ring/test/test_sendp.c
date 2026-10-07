@@ -185,7 +185,7 @@ uint8_t HDR_CHKSUM(const void *hdr, const uint16_t *len_p)
 
 static int mcr_calls;
 
-void MMU_$MCR_CHANGE(uint16_t bit) { (void)bit; mcr_calls++; }
+void (MMU_$MCR_CHANGE)(uint32_t bit_slot) { uint16_t bit = (uint16_t)ARCH_PASCAL_SLOT_WORD(bit_slot); (void)bit; (void)bit; mcr_calls++; }
 
 static uint32_t parity_result;
 static uint32_t parity_ppn1, parity_ppn2;

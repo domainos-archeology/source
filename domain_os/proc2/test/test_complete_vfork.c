@@ -90,7 +90,7 @@ static void reset_mocks(void)
 
 void ML_$LOCK(int16_t id)   { (void)id; n_lock++; }
 void ML_$UNLOCK(int16_t id) { (void)id; n_unlock++; }
-void FIM_$FP_INIT(int16_t asid) { n_fp_init++; last_fp_init_asid = asid; }
+void (FIM_$FP_INIT)(uint32_t asid_slot) { int16_t asid = (int16_t)ARCH_PASCAL_SLOT_WORD(asid_slot); (void)asid; n_fp_init++; last_fp_init_asid = asid; }
 void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                            uint32_t map_param, int16_t area_kind, boolean touch,
                            status_$t *status)

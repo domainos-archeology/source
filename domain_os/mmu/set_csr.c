@@ -15,8 +15,9 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$SET_CSR(uint16_t csr_val)
+void (MMU_$SET_CSR)(uint32_t csr_val_slot)
 {
+    uint16_t csr_val = ARCH_PASCAL_SLOT_WORD(csr_val_slot); /* only its low byte, (5,SP), is read */
     MMU_$PID_PRIV = (uint16_t)(((csr_val & 0xFF) << 8) | (MMU_$PID_PRIV & 0x00FF)); /* 0x00E241F8 */
     MMU_CSR = MMU_$PID_PRIV;                                                     /* 0x00E241FC */
 }

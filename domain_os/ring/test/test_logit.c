@@ -51,8 +51,9 @@ ml_$spin_token_t ML_$SPIN_LOCK(void *lock)
     return 0;
 }
 
-void ML_$SPIN_UNLOCK(void *lock, ml_$spin_token_t token)
+void (ML_$SPIN_UNLOCK)(void *lock, uint32_t token_slot)
 {
+    ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token;
     (void)lock;
     (void)token;
 }

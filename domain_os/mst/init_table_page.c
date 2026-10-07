@@ -51,7 +51,7 @@
  * MMU protection/ASID word installed for an MST page-table page.
  * 0xE42D12 pushes 0x16: ASID 0 (global) and protection 0x16.
  */
-#define MST_TABLE_PAGE_MMU_FLAGS  MMU_FLAGS(0, 0x16)
+#define MST_TABLE_PAGE_MMU_FLAGS  0x16    /* prot; asid 0 (pea (0x16).w) */
 
 /* clr.l (A2)+ / dbf #0xFF: 256 longwords = one 0x400-byte MST page. */
 #define MST_TABLE_PAGE_LONGS      256
@@ -82,7 +82,7 @@ uint32_t mst_$init_table_page(uintptr_t page_addr)
     WP_$CALLOC(&ppn, &status);
     /* status is deliberately not examined - see the note above. */
 
-    MMU_$INSTALL(ppn, (uint32_t)(uintptr_t)page, MST_TABLE_PAGE_MMU_FLAGS);
+    MMU_$INSTALL(ppn, (uint32_t)(uintptr_t)page, 0, MST_TABLE_PAGE_MMU_FLAGS);
 
     for (i = MST_TABLE_PAGE_LONGS - 1; i >= 0; i--) {
         *page++ = 0;

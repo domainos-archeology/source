@@ -13,7 +13,7 @@ void TTY_$I_LOCK(tty_desc_t *t) { (void)t; logf_call("lock;"); }
 void TTY_$I_UNLOCK(tty_desc_t *t) { (void)t; logf_call("unlock;"); }
 uint32_t TTY_$SPIN_LOCK;
 ml_$spin_token_t ML_$SPIN_LOCK(void *p) { (void)p; logf_call("spin;"); return 3; }
-void ML_$SPIN_UNLOCK(void *p, ml_$spin_token_t t) { (void)p; (void)t; logf_call("unspin;"); }
+void (ML_$SPIN_UNLOCK)(void *p, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)p; (void)t; logf_call("unspin;"); }
 
 static void k_reset(void)
 {

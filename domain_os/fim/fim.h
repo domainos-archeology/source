@@ -717,7 +717,11 @@ void FIM_$FP_ABORT(void);
  * Address: 0x00E21BB0 (84 bytes and the 48-byte fim_$copy_fp_frame,
  * fim/sau2/fp_init.s)
  */
-void FIM_$FP_INIT(int16_t asid);
+void FIM_$FP_INIT(uint32_t asid_slot);
+/* Pascal frame (fim/sau2/fp_init.s 0xE21BB0 `move.w (4,sp),d1'): (4)
+ * asid.w; callers `subq.l #2,sp; move.w asid' (call 0xE727DE).  gcc slot
+ * 1 = asid in its first word (arch/arch.h "Pascal parameter slots", source-nxtd). */
+#define FIM_$FP_INIT(asid) (FIM_$FP_INIT)(ARCH_PASCAL_WORD_SLOT(asid))
 
 /*
  * FIM_$FSAVE - Save floating point state
@@ -809,7 +813,14 @@ void FIM_$PARITY_TRAP(void);
  * Address: 0x00E2277C (118 bytes and a 116-byte frame checker,
  * fim/sau2/get_user_sr_ptr.s)
  */
-void *FIM_$GET_USER_SR_PTR(uint16_t process, uint32_t unused);
+void *FIM_$GET_USER_SR_PTR(uint32_t process_slot);
+/* Pascal frame (fim/sau2/get_user_sr_ptr.s 0xE2277C `move.w (4,sp),d0'):
+ * (4) process.w only - both image callers (hand asm, 0xE0A88C and
+ * PROC1_$GET_INFO_INT 0xE20F1E) push one word; the second "unused"
+ * parameter the old prototype carried does not exist.  gcc slot 1 =
+ * process in its first word. */
+#define FIM_$GET_USER_SR_PTR(process) \
+    (FIM_$GET_USER_SR_PTR)(ARCH_PASCAL_WORD_SLOT(process))
 
 /*
  * FIM_$DELIVER_TRACE_FAULT - Deliver trace fault to process
@@ -822,14 +833,22 @@ void *FIM_$GET_USER_SR_PTR(uint16_t process, uint32_t unused);
  *
  * Address: 0x00E22866 (42 bytes, fim/sau2/deliver_trace_fault.s)
  */
-void FIM_$DELIVER_TRACE_FAULT(int16_t as_id);
+void FIM_$DELIVER_TRACE_FAULT(uint32_t as_id_slot);
+/* Pascal frame (0xE22866 `move.w (4,sp),d0'): (4) as_id.w; callers
+ * `subq.l #2,sp; move.w asid' (call 0xE1A188).  gcc slot 1 = as_id first. */
+#define FIM_$DELIVER_TRACE_FAULT(as_id) \
+    (FIM_$DELIVER_TRACE_FAULT)(ARCH_PASCAL_WORD_SLOT(as_id))
 
 /*
  * FIM_$CLEAR_TRACE_FAULT - Clear trace fault state
  *
  * Address: 0x00E22890 (44 bytes) -- see fim/sau2/clear_trace_fault.s
  */
-void FIM_$CLEAR_TRACE_FAULT(int16_t as_id);   /* move.w (0x4,SP),D0: one word argument */
+void FIM_$CLEAR_TRACE_FAULT(uint32_t as_id_slot);
+/* Pascal frame (0xE22890 `move.w (4,sp),d0'): (4) as_id.w (call 0xE5B4D2).
+ * gcc slot 1 = as_id in its first word. */
+#define FIM_$CLEAR_TRACE_FAULT(as_id) \
+    (FIM_$CLEAR_TRACE_FAULT)(ARCH_PASCAL_WORD_SLOT(as_id))
 
 /*
  * FIM_$CRASH - System crash handler

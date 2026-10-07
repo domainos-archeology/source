@@ -20,8 +20,9 @@
 
 #if !defined(ARCH_M68K)
 
-uint16_t MMU_$SET_PROT(uint32_t ppn, uint16_t prot)
+uint16_t (MMU_$SET_PROT)(uint32_t ppn, uint32_t prot_slot)
 {
+    uint16_t prot = ARCH_PASCAL_SLOT_WORD(prot_slot);   /* (0xC,SP) after one save */
     uint16_t saved_sr;
     uint16_t d3 = (uint16_t)(prot << 4);                         /* 0x00E24230 */
     uint16_t idx4 = (uint16_t)(ppn << 2);                        /* 0x00E24236 */

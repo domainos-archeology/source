@@ -178,8 +178,9 @@ void MST_$MAP_CANNED_AT(uint32_t a, uid_t *b, uint32_t c, uint32_t d,
     (void)h;
     *i = status_$ok;
 }
-uint16_t MMU_$SET_PROT(uint32_t a, uint16_t b)
+uint16_t (MMU_$SET_PROT)(uint32_t a, uint32_t b_slot)
 {
+    uint16_t b = (uint16_t)ARCH_PASCAL_SLOT_WORD(b_slot); (void)b;
     (void)a;
     (void)b;
     return 0;

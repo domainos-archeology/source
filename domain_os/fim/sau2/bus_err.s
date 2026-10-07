@@ -139,11 +139,11 @@
          *   CRASH_SYSTEM(&status)     misc/sau2/crash_system.s (map 0xE1E700) */
         .extern PROC1_$AS_ID
 
+        .extern MST_$TOUCH                      /* mst/touch.c (map 0xE0DD40) */
+
         /* Not yet in our tree: keep the image address.
-         * TODO(source-k79b): FIM_$COM, the common fault delivery entry.
-         * TODO(source-nojc): MST_$TOUCH. */
+         * TODO(source-k79b): FIM_$COM, the common fault delivery entry. */
         .equ    FIM_COM,            0x00E213A4  /* map FIM_$COM */
-        .equ    MST_TOUCH,          0x00E0DD40  /* map MST_$TOUCH */
 
         /* Per-AS trace fault status, 4 bytes per AS: the trace_sts field of
          * FIM_$WIRED_DATA (fim/fim.h, block image 0x00E21FE6, field +0x3BC);
@@ -335,7 +335,7 @@ FIM_$BUS_ERR:
         pea     (0x18,%sp)              /* MST_$TOUCH arg 2: &scratch status */
         move.l  %d2,-(%sp)              /* MST_$TOUCH arg 1: faulting address */
         andi.w  #0xf8ff,%sr             /* Drop to IPL 0 */
-        jsr     (MST_TOUCH).l
+        jsr     (MST_$TOUCH).l
         adda.l  #12,%sp                 /* Pop the three arguments */
         move.l  (0x14,%sp),%d0          /* D0 = status MST_$TOUCH returned */
         bne.b   .bus_err_touch_failed

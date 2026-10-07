@@ -64,7 +64,7 @@ void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
     *ppn_out = next_ppn++;
     *status = calloc_status;
 }
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     (void)ppn;
     note("I");

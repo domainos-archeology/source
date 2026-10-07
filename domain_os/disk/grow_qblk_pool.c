@@ -129,7 +129,7 @@ int8_t disk_$grow_qblk_pool(uint16_t count)
             if (st != status_$ok) {
                 CRASH_SYSTEM(&st);
             }
-            MMU_$INSTALL(ppn, DISK_POOL_PAGE_VA(page), DISK_QBLK_PAGE_PROT);
+            MMU_$INSTALL(ppn, DISK_POOL_PAGE_VA(page), 0, DISK_QBLK_PAGE_PROT);
             MMU_$CACHE_INHIBIT_VA(DISK_POOL_PAGE_VA(page));
             ppns[page - 1] = ppn;
         }

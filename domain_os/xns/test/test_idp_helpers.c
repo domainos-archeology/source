@@ -111,8 +111,9 @@ static uint16_t *csum_data[MAX_CALLS];
 static int16_t   csum_words[MAX_CALLS];
 static uint16_t  csum_answer[MAX_CALLS];
 
-uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count)
+uint16_t (XNS_IDP_$CHECKSUM)(uint16_t *data, uint32_t word_count_slot)
 {
+    int16_t word_count = (int16_t)ARCH_PASCAL_SLOT_WORD(word_count_slot); (void)word_count;
     int n = csum_calls++;
     if (n < MAX_CALLS) {
         csum_data[n] = data;

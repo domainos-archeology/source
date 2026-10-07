@@ -63,7 +63,7 @@ void DBUF_$INIT(void)
                 CRASH_SYSTEM(&status);
             }
             /* 0x00E3AC98 - 0x00E3ACB8 */
-            MMU_$INSTALL(ppn, va, DBUF_INSTALL_FLAGS);
+            MMU_$INSTALL(ppn, va, 0, DBUF_INSTALL_FLAGS);
             MMU_$CACHE_INHIBIT_VA(va);
             /* 0x00E3ACBA - 0x00E3ACCE */
             e->ppn = ppn;

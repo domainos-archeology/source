@@ -71,8 +71,8 @@ void PEB_$UNLOAD_REGS(peb_fp_state_t *state) { peb_unload_calls++; peb_unload_st
 static int fp_get_calls, fp_put_calls, peb_get_calls, peb_put_calls;
 static uint16_t fp_get_asid;
 static int16_t *peb_get_asid;
-void FP_$GET_FP(uint16_t asid) { fp_get_calls++; fp_get_asid = asid; }
-void FP_$PUT_FP(uint16_t asid) { (void)asid; fp_put_calls++; }
+void (FP_$GET_FP)(uint32_t asid_slot) { uint16_t asid = (uint16_t)ARCH_PASCAL_SLOT_WORD(asid_slot); (void)asid; fp_get_calls++; fp_get_asid = asid; }
+void (FP_$PUT_FP)(uint32_t asid_slot) { uint16_t asid = (uint16_t)ARCH_PASCAL_SLOT_WORD(asid_slot); (void)asid; (void)asid; fp_put_calls++; }
 void PEB_$GET_FP(int16_t *asid) { peb_get_calls++; peb_get_asid = asid; }
 void PEB_$PUT_FP(int16_t *asid) { (void)asid; peb_put_calls++; }
 

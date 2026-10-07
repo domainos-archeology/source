@@ -174,11 +174,11 @@ top:
 
         /*
          * 0x00E03B2C..0x00E03B48: map the wired pages at the buffer window.
-         * The two words pushed after the VA (ASID, then 7) form the flags
-         * longword; the `subq.l #0x2,SP` result slot is discarded.
+         * The two words pushed before the VA (7, then the ASID) are the
+         * asid and prot words; the `subq.l #0x2,SP` keeps the 14-byte
+         * frame long-aligned (mmu/mmu.h, MMU_$INSTALL_LIST).
          */
-        MMU_$INSTALL_LIST(got, wired_ppns, buffer_va,
-                          ((uint32_t)PROC1_$AS_ID << 16) | 7);
+        MMU_$INSTALL_LIST(got, wired_ppns, buffer_va, PROC1_$AS_ID, 7);
 
         /* 0x00E03B4C..0x00E03B58: count and min_count are both `got` */
         ast_$allocate_pages((int16_t)got, (int16_t)got, new_ppns);
@@ -208,8 +208,7 @@ top:
 
             /* 0x00E03BCC..0x00E03BE2: MMU_$INSTALL(ppn, 0xFF8C00,
              * ASID:0x16) - the ASID word is the high half of the flags */
-            MMU_$INSTALL(new_ppns[i], temp_va,
-                         ((uint32_t)PROC1_$AS_ID << 16) | 0x16);
+            MMU_$INSTALL(new_ppns[i], temp_va, PROC1_$AS_ID, 0x16);
 
             /* 0x00E03BE6..0x00E03BF2: ori.w #0x6000 on the PFT low word;
              * the index is the ppn's low word << 2 (a 16-bit shift) */

@@ -51,5 +51,5 @@ void NETBUF_$GETVA(uint32_t ppn_shifted, uint32_t *va_out, status_$t *status)
     *status = status_$ok;
 
     /* Install MMU mapping: ppn -> va with protection flags 0x16 */
-    MMU_$INSTALL(ppn_shifted >> 10, va, 0x16);
+    MMU_$INSTALL(ppn_shifted >> 10, va, 0, 0x16);
 }

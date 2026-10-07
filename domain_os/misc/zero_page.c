@@ -30,7 +30,7 @@ void ZERO_PAGE(uint32_t ppn)
     int16_t count;      /* D0w */
 
     /* 0x00E00EB4-0x00E00EC8 */
-    MMU_$INSTALL(ppn, ARCH_PTR_TO_VA(AST_$ZERO_BUFF), 0x16);
+    MMU_$INSTALL(ppn, ARCH_PTR_TO_VA(AST_$ZERO_BUFF), 0, 0x16);
 
     /* 0x00E00ECC-0x00E00EDA */
     p = AST_$ZERO_BUFF;

@@ -61,7 +61,7 @@ void AST_$FETCH_PMAP_PAGE(void *uid_info, uint32_t *output_buf,
     if (status == status_$ok) {
         /* 0x00E04228..0x00E0424C: map the page at 0xFF8C00 with flags 0x16 */
         ML_$LOCK(PMAP_LOCK_ID);
-        MMU_$INSTALL(ppn_array[0], ARCH_PTR_TO_VA(AST_$ZERO_BUFF), 0x16);
+        MMU_$INSTALL(ppn_array[0], ARCH_PTR_TO_VA(AST_$ZERO_BUFF), 0, 0x16);
 
         /* 0x00E04250..0x00E0425E: move.w #0xff / dbf = 256 longwords */
         src = AST_$ZERO_BUFF;

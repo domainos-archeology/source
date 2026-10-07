@@ -132,7 +132,7 @@ void PEB_$INIT(void)
 
     /* Install MMU mapping for PEB control register at 0xFF7000 */
     /* PPN 0x2C maps to VA 0xFF7000 with flags 0x16 */
-    MMU_$INSTALL(PEB_CTL_PPN, PEB_CTL_VA, PEB_MMU_FLAGS);
+    MMU_$INSTALL(PEB_CTL_PPN, PEB_CTL_VA, 0, PEB_MMU_FLAGS);
 
     /* Probe for PEB hardware */
     {
@@ -159,7 +159,7 @@ void PEB_$INIT(void)
 
             /* Install MMU mapping for WCS at 0xFF7800 */
             /* PPN 0x2E maps to VA 0xFF7800 with flags 0x16 */
-            MMU_$INSTALL(PEB_WCS_PPN, PEB_WCS_VA, PEB_MMU_FLAGS);
+            MMU_$INSTALL(PEB_WCS_PPN, PEB_WCS_VA, 0, PEB_MMU_FLAGS);
 
             /* Clear PEB control register to initialize hardware */
             PEB_CTL = 0;

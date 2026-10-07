@@ -65,8 +65,9 @@ static void reset_trace(void)
     __host_intr_disable_count = 0;
 }
 
-void PROC1_$SET_LOCK(uint16_t lock_id)
+void (PROC1_$SET_LOCK)(uint32_t lock_id_slot)
 {
+    uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id;
     n_set_lock++;
     last_set_lock_id = lock_id;
 }
@@ -110,8 +111,9 @@ void CRASH_SYSTEM(const status_$t *status_p)
 }
 
 ml_$spin_token_t ML_$SPIN_LOCK(void *lockp) { (void)lockp; return 0; }
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token)
+void (ML_$SPIN_UNLOCK)(void *lockp, uint32_t token_slot)
 {
+    ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token;
     (void)lockp; (void)token;
 }
 

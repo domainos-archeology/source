@@ -54,9 +54,9 @@ void PEB_$ASSOC(void)
         PEB_$MMU_INSTALLED = -1;   /* st: 0xFF */
 
         /* 0x00E5AD5C-0x00E5AD9A: three page installs, all with flags 6 */
-        MMU_$INSTALL(0x2E, 0xFF7800, 6);
-        MMU_$INSTALL(0x2C, 0xFF7000, 6);
-        MMU_$INSTALL(0x2D, 0xFF7400, 6);
+        MMU_$INSTALL(0x2E, 0xFF7800, 0, 6);
+        MMU_$INSTALL(0x2C, 0xFF7000, 0, 6);
+        MMU_$INSTALL(0x2D, 0xFF7400, 0, 6);
     }
 }
 

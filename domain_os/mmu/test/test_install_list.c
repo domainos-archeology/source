@@ -82,6 +82,13 @@ static void reset(void)
     calls = 0;
 }
 
+/*
+ * The ppn_array pointer crosses the call as a 32-bit VA straddling two
+ * Pascal slots (mmu/mmu.h); a 64-bit host pointer survives that only
+ * inside an ARCH_HOST_VA_BASE window (VA 0 is nil, so start below it).
+ */
+#define PPNS_WINDOW(a) (ARCH_HOST_VA_BASE = (uintptr_t)(a) - 0x100)
+
 /* pack(va, asid, prot) exactly as the image does on a 68020 */
 static uint32_t pack(uint32_t va, uint8_t asid, uint8_t prot)
 {
@@ -95,9 +102,11 @@ static uint32_t pack(uint32_t va, uint8_t asid, uint8_t prot)
 
 TEST(list_installs_each_page_in_order)
 {
-    uint32_t ppns[3] = { 0x11, 0x22, 0x33 };
+    static uint32_t ppns[3] = { 0x11, 0x22, 0x33 };
     reset();
-    MMU_$INSTALL_LIST(3, ppns, 0x20000, (5u << 16) | 6u);
+    PPNS_WINDOW(ppns);
+    MMU_$INSTALL_LIST(3, ppns, 0x20000, 5, 6);
+    ARCH_HOST_VA_BASE = 0;
     ASSERT_EQ(3, calls);
     ASSERT_EQ(0x11, got_ppn[0]);
     ASSERT_EQ(0x33, got_ppn[2]);
@@ -113,14 +122,16 @@ TEST(list_installs_each_page_in_order)
 /* `add.w #0x10,D5w`: the carry stays in the low word */
 TEST(list_packed_increment_is_a_word_add)
 {
-    uint32_t ppns[2] = { 1, 2 };
+    static uint32_t ppns[2] = { 1, 2 };
     reset();
+    PPNS_WINDOW(ppns);
     /*
      * asid 0xFF and an all-ones va pack (on a 68020) to 0xFE0FFFF0, whose
      * low word is 0xFFF0: the asid byte sits under the low word after the
      * two rotates, so a zero asid can never produce it.
      */
-    MMU_$INSTALL_LIST(2, ppns, 0xFFFFFFFFu, 0xFFu << 16);
+    MMU_$INSTALL_LIST(2, ppns, 0xFFFFFFFFu, 0xFF, 0);
+    ARCH_HOST_VA_BASE = 0;
     ASSERT_EQ(0xFFF0, got_packed[0] & 0xFFFF);
     ASSERT_EQ(got_packed[0] & 0xFFFF0000u, got_packed[1] & 0xFFFF0000u);
     ASSERT_EQ(0x0000, got_packed[1] & 0xFFFF);
@@ -128,10 +139,12 @@ TEST(list_packed_increment_is_a_word_add)
 
 TEST(list_68010_shifts_low_word)
 {
-    uint32_t ppns[1] = { 9 };
+    static uint32_t ppns[1] = { 9 };
     reset();
     M68020 = 0;
-    MMU_$INSTALL_LIST(1, ppns, 0x1000, (2u << 16) | 3u);
+    PPNS_WINDOW(ppns);
+    MMU_$INSTALL_LIST(1, ppns, 0x1000, 2, 3);
+    ARCH_HOST_VA_BASE = 0;
     {
         uint32_t p = 0x1000u << 8;
         p = (p & 0xFFFFFF00u) | 3;
@@ -148,7 +161,7 @@ TEST(private_clears_global_bit_and_restores_csr)
 {
     reset();
     pft_store[0x22] = 0x12345678u | 0x1000u;
-    MMU_$INSTALL_PRIVATE(0x22, 0x3000, (7u << 16) | 1u);
+    MMU_$INSTALL_PRIVATE(0x22, 0x3000, 7, 1);
     ASSERT_EQ(1, calls);
     ASSERT_EQ(0x22, got_ppn[0]);
     ASSERT_EQ(pack(0x3000, 7, 1), got_packed[0]);

@@ -77,7 +77,7 @@ uint32_t MMU_$PTOV(uint32_t ppn)
     return mock_ptov_result;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     record(EV_INSTALL, ppn, va, flags);
 }

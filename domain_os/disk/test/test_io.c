@@ -198,7 +198,7 @@ void ML_$EXCLUSION_START(ml_$exclusion_t *l) { (void)l; excl_start_count++; }
 void ML_$EXCLUSION_STOP(ml_$exclusion_t *l)  { (void)l; excl_stop_count++; }
 
 static int mcr_change_count;
-void MMU_$MCR_CHANGE(uint16_t bit) { (void)bit; mcr_change_count++; }
+void (MMU_$MCR_CHANGE)(uint32_t bit_slot) { uint16_t bit = (uint16_t)ARCH_PASCAL_SLOT_WORD(bit_slot); (void)bit; (void)bit; mcr_change_count++; }
 
 static int netlog_count;
 void NETLOG_$LOG_IT(uint16_t kind, uint32_t *uid, uint16_t p3, uint16_t p4,

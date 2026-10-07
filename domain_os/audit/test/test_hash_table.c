@@ -110,7 +110,7 @@ void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
     wp_calloc_calls++;
 }
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     if (mmu_install_calls < 8) {
         mmu_install_ppn[mmu_install_calls]   = ppn;

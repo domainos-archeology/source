@@ -25,8 +25,9 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$INSTALL_ASID(uint16_t asid)
+void (MMU_$INSTALL_ASID)(uint32_t asid_slot)
 {
+    uint16_t asid = ARCH_PASCAL_SLOT_WORD(asid_slot);   /* (4,SP) */
     PROC1_$AS_ID = asid;                                            /* 0x00E24208 */
     MMU_$PID_PRIV = (uint16_t)(((asid & 0xFF) << 8) | (MMU_$PID_PRIV & 0x00FF)); /* 0x00E2420E */
     MMU_CSR = MMU_$PID_PRIV;                                        /* 0x00E24214 */

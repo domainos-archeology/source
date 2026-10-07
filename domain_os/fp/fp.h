@@ -120,7 +120,10 @@ extern ml_$exclusion_t FP_$EXCLUSION;
  * Hand-written assembly: fp/sau2/fp_context.s.
  * Original address: 0x00E21D48 (40 bytes)
  */
-void FP_$GET_FP(uint16_t asid);
+void FP_$GET_FP(uint32_t asid_slot);
+/* Pascal frame (fp/sau2/fp_context.s 0xE21D48 `move.w (8,sp),d2' after
+ * saving D2): (4) asid.w.  gcc slot 1 = asid in its first word (arch/arch.h "Pascal parameter slots", source-nxtd). */
+#define FP_$GET_FP(asid) (FP_$GET_FP)(ARCH_PASCAL_WORD_SLOT(asid))
 
 /*
  * FP_$PUT_FP - Put (save) FPU context for address space
@@ -140,6 +143,9 @@ void FP_$GET_FP(uint16_t asid);
  * Hand-written assembly: fp/sau2/fp_context.s.
  * Original address: 0x00E21D94 (46 bytes)
  */
-void FP_$PUT_FP(uint16_t asid);
+void FP_$PUT_FP(uint32_t asid_slot);
+/* Pascal frame (0xE21D94 `move.w (0xc,sp),d0' after saving D2-D3):
+ * (4) asid.w.  gcc slot 1 = asid in its first word. */
+#define FP_$PUT_FP(asid) (FP_$PUT_FP)(ARCH_PASCAL_WORD_SLOT(asid))
 
 #endif /* FP_H */

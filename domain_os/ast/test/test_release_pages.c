@@ -75,7 +75,7 @@ void ML_$UNLOCK(int16_t id) { unlock_calls++; (void)id; }
 static int remove_calls; static uint32_t remove_ppns[MAX_REC];
 void MMU_$REMOVE(uint32_t ppn) { if (remove_calls < MAX_REC) remove_ppns[remove_calls] = ppn; remove_calls++; }
 static int list_calls; static uint16_t list_count; static uint32_t list_copy[32];
-void MMU_$REMOVE_LIST(uint32_t *arr, uint16_t count) { list_calls++; list_count = count; memcpy(list_copy, arr, count * 4); }
+void (MMU_$REMOVE_LIST)(uint32_t *arr, uint32_t count_slot) { uint16_t count = (uint16_t)ARCH_PASCAL_SLOT_WORD(count_slot); (void)count; list_calls++; list_count = count; memcpy(list_copy, arr, count * 4); }
 static int release_calls; static uint16_t release_pid, release_count;
 void MMAP_$RELEASE_PAGES(uint16_t pid, uint32_t *arr, uint16_t count) { (void)arr; release_calls++; release_pid = pid; release_count = count; }
 

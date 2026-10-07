@@ -36,8 +36,8 @@ void network_$phys_copy(uint32_t dst_pa, uint32_t src_pa, int16_t len)
     uint32_t dst_va = ARCH_PTR_TO_VA(AST_$ZERO_BUFF) + (dst_pa & 0x3FF);  /* (-0x8,A6) */
 
     ML_$LOCK(ML_LOCK_PMAP);                                         /* 0x00E0F16E */
-    MMU_$INSTALL(src_ppn, src_va, NETWORK_PHYS_COPY_MMU_FLAGS);
-    MMU_$INSTALL(dst_ppn, dst_va, NETWORK_PHYS_COPY_MMU_FLAGS);
+    MMU_$INSTALL(src_ppn, src_va, 0, NETWORK_PHYS_COPY_MMU_FLAGS);
+    MMU_$INSTALL(dst_ppn, dst_va, 0, NETWORK_PHYS_COPY_MMU_FLAGS);
     OS_$DATA_COPY(ARCH_VA_TO_PTR(src_va), ARCH_VA_TO_PTR(dst_va),
                   (uint32_t)(int32_t)len);                          /* 0x00E0F1AC */
     MMU_$REMOVE(src_ppn);

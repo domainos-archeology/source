@@ -53,7 +53,7 @@ void WP_$CALLOC(uint32_t *ppn_out, status_$t *status)
     callocs++;
     *status = calloc_status;
 }
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     if (installs < 64) { install_ppn[installs] = ppn; install_va[installs] = va; install_flags[installs] = flags; }
     installs++;

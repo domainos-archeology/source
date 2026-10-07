@@ -41,7 +41,7 @@ static int ntrace;
 static uint32_t inst_ppn, inst_va, inst_flags, rem_ppn;
 static int filled_at_install;
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     trace[ntrace++] = 'I';
     inst_ppn = ppn; inst_va = va; inst_flags = flags;

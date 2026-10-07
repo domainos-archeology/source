@@ -6,7 +6,7 @@
  * PROC1_$DATA.ts_elem[pid].elem at (0x14,A5 + pid*0x1C) and the queue is
  * TIME_$VTQ[pid - 1] (`pea (-0xc,A0,D3w)' with A0 = 0xE2A4A0, D3 = pid*12).
  *
- * Frame: (0x8,A6) pcb, (0xC,A6) timeslice (word).
+ * Frame: (0x8,A6) pcb, (0xC,A6) timeslice (word, a Pascal 2-byte slot).
  * Locals: (-0xC,A6) a 6-byte clock {0, timeslice}, (-0x4,A6) status.
  *
  * 0x00E14A08  link.w A6,-0x10 / movem.l D2-D4/A2/A5,-(SP) / lea A5
@@ -34,8 +34,11 @@
 #include "proc1/proc1_internal.h"
 #include "time/time.h"
 
-void PROC1_$SET_TS(proc1_t *pcb, int16_t timeslice)
+void (PROC1_$SET_TS)(proc1_t *pcb, uint32_t timeslice_slot)
 {
+    /* (0xC,A6): a Pascal word slot - ec/sau2/advance_int.s pushes it with
+     * move.w (proc1/proc1.h) */
+    int16_t timeslice = (int16_t)ARCH_PASCAL_SLOT_WORD(timeslice_slot);
     clock_t when;               /* (-0xC,A6) */
     status_$t status;           /* (-0x4,A6) */
     uint16_t pid;

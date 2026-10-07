@@ -1139,7 +1139,12 @@ void XNS_IDP_$PROC2_CLEANUP(uint16_t as_id);
  *
  * Original address: 0x00E2B850
  */
-uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count);
+uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, uint32_t word_count_slot);
+/* Pascal frame (xns/sau2/idp_checksum.s 0xE2B850): (4) data.l, (8)
+ * word_count.w; callers `subq.l #2,sp; move.w n; pea data' (call
+ * 0xE17D84).  gcc slot 2 = word_count in its first word (arch/arch.h "Pascal parameter slots", source-nxtd). */
+#define XNS_IDP_$CHECKSUM(data, word_count) \
+    (XNS_IDP_$CHECKSUM)((data), ARCH_PASCAL_WORD_SLOT(word_count))
 
 /*
  * XNS_IDP_$HOP_AND_SUM - Calculate hop count contribution to checksum
@@ -1154,7 +1159,13 @@ uint16_t XNS_IDP_$CHECKSUM(uint16_t *data, int16_t word_count);
  *
  * Original address: 0x00E2B872
  */
-int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset);
+int16_t XNS_IDP_$HOP_AND_SUM(uint32_t sum_hop_slot);
+/* Pascal frame (0xE2B872 `move.w (6,sp),d1' / `add.w (4,sp),d0'): (4)
+ * current_sum.w, (6) hop_offset.w; the image caller (call 0xE87536)
+ * pushes `move.w hop; move.w sum'.  gcc slot 1 = current_sum then
+ * hop_offset (one pair slot). */
+#define XNS_IDP_$HOP_AND_SUM(current_sum, hop_offset) \
+    (XNS_IDP_$HOP_AND_SUM)(ARCH_PASCAL_WORD_PAIR_SLOT(current_sum, hop_offset))
 
 /*
  * XNS_ERROR_$SEND - Send an XNS Error Protocol packet

@@ -201,8 +201,9 @@ void CRASH_SYSTEM(const status_$t *status_p)
     longjmp(escape, 2);
 }
 
-void PROC1_$SET_LOCK(uint16_t lock_id)
+void (PROC1_$SET_LOCK)(uint32_t lock_id_slot)
 {
+    uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id;
     lock_calls++;
     lock_arg = lock_id;
 }

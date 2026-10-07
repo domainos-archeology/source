@@ -86,7 +86,7 @@ void ML_$UNLOCK(int16_t id) { (void)id; n_unlock++; }
 void TIME_$CLOCK(clock_t *c) { c->high = 0xDEADBEEFu; c->low = 0xCAFE; }
 uint16_t MST_$ALLOC_ASID(status_$t *s) { *s = mock_alloc_asid_status; return mock_alloc_asid_result; }
 void MST_$FREE_ASID(uint16_t asid, status_$t *s) { (void)asid; *s = status_$ok; n_free_asid++; }
-void FIM_$FP_INIT(int16_t asid) { (void)asid; n_fp_init++; }
+void (FIM_$FP_INIT)(uint32_t asid_slot) { int16_t asid = (int16_t)ARCH_PASCAL_SLOT_WORD(asid_slot); (void)asid; (void)asid; n_fp_init++; }
 void PROC2_$INIT_ENTRY_INTERNAL(proc2_info_t *e) { (void)e; n_init_entry++; }
 void MST_$MAP_INITIAL_AREA(uint32_t code_desc, uint16_t asid, uid_t *parent_uid,
                            uint32_t map_param, int16_t area_kind, boolean touch,

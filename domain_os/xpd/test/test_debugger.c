@@ -95,8 +95,8 @@ static ec_$eventcount_t *ec2_ec;
 void *EC2_$REGISTER_EC1(ec_$eventcount_t *ec1, status_$t *status_ret) { ec2_ec = ec1; *status_ret = ec2_status; return (void *)0x5150; }
 
 /* CAPTURE_FAULT's callees: never reached here */
-void FIM_$DELIVER_TRACE_FAULT(int16_t as_id) { (void)as_id; }
-void FIM_$CLEAR_TRACE_FAULT(int16_t as_id) { (void)as_id; }
+void (FIM_$DELIVER_TRACE_FAULT)(uint32_t as_id_slot) { int16_t as_id = (int16_t)ARCH_PASCAL_SLOT_WORD(as_id_slot); (void)as_id; (void)as_id; }
+void (FIM_$CLEAR_TRACE_FAULT)(uint32_t as_id_slot) { int16_t as_id = (int16_t)ARCH_PASCAL_SLOT_WORD(as_id_slot); (void)as_id; (void)as_id; }
 void PROC2_$AWAKEN_GUARDIAN(int16_t *proc_index) { (void)proc_index; }
 int8_t PROC1_$SUSPEND(uint16_t pid, status_$t *st) { (void)pid; *st = 0; return 0; }
 void XPD_$FP_GET_STATE(void *a, void *b) { (void)a; (void)b; }

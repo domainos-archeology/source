@@ -242,8 +242,8 @@ void NETWORK_$SET_SERVICE(int16_t *op_ptr, uint32_t *value_ptr,
     *status_p = status_$ok;
 }
 
-void PROC1_$SET_LOCK(uint16_t lock_id) { (void)lock_id; }
-void PROC1_$CLR_LOCK(uint16_t lock_id) { (void)lock_id; }
+void (PROC1_$SET_LOCK)(uint32_t lock_id_slot) { uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id; (void)lock_id; }
+void (PROC1_$CLR_LOCK)(uint32_t lock_id_slot) { uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id; (void)lock_id; }
 
 void PROC1_$UNBIND(uint16_t pid, status_$t *status_ret)
 {
@@ -272,8 +272,10 @@ int16_t RIP_$FIND_NEXTHOP(void *addr_info, boolean flags, int16_t *port_ret,
     return 0;
 }
 
-int16_t XNS_IDP_$HOP_AND_SUM(uint16_t current_sum, int16_t hop_offset)
+int16_t (XNS_IDP_$HOP_AND_SUM)(uint32_t current_sum_hop_offset_slot)
 {
+    uint16_t current_sum = (uint16_t)ARCH_PASCAL_SLOT_WORD(current_sum_hop_offset_slot); (void)current_sum;
+    int16_t hop_offset = (int16_t)ARCH_PASCAL_SLOT_WORD2(current_sum_hop_offset_slot); (void)hop_offset;
     (void)hop_offset;
     mock_hop_and_sum_calls++;
     return (int16_t)(current_sum + 1);

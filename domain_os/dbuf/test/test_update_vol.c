@@ -44,7 +44,7 @@ static status_$t write_status;
 static int busy_during_write;
 
 ml_$spin_token_t ML_$SPIN_LOCK(void *p) { (void)p; spin_locks++; return 1; }
-void ML_$SPIN_UNLOCK(void *p, ml_$spin_token_t t) { (void)p; (void)t; spin_unlocks++; }
+void (ML_$SPIN_UNLOCK)(void *p, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)p; (void)t; spin_unlocks++; }
 void EC_$ADVANCE(ec_$eventcount_t *ec) { (void)ec; advances++; }
 void DISK_$WRITE(int16_t vol_idx, uint32_t daddr, uint32_t ppn, uint32_t *info,
                  status_$t *status)

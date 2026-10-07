@@ -199,7 +199,15 @@ ml_$spin_token_t ML_$SPIN_LOCK(void *lockp);
  *
  * Original address: 0x00E20BBE
  */
-void ML_$SPIN_UNLOCK(void *lockp, ml_$spin_token_t token);
+void ML_$SPIN_UNLOCK(void *lockp, uint32_t token_slot);
+/*
+ * Pascal frame (ml/sau2/spin_unlock.s, 0xE20BBE `move.w (8,sp),sr'):
+ *   (4,SP) lockp.l, (8,SP) token.w; the image's callers push
+ *   `subq.l #2,sp; move.w token,-(sp); pea lock'.  gcc slot 2 = the token
+ *   in its FIRST word (arch/arch.h, Pascal parameter slots; source-nxtd).
+ */
+#define ML_$SPIN_UNLOCK(lockp, token) \
+    (ML_$SPIN_UNLOCK)((lockp), ARCH_PASCAL_WORD_SLOT(token))
 
 /*
  * ============================================================================

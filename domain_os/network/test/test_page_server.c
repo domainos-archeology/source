@@ -85,14 +85,14 @@ static uint8_t arena[0x800];
 static app_$receive_rec_t rcv_stub;
 
 ml_$spin_token_t ML_$SPIN_LOCK(void *l) { (void)l; return 7; }
-void ML_$SPIN_UNLOCK(void *l, ml_$spin_token_t t) { (void)l; (void)t; }
+void (ML_$SPIN_UNLOCK)(void *l, uint32_t t_slot) { ml_$spin_token_t t = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(t_slot); (void)t; (void)l; (void)t; }
 uint32_t MMAP_$REMOTE_POOL(uint32_t p) { return p + 1; }
 void WP_$CALLOC(uint32_t *ppn, status_$t *st) { *ppn = 0x123; *st = 0; }
 void CRASH_SYSTEM(const status_$t *s) { (void)s; crash_calls++; }
 void AST_$PAGE_ZERO(uint32_t ppn) { (void)ppn; zero_calls++; }
 int8_t SOCK_$OPEN(uint16_t s, uint32_t a, uint32_t b)
 { (void)a; (void)b; open_socks[open_calls++ & 3] = s; return -1; }
-void PROC1_$SET_LOCK(uint16_t id) { (void)id; }
+void (PROC1_$SET_LOCK)(uint32_t id_slot) { uint16_t id = (uint16_t)ARCH_PASCAL_SLOT_WORD(id_slot); (void)id; (void)id; }
 uint16_t EC_$WAITN(ec_$eventcount_t **ecs, int32_t *vals, int16_t n)
 {
     (void)ecs; (void)vals; (void)n;

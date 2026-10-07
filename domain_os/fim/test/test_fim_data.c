@@ -61,8 +61,9 @@ uint16_t PROC1_$AS_ID;
 static int clear_trace_calls;
 static int16_t clear_trace_asid;
 
-void FIM_$CLEAR_TRACE_FAULT(int16_t as_id)
+void (FIM_$CLEAR_TRACE_FAULT)(uint32_t as_id_slot)
 {
+    int16_t as_id = (int16_t)ARCH_PASCAL_SLOT_WORD(as_id_slot); (void)as_id;
     clear_trace_calls++;
     clear_trace_asid = as_id;
 }

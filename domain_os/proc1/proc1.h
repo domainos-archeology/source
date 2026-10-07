@@ -574,13 +574,20 @@ void proc1_$add_ready_body(proc1_t *pcb);
  * PROC1_$SET_LOCK - Acquire a resource lock
  * Original address: 0x00e20ae4
  */
-void PROC1_$SET_LOCK(uint16_t lock_id);
+void PROC1_$SET_LOCK(uint32_t lock_id_slot);
+/* Pascal frame (proc1/sau2/set_lock.s 0xE20AE4 `move.w (4,sp),d0'):
+ * (4) lock_id.w; callers `move.w #n,-(sp)' (call 0xE116BA).  gcc slot 1 =
+ * lock_id in its first word (arch/arch.h "Pascal parameter slots", source-nxtd). */
+#define PROC1_$SET_LOCK(lock_id) (PROC1_$SET_LOCK)(ARCH_PASCAL_WORD_SLOT(lock_id))
 
 /*
  * PROC1_$CLR_LOCK - Release a resource lock
  * Original address: 0x00e20b92
  */
-void PROC1_$CLR_LOCK(uint16_t lock_id);
+void PROC1_$CLR_LOCK(uint32_t lock_id_slot);
+/* Pascal frame (proc1/sau2/clr_lock.s 0xE20B92 `move.w (4,sp),d0'):
+ * (4) lock_id.w.  gcc slot 1 = lock_id in its first word. */
+#define PROC1_$CLR_LOCK(lock_id) (PROC1_$CLR_LOCK)(ARCH_PASCAL_WORD_SLOT(lock_id))
 
 /*
  * PROC1_$TST_LOCK - Test if a lock is held
@@ -788,7 +795,15 @@ void PROC1_$VT_INT(clock_t *cpu_time_out);
  * PROC1_$SET_TS - Set timeslice value
  * Original address: 0x00e14a08
  */
-void PROC1_$SET_TS(proc1_t *pcb, int16_t value);
+void PROC1_$SET_TS(proc1_t *pcb, uint32_t value_slot);
+/* Pascal frame (0x00E14A08: (0x8,A6) pcb, (0xC,A6) timeslice.w).  The
+ * hand-assembled EC_$ADVANCE interrupt path (ec/sau2/advance_int.s,
+ * 0xE20790..0xE20796) calls it with `move.w tsvv[pri],-(sp); move.l pcb':
+ * a Pascal word slot.  So the C definition takes the slot too and every C
+ * caller packs the word with the macro (arch/arch.h "Pascal parameter
+ * slots", source-nxtd). */
+#define PROC1_$SET_TS(pcb, value) \
+    (PROC1_$SET_TS)((pcb), ARCH_PASCAL_WORD_SLOT(value))
 
 /*
  * PROC1_$TS_END_CALLBACK - Timeslice end callback
@@ -862,9 +877,40 @@ void PROC1_$GET_INFO(int16_t *pidp, proc1_$info_t *info_ret, status_$t *status_r
  *   usb_ret - Pointer to receive user stack base
  *   usp_ret - Pointer to receive user SP
  */
-void PROC1_$GET_INFO_INT(uint16_t pid, void *stack_base, void *stack_top,
-                         uint16_t *usr_ret, uint32_t *upc_ret,
-                         uint32_t *usb_ret, uint32_t *usp_ret);
+void PROC1_$GET_INFO_INT(uint32_t s1, uint32_t s2, uint32_t s3, uint32_t s4,
+                         uint32_t s5, uint32_t s6, uint32_t s7);
+/*
+ * Pascal frame (proc1/sau2/misc.s, 0xE20F12; read at 0x10(SP) after the
+ * bsr and a 3-register movem): (4) pid.w, then six UNPADDED longwords at
+ * (6) stack_base, (0xA) stack_top, (0xE) usr_ret, (0x12) upc_ret,
+ * (0x16) usb_ret, (0x1A) usp_ret - the only image caller, PROC1_$GET_INFO
+ * (call 0xE14FFC), pushes them with `pea'/`move.l' and the pid last with
+ * `move.w'.  So each longword straddles two gcc slots (arch/arch.h "Pascal parameter slots", source-nxtd):
+ *   s1 = pid | base.hi,  s2 = base.lo | top.hi,  s3 = top.lo | usr.hi,
+ *   s4 = usr.lo | upc.hi, s5 = upc.lo | usb.hi, s6 = usb.lo | usp.hi,
+ *   s7 = usp.lo | (pad)
+ * proc1_$get_info_int_slots packs them; the macro evaluates each argument
+ * once.
+ */
+static inline void proc1_$get_info_int_slots(uint16_t pid, uint32_t base,
+                                             uint32_t top, uint32_t usr,
+                                             uint32_t upc, uint32_t usb,
+                                             uint32_t usp)
+{
+    (PROC1_$GET_INFO_INT)(ARCH_PASCAL_WORD_PAIR_SLOT(pid, base >> 16),
+                          ARCH_PASCAL_WORD_PAIR_SLOT(base, top >> 16),
+                          ARCH_PASCAL_WORD_PAIR_SLOT(top, usr >> 16),
+                          ARCH_PASCAL_WORD_PAIR_SLOT(usr, upc >> 16),
+                          ARCH_PASCAL_WORD_PAIR_SLOT(upc, usb >> 16),
+                          ARCH_PASCAL_WORD_PAIR_SLOT(usb, usp >> 16),
+                          ARCH_PASCAL_WORD_SLOT(usp));
+}
+#define PROC1_$GET_INFO_INT(pid, stack_base, stack_top, usr_ret, upc_ret,     \
+                            usb_ret, usp_ret)                                 \
+    proc1_$get_info_int_slots((pid), ARCH_PTR_TO_VA(stack_base),              \
+                              ARCH_PTR_TO_VA(stack_top),                      \
+                              ARCH_PTR_TO_VA(usr_ret), ARCH_PTR_TO_VA(upc_ret), \
+                              ARCH_PTR_TO_VA(usb_ret), ARCH_PTR_TO_VA(usp_ret))
 
 /*
  * Process list entry structure (4 bytes)

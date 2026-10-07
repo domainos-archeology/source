@@ -60,7 +60,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
             if (local_status != status_$ok) {
                 CRASH_SYSTEM(&local_status);
             }
-            MMU_$INSTALL(ppn, va, 0x16);        /* pea (0x16).w */
+            MMU_$INSTALL(ppn, va, 0, 0x16);        /* pea (0x16).w */
         }
 
         /* 0x00E01216..0x00E01222 */
@@ -94,7 +94,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
                     if (local_status != status_$ok) {
                         CRASH_SYSTEM(&local_status);
                     }
-                    MMU_$INSTALL(ppn, va, 0x16);
+                    MMU_$INSTALL(ppn, va, 0, 0x16);
                 }
 
                 /* 0x00E012B8..0x00E012C6: moveq #0x9 / dbf = 10 words, the
@@ -113,7 +113,7 @@ uint16_t AST_$ADD_ASTES(uint16_t *count, status_$t *status)
                     if (local_status != status_$ok) {
                         CRASH_SYSTEM(&local_status);
                     }
-                    MMU_$INSTALL(ppn, segmap_va, 0x16);
+                    MMU_$INSTALL(ppn, segmap_va, 0, 0x16);
                 }
 
                 /* 0x00E0131A..0x00E0132A: moveq #0x3f / dbf = 0x40 words */

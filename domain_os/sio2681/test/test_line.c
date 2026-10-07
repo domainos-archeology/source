@@ -27,7 +27,7 @@ static void next_isr(void) { regs[SIO2681_REG_ISR] = isr_script[isr_idx < 7 ? is
 
 static int lock_calls, unlock_calls;
 ml_$spin_token_t ML_$SPIN_LOCK(void *lock) { (void)lock; lock_calls++; return 0x77; }
-void ML_$SPIN_UNLOCK(void *lock, ml_$spin_token_t token) { (void)lock; (void)token; unlock_calls++; }
+void (ML_$SPIN_UNLOCK)(void *lock, uint32_t token_slot) { ml_$spin_token_t token = (ml_$spin_token_t)ARCH_PASCAL_SLOT_WORD(token_slot); (void)token; (void)lock; (void)token; unlock_calls++; }
 
 static int tstart_calls; static sio_desc_t *tstart_arg;
 void SIO_$I_TSTART(sio_desc_t *desc) { tstart_calls++; tstart_arg = desc; }

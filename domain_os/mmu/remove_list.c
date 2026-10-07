@@ -17,8 +17,9 @@
 
 #if !defined(ARCH_M68K)
 
-void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
+void (MMU_$REMOVE_LIST)(uint32_t *ppn_array, uint32_t count_slot)
 {
+    uint16_t count = ARCH_PASCAL_SLOT_WORD(count_slot);  /* (0x24,SP) after the movem */
     uint16_t saved_sr;              /* D6 */
     uint16_t n = (uint16_t)(count - 1); /* D7 */
 

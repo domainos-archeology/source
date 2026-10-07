@@ -80,8 +80,9 @@ void ast_$wait_for_page_transition(void)
 static int      remove_calls;
 static uint16_t remove_counts[MAX_REC];
 static uint32_t remove_first[MAX_REC];
-void MMU_$REMOVE_LIST(uint32_t *ppn_array, uint16_t count)
+void (MMU_$REMOVE_LIST)(uint32_t *ppn_array, uint32_t count_slot)
 {
+    uint16_t count = (uint16_t)ARCH_PASCAL_SLOT_WORD(count_slot); (void)count;
     if (remove_calls < MAX_REC) {
         remove_counts[remove_calls] = count;
         remove_first[remove_calls] = ppn_array[0];

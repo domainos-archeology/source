@@ -45,8 +45,8 @@ static uint16_t lit_pat[8], lit_y[8];
 static uint32_t w_high; static uint16_t w_low, w_type;
 
 void PROC1_$SET_TYPE(uint16_t pid, uint16_t type) { (void)pid; set_type = type; }
-void PROC1_$SET_LOCK(uint16_t lock_id) { lock_set = lock_id; }
-void PROC1_$CLR_LOCK(uint16_t lock_id) { if (lock_id == 0x1A) n_clr++; }
+void (PROC1_$SET_LOCK)(uint32_t lock_id_slot) { uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id; lock_set = lock_id; }
+void (PROC1_$CLR_LOCK)(uint32_t lock_id_slot) { uint16_t lock_id = (uint16_t)ARCH_PASCAL_SLOT_WORD(lock_id_slot); (void)lock_id; if (lock_id == 0x1A) n_clr++; }
 void PROC1_$UNBIND(uint16_t pid, status_$t *st) { (void)pid; n_unbind++; *st = 0; }
 void TIME_$WAIT(uint16_t *delay_type, clock_t *delay, status_$t *status)
 {

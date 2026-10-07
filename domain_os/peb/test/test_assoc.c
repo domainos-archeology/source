@@ -16,7 +16,7 @@ uint16_t      PROC1_$AS_ID;
 static int install_calls; static uint32_t inst_ppn[4], inst_va[4], inst_flags[4];
 static int remove_calls; static uint32_t remove_ppn;
 
-void MMU_$INSTALL(uint32_t ppn, uint32_t va, uint32_t flags)
+void (MMU_$INSTALL)(uint32_t ppn, uint32_t va, uint32_t flags)
 {
     if (install_calls < 4) { inst_ppn[install_calls] = ppn; inst_va[install_calls] = va;
                              inst_flags[install_calls] = flags; }
