@@ -66,11 +66,37 @@
  * were literals until source-m4xs) and named as in the map:
  *   OS_BEGIN     the bottom of the kernel's VAs, 0xE00000
  *   OS_PROC      the first kernel page, 0xE00800 (info block +8)
- *   OS_DATA      the start of .data (info block +4)
+ *   OS_DATA      info block +4: the map's `.DATA' = OS_DATA_UNWIRED (the
+ *                map has `D39 E78400 OS_DATA' there); nothing reads the
+ *                cell (docs section 4), it is a fixup like the image's
  *   RELOC        the first byte after the last loaded byte: the fixup
  *                table's VMA, and the start of .bss
  *   OS_PAGE_END  the end of .bss rounded up to a page: COLD maps the kernel
  *                pages OS_PROC .. OS_PAGE_END
+ * the boundaries OS_$INIT builds the address space from (source-wh9b;
+ * os/os_internal.h has the table, docs section 8b the decisions), defined
+ * by tools/gen_layout_ld.py at their map positions in layout.ld and
+ * layout_bss.ld under the map's names:
+ *   OS_DATA_WIRED     the first wired data (map 0xE1DC00, page aligned)
+ *   OS_INIT_START, OS_INIT_END  the boot-only code and data that
+ *                     os_$start_proc2 frees (map 0xE2F000, page aligned,
+ *                     and 0xE35380)
+ *   OS_PROC_UNWIRED   the start of the unwired code (map .TEXT 0xE38000,
+ *                     32 KB aligned as in the image: OS_INIT_END rounded up)
+ *   OS_DISK_PROC_END  the end of the disk code kept wired (map 0xE3E746;
+ *                     its start is the function OS_DISK_PROC)
+ *   OS_DATA_UNWIRED   the start of the unwired data (map .DATA = OS_DATA
+ *                     0xE78400, page aligned; OS_DATA is defined equal to
+ *                     it below, as in the map)
+ *   OS_DISK_DATA, OS_DISK_DATA_END  the disk data kept wired (map 0xE784D0,
+ *                     0xE7B044)
+ *   OS_LINK_UNPLACED  ours, no map name: the catch-all code, .rodata and
+ *                     .data, everything the map gives no position, which
+ *                     OS_$INIT keeps wired up to RELOC
+ *   OS_DATA_END       the end of the image's own bss blocks ACL_$DATA ..
+ *                     PROC2_$DATA (map 0xEA9684)
+ *   OS_PAGE           the stacks page OS_$STACK (map 0xEB0000, 32 KB
+ *                     aligned: OS_$INIT rounds OS_DATA_END up to it)
  * and the constants of the physical split (docs section 2): the kernel
  * bytes below file page 0x55F stay at their low address, the rest are
  * loaded from PPN 0x600 (0x180000) up; COLD reaches MMAP, MMU_$PTTX and
@@ -104,9 +130,10 @@
  *     (source-uwxz, source-xlo9).
  *
  * Absolute image addresses still used as literals by C and hand-written
- * code (tools/check_guards.py's EXEMPT table, tools/asm_abs_addrs.md, the
- * OS_$INIT layout constants of os/init.c) name memory this link gives to
- * something else; they are tracked by their beads.
+ * code (tools/check_guards.py's EXEMPT table, tools/asm_abs_addrs.md)
+ * name memory this link gives to something else; they are tracked by
+ * their beads.  OS_$INIT's layout boundaries come from the symbols above
+ * since source-wh9b.
  */
 
 OUTPUT_FORMAT("elf32-m68k")
@@ -127,6 +154,14 @@ RFC_SPLIT_LOW = 0x00157C00;
 RFC_KERNEL_LO_BYTES = 0x00055C00;   /* RFC_SPLIT_LOW - (OS_PROC - RFC_LOW_DELTA) */
 
 OS_BEGIN = 0x00E00000;
+
+/* The low region below the kernel (map `D92 D00000 OS_LOW' .. `D93 DA4800
+ * OS_LOW_END_': UNWIRED_STACKS, DISK_BUFFERS, NETPOOL, AREA_PAGES), fixed
+ * VAs not in the file; OS_$INIT maps them (canned map 1, 0x00E33996).
+ * Symbols rather than C constants so the cells naming them are fixups, as
+ * in the image (source-wh9b). */
+OS_LOW = 0x00D00000;
+OS_LOW_END = 0x00DA4800;
 
 SECTIONS {
     .cold RFC_LOAD : AT(RFC_LOAD) {
@@ -152,7 +187,6 @@ SECTIONS {
     }
 
     .data : AT(ADDR(.data) - RFC_LOW_DELTA) {
-        OS_DATA = .;
         *(.data .data.*)
         /* C bss objects the image had in its file: zero bytes */
         INCLUDE layout_data.ld
@@ -162,6 +196,13 @@ SECTIONS {
     /* The last loaded byte + 1: the fixup table's VMA (its low address is
      * RELOC - RFC_LOW_DELTA, the end of the file before the table). */
     RELOC = ADDR(.data) + SIZEOF(.data);
+
+    /* Info block +4 (cold_start.s): the map's OS_DATA is `.DATA' (`D21
+     * E78400 .DATA' / `D39 E78400 OS_DATA'), the start of the unwired data,
+     * which layout.ld defines as OS_DATA_UNWIRED; the same here, not the
+     * start of the C .data section (source-wh9b review).  sysboot and COLD
+     * never read the cell; it is a fixup, as in the image. */
+    OS_DATA = OS_DATA_UNWIRED;
 
     .bss RELOC (NOLOAD) : {
         INCLUDE layout_bss.ld
@@ -188,3 +229,18 @@ ASSERT(RELOC - RFC_LOW_DELTA > RFC_SPLIT_LOW, "the fixup table must start past t
 ASSERT(MMAP_$MMAPE >= OS_PROC + RFC_KERNEL_LO_BYTES && MMAP_$MMAPE < OS_PAGE_END, "MMAP must be in the high piece")
 ASSERT(MMU_$PTTX >= OS_PROC + RFC_KERNEL_LO_BYTES && MMU_$PTTX < OS_PAGE_END, "MMU_$PTTX must be in the high piece")
 ASSERT(OS_$STACK + 0x2000 >= OS_PROC + RFC_KERNEL_LO_BYTES && OS_$STACK + 0x2000 < OS_PAGE_END, "P1_STACK_BASE must be in the high piece")
+
+/* OS_$INIT's address-space boundaries (os/os_internal.h, docs section 8b).
+ * The two run-time roundings to a 32 KB segment must land where the image's
+ * did: .TEXT's start rounded down is .TEXT's start (0x00E339A2), and
+ * OS_DATA_END + 0x7FFF rounded down is OS_PAGE (0x00E339D6), so no wired
+ * page is handed to the paging loop and the loop frees nothing past
+ * OS_DATA_END that the kernel uses (stacks, MMAP, PTTX). */
+ASSERT(OS_PROC_UNWIRED % 0x8000 == 0, "OS_PROC_UNWIRED must start a 32 KB segment")
+ASSERT(OS_PAGE % 0x8000 == 0 && OS_PAGE == ALIGN(OS_DATA_END, 0x8000), "OS_PAGE must be OS_DATA_END rounded up to a 32 KB segment")
+ASSERT(OS_PROC < OS_DATA_WIRED && OS_DATA_WIRED < OS_INIT_START && OS_INIT_START % 0x400 == 0 && OS_INIT_START < OS_INIT_END, "wired code, wired data, then the boot-only part")
+ASSERT(OS_PROC_UNWIRED == ALIGN(OS_INIT_END, 0x8000), "os_$start_proc2 frees up to OS_INIT_END rounded to a segment, which must be .TEXT")
+ASSERT(OS_PROC_UNWIRED <= OS_DISK_PROC && OS_DISK_PROC < OS_DISK_PROC_END && OS_DISK_PROC_END <= OS_DATA_UNWIRED, "OS_DISK_PROC..OS_DISK_PROC_END inside the unwired code")
+ASSERT(OS_DATA_UNWIRED <= OS_DISK_DATA && OS_DISK_DATA <= OS_DISK_DATA_END && OS_DISK_DATA_END <= OS_LINK_UNPLACED, "OS_DISK_DATA..OS_DISK_DATA_END inside the unwired data")
+ASSERT(OS_LINK_UNPLACED <= RELOC && RELOC <= OS_DATA_END && OS_DATA_END < OS_PAGE, "the unplaced part and the image's bss blocks below OS_DATA_END")
+ASSERT(OS_$STACK == OS_PAGE && MMAP_$MMAPE >= OS_PAGE && MMU_$PTTX >= OS_PAGE, "the stacks, MMAP and PTTX lie past the paging loop")

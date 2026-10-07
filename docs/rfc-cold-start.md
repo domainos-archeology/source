@@ -538,8 +538,14 @@ Written by Claude Opus 5.5.  `domain_os/sau2.ld` links an ELF
   0x80E56400 cell); the 47 R_68K_32 cells of COLD and DUMP are exactly
   the original's 47 (`check-rfc`).  The split constants (0x55F, 0x600,
   0x157C00, 0x55C00, 0x102000) stay literals, as in the image.
-* **Info block** (this build): 0xC00, OS_DATA 0xE98454, OS_PROC 0xE00800,
-  0xFEED2B03, 0x55F, 0x600.
+* **Info block** (this build): 0xC00, OS_DATA 0xE6E800, OS_PROC 0xE00800,
+  0xFEED2B03, 0x55F, 0x600.  **[review 2026-10-06]** Until the source-wh9b
+  review OS_DATA was the start of the C `.data` section (0xE98454 in the
+  build above, 0xE9CCE0 after wh9b), which is not what the map calls
+  OS_DATA: its `D39 E78400 OS_DATA` is `.DATA`, the start of the unwired
+  data, the position layout.ld now names OS_DATA_UNWIRED.  sau2.ld defines
+  `OS_DATA = OS_DATA_UNWIRED` (section 4: sysboot and COLD never read the
+  cell, so this is faithfulness only; it stays a fixup cell).
 * **COLD's page count** (section 5 step 12): (0xF0BC00 - 0xE00800) >> 10 =
   0x42D pages > 0x157, so the low entry keeps its static 0x157 at PPN
   0x408 and COLD stores 0x2D6 << 16 | 0x600 in the high entry (VA
@@ -567,12 +573,131 @@ Written by Claude Opus 5.5.  `domain_os/sau2.ld` links an ELF
   0xE00400, OS_PROC 0xE00800 at file 0xC00, RELOC's low address past
   0x157C00, MMAP / MMU_$PTTX / P1_STACK_BASE in [OS_PROC + 0x55C00,
   OS_PAGE_END).
-* **Not done here**: os/init.c still builds the address space from the
-  image's literal boundaries (OS_DATA_HIGH, OS_TEXT_LOW, OS_WIRED_END ...),
-  which no longer describe this link; and the image maps only up to its
-  OS_PAGE_END 0xEC4800, leaving AUDIT_LIST, AST_AOT and VM_TABLES to the
-  kernel, where our OS_PAGE_END covers all of `.bss` (the rule chosen
-  for this step; source-wh9b tracks the os/init.c boundaries).
+* **Not done here**: the image maps only up to its OS_PAGE_END 0xEC4800,
+  leaving AUDIT_LIST, AST_AOT and VM_TABLES to the kernel, where our
+  OS_PAGE_END covers all of `.bss` (the rule chosen for this step;
+  source-o7s2).  os/init.c's literal boundaries are gone: section 8b.
+
+## 8b. What OS_$INIT does with the layout (source-wh9b)
+
+Written 2026-10-06 by Claude Opus 5.5.  OS_$INIT (0xE337F4) builds the
+kernel's address space from section boundaries that in the image are
+`move.l #<link-time value>` immediates (every one a RELOC cell), rounded
+at run time to a 32 KB segment (`andi.l #-0x8000`) or a 1 KB page
+(`andi.w #-0x400`); where a boundary is rounded up the binder folded
+`+0x7FFF` / `+0x3FF` into the immediate.  Since this step they come from
+the link with the rounding unchanged; `os/os_internal.h` has the full table
+(immediate, instruction addresses, map evidence, replacement), and the
+compiler folds the `+0x7FFF` / `+0x3FF` into the R_68K_32 addend exactly as
+the binder did.
+
+**What each boundary is** (map symbols; the old os/init.c names in
+brackets):
+
+| image value | map | used for |
+|---|---|---|
+| 0xD00000, 0xDAC7FF | OS_LOW, OS_LOW_END + 0x7FFF [OS_WIRED_LOW/HIGH] | canned map 1, the fixed low region (stacks, disk buffers, netpool, area pages) |
+| 0xE00000 | OS_BEGIN [OS_DATA_LOW] | canned map 2 start |
+| 0xE38000 | .TEXT = OS_PROC_UNWIRED [OS_DATA_HIGH] | end of map 2 (wired code, wired data, boot-only part), start of map 3 (unwired code, read-only on a type-4 boot), the paging file's origin and the paging loop's start |
+| 0xE78400 | .DATA = OS_DATA = OS_DATA_UNWIRED, rounded down [OS_TEXT_LOW] | end of map 3, start of map 4 (unwired data) |
+| 0xEB1683 | OS_DATA_END + 0x7FFF [OS_TEXT_HIGH] | end of map 4 and of the paging loop, start of map 5 (= OS_PAGE 0xEB0000) |
+| 0xEF6400 | MSTE_PAGES [OS_MST_BASE] | end of map 5: MSTE_PAGES + MST_PAGES_LIMIT pages, rounded up |
+| 0xF4FC00, 0xFC0000 | IODEFS_GUARD = VM_TABLES_END, IODEFS [OS_WIRED_END/LIMIT] | the tables-below-I/O check |
+| 0xE00BFF, 0xE1DC00 | OS_PROC + 0x3FF, OS_DATA_WIRED | the type-4 walk's read-only range (the wired code) |
+| 0xE3824C, 0xE3EB45 | OS_DISK_PROC, OS_DISK_PROC_END + 0x3FF [OS_KEEP_WIRED1] | disk code a disked node keeps wired |
+| 0xE784D0, 0xE7B443 | OS_DISK_DATA, OS_DISK_DATA_END + 0x3FF [OS_KEEP_WIRED2] | disk data kept wired |
+| 0xEA9684 | OS_DATA_END [OS_INIT_FREE_ABOVE] | pages at or past it are freed, not given to the paging file |
+| 0xE2F000, 0xE3D37F | OS_INIT_START, OS_INIT_END + 0x7FFF | os_$start_proc2 frees the boot-only part, up to .TEXT |
+
+(OS_INIT_FREE_ABOVE was not the init code's end: it is OS_DATA_END, the
+end of the image's own bss blocks ACL_$DATA .. PROC2_$DATA.  The fifth
+canned map starts at OS_PAGE, not at the MST: 0xEF6400 is MSTE_PAGES, the
+MST itself is at 0xEE5800.)
+
+**How the link provides them.**  `tools/gen_layout_ld.py` emits each map
+symbol (`NAME = .;`) in layout.ld / layout_bss.ld just before the first
+placed item whose ordering key is at or past its map address: OS_DATA_WIRED,
+OS_INIT_START, OS_INIT_END, OS_PROC_UNWIRED, OS_DISK_PROC_END,
+OS_DATA_UNWIRED, OS_DISK_DATA, OS_DISK_DATA_END, then OS_DATA_END and
+OS_PAGE in `.bss`.  OS_DISK_PROC is the function the map names there;
+OS_PROC and OS_BEGIN were already defined; OS_LOW and OS_LOW_END are
+absolute symbols in sau2.ld with the map's values (fixed VAs, but symbols
+so the cells are fixups as in the image).  Map order puts the same objects
+on each side of every boundary as in the image.  Two of the run-time
+roundings need alignment the image's binder also gave: .TEXT starts a
+32 KB segment (`. = ALIGN(0x8000)` before OS_PROC_UNWIRED; otherwise the
+rounding down would hand the tail of the wired kernel to map 3 and the
+paging loop) and OS_PAGE starts one (otherwise OS_DATA_END rounded up
+would overrun the stacks and MMAP, which the loop would then free).
+WIRED_DATA, .DATA and OS_INIT_PROC start pages, as in the map.  In this
+build: OS_INIT_END 0xE2BB5E -> .TEXT 0xE30000 (17.6 KB of zeros in the
+file, as the image's 0xE35380..0xE38000), OS_DATA_END 0xEDD2F2 -> OS_PAGE
+0xEE0000 (11.3 KB of bss the loop frees, as the image's 0xEA9800..
+0xEB0000).  File 839,950 bytes; RAM needed through physical 0x23CC00.
+sau2.ld ASSERTs the alignments and the order of all the symbols, and that
+OS_$STACK, MMAP and PTTX lie at or past OS_PAGE.
+
+**Where our layout differs, and what OS_$INIT does there.**
+
+1. *What the map does not place* (`OS_LINK_UNPLACED` .. RELOC, 0xE78D2A..
+   0xEBA22C, ~261 KB): the catch-all code (353 sections: memcpy, WIN_ and
+   disk helpers, statics of objects with no placed section, os_$start_proc2
+   and os_$free_va_page themselves), the C `.rodata`, and the C `.data`
+   with the C bss the image had as file zeros (vtoc_$data, OS_WIRED_$UID,
+   OS_$SHUTDOWN_EC, ...).  Wired and unwired modules are mixed there; in
+   the image every wired module's code and data lay below .TEXT and never
+   reached the paging file.  Decision: OS_$INIT keeps this range wired,
+   with a third test in the paging loop shaped like the two disk ranges'
+   (0x00E3450A..0x00E3452A), the image's own mechanism for what must stay
+   resident, but applied on every node: the image lets its two disk ranges
+   go on a diskless node (0x00E34506 `tst.b NETWORK_$REALLY_DISKLESS'),
+   whereas the unplaced part holds wired modules' code (memcpy, the driver
+   helpers) that a diskless node runs under its own page faults.
+   **[review 2026-10-06]** The first version had the third test inside the
+   disked branch, which would have paged the wired modules on a diskless
+   node; fixed.  This is a deviation (the image has two ranges, disked
+   only), marked in os/init.c; source-s5lm would place those objects by
+   module and drop it.
+2. *The fixup table's room* (RELOC .. RFC_FIXUP_TABLE_END): the image's
+   table lay in ACL_$DATA's first pages, which the loop gives to the paging
+   file and unwires like any page below OS_DATA_END (and ACL_$INIT zeroes).
+   Ours is below OS_DATA_END too, so it gets the same treatment with no
+   special case: given to the file, unwired, not freed.
+3. *The image's bss blocks* (ACL_$DATA .. PROC2_$DATA, after the room):
+   pageable, exactly as in the image.
+4. *OS_PAGE up* (OS_$STACK, MMAP, PTTX, AST_$AOT, PMAP_$SEGMAP, MST):
+   past the paging loop, mapped by canned map 5 and wired, as the image's
+   OS_PAGE .. VM_TABLES.  Map 5 ends at MSTE_PAGES + MST_PAGES_LIMIT pages,
+   and MSTE_PAGES is still mst/mst.h's literal 0xEF6400, which in our link
+   lies inside AST_$AOT (as AREA's 0xEE4C00 / 0xEE6400 windows lie inside
+   MMAP): source-o7s2 gives the VM-table windows link positions past
+   OS_PAGE_END; OS_$INIT already takes the value from MST_PAGE_TABLE_BASE,
+   and OS_IODEFS_GUARD from MST_PAGE_TABLE_BASE + MST_MSTE_PAGES_MAX pages
+   (0xEF6400 + 0x166 * 0x400 = 0xF4FC00, the map's value).
+5. *The high-piece split* is physical only; OS_$INIT works on VAs.
+6. *The crash record and DUMP pages* lie in [OS_BEGIN, OS_PROC), map 2, as
+   in the image.
+
+**Zeroing of the NOBITS blocks (source-olmv).**  Neither COLD (bar MMAP)
+nor OS_$INIT clears bss in the image, and OS_$INIT does not here either:
+each owner zeroes or writes its block before use, as the Pascal does.
+ACL_$DATA and XPD_$DATA: OS_$DATA_ZERO in ACL_$INIT / XPD_$INIT.
+RINGLOG_$DATA: its index is reset before the first entry
+(RINGLOG_$CTL.first_entry_flag = -1 is file data) and entries are written
+before they are read.  PROC2_$DATA: PROC2_$INIT builds the pid map, the
+process-group counts and the free list.  OS_$STACK: OS_$INIT frees the
+guard pages and zeroes the interrupt stack.  MMAP_$MMAPE: COLD.
+MMU_$PTTX: written per page by COLD and MMU_$INSTALL before MMU_$PTOV
+reads an entry.  AST_$AOT and PMAP_$SEGMAP: AST_$ADD_AOTES / ADD_ASTES
+zero each entry and its segment-map block as they carve them.  MST:
+MST_$INIT clears every MST word it uses (whose page installation over our
+COLD-mapped MST is source-o7s2).
+
+**Checks.**  sau2.ld's ASSERTs run at every link (make and make check);
+os/test/test_init.c applies the boundary macros to the map's values and
+gets the image's immediates back, and walks a model of the paging loop's
+page classes (the loop is inside OS_$INIT, which the test never runs) for
+the image's layout and a sample of ours, disked and diskless.
 
 ## 9. Open questions (status after the review)
 

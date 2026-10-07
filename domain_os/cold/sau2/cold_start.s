@@ -88,7 +88,7 @@
         .set    MMAP,           MMAP_$MMAPE         /* map 0xEB4800, the MMAP page table (mmap/mmap.h) */
 
 /* ---- the kernel's layout: symbols sau2.ld defines (source-m4xs) -------- */
-/*      OS_DATA      map 0xE78400: VA of `.DATA' (ours: the start of .data)   */
+/*      OS_DATA      map 0xE78400: VA of `.DATA' (ours: = OS_DATA_UNWIRED)     */
 /*      OS_PROC      map 0xE00800: the first kernel page                      */
 /*      RELOC        map 0xE88834: the first byte after the last loaded byte  */
 /*      OS_BEGIN     map 0xE00000: the bottom of the kernel's VA window       */

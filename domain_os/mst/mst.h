@@ -209,6 +209,16 @@ extern uint16_t MST[MST_TABLE_ENTRIES];
 #define MST_PAGE_TABLE_BASE 0xef6400
 
 /*
+ * The most MSTE pages there can be: MST_$INIT clamps MST_$MST_PAGES_LIMIT to
+ * 0x166 (0x00E30CF8 `cmpi.w #0x166` / 0x00E30CFE `move.w #0x166`).  The map
+ * leaves exactly that much room after MSTE_PAGES: VM_TABLES ends at
+ * VM_TABLES_END = IODEFS_GUARD 0xF4FC00 = 0xEF6400 + 0x166 * 0x400 (`D98
+ * ED5000 VM_TABLES size = 7AC00'), the ceiling OS_$INIT checks against the
+ * I/O space (os/os_internal.h, OS_IODEFS_GUARD).
+ */
+#define MST_MSTE_PAGES_MAX 0x166
+
+/*
  * Function prototypes
  */
 

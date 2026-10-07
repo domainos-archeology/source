@@ -11,6 +11,12 @@
  *   os_$boot_term_params   the boot flags -> (mode, ctrl) mapping
  *                          (0x00E33C4A-0x00E33C8C)
  *
+ * The address-space boundaries (source-wh9b) are tested through the
+ * os/os_internal.h macros OS_$INIT applies to its link symbols: with the SAU2
+ * map's values they give back the image's immediates, and for the image's
+ * layout and a sample of our link the paging loop's page classes keep the
+ * stacks, MMAP and the wired ranges safe.
+ *
  * The real os/init.c is #included, so the helpers under test are the ones the
  * kernel builds.  Everything OS_$INIT itself calls is stubbed out; OS_$INIT
  * is never invoked.
@@ -347,6 +353,32 @@ uint32_t TIME_$CURRENT_USEC;
 uint32_t ROUTE_$PORT;
 as_$info_t AS_$INFO; /* AS_$STACK_HIGH is AS_$INFO.stack_high, 0xE2B950 */
 
+/*
+ * The link symbols OS_$INIT takes its address-space boundaries from
+ * (sau2.ld / tools/gen_layout_ld.py; os/os_internal.h).  OS_$INIT is never
+ * run here, so they only need to exist; the boundary arithmetic is tested
+ * through the os_internal.h macros with the map's and the link's values.
+ * OS_DISK_PROC is a function (os/disk_proc.c), stubbed.
+ */
+char OS_PROC[1];
+char OS_DATA_WIRED[1];
+char OS_PROC_UNWIRED[1];
+char OS_DISK_PROC_END[1];
+char OS_DATA_UNWIRED[1];
+char OS_DISK_DATA[1];
+char OS_DISK_DATA_END[1];
+char OS_LINK_UNPLACED[1];
+char RELOC[1];
+char OS_DATA_END[1];
+char OS_LOW[1];
+char OS_LOW_END[1];
+char OS_BEGIN[1];
+void OS_DISK_PROC(int16_t proc_id) { (void)proc_id; }
+
+/* The start of the I/O space (arch/m68k/sau2/hw.h, not defined on the
+ * host): the map's IODEFS = DISP1_MEM */
+#define SAU2_DISPLAY_MEM_BASE 0x00FC0000u
+
 /* ------------------------------------------------------------------ */
 /* The code under test                                                 */
 /* ------------------------------------------------------------------ */
@@ -592,6 +624,189 @@ static void test_vtoce_layout(void)
     CHECK_EQ(0x1Du, __builtin_offsetof(vtoc_$lookup_req_t, flags_1d));
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Address-space boundaries (source-wh9b)                              */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Applied to the SAU2 map's values, each boundary macro gives back the
+ * image's run-time value, and the `+ 0x7FFF' / `+ 0x3FF' forms give back the
+ * immediates the binder wrote (os/os_internal.h has the table).
+ */
+static void test_bounds_reproduce_image(void)
+{
+    /* canned map 1: 0x00E33996 / 0x00E3399C */
+    CHECK_EQ(0x00D00000u, OS_INIT_SEG_DOWN(0x00D00000u));      /* OS_LOW */
+    CHECK_EQ(0x00DAC7FFu, 0x00DA4800u + 0x7FFFu);              /* immediate */
+    CHECK_EQ(0x00DA8000u, OS_INIT_SEG_UP(0x00DA4800u));        /* OS_LOW_END */
+    /* canned maps 2-5: 0x00E339AE .. 0x00E339DC */
+    CHECK_EQ(0x00E00000u, OS_INIT_SEG_DOWN(0x00E00000u));      /* OS_BEGIN */
+    CHECK_EQ(0x00E38000u, OS_INIT_SEG_DOWN(0x00E38000u));      /* .TEXT */
+    CHECK_EQ(0x00E78000u, OS_INIT_SEG_DOWN(0x00E78400u));      /* .DATA */
+    CHECK_EQ(0x00EB1683u, 0x00EA9684u + 0x7FFFu);              /* immediate */
+    CHECK_EQ(0x00EB0000u, OS_INIT_SEG_UP(0x00EA9684u));        /* OS_DATA_END */
+    /* 0x00E339E6-0x00E33A0A: MSTE_PAGES + limit pages, rounded up */
+    CHECK_EQ(0x00F18000u, OS_INIT_MST_HIGH(0x00EF6400u, 0x80));
+    CHECK_EQ(0x00F50000u, OS_INIT_MST_HIGH(0x00EF6400u, 0x160));
+    /* the limit word is sign-extended (`ext.l') */
+    CHECK_EQ(0x00EF8000u, OS_INIT_MST_HIGH(0x00EF6400u, 0xFFFF));
+    /* type-4 walk: 0x00E33B78 / 0x00E33B7E */
+    CHECK_EQ(0x00E00BFFu, 0x00E00800u + 0x3FFu);               /* immediate */
+    CHECK_EQ(0x00E00800u, OS_INIT_PAGE_UP(0x00E00800u));       /* OS_PROC */
+    CHECK_EQ(0x00E1DC00u, OS_INIT_PAGE_DOWN(0x00E1DC00u));     /* OS_DATA_WIRED */
+    /* keep-wired ranges: 0x00E343E6 .. 0x00E34412 */
+    CHECK_EQ(0x00E38000u, OS_INIT_PAGE_DOWN(0x00E3824Cu));     /* OS_DISK_PROC */
+    CHECK_EQ(0x00E3EB45u, 0x00E3E746u + 0x3FFu);
+    CHECK_EQ(0x00E3E800u, OS_INIT_PAGE_UP(0x00E3E746u));       /* .._END */
+    CHECK_EQ(0x00E78400u, OS_INIT_PAGE_DOWN(0x00E784D0u));     /* OS_DISK_DATA */
+    CHECK_EQ(0x00E7B443u, 0x00E7B044u + 0x3FFu);
+    CHECK_EQ(0x00E7B400u, OS_INIT_PAGE_UP(0x00E7B044u));       /* .._END */
+    /* os_$start_proc2: 0x00E6D25C, OS_INIT_END up to .TEXT */
+    CHECK_EQ(0x00E3D37Fu, 0x00E35380u + 0x7FFFu);
+    CHECK_EQ(0x00E38000u, OS_INIT_SEG_UP(0x00E35380u));
+    /* 0x00E3397C: IODEFS_GUARD = MSTE_PAGES + 0x166 pages, below IODEFS.
+     * Holds while MST_PAGE_TABLE_BASE is the map's 0xEF6400 (source-o7s2
+     * will move it). */
+    CHECK_EQ(0x00F4FC00u, OS_IODEFS_GUARD);
+    CHECK_EQ(1, OS_IODEFS_GUARD <= SAU2_DISPLAY_MEM_BASE);
+}
+
+/* One layout: the link-time values OS_$INIT reads */
+typedef struct {
+    uint32_t os_proc, data_wired, proc_unwired, disk_proc, disk_proc_end;
+    uint32_t data_unwired, disk_data, disk_data_end, unplaced, reloc;
+    uint32_t data_end, os_page, mmap, pttx, stack;
+} layout_t;
+
+/* What the paging loop (0x00E34426-0x00E345E2) does with one page.  A
+ * model of the loop's page classes (the loop itself is inside OS_$INIT,
+ * which is not run here), using the real boundary macros. */
+enum { PAGE_FREED, PAGE_KEPT_WIRED, PAGE_UNWIRED };
+
+static int classify_page(const layout_t *l, uint32_t va, int diskless)
+{
+    int in1, in2, in3;
+
+    if (va >= l->data_end) { /* 0x00E34452 */
+        return PAGE_FREED;
+    }
+    /* 0x00E34506: a diskless node lets the two disk ranges go */
+    in1 = !diskless && va >= OS_INIT_PAGE_DOWN(l->disk_proc) &&
+          va < OS_INIT_PAGE_UP(l->disk_proc_end);
+    in2 = !diskless && va >= OS_INIT_PAGE_DOWN(l->disk_data) &&
+          va < OS_INIT_PAGE_UP(l->disk_data_end);
+    /* the third range, kept on every node; the image has none: its
+     * fixture marks it empty */
+    in3 = l->unplaced < l->reloc && va >= OS_INIT_PAGE_DOWN(l->unplaced) &&
+          va < OS_INIT_PAGE_UP(l->reloc);
+    return (in1 || in2 || in3) ? PAGE_KEPT_WIRED : PAGE_UNWIRED;
+}
+
+/*
+ * The relationships OS_$INIT depends on, for any layout: the canned maps
+ * tile the kernel without gaps, the paging loop starts and ends on the
+ * segments the maps use, the stacks/MMAP/PTTX lie past it, the ranges kept
+ * wired lie inside it and nothing the loop frees is below OS_DATA_END.
+ */
+static void check_layout(const layout_t *l)
+{
+    uint32_t kernel_base = OS_INIT_SEG_DOWN(0x00E00000u);
+    uint32_t unwired_proc = OS_INIT_SEG_DOWN(l->proc_unwired);
+    uint32_t unwired_data = OS_INIT_SEG_DOWN(l->data_unwired);
+    uint32_t paged_end = OS_INIT_SEG_UP(l->data_end);
+    uint32_t ro_low = OS_INIT_PAGE_UP(l->os_proc);
+    uint32_t ro_high = OS_INIT_PAGE_DOWN(l->data_wired);
+    uint32_t va;
+    int kept = 0, unwired = 0, freed = 0;
+
+    /* nothing wired is lost to the rounding of map 2's end */
+    CHECK_EQ(l->proc_unwired, unwired_proc);
+    CHECK_EQ(0u, unwired_proc % OS_SEG_SIZE);
+    /* map 4 ends on OS_PAGE, where map 5 starts */
+    CHECK_EQ(l->os_page, paged_end);
+    CHECK_EQ(1, kernel_base < ro_low && ro_low < ro_high &&
+                    ro_high < unwired_proc);
+    CHECK_EQ(1, unwired_proc < unwired_data && unwired_data < paged_end);
+    /* the stacks, MMAP and PTTX are never visited by the loop */
+    CHECK_EQ(1, l->stack >= paged_end && l->mmap >= paged_end &&
+                    l->pttx >= paged_end);
+    /* the disk ranges and the unplaced range lie inside the loop */
+    CHECK_EQ(1, unwired_proc <= OS_INIT_PAGE_DOWN(l->disk_proc) &&
+                    OS_INIT_PAGE_UP(l->disk_proc_end) <=
+                        OS_INIT_PAGE_UP(l->data_unwired));
+    CHECK_EQ(1, unwired_data <= OS_INIT_PAGE_DOWN(l->disk_data) &&
+                    OS_INIT_PAGE_UP(l->disk_data_end) <= l->data_end);
+    CHECK_EQ(1, l->unplaced <= l->reloc && l->reloc <= l->data_end);
+    /* every page from .TEXT to OS_PAGE: freed only at or past OS_DATA_END */
+    for (va = unwired_proc; va < paged_end; va += OS_PAGE_SIZE) {
+        int c = classify_page(l, va, 0);
+        if (c == PAGE_FREED) {
+            freed++;
+            CHECK_EQ(1, va >= l->data_end);
+        } else if (c == PAGE_KEPT_WIRED) {
+            kept++;
+        } else {
+            unwired++;
+        }
+    }
+    CHECK_EQ(1, kept > 0 && unwired > 0);
+    CHECK_EQ(PAGE_KEPT_WIRED,
+             classify_page(l, OS_INIT_PAGE_DOWN(l->disk_proc), 0));
+    CHECK_EQ(PAGE_KEPT_WIRED,
+             classify_page(l, OS_INIT_PAGE_DOWN(l->disk_data), 0));
+    /* diskless: the disk ranges are unwired ... */
+    CHECK_EQ(PAGE_UNWIRED,
+             classify_page(l, OS_INIT_PAGE_DOWN(l->disk_proc), 1));
+    CHECK_EQ(PAGE_UNWIRED,
+             classify_page(l, OS_INIT_PAGE_DOWN(l->disk_data), 1));
+    if (l->unplaced < l->reloc) {
+        /* ... the unplaced range is kept, disked or diskless */
+        CHECK_EQ(PAGE_KEPT_WIRED,
+                 classify_page(l, OS_INIT_PAGE_DOWN(l->reloc - 1), 0));
+        CHECK_EQ(PAGE_KEPT_WIRED,
+                 classify_page(l, OS_INIT_PAGE_DOWN(l->unplaced), 1));
+        CHECK_EQ(PAGE_KEPT_WIRED,
+                 classify_page(l, OS_INIT_PAGE_DOWN(l->reloc - 1), 1));
+    }
+    (void)freed;
+}
+
+/* The SAU2 map's values: the image itself (nothing unplaced) */
+static void test_bounds_image_layout(void)
+{
+    static const layout_t image = {
+        0x00E00800u, 0x00E1DC00u, 0x00E38000u, 0x00E3824Cu, 0x00E3E746u,
+        0x00E78400u, 0x00E784D0u, 0x00E7B044u,
+        0x00E88834u, 0x00E88834u, /* OS_LINK_UNPLACED = RELOC: empty */
+        0x00EA9684u, 0x00EB0000u, 0x00EB4800u, 0x00EC2800u, 0x00EB0000u,
+    };
+    check_layout(&image);
+    /* in the image, the first page past the disk data is unwired */
+    CHECK_EQ(PAGE_UNWIRED, classify_page(&image, 0x00E7B400u, 0));
+    /* and the last page below OS_DATA_END is still given to the file */
+    CHECK_EQ(PAGE_UNWIRED, classify_page(&image, 0x00EA9400u, 0));
+    CHECK_EQ(PAGE_FREED, classify_page(&image, 0x00EA9800u, 0));
+}
+
+/* A sample of our link (build of 2026-10-06, source-wh9b) */
+static void test_bounds_link_layout(void)
+{
+    static const layout_t link = {
+        0x00E00800u, 0x00E1C400u, 0x00E30000u, 0x00E302DCu, 0x00E37FD2u,
+        0x00E6E800u, 0x00E6E800u, 0x00E6E998u,
+        0x00E78D2Au, 0x00EBA22Cu,
+        0x00EDD2DEu, 0x00EE0000u, 0x00EE2C00u, 0x00EF0C00u, 0x00EE0000u,
+    };
+    check_layout(&link);
+    /* the unplaced code and C data stay wired */
+    CHECK_EQ(PAGE_KEPT_WIRED, classify_page(&link, 0x00E79000u, 0));
+    CHECK_EQ(PAGE_KEPT_WIRED, classify_page(&link, 0x00EBA000u, 0));
+    /* the fixup table's room past RELOC is unwired data, as the image's
+     * table (inside ACL_$DATA) was */
+    CHECK_EQ(PAGE_UNWIRED, classify_page(&link, 0x00EBA400u, 0));
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -606,6 +821,9 @@ int main(void)
     RUN(test_term_params);
     RUN(test_boot_params_layout);
     RUN(test_vtoce_layout);
+    RUN(test_bounds_reproduce_image);
+    RUN(test_bounds_image_layout);
+    RUN(test_bounds_link_layout);
 
     printf("%d tests, %d failed\n", tests_run, tests_failed);
     return tests_failed != 0;

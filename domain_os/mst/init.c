@@ -247,8 +247,8 @@ void MST_$INIT(void)
     }
     MST_$MST_PAGES_LIMIT = (uint16_t)limit;             /* 0x00E30CF4 */
 
-    if (limit > 0x166) {                                /* 0x00E30CF8 */
-        limit = 0x166;                                  /* 0x00E30CFE */
+    if (limit > MST_MSTE_PAGES_MAX) {                   /* 0x00E30CF8 */
+        limit = MST_MSTE_PAGES_MAX;                     /* 0x00E30CFE */
     }
     MST_$MST_PAGES_LIMIT = (uint16_t)limit;             /* 0x00E30D04 */
 
