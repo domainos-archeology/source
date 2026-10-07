@@ -473,3 +473,16 @@ ACL_$INIT zeroes anyway).
    (the 26-bit DN330 address map is not in the bytes of this image; the
    kernel's 9 PTT cells are simply moved there), and why the binder pads
    RELOC with ~8 KB of zeros.
+
+### Answered by the Engineering Handbook (2026-10-06, docs/handbook-dn3xx.md 7-1)
+
+The DN330 runs with a 26-bit address space: physical 0x100000 (where
+the kernel's data starts, "mem: md data") is virtual 0x3D00000, the I/O
+page is at 0x3FFxxxx (mmu 0x3FFB400, sios 0x3FFB000, timers 0x3FFAC00,
+ring 0x3FF9C00, disk/tape/cal 0x3FFA800, pft 0x3FFB800) and the page
+translation table is at 0x400000 instead of 0x700000.  That is exactly
+what the fixup windows do: +0x2F00000 moves the 0xE00000 kernel to
+0x3D00000, +0x3000000 moves the 0xFA0000+ I/O references to 0x3FAxxxx,
+and the 0x700000 window moves PTT references down to 0x400000.  The
+DN300/DN320 keep the 24-bit map (kernel at 0xE00000, I/O at 0xFFxxxx,
+PTT at 0x700000), which is why that path needs no fixups.
