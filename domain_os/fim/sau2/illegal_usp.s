@@ -10,19 +10,19 @@
  * 0x00E213A0 followed by the descriptor words it reads through the return
  * address (see fim/sau2/uii.s).
  *
- * Byte gate (tools/asm_compare.py): `bsr.w 0xE213A0' is written
- * `jsr (0x00E213A0).l' (bsr -> jsr widening: the entry is not in our tree).
+ * Byte gate (tools/asm_compare.py): identical to the image modulo
+ * relocations (the call to the common fault entry, fim/sau2/com.s, is the
+ * image's `bsr.w', R_68K_PC16; source-k79b).
  */
 
         .section ".text.FIM_$ILLEGAL_USP","ax",@progbits
         .even
 
-        /* TODO(source-k79b): the FIM_UNWIRED common fault entry. */
-        .equ    FIM_COMMON_FAULT, 0x00E213A0
+        .extern FIM_COMMON_FAULT        /* fim/sau2/com.s, image 0xE213A0 */
 
         .global FIM_$ILLEGAL_USP
 FIM_$ILLEGAL_USP:
-        jsr     (FIM_COMMON_FAULT).l            /* e2158a  image bsr.w 0xE213A0 (6100 fe14) */
+        bsr.w   FIM_COMMON_FAULT                /* e2158a  6100 fe14 */
         .long   0x0012000D                      /* e2158e  status "invalid user stack pointer" */
         .short  0x0013                          /* e21592  signal number 0x13 */
         .short  0xA000                          /* e21594  fault class flags */

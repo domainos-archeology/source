@@ -504,13 +504,18 @@ uint32_t FIM_$GET_USER_PC(void);
  * 5. Sets up return to user FIM handler
  *
  * Parameters:
- *   exception_frame - Pointer to m68k exception frame
- *   return_pc - PC to use for return
- *   regs - Saved register set
- *   flags - Fault flags
- *   signal_params - Signal parameters
- *   status - Fault status code
- *   result - Output: delivery frame pointers
+ *   exception_frame - Pointer to the m68k exception frame (SR, PC, format)
+ *   usp - the user stack pointer at the fault (movec usp,D0 in FIM_$COM)
+ *   regs - Saved register set D0..A7 (FIM_$COM's movem.l area)
+ *   fault_class - fim_fault_desc_t.fault_class (word slot)
+ *   signal - fim_fault_desc_t.signal (word slot)
+ *   status - fim_fault_desc_t.status
+ *   result - Output: result[0] = new USP (A1), result[1] = new SSP (A0)
+ *
+ * The only caller is FIM_$COM (fim/sau2/com.s, jsr at 0x00E213C6), which
+ * pushes the seven arguments right to left: frame 8(A6), usp 0xC(A6),
+ * regs 0x10(A6), fault_class 0x14(A6), signal 0x16(A6), status 0x18(A6),
+ * result 0x1C(A6).  Not yet in the tree: bead source-h93c.
  *
  * Returns:
  *   0xFF if fault delivered to user, 0 if handled locally
@@ -518,9 +523,9 @@ uint32_t FIM_$GET_USER_PC(void);
  * Address: 0x00E0A458 (1296 bytes) -- first entry of the FIM_ code segment
  * in the SAU2 link map.
  */
-uint8_t FIM_$BUILD_DF(void *exception_frame, uint32_t return_pc,
-                      fim_regs_t *regs, uint16_t flags,
-                      uint16_t signal_param, uint32_t status,
+uint8_t FIM_$BUILD_DF(void *exception_frame, uint32_t usp,
+                      fim_regs_t *regs, uint16_t fault_class,
+                      uint16_t signal, uint32_t status,
                       void **result);
 
 /*

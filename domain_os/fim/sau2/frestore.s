@@ -26,8 +26,8 @@
  * FIM_$PARITY_TRAP); the image has the absolute short form.
  *
  * Byte gate (tools/asm_compare.py): identical to the image modulo
- * relocations.  FIM_$COM is not in our tree; its image address stays a
- * literal in the absolute jmp the image already has.
+ * relocations.  The absolute jmp to FIM_$COM (fim/sau2/com.s) is
+ * relocated (source-k79b).
  */
 
         .section ".text.FIM_$FRESTORE","ax",@progbits
@@ -38,8 +38,7 @@
         .extern ML_$EXCLUSION_STOP      /* map 0xE20E7E */
         .extern fp_$switch_owner        /* fp/sau2/fp_context.s, image 0xE21B10 */
 
-        /* TODO(source-k79b): FIM_$COM (map 0xE213A4) is not in our tree. */
-        .equ    FIM_COM, 0x00E213A4
+        .extern FIM_COM                 /* fim/sau2/com.s: FIM_$COM, map 0xE213A4 */
 
         .global FIM_$FRESTORE
 FIM_$FRESTORE:

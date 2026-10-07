@@ -138,9 +138,10 @@ verified by the gate):
 
 | where | code | value | class | what | done |
 |---|---|---|---|---|---|
-| fim/sau2/uii.s, priv_viol.s, illegal_usp.s | `.equ FIM_COMMON_FAULT, 0x00E213A0` | 0xE213A0 | 4 not yet translated | FIM_UNWIRED common fault entry; image `bsr.w`, ours `jsr (xxx).l` | kept, TODO(source-k79b) |
-| fim/sau2/generate.s | `.equ FIM_SOFT_FAULT_TAIL, 0x00E21458` | 0xE21458 | 4 not yet translated | FIM_$SOFT_FAULT+0xC; image `bra.s`, ours `jmp (xxx).l` | kept, TODO(source-k79b) |
-| fim/sau2/frestore.s, parity_trap.s | `.equ FIM_COM, 0x00E213A4` | 0xE213A4 | 4 not yet translated | map FIM_$COM; image `jmp (xxx).l` | kept, TODO(source-k79b) |
+| fim/sau2/uii.s, priv_viol.s, illegal_usp.s | `.equ FIM_COMMON_FAULT, 0x00E213A0` | 0xE213A0 | 4 not yet translated | FIM_UNWIRED common fault entry | fixed (source-k79b): symbol from fim/sau2/com.s, image `bsr.w` restored |
+| fim/sau2/generate.s | `.equ FIM_SOFT_FAULT_TAIL, 0x00E21458` | 0xE21458 | 4 not yet translated | FIM_$SOFT_FAULT+0xC | fixed (source-k79b): symbol from fim/sau2/soft_fault.s, image `bra.s` restored |
+| fim/sau2/frestore.s, parity_trap.s | `.equ FIM_COM, 0x00E213A4` | 0xE213A4 | 4 not yet translated | map FIM_$COM; image `jmp (xxx).l` | fixed (source-k79b): symbol from fim/sau2/com.s |
+| fim/sau2/com.s | `.equ FIM_BUILD_DF, 0x00E0A458` | 0xE0A458 | 4 not yet translated | map FIM_$BUILD_DF; image `jsr (xxx).l` | kept, TODO(source-h93c) |
 | fim/sau2/fp_init.s, fp_get_state.s | `.equ FP_HW_OWNER, 0x00FFB402` | 0xFFB402 | 1 hardware/PROM | FPU owner register | kept (.equ, commented) |
 | fim/sau2/frestore.s | `move.w (0x2000).w,-(%sp)` | 0x002000 | 1 hardware/PROM | the image reads the word at absolute 0x2000 (abs.w) where its siblings push an immediate class word | kept as the image has it, commented |
 | fim/sau2/get_user_sr_ptr.s | `.equ USER_VA_LIMIT, 0x00CC0000`; `cmp.l #0x00008000` | 0xCC0000, 0x008000 | 5 not an address | user/kernel VA limit, lowest user PC | kept |
@@ -161,7 +162,7 @@ verified by the gate):
 | ec/sau2/advance_int.s:176 | `move.l  #0x7fffffff,(%a0)` | 0x7FFFFFFF | 5 not an address | status code / mask / magic constant | kept |
 | fim/sau2/bus_err.s:142 | `.equ    PROC1_AS_ID,        0x00E2060A` | 0xE2060A | 2 data object | uint16_t; move.w | -> PROC1_$AS_ID |
 | fim/sau2/bus_err.s:145 | `.equ    FIM_EXIT,           0x00E228BC` | 0xE228BC | 3 code in tree | routine | -> FIM_$EXIT |
-| fim/sau2/bus_err.s:146 | `.equ    FIM_COM,            0x00E213A4` | 0xE213A4 | 4 not yet translated | map FIM_$COM | kept, TODO(source-k79b) |
+| fim/sau2/bus_err.s:146 | `.equ    FIM_COM,            0x00E213A4` | 0xE213A4 | 4 not yet translated | map FIM_$COM | fixed (source-k79b): symbol from fim/sau2/com.s |
 | fim/sau2/bus_err.s:147 | `.equ    FIM_DELIVER_TRACE_FAULT, 0x00E22866` | 0xE22866 | 3 code in tree | routine | -> FIM_$DELIVER_TRACE_FAULT |
 | fim/sau2/bus_err.s:148 | `.equ    FP_SAVEP,           0x00E218D0` | 0xE218D0 | 2 data object | 4-byte cell in fim.s; tst.l | -> FP_$SAVEP |
 | fim/sau2/bus_err.s:157 | `.equ    MMU_INSTALL,        0x00E24048` | 0xE24048 | 3 code in tree | routine | -> MMU_$INSTALL |

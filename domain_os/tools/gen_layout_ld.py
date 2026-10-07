@@ -227,6 +227,11 @@ ANCHORS = {
     # TIME_$DI_RTE (0xE2B11E), and TIME_$SET_VECTOR reaches the handler with
     # `lea (0x2c,PC)' (source-lu78).
     '.text.TIME_$TIMER_HANDLER': 0xE2B130,
+    # fim/sau2/com.s: FIM_COMMON_FAULT, the `pea (4,SP)' that the vector
+    # stubs `bsr' to and that falls into FIM_$COM (0xE213A4); it is the
+    # first word of the FIM_UNWIRED segment (0xE213A0), where the map names
+    # no symbol (source-k79b).
+    '.text.FIM_UNWIRED': 0xE213A0,
 }
 
 SITE_RE = re.compile(

@@ -141,9 +141,7 @@
 
         .extern MST_$TOUCH                      /* mst/touch.c (map 0xE0DD40) */
 
-        /* Not yet in our tree: keep the image address.
-         * TODO(source-k79b): FIM_$COM, the common fault delivery entry. */
-        .equ    FIM_COM,            0x00E213A4  /* map FIM_$COM */
+        .extern FIM_COM                 /* fim/sau2/com.s: FIM_$COM, map 0xE213A4 */
 
         /* Per-AS trace fault status, 4 bytes per AS: the trace_sts field of
          * FIM_$WIRED_DATA (fim/fim.h, block image 0x00E21FE6, field +0x3BC);

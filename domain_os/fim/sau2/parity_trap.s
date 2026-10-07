@@ -22,8 +22,8 @@
  * Byte gate (tools/asm_compare.py): identical to the image modulo
  * relocations; the PC-relative reads of the parity record keep their form
  * (R_68K_PC16 on FIM_$WIRED_DATA + field; the block follows this routine in
- * the link, as in the image).  FIM_$COM is not in our tree; its image
- * address stays a literal in the absolute jmp the image already has.
+ * the link, as in the image).  The absolute jmp to FIM_$COM
+ * (fim/sau2/com.s) is relocated (source-k79b).
  */
 
         .section ".text.FIM_$PARITY_TRAP","ax",@progbits
@@ -40,8 +40,7 @@
         .set    PARITY_ERR_STATUS, FIM_$WIRED_DATA + 0x10  /* 0xE21FF6 */
         .set    PARITY_ERR_DATA,   FIM_$WIRED_DATA + 0x12  /* 0xE21FF8 */
 
-        /* TODO(source-k79b): FIM_$COM (map 0xE213A4) is not in our tree. */
-        .equ    FIM_COM, 0x00E213A4
+        .extern FIM_COM                 /* fim/sau2/com.s: FIM_$COM, map 0xE213A4 */
 
         .global FIM_$PARITY_TRAP
 FIM_$PARITY_TRAP:

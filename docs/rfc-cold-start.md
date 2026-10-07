@@ -975,3 +975,15 @@ decided by heap garbage - both kernels stall at DISK_$INIT when it comes
 up busy (bead source-u2yq, reported to the owner).  No evidence so far
 blames the emulator's 68010 fault handling: that path has not been
 exercised by either kernel yet.
+
+**Oracle, 2026-10-07 afternoon (emulator drive flag fixed by the owner).**
+The original 10.2 image, direct-loaded by the harness, boots: it mounts
+the SR10.3 disk, services its page faults through FIM_$BUS_ERR (three
+fault entries, no cascade), prints `Warning: Unable to resolve
+"/sys/peb2_microcode" -- E0007`, `PEB is disabled.`, `Apollo Phase II
+Environment   Revision 10.3   Aug 7, 1990  5:39:56 pm` and waits at a `)`
+prompt in NULL_LOOP (no keyboard in the headless run).  Conclusions: the
+loader, the PROM-map replication and the entry frame are faithful enough
+for a full boot; the emulator's 68010 bus-error frame and rerun are good
+enough for the kernel's pager; any stop our image hits from here on is
+ours unless the oracle reproduces it.

@@ -14,21 +14,19 @@
  * class 0xA000) descriptor and enters FIM_$COM as a fault taken at the
  * caller's return point.
  *
- * Byte gate (tools/asm_compare.py): the image's `bra.s 0xE21458' (60aa) is
- * written `jmp (0x00E21458).l' (bra -> jmp widening): FIM_$SOFT_FAULT is
- * not in our tree.
+ * Byte gate (tools/asm_compare.py): identical to the image modulo
+ * relocations (the `bra.s' into FIM_$SOFT_FAULT, fim/sau2/soft_fault.s, is
+ * R_68K_PC8 against FIM_SOFT_FAULT_TAIL; source-k79b).
  */
 
         .section ".text.FIM_$GENERATE","ax",@progbits
         .even
 
-        /* TODO(source-k79b): FIM_$SOFT_FAULT (map 0xE2144C) is not in our
-         * tree; 0xE21458 is its descriptor-building tail. */
-        .equ    FIM_SOFT_FAULT_TAIL, 0x00E21458
+        .extern FIM_SOFT_FAULT_TAIL     /* fim/sau2/soft_fault.s, image 0xE21458 = FIM_$SOFT_FAULT+0xC */
 
         .global FIM_$GENERATE
 FIM_$GENERATE:
         addq.w  #4,%sp                          /* e214a8  drop the return address */
         move.l  (%sp)+,%d0                      /* e214aa  D0 = status */
-        jmp     (FIM_SOFT_FAULT_TAIL).l         /* e214ac  image bra.s 0xE21458 (60aa) */
+        bra.s   FIM_SOFT_FAULT_TAIL             /* e214ac  60aa */
         .short  0x0000                          /* e214ae  pad; FIM_$FP_BSUN is at 0xE214B0 */

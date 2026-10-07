@@ -152,6 +152,16 @@ LOCAL_SYMBOLS = {
     # time/sau2/timer_handler.s: the level-6 timer interrupt, which the map
     # counts into TIME_ASM without a symbol (source-lu78)
     'TIME_$TIMER_HANDLER': 0x00E2B130,
+    # fim/sau2/com.s, soft_fault.s, fp_exceptions.s: points inside the map's
+    # FIM_UNWIRED segment that other routines branch to (source-k79b)
+    'FIM_COMMON_FAULT': 0x00E213A0,         # segment start, falls into FIM_$COM
+    'FIM_COM': 0x00E213A4,                  # alias of FIM_$COM
+    'FIM_SOFT_FAULT_TAIL': 0x00E21458,      # FIM_$SOFT_FAULT+0xC (FIM_$GENERATE)
+    'FIM_SOFT_FAULT_PUSH': 0x00E21462,      # FIM_$SOFT_FAULT+0x16 (FIM_$TRACE)
+    'fim_fp_frame_pc': 0x00E2151E,          # FP stub helper inside FIM_$FP_SIG_NAN
+    # pchist/pchist_data.c: our name for the map segment `D E2C204 PCHIST
+    # size = 128' (fim/sau2/trace.s reaches PCHIST_$ADDR as +0x20)
+    'PCHIST_$CONTROL': 0x00E2C204,
 }
 
 # Runs whose code is restructured relative to the image (not a matter of

@@ -17,9 +17,9 @@
  * descriptor words follow the call.
  *
  * Byte gate (tools/asm_compare.py): identical to the image modulo
- * relocations, except (a) `bsr.w 0xE213A0' written `jsr (0x00E213A0).l'
- * (bsr -> jsr widening: the common fault entry is not in our tree) and (b)
- * the AND/CMP #imm,Dn instructions, which the Apollo assembler encodes in
+ * relocations (the call to the common fault entry, fim/sau2/com.s, is the
+ * image's `bsr.w', R_68K_PC16; source-k79b), except the AND/CMP #imm,Dn
+ * instructions, which the Apollo assembler encodes in
  * the <ea>=#imm form (c27c, b27c) and gas as ANDI/CMPI (same length, same
  * operation; recognised by the gate).
  */
@@ -29,8 +29,7 @@
 
         .extern FIM_$EXIT               /* fim/sau2/exit.s, map 0xE228BC */
 
-        /* TODO(source-k79b): the FIM_UNWIRED common fault entry. */
-        .equ    FIM_COMMON_FAULT, 0x00E213A0
+        .extern FIM_COMMON_FAULT        /* fim/sau2/com.s, image 0xE213A0 */
 
         .global FIM_$PRIV_VIOL
 FIM_$PRIV_VIOL:
@@ -66,7 +65,7 @@ FIM_$PRIV_VIOL:
         .byte   0x02, 0x00, 0x02, 0x02, 0x02, 0x04, 0x04, 0x04  /* e21576 */
 
 .Lpv_fault:
-        jsr     (FIM_COMMON_FAULT).l            /* e2157e  image bsr.w 0xE213A0 (6100 fe20) */
+        bsr.w   FIM_COMMON_FAULT                /* e2157e  6100 fe20 */
         .long   0x00120006                      /* e21582  status "privileged instruction violation" */
         .short  0x0013                          /* e21586  signal number 0x13 */
         .short  0xA000                          /* e21588  fault class flags */

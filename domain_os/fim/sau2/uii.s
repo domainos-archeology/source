@@ -17,10 +17,8 @@
  * and the fault class flags (fim_fault_desc_t, fim/fim.h).
  *
  * Byte gate (tools/asm_compare.py): identical to the image modulo
- * relocations, except the call to the common fault entry, which is not in
- * our tree: the image's `bsr.w 0xE213A0' is written `jsr (0x00E213A0).l'
- * (bsr -> jsr widening; the return address pushed is still the address of
- * the inline words).
+ * relocations (the call to the common fault entry, fim/sau2/com.s, is the
+ * image's `bsr.w', R_68K_PC16; source-k79b).
  */
 
         .section ".text.FIM_$UII","ax",@progbits
@@ -28,9 +26,7 @@
 
         .extern STOP_$WATCH_UII         /* stop/sau2/watch.s, map 0xE81A56 */
 
-        /* TODO(source-k79b): the FIM_UNWIRED common fault entry (0xE213A0,
-         * `pea (4,SP)' then FIM_$COM) is not in our tree yet. */
-        .equ    FIM_COMMON_FAULT, 0x00E213A0
+        .extern FIM_COMMON_FAULT        /* fim/sau2/com.s, image 0xE213A0 */
 
         .global FIM_$UII
 FIM_$UII:
@@ -48,7 +44,7 @@ FIM_$UII:
 .Luii_restore:
         movea.l (%sp)+,%a0                      /* e2148c */
 .Luii_fault:
-        jsr     (FIM_COMMON_FAULT).l            /* e2148e  image bsr.w 0xE213A0 (6100 ff10) */
+        bsr.w   FIM_COMMON_FAULT                /* e2148e  6100 ff10 */
         .long   0x0012000A                      /* e21492  status "unimplemented instruction" */
         .short  0x0007                          /* e21496  signal number 7 */
         .short  0xA000                          /* e21498  fault class flags (FIM_FAULT_CLASS_OTHER) */
