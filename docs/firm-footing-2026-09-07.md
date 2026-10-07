@@ -244,7 +244,12 @@ batches between 2026-09-29 and 2026-10-06, each emitted by an Opus 5.5
 agent from the disassembly and walked block by block against the image
 by a separate Fable 5.1 agent before commit (9 commits, 412 files
 touched, 42,649 lines added).  Every function the SAU2 link map names
-now has a definition; the 53 module-local helpers that existing C had
+and that something in the tree calls now has a definition (a 2026-10-06
+triage found about 25 uncalled map routines still untranslated,
+source-5v9m, and a dozen map-named routines whose files carry a silent
+'return ok' body rather than a translation: AREA_$REMOVE_SEG,
+AREA_$DEACTIVATE_ASTE, PROC2_$DELETE_CLEANUP, two DIR readu helpers and
+seven ring driver routines, tracked under source-u4b, ld0, qgq, 6co); the 53 module-local helpers that existing C had
 referenced by name without a source file are translated too; the
 compiler-support memcpy that gcc emits for struct copies has an
 arch/m68k definition.  `make` now produces dist/sau2/domain_os, a
