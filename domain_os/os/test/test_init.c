@@ -373,6 +373,10 @@ char OS_DATA_END[1];
 char OS_LOW[1];
 char OS_LOW_END[1];
 char OS_BEGIN[1];
+/* the VM tables' run-time windows (sau2.ld, source-o7s2): MST_PAGE_TABLE_BASE
+ * and OS_IODEFS_GUARD in init.c; their layout is os/test/test_vm_tables.c's */
+char MSTE_PAGES[1];
+char IODEFS_GUARD[1];
 void OS_DISK_PROC(int16_t proc_id) { (void)proc_id; }
 
 /* The start of the I/O space (arch/m68k/sau2/hw.h, not defined on the
@@ -665,11 +669,11 @@ static void test_bounds_reproduce_image(void)
     /* os_$start_proc2: 0x00E6D25C, OS_INIT_END up to .TEXT */
     CHECK_EQ(0x00E3D37Fu, 0x00E35380u + 0x7FFFu);
     CHECK_EQ(0x00E38000u, OS_INIT_SEG_UP(0x00E35380u));
-    /* 0x00E3397C: IODEFS_GUARD = MSTE_PAGES + 0x166 pages, below IODEFS.
-     * Holds while MST_PAGE_TABLE_BASE is the map's 0xEF6400 (source-o7s2
-     * will move it). */
-    CHECK_EQ(0x00F4FC00u, OS_IODEFS_GUARD);
-    CHECK_EQ(1, OS_IODEFS_GUARD <= SAU2_DISPLAY_MEM_BASE);
+    /* 0x00E3397C: IODEFS_GUARD = MSTE_PAGES + 0x166 pages, below IODEFS,
+     * in the image (map values); ours is a sau2.ld symbol since source-o7s2,
+     * its layout checked by os/test/test_vm_tables.c and sau2.ld. */
+    CHECK_EQ(0x00F4FC00u, 0x00EF6400u + (uint32_t)MST_MSTE_PAGES_MAX * 0x400u);
+    CHECK_EQ(1, 0x00F4FC00u <= SAU2_DISPLAY_MEM_BASE);
 }
 
 /* One layout: the link-time values OS_$INIT reads */

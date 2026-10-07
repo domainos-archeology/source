@@ -31,7 +31,14 @@
 #   build/sau2/layout_data.ld  at the end of `.data': the C bss objects that
 #                              are zero bytes in the file;
 #   build/sau2/layout_bss.ld   inside the NOBITS `.bss': the image's own bss
-#                              (the bss rule below), in map order.
+#                              (the bss rule below), in map order, up to the
+#                              VM tables' run-time windows;
+#   build/sau2/layout_vm.ld    inside the NOBITS `.vm_tables' past
+#                              OS_PAGE_END: the run-time windows of the map's
+#                              VM_TABLES (AREA_$RPMAP_CACHE, MST, PIT_PAGES,
+#                              MSTE_PAGES .. VM_TABLES_END), at the map's
+#                              offsets from AREA_$RPMAP_CACHE (source-o7s2,
+#                              docs/rfc-cold-start.md section 8c).
 # The first and third also define, at their map positions, the section
 # boundaries OS_$INIT builds the address space from (TEXT_MARKS, BSS_MARKS;
 # source-wh9b), and layout.ld names the start of the catch-all
@@ -58,8 +65,9 @@
 # Modes:
 #
 #   gen_layout_ld.py --map MAP -o build/sau2/layout.ld OBJ...
-#       Scan, check and write the three fragments (layout_data.ld and
-#       layout_bss.ld next to layout.ld; each only if its text changed).
+#       Scan, check and write the four fragments (layout_data.ld,
+#       layout_bss.ld and layout_vm.ld next to layout.ld; each only if its
+#       text changed).
 #
 #   gen_layout_ld.py --map MAP --check-only OBJ...
 #       The same checks, no output.
@@ -116,6 +124,24 @@ IMAGE_BSS_START = 0x00E88834
 # 0xFF8800, AST_$ZERO_BUFF 0xFF8C00, ...) are absolute addresses outside
 # the image; a C object standing for one is file zeros like any other.
 IMAGE_BSS_END = 0x00F4FC00
+
+# The run-time windows of the map's VM_TABLES (source-o7s2, docs/
+# rfc-cold-start.md section 8c).  The image's COLD maps the kernel only up
+# to its OS_PAGE_END (0xEC4800); everything past it gets pages at run time.
+# AST_$AOT and AST_PMAPS (PMAP_$SEGMAP) are filled on demand by
+# AST_$ADD_AOTES / AST_$ADD_ASTES, which install a page only where
+# MMU_$VTOP finds none (0x00E0104C, 0x00E011C4, 0x00E0126C, 0x00E012CA), so
+# they stay in `.bss' and COLD maps them; from AREA_$RPMAP_CACHE (= the
+# map's AST_PMAPS_END) up the kernel installs fresh pages unconditionally
+# (AREA_$INIT 0x00E2F48A, MST_$INIT 0x00E30AE2 for MST and the MSTE pages,
+# area_$alloc_seg_table 0x00E09D90 for PIT_PAGES), so those VAs must not be
+# mapped by COLD: they go to the NOBITS `.vm_tables' that sau2.ld starts at
+# OS_PAGE_END, in map order and at the map's offsets from its first symbol.
+# Keys in [VM_WINDOWS_START, IMAGE_BSS_END) go there; each VM_WINDOW_MARKS
+# name is defined (`NAME = .;') at its map offset.
+VM_WINDOWS_START = 0x00EE4C00          # EE4C00 AREA_$RPMAP_CACHE
+VM_WINDOW_MARKS = ['AREA_$RPMAP_CACHE', 'PIT_PAGES', 'MSTE_PAGES',
+                   'VM_TABLES_END']    # EE4C00, EE6400, EF6400, F4FC00
 
 # Input sections sau2.ld places itself (output sections of their own at
 # fixed VMAs): COLD (.cold, 0x101400, file 0), the DUMP page (.dump,
@@ -562,6 +588,15 @@ class Layout:
         items.sort(key=lambda t: (t[0], t[1]))
         return items
 
+    def cold_nobits(self):
+        """The NOBITS part COLD maps (`.bss', below OS_PAGE_END)."""
+        return [t for t in self.nobits() if t[0][0] < VM_WINDOWS_START]
+
+    def vm_nobits(self):
+        """The NOBITS part in the VM tables' run-time windows
+        (`.vm_tables', past OS_PAGE_END)."""
+        return [t for t in self.nobits() if t[0][0] >= VM_WINDOWS_START]
+
     def file_bss(self):
         """C bss sections that are zero bytes in the file."""
         return [s for s in self.bss if s.key is None]
@@ -723,7 +758,7 @@ def bss_fragment(layout, map_path, nfixups):
            '    . = RFC_FIXUP_TABLE_END;',
            '']
     marks = list(BSS_MARKS)
-    for key, _, kind, item in layout.nobits():
+    for key, _, kind, item in layout.cold_nobits():
         addr = key[0]
         emit_marks(out, marks, addr)
         if addr % PAGE == 0:
@@ -740,8 +775,85 @@ def bss_fragment(layout, map_path, nfixups):
                        % (item.pattern, pad(item.pattern, 0), addr, note))
     emit_marks(out, marks, None)
     out.append('')
-    out.append('    /* not listed above (none expected) */')
-    out.append('    *(.bss.*)')
+    # ld gives an input section to the first statement that matches it, and
+    # `.bss' precedes `.vm_tables' in sau2.ld: keep the catch-all off the
+    # objects owning a window object so layout_vm.ld gets them.  (The map
+    # key alone cannot do it: `.vm_tables' starts at OS_PAGE_END, which is
+    # only known once `.bss' is laid out, so it cannot come first in the
+    # script.  If the exclusion ever misses, the object lands in `.bss'
+    # below OS_PAGE_END and sau2.ld's ASSERTs on the windows' order and
+    # offsets fail the link, so a miss is never silent.)
+    # (A module data block there would need its object found the same way;
+    # there is none, and one is refused rather than silently caught.)
+    vm_blocks = [item.name for _, _, kind, item in layout.vm_nobits()
+                 if kind == 'block']
+    if vm_blocks:
+        fail(['module data block(s) %s keyed in the VM tables\' run-time '
+              'windows (0x%06X..): not supported by layout_vm.ld'
+              % (', '.join(vm_blocks), VM_WINDOWS_START)])
+    vm_objs = sorted({item.obj for _, _, kind, item in layout.vm_nobits()})
+    out.append('    /* not listed above (none expected)%s */'
+               % ('; not from the objects holding the VM-table windows'
+                  if vm_objs else ''))
+    if vm_objs:
+        out.append('    *(EXCLUDE_FILE(%s) .bss.*)'
+                   % ' '.join('*' + o.split('build/sau2/', 1)[-1]
+                              for o in vm_objs))
+    else:
+        out.append('    *(.bss.*)')
+    out.append('')
+    return '\n'.join(out)
+
+
+def vm_fragment(layout, map_path):
+    """build/sau2/layout_vm.ld: INCLUDEd inside sau2.ld's NOBITS
+    `.vm_tables', which starts at OS_PAGE_END.  The map's VM_TABLES from
+    AREA_$RPMAP_CACHE up, at the map's offsets from it (docs section 8c)."""
+    lm = layout.linkmap
+    marks = []
+    for name in VM_WINDOW_MARKS:
+        if name not in lm.symbols:
+            fail(['the map has no %s (VM_WINDOW_MARKS)' % name])
+        marks.append((lm.symbols[name][0], name))
+    base_addr, base = marks[0]
+    if base_addr != VM_WINDOWS_START:
+        fail(['the map\'s %s is 0x%06X, not VM_WINDOWS_START 0x%06X'
+              % (base, base_addr, VM_WINDOWS_START)])
+    if marks[-1][0] > IMAGE_BSS_END:
+        fail(['%s 0x%06X is past IMAGE_BSS_END' % marks[-1][::-1]])
+    out = ['/*',
+           ' * layout_vm.ld - GENERATED by tools/gen_layout_ld.py; do not '
+           'edit.',
+           ' * INCLUDEd inside the NOBITS `.vm_tables\' output section of '
+           'sau2.ld, which',
+           ' * starts at OS_PAGE_END: the run-time windows of the map\'s '
+           'VM_TABLES (%s),' % os.path.basename(map_path),
+           ' * in map order at the map\'s offsets from %s.  COLD maps none '
+           'of it;' % base,
+           ' * the kernel installs fresh pages there (docs/rfc-cold-start.md '
+           'section 8c).',
+           ' */',
+           '']
+    rows = [(a, 0, 'mark', n) for a, n in marks]
+    rows += [(key[0], 1, kind, item) for key, _, kind, item
+             in layout.vm_nobits()]
+    rows.sort(key=lambda r: (r[0], r[1]))
+    for addr, _, kind, item in rows:
+        if addr != base_addr:
+            stmt = '. = %s + 0x%X;' % (base, addr - base_addr)
+            out.append('    %s%s/* %06X */' % (stmt, pad(stmt, 0), addr))
+        if kind == 'mark':
+            stmt = '%s = .;' % item
+            out.append('    %s%s/* %06X map %s */' % (stmt, pad(stmt, 0),
+                                                       addr, item))
+        elif kind == 'block':
+            stmt = 'KEEP(*("%s"))' % item.section
+            out.append('    %s%s/* %06X module data %s (%s) */'
+                       % (stmt, pad(stmt, 0), addr, item.name, item.where))
+        else:
+            note = item.map_syms[0][1]
+            out.append('    %s%s/* %06X %s */'
+                       % (item.pattern, pad(item.pattern, 0), addr, note))
     out.append('')
     return '\n'.join(out)
 
@@ -947,6 +1059,8 @@ def main():
     write_if_changed(os.path.join(out_dir, 'layout_bss.ld'),
                      bss_fragment(layout, args.map,
                                   count_fixups(args.objects)))
+    write_if_changed(os.path.join(out_dir, 'layout_vm.ld'),
+                     vm_fragment(layout, args.map))
 
 
 if __name__ == '__main__':

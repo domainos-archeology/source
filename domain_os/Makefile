@@ -125,8 +125,9 @@ $(DIST_DIR)/domain_os: $(KERNEL_ELF) $(RFC_FIXUPS) $(RFC_ELF)
 # section: one input-section statement per C function (-ffunction-sections),
 # hand-written routine and MODULE_DATA block, in map order, then the
 # catch-all.  The generator also writes layout_data.ld (C bss objects that
-# are zero bytes in the file, end of `.data') and layout_bss.ld (the image's
-# own bss, NOBITS, in map order); see the bss rule in sau2.ld.  tools/gen_layout_ld.py writes it from the map, the compiled
+# are zero bytes in the file, end of `.data'), layout_bss.ld (the image's
+# own bss, NOBITS, in map order) and layout_vm.ld (the VM tables' run-time
+# windows past OS_PAGE_END, source-o7s2); see the bss rule in sau2.ld.  tools/gen_layout_ld.py writes it from the map, the compiled
 # objects' symbol tables and the MODULE_DATA_DEFINE sites (whose addresses
 # are now ordering keys), and refuses odd or non-literal block addresses and
 # duplicate block names.  It is regenerated before every link.

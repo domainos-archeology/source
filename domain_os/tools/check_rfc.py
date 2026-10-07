@@ -37,7 +37,16 @@
 #   7. the dry-run loader (below) maps every byte of DUMP, the kernel's
 #      loaded sections and COLD to a physical page holding the ELF's byte,
 #      maps every page OS_PROC..OS_PAGE_END exactly once, maps CRASH_$RECORD
-#      to PPN 0x400, and finds the fixup table where COLD's 68020 path looks.
+#      to PPN 0x400, and finds the fixup table where COLD's 68020 path looks;
+#   8. the VM tables' run-time windows (docs section 8c, source-o7s2):
+#      AREA_$RPMAP_CACHE, MST, PIT_PAGES, MSTE_PAGES .. VM_TABLES_END =
+#      IODEFS_GUARD lie in map order, page aligned, from OS_PAGE_END up;
+#      no page of them is mapped by COLD (the dry-run loader's map) and no
+#      allocated section other than `.vm_tables' overlaps them; MSTE_PAGES +
+#      MST_MSTE_PAGES_MAX (0x166) pages <= VM_TABLES_END < 0xFA0000 (the
+#      68020 fixups' I/O window) and <= DISP1_MEM 0xFC0000 (IODEFS, the
+#      I/O space).  The same window check runs on the original with the
+#      map's values (0xEE4C00 .. 0xF4FC00 past its OS_PAGE_END 0xEC4800).
 #
 # The loader model: sysboot puts file page i (1 KB) at PPN (0x101400 >> 10)
 # + i, or, when that is >= the split PPN (info +16), at that - split +
@@ -85,6 +94,15 @@ OP_MMAP_VA = 0x1015E6
 OP_STACK = 0x1016FA
 OP_ENTRY = 0x101708
 OP_PTTX_VA = 0x10176A
+
+# The VM tables' run-time windows (docs section 8c): map names and the
+# image's addresses (domain_os.10.2.map, VM_TABLES `D98 ED5000 size 7AC00').
+VM_WINDOWS = [('AREA_$RPMAP_CACHE', 0xEE4C00), ('MST', 0xEE5800),
+              ('PIT_PAGES', 0xEE6400), ('MSTE_PAGES', 0xEF6400),
+              ('VM_TABLES_END', 0xF4FC00)]
+MST_MSTE_PAGES_MAX = 0x166      # mst/mst.h, MST_$INIT 0x00E30CF8
+IO_FIXUP_WINDOW = 0xFA0000      # cold_start.s IO_WINDOW
+IODEFS = 0xFC0000               # DISP1_MEM / IODEFS, arch/m68k/sau2/iodefs.s
 
 WINDOWS = [(0xE00000, 0xFA0000, 'E00000..FA0000 +2F00000'),
            (0xFA0000, 0x4000000, 'FA0000..4000000 +3000000'),
@@ -290,6 +308,42 @@ class Loader:
         return a0, a0 - cc['split_low'] + (info['move_to_ppn'] << 10)
 
 
+def check_vm_windows(r, ld, wins, os_page_end, iodefs, sections=()):
+    """Item 8: the run-time windows `wins' [(name, va)] (the last is
+    VM_TABLES_END) against COLD's map `ld' and the allocated `sections'
+    [(name, lo, hi)] that must not overlap them."""
+    vas = [va for _, va in wins]
+    lo, hi = vas[0], vas[-1]
+    r.check(all(v is not None for v in vas), 'a VM-table window symbol is '
+            'missing: %s' % [n for n, v in wins if v is None])
+    if any(v is None for v in vas):
+        return
+    r.check(all(a < b for a, b in zip(vas, vas[1:])),
+            'the VM-table windows are not in map order: %s'
+            % ', '.join('%s 0x%X' % w for w in wins))
+    r.check(all(v % PAGE == 0 for v in vas),
+            'a VM-table window does not start a page')
+    r.check(lo >= os_page_end, 'the VM-table windows start at 0x%X, below '
+            'OS_PAGE_END 0x%X' % (lo, os_page_end))
+    mapped = [p << 10 for p in range(lo >> 10, hi >> 10) if p in ld.vmap]
+    r.check(not mapped, '%d page(s) of the VM-table windows 0x%X..0x%X are '
+            'mapped by COLD (first 0x%X): the kernel installs fresh pages '
+            'there' % (len(mapped), lo, hi, mapped[0] if mapped else 0))
+    for name, a, b in sections:
+        r.check(b <= lo or a >= hi, 'section %s 0x%X..0x%X overlaps the '
+                'VM-table windows 0x%X..0x%X' % (name, a, b, lo, hi))
+    mste = dict(wins)['MSTE_PAGES']
+    r.check(mste + MST_MSTE_PAGES_MAX * PAGE <= hi,
+            'MSTE_PAGES 0x%X + 0x%X pages is past VM_TABLES_END 0x%X'
+            % (mste, MST_MSTE_PAGES_MAX, hi))
+    r.check(hi < IO_FIXUP_WINDOW and hi <= iodefs,
+            'VM_TABLES_END 0x%X is not below the 68020 I/O fixup window '
+            '0x%X and IODEFS 0x%X' % (hi, IO_FIXUP_WINDOW, iodefs))
+    r.note('VM-table windows (run time, not mapped by COLD): %s; %d KB, '
+           '0x%X below IODEFS' % (', '.join('%s 0x%X' % w for w in wins),
+                                  (hi - lo) >> 10, iodefs - hi))
+
+
 def elf_r68k_32_cells(elf):
     cells = set()
     for sec, vma, typ, _, _ in elf.relocations():
@@ -437,6 +491,18 @@ def check_ours(a, orig_cells_low):
             ld.phys.get(tphys >> 10, b'')[tphys & 0x3FF:(tphys & 0x3FF) + 2]
             == img.bytes(reloc_low, 2),
             'COLD\'s 68020 path does not find the fixup table')
+    # 8. the VM tables' run-time windows
+    wins = [(n, sym(n)) for n, _ in VM_WINDOWS]
+    r.check(sym('IODEFS_GUARD') == sym('VM_TABLES_END'),
+            'IODEFS_GUARD is not VM_TABLES_END')
+    vmt = elf.section('.vm_tables')
+    r.check(vmt is not None and vmt.addr == sym('AREA_$RPMAP_CACHE') and
+            vmt.addr + vmt.size == sym('VM_TABLES_END') and not vmt.loaded,
+            '.vm_tables is not the NOBITS AREA_$RPMAP_CACHE..VM_TABLES_END')
+    others = [(x.name, x.addr, x.addr + x.size) for x in elf.sections
+              if x.alloc and x.size and x.name != '.vm_tables']
+    check_vm_windows(r, ld, wins, cc['os_page_end'], sym('DISP1_MEM'),
+                     others)
     top = 0
     for e in ld.entries:
         if e['va'] >= 0xE00000:
@@ -504,6 +570,7 @@ def check_orig(a):
                                  cc['os_page_end'] >> 10)
                 if p not in ld.vmap]
     r.check(not unmapped, '%d kernel pages not mapped' % len(unmapped))
+    check_vm_windows(r, ld, VM_WINDOWS, cc['os_page_end'], IODEFS)
     nruns = nok = 0
     for line in open(a.ref):
         if line.startswith('#') or not line.strip():

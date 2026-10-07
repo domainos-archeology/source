@@ -575,8 +575,10 @@ Written by Claude Opus 5.5.  `domain_os/sau2.ld` links an ELF
   OS_PAGE_END).
 * **Not done here**: the image maps only up to its OS_PAGE_END 0xEC4800,
   leaving AUDIT_LIST, AST_AOT and VM_TABLES to the kernel, where our
-  OS_PAGE_END covers all of `.bss` (the rule chosen for this step;
-  source-o7s2).  os/init.c's literal boundaries are gone: section 8b.
+  OS_PAGE_END covered all of `.bss` (the rule chosen for this step).
+  Since source-o7s2 the run-time windows of VM_TABLES (AREA_$RPMAP_CACHE,
+  MST, PIT_PAGES, MSTE_PAGES) lie past OS_PAGE_END, unmapped by COLD:
+  section 8c.  os/init.c's literal boundaries are gone: section 8b.
 
 ## 8b. What OS_$INIT does with the layout (source-wh9b)
 
@@ -665,15 +667,15 @@ OS_$STACK, MMAP and PTTX lie at or past OS_PAGE.
    special case: given to the file, unwired, not freed.
 3. *The image's bss blocks* (ACL_$DATA .. PROC2_$DATA, after the room):
    pageable, exactly as in the image.
-4. *OS_PAGE up* (OS_$STACK, MMAP, PTTX, AST_$AOT, PMAP_$SEGMAP, MST):
-   past the paging loop, mapped by canned map 5 and wired, as the image's
-   OS_PAGE .. VM_TABLES.  Map 5 ends at MSTE_PAGES + MST_PAGES_LIMIT pages,
-   and MSTE_PAGES is still mst/mst.h's literal 0xEF6400, which in our link
-   lies inside AST_$AOT (as AREA's 0xEE4C00 / 0xEE6400 windows lie inside
-   MMAP): source-o7s2 gives the VM-table windows link positions past
-   OS_PAGE_END; OS_$INIT already takes the value from MST_PAGE_TABLE_BASE,
-   and OS_IODEFS_GUARD from MST_PAGE_TABLE_BASE + MST_MSTE_PAGES_MAX pages
-   (0xEF6400 + 0x166 * 0x400 = 0xF4FC00, the map's value).
+4. *OS_PAGE up* (OS_$STACK, MMAP, PTTX, AST_$AOT, PMAP_$SEGMAP, then
+   past OS_PAGE_END the VM-table windows AREA_$RPMAP_CACHE, MST,
+   PIT_PAGES, MSTE_PAGES): past the paging loop, mapped by canned map 5
+   and wired, as the image's OS_PAGE .. VM_TABLES.  Map 5 ends at
+   MSTE_PAGES + MST_PAGES_LIMIT pages, rounded up to a segment.  Until
+   source-o7s2 MSTE_PAGES was mst/mst.h's literal 0xEF6400, inside our
+   AST_$AOT (and AREA's 0xEE4C00 / 0xEE6400 windows inside MMAP); now
+   MST_PAGE_TABLE_BASE is the link symbol MSTE_PAGES and OS_IODEFS_GUARD
+   the link symbol IODEFS_GUARD = VM_TABLES_END (section 8c).
 5. *The high-piece split* is physical only; OS_$INIT works on VAs.
 6. *The crash record and DUMP pages* lie in [OS_BEGIN, OS_PROC), map 2, as
    in the image.
@@ -690,14 +692,135 @@ guard pages and zeroes the interrupt stack.  MMAP_$MMAPE: COLD.
 MMU_$PTTX: written per page by COLD and MMU_$INSTALL before MMU_$PTOV
 reads an entry.  AST_$AOT and PMAP_$SEGMAP: AST_$ADD_AOTES / ADD_ASTES
 zero each entry and its segment-map block as they carve them.  MST:
-MST_$INIT clears every MST word it uses (whose page installation over our
-COLD-mapped MST is source-o7s2).
+MST_$INIT installs fresh pages for it and clears every MST word it uses
+(since source-o7s2 MST is in the run-time windows past OS_PAGE_END, which
+COLD does not map: section 8c).
 
 **Checks.**  sau2.ld's ASSERTs run at every link (make and make check);
 os/test/test_init.c applies the boundary macros to the map's values and
 gets the image's immediates back, and walks a model of the paging loop's
 page classes (the loop is inside OS_$INIT, which the test never runs) for
 the image's layout and a sample of ours, disked and diskless.
+
+## 8c. VM tables (source-o7s2)
+
+Written 2026-10-07 by Claude Opus 5.5.
+
+**What the image does.**  The map's last kernel data segment is
+`D98 ED5000 VM_TABLES size = 7AC00`, after `D00 EC5400 AST_AOT` and
+`D89 EC4800 AUDIT_LIST`, all past the image's OS_PAGE_END 0xEC4800, so
+COLD maps none of it; it is virtual only (no file bytes, the map's bss
+`loaded at`).  Its symbols:
+
+| map VA | map symbol | size | pages come from |
+|---|---|---|---|
+| 0xED5000 | AST_PMAPS (= PMAP_$SEGMAP) | 0xFC00 | AST_$ADD_ASTES, on demand: MMU_$VTOP first, WP_$CALLOC + MMU_$INSTALL only if unmapped (0x00E011C4, 0x00E0126C, 0x00E012CA) |
+| 0xEE4C00 | AST_PMAPS_END = AREA_$RPMAP_CACHE | 0xC00 (3 pages) | AREA_$INIT on a diskless node: MMU_$INSTALL, unconditional (0x00E2F48A) |
+| 0xEE5800 | MST | 0xC00 | MST_$INIT: MMAP_$ALLOC_FREE + MMU_$INSTALL + zero, unconditional (0x00E30AE2) |
+| 0xEE6400 | PIT_PAGES | 0x10000 (one page per seg-table pool record, 64) | area_$alloc_seg_table: WP_$CALLOC + MMU_$INSTALL, unconditional (0x00E09D90) |
+| 0xEF6400 | MSTE_PAGES | up to 0x166 pages (MST_$INIT clamps MST_PAGES_LIMIT to 0x166, 0x00E30CF8) | MST_$INIT (Global A/B pages) and mst_$init_table_page (0x00E42D1A), unconditional |
+| 0xF4FC00 | VM_TABLES_END = IODEFS_GUARD | - | OS_$INIT's ceiling, `move.l #IODEFS_GUARD,D0` / `cmp.l #IODEFS,D0` / `bls` (0x00E3397C) |
+
+AST_AOT (ASTE and AOTE arrays) is filled like AST_PMAPS, on demand behind
+an MMU_$VTOP probe (AST_$ADD_AOTES 0x00E0104C, 0x00E010E4).  Every
+immediate naming these VAs is a fixup cell (checked in the image's RELOC
+table: 0x00E2F450, 0x00E30BAA, 0x00E30BFC, 0x00E30C18, 0x00E09D70,
+0x00E09E70, 0x00E3397E, 0x00E339FC, 0x00E42DC2, 0x00E43FAC, 0x00E4417C),
+i.e. link-time values, not hardware: the 68020 path moves them with the
+kernel.  **[review 2026-10-07]** Exhaustively: every even-aligned longword
+of the kernel file (0xE00800 .. RELOC) whose value lies in
+[0xEC4800, 0xF4FC00] is either one of 126 RELOC cells (naming AUDIT_LIST,
+AST_AOT 0xEC5400, 0xEC7B60, AST_PMAPS 0xED5000, and the five window VAs:
+0xEE4C00 x3, 0xEE5800 x23, 0xEE6400 x2, 0xEF6400 x18, 0xF4FC00 x1) or an
+instruction-word pair that happens to fall in the range (159, none a page
+address); COLD and DUMP hold only the 0xEC4800 OS_PAGE_END cell (itself a
+RELOC cell).  No PC-relative or absolute-short form can reach these VAs
+from the kernel's code, so moving the symbols is faithful on both CPU
+paths.  check-rfc item 8 was also fed three bad layouts (a window off a
+page, MSTE_PAGES below OS_PAGE_END, VM_TABLES_END past 0xFA0000) and
+failed each.
+
+**The problem.**  Since RFC step 3 our `.bss` held AST_$AOT,
+PMAP_$SEGMAP and MST, all COLD-mapped, while AREA's 0xEE4C00 / 0xEE6400
+and mst/mst.h's 0xEF6400 were still the image's literals, which our link
+gave to MMAP_$MMAPE and AST_$AOT.  An unconditional MMU_$INSTALL over a
+COLD-mapped VA would have orphaned the page under it (and on the DN3xx put
+two PFT entries with the same VA in one hash chain); MST_$INIT did exactly
+that to our MST.
+
+**The rule.**  The VM-table windows the kernel installs pages into
+unconditionally are layout, not hardware: they are placed in map order
+immediately after our OS_PAGE_END (page aligned), at the map's offsets
+from AREA_$RPMAP_CACHE, keeping every size; VM_TABLES_END = IODEFS_GUARD
+is the end of the moved region.  Concretely (tools/gen_layout_ld.py,
+VM_WINDOWS_START / VM_WINDOW_MARKS, writes build/sau2/layout_vm.ld;
+sau2.ld INCLUDEs it in the NOBITS output section `.vm_tables` at
+OS_PAGE_END):
+
+```
+.vm_tables OS_PAGE_END (NOLOAD) : {
+    AREA_$RPMAP_CACHE = .;            /* EE4C00 */
+    . = AREA_$RPMAP_CACHE + 0xC00;    KEEP(*(".bss.MST"))   /* EE5800 */
+    . = AREA_$RPMAP_CACHE + 0x1800;   PIT_PAGES = .;        /* EE6400 */
+    . = AREA_$RPMAP_CACHE + 0x11800;  MSTE_PAGES = .;       /* EF6400 */
+    . = AREA_$RPMAP_CACHE + 0x6B000;  VM_TABLES_END = .;    /* F4FC00 */
+}
+IODEFS_GUARD = VM_TABLES_END;
+```
+
+**AST_PMAPS and AST_AOT stay in `.bss`.**  The smallest faithful change:
+their only writers map a page only where MMU_$VTOP finds none, so a page
+COLD already mapped is simply used (the same code path as a second ASTE on
+an already-installed page in the image).  The cost is RAM: COLD maps their
+0xF960 + 0xFC00 bytes (125 pages) up front where the image let them grow.
+Because PMAP_$SEGMAP (page aligned, 0xFC00 bytes) is the last `.bss` block,
+OS_PAGE_END = PMAP_$SEGMAP + 0xFC00 = AREA_$RPMAP_CACHE: the map's
+AST_PMAPS_END = AREA_$RPMAP_CACHE adjacency survives, and VM_TABLES is one
+contiguous VA range again, split only in what COLD maps.  (Moving AST_AOT
+and AST_PMAPS out too, as the image has them, would save that RAM; it
+needs a lower VM_WINDOWS_START and those blocks in layout_vm.ld, and is
+not needed to boot: source-xmi3.)
+
+**The I/O page stays.**  DISP1_MEM = IODEFS 0xFC0000 and the pages above
+it are hardware (handbook 7-1, iodefs.s); the windows must end below it,
+and below 0xFA0000 too, where COLD's 68020 fixup pass starts treating a
+cell value as an I/O address (cold_start.s IO_WINDOW): a cell naming
+VM_TABLES_END there would be moved by +0x3000000 instead of +0x2F00000.
+
+**This build.**  OS_PAGE_END = AREA_$RPMAP_CACHE 0xF12400, MST 0xF13000,
+PIT_PAGES 0xF13C00, MSTE_PAGES 0xF23C00, VM_TABLES_END = IODEFS_GUARD
+0xF7D400 (0x42C00 below IODEFS, 0x22C00 below 0xFA0000: the COLD-mapped
+kernel can grow until OS_PAGE_END reaches 0xF35000).  Moving MST out of
+`.bss` took 3 pages off COLD's map: 0x447 kernel pages, RAM needed through
+physical 0x23C000.
+
+**Consumers** (all `ARCH_PTR_TO_VA` of the symbol, so their cells are
+R_68K_32 fixups as in the image): mst/mst.h `MST_PAGE_TABLE_BASE` =
+MSTE_PAGES (mst_$init, alloc_asid, alloc_segs, alloc_table_page (the
+folded literal 0xEF6000 is now MSTE_PAGES + index * 0x400 - 0x400, as at
+0x00E43FAA..0x00E43FBA), fork, get_private_size, invalidate,
+map_canned_at, priv_set_touch_ahead_cnt, set_mstes, touch, unmap_privi,
+unwire_asid_pages, va_to_pte, and os/init.c's map 5); area/area.h
+`AREA_RPMAP_CACHE_VA` = AREA_$RPMAP_CACHE (area/init.c, rpmap_get.c) and
+`AREA_PIT_PAGES_VA` = PIT_PAGES (alloc_seg_table.c, free_seg_table.c);
+os/os_internal.h `OS_IODEFS_GUARD` = IODEFS_GUARD (os/init.c 0x00E3397C;
+previously computed as MST_PAGE_TABLE_BASE + 0x166 pages, now the single
+symbol the image's immediate names).  MST itself was already the C object.
+
+**Checks.**  sau2.ld ASSERTs: AREA_$RPMAP_CACHE = OS_PAGE_END on a page;
+PMAP_$SEGMAP + 0xFC00 = AREA_$RPMAP_CACHE; the windows in map order, on
+pages, with the map's sizes; VM_TABLES_END = IODEFS_GUARD = MSTE_PAGES +
+0x166 pages; VM_TABLES_END < 0xFA0000 and <= DISP1_MEM.  `make check-rfc`
+item 8, on our image and on the original with the map's values: the
+windows in order, page aligned, from OS_PAGE_END up, no page of them in
+COLD's dry-run map, no other allocated section overlapping them, MSTE_PAGES
++ 0x166 pages <= VM_TABLES_END < 0xFA0000, <= IODEFS.  Host test
+os/test/test_vm_tables.c: the map's relationships against the C records
+(sizeof(pmap_$segmap_t), MST_TABLE_ENTRIES, AREA_DISKLESS_PAGE_COUNT,
+AREA_SEG_TABLE_POOL_COUNT, MST_MSTE_PAGES_MAX), the rule on this build's
+OS_PAGE_END and its headroom, and every consumer macro = the VA of its
+symbol; the mst/area tests that model memory stand in for the symbols with
+the map's VAs.
 
 ## 9. Open questions (status after the review)
 

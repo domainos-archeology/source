@@ -180,7 +180,8 @@ void MST_$INIT(void)
      * clears bit 0 - page 0 is never handed out. */
     MST_$PAGE_AVAIL_BITMAP[0] &= ~1u;
 
-    /* 0x00E30C16 `move.l #0xef6400,(-0x10,A6)` */
+    /* 0x00E30C16 `move.l #0xef6400,(-0x10,A6)`: MSTE_PAGES, a run-time
+     * window past OS_PAGE_END that COLD does not map (source-o7s2) */
     mst_init_va = MST_PAGE_TABLE_BASE;
 
     /* 0x00E30C1E `clr.w (0x34,A1)` */

@@ -132,11 +132,14 @@ extern uint32_t BOOT_INFO_TABLE[];
  *  0xEF6400   0x00E339FA add.l                       [OS_MST_BASE]
  *             `EF6400 MSTE_PAGES' in VM_TABLES (not MST, which is EE5800)
  *    -> the MSTE pages; map 5 ends MST_PAGES_LIMIT pages past it, rounded
- *       up to a segment                    -> MST_PAGE_TABLE_BASE (mst/mst.h)
+ *       up to a segment                    -> MSTE_PAGES (sau2.ld,
+ *                                             source-o7s2) via
+ *                                             MST_PAGE_TABLE_BASE (mst/mst.h)
  *  0xF4FC00   0x00E3397C move.l                      [OS_WIRED_END]
  *             `D52 F4FC00 IODEFS_GUARD' = VM_TABLES_END = MSTE_PAGES +
  *             MST_MSTE_PAGES_MAX pages
- *    -> the top of the kernel's tables     -> OS_IODEFS_GUARD (below)
+ *    -> the top of the kernel's tables     -> IODEFS_GUARD (sau2.ld,
+ *                                             source-o7s2), OS_IODEFS_GUARD
  *  0xFC0000   0x00E33982 cmp.l                       [OS_WIRED_LIMIT]
  *             `FC0000 IODEFS' = DISP1_MEM
  *    -> the start of the I/O space         -> SAU2_DISPLAY_MEM_BASE (hw.h)
@@ -220,13 +223,17 @@ extern char OS_LOW_END[];       /* `D93 DA4800 OS_LOW_END_' */
 extern char OS_BEGIN[];         /* `D95 E00000 OS_BEGIN' */
 
 /*
- * The ceiling of the kernel's tables, checked at 0x00E3397C against the
- * start of the I/O space: the map's IODEFS_GUARD 0xF4FC00 is VM_TABLES_END,
- * the end of the room MST_$INIT can give the MSTE pages.  0xEF6400 + 0x166
- * * 0x400 = 0xF4FC00.
+ * The ceiling of the kernel's tables, checked at 0x00E3397C (`move.l
+ * #0xf4fc00,D0', a fixup cell) against the start of the I/O space: the
+ * map's IODEFS_GUARD 0xF4FC00 is VM_TABLES_END, the end of the room
+ * MST_$INIT can give the MSTE pages (0xEF6400 + 0x166 * 0x400 = 0xF4FC00).
+ * Layout, not hardware: sau2.ld defines IODEFS_GUARD = VM_TABLES_END at
+ * the end of the run-time windows past OS_PAGE_END and ASSERTs it is
+ * MSTE_PAGES + MST_MSTE_PAGES_MAX pages, below IODEFS (docs/
+ * rfc-cold-start.md section 8c, source-o7s2).
  */
-#define OS_IODEFS_GUARD \
-    ((uint32_t)MST_PAGE_TABLE_BASE + (uint32_t)MST_MSTE_PAGES_MAX * 0x400u)
+extern char IODEFS_GUARD[];     /* `D52 F4FC00 IODEFS_GUARD' */
+#define OS_IODEFS_GUARD ARCH_PTR_TO_VA(IODEFS_GUARD)
 
 /* 1 KB pages, 32 KB segments of 32 pages */
 #define OS_PAGE_SIZE 0x400u

@@ -35,7 +35,8 @@
  *                                  appended by gen_rfc_fixups.py; it is not
  *                                  a section of this link.
  *
- * Not in the file (NOBITS):
+ * Not in the file (NOBITS; `.vm_tables' past OS_PAGE_END is described
+ * below):
  *   .crash_record  VMA OS_BEGIN 0xE00000: CRASH_$RECORD and
  *                  LOG_$LAST_ENTRY (log/log_data.c), the page COLD maps to
  *                  PPN 0x400, which survives a reboot (map `D41 E00000
@@ -53,7 +54,8 @@
  * what the image had no file bytes for.  Zero-filled module data blocks
  * (`.bss.moddata.<name>') keyed in the image's bss (RELOC 0xE88834 up to
  * IODEFS_GUARD 0xF4FC00) and C bss objects defining a map symbol there go
- * to .bss, a page-aligned image address starting a page; every
+ * to .bss (those keyed from AREA_$RPMAP_CACHE 0xEE4C00 up, only MST, to
+ * .vm_tables instead), a page-aligned image address starting a page; every
  * other zero-filled block stays among the code as zeros in the file (as
  * the image had them), and every other C bss object is zeros in the file
  * at the end of .data (build/sau2/layout_data.ld).  So everything the image
@@ -73,6 +75,11 @@
  *                table's VMA, and the start of .bss
  *   OS_PAGE_END  the end of .bss rounded up to a page: COLD maps the kernel
  *                pages OS_PROC .. OS_PAGE_END
+ * the VM tables' run-time windows (source-o7s2, docs section 8c), from
+ * OS_PAGE_END up in the NOBITS `.vm_tables' (build/sau2/layout_vm.ld), at
+ * the map's offsets, never mapped by COLD:
+ *   AREA_$RPMAP_CACHE, MST (the C table), PIT_PAGES, MSTE_PAGES,
+ *   VM_TABLES_END = IODEFS_GUARD
  * the boundaries OS_$INIT builds the address space from (source-wh9b;
  * os/os_internal.h has the table, docs section 8b the decisions), defined
  * by tools/gen_layout_ld.py at their map positions in layout.ld and
@@ -210,6 +217,27 @@ SECTIONS {
 
     OS_PAGE_END = ALIGN(ADDR(.bss) + SIZEOF(.bss), 0x400);
 
+    /* The VM tables' run-time windows (docs/rfc-cold-start.md section 8c,
+     * source-o7s2): the map's VM_TABLES from AREA_$RPMAP_CACHE (= its
+     * AST_PMAPS_END) up to VM_TABLES_END = IODEFS_GUARD, at the map's
+     * offsets (layout_vm.ld): AREA_$RPMAP_CACHE (3 pages, AREA_$INIT
+     * 0x00E2F48A), MST (0xC00, MST_$INIT 0x00E30AE2), PIT_PAGES (0x40
+     * pages, area_$alloc_seg_table 0x00E09D90), MSTE_PAGES (up to 0x166
+     * pages, MST_$INIT / mst_$init_table_page 0x00E42D1A).  Virtual only:
+     * not in the file and not mapped by COLD (it stops at OS_PAGE_END, as
+     * the image's stops at its OS_PAGE_END 0xEC4800 below AUDIT_LIST /
+     * AST_AOT / VM_TABLES); the kernel installs fresh pages at these VAs
+     * unconditionally, so none of them may be a page COLD maps.  OS_$INIT's
+     * canned map 5 covers them (OS_PAGE .. MSTE_PAGES + MST_PAGES_LIMIT
+     * pages). */
+    .vm_tables OS_PAGE_END (NOLOAD) : {
+        INCLUDE layout_vm.ld
+    }
+
+    /* `D52 F4FC00 IODEFS_GUARD' = VM_TABLES_END: OS_$INIT's ceiling check
+     * at 0x00E3397C (`move.l #IODEFS_GUARD,D0', a fixup cell). */
+    IODEFS_GUARD = VM_TABLES_END;
+
     /* Discard debug sections and other unnecessary stuff */
     /DISCARD/ : {
         *(.comment)
@@ -244,3 +272,19 @@ ASSERT(OS_PROC_UNWIRED <= OS_DISK_PROC && OS_DISK_PROC < OS_DISK_PROC_END && OS_
 ASSERT(OS_DATA_UNWIRED <= OS_DISK_DATA && OS_DISK_DATA <= OS_DISK_DATA_END && OS_DISK_DATA_END <= OS_LINK_UNPLACED, "OS_DISK_DATA..OS_DISK_DATA_END inside the unwired data")
 ASSERT(OS_LINK_UNPLACED <= RELOC && RELOC <= OS_DATA_END && OS_DATA_END < OS_PAGE, "the unplaced part and the image's bss blocks below OS_DATA_END")
 ASSERT(OS_$STACK == OS_PAGE && MMAP_$MMAPE >= OS_PAGE && MMU_$PTTX >= OS_PAGE, "the stacks, MMAP and PTTX lie past the paging loop")
+
+/* The VM tables' run-time windows (docs section 8c, source-o7s2): right
+ * after the COLD-mapped kernel, in the map's order and at its offsets,
+ * page aligned, and below the I/O space.  AST_PMAPS_END (PMAP_$SEGMAP's end,
+ * map size 0xFC00) is AREA_$RPMAP_CACHE as in the map.  The window end must
+ * also stay below 0xFA0000, where COLD's 68020 fixup pass starts treating a
+ * cell as an I/O address (cold_start.s IO_WINDOW, docs section 5 step 8),
+ * and below DISP1_MEM = IODEFS 0xFC0000 (hardware, arch/m68k/sau2/
+ * iodefs.s), which OS_$INIT compares IODEFS_GUARD with (0x00E33982). */
+ASSERT(AREA_$RPMAP_CACHE == OS_PAGE_END && OS_PAGE_END % 0x400 == 0, "the VM-table windows start at OS_PAGE_END, on a page")
+ASSERT(PMAP_$SEGMAP + 0xFC00 == AREA_$RPMAP_CACHE, "AST_PMAPS_END (PMAP_$SEGMAP + 0xFC00) must be AREA_$RPMAP_CACHE, the last COLD-mapped block")
+ASSERT(AREA_$RPMAP_CACHE < MST && MST < PIT_PAGES && PIT_PAGES < MSTE_PAGES && MSTE_PAGES < VM_TABLES_END, "the VM-table windows in map order")
+ASSERT(MST % 0x400 == 0 && PIT_PAGES % 0x400 == 0 && MSTE_PAGES % 0x400 == 0 && VM_TABLES_END % 0x400 == 0, "the VM-table windows start pages")
+ASSERT(MST - AREA_$RPMAP_CACHE == 0xC00 && PIT_PAGES - MST == 0xC00 && MSTE_PAGES - PIT_PAGES == 0x10000, "the VM-table windows keep the map's sizes")
+ASSERT(VM_TABLES_END == MSTE_PAGES + 0x166 * 0x400 && IODEFS_GUARD == VM_TABLES_END, "VM_TABLES_END = IODEFS_GUARD = MSTE_PAGES + MST_MSTE_PAGES_MAX pages")
+ASSERT(VM_TABLES_END < 0x00FA0000 && VM_TABLES_END <= DISP1_MEM, "the VM tables must end below the 68020 I/O fixup window and IODEFS")

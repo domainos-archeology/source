@@ -486,8 +486,10 @@ void OS_$INIT(uint32_t *param_1, uint32_t *param_2)
     /*
      * 0x00E3397C-0x00E33994: do the kernel's tables end below the I/O
      * space?  Both operands are link-time constants (0x00F4FC00 <=
-     * 0x00FC0000 in the image), so the crash never happens; the test is
-     * kept because the image makes it.  `bls': unsigned.
+     * 0x00FC0000 in the image; IODEFS_GUARD = VM_TABLES_END from sau2.ld
+     * here, which ASSERTs it below IODEFS, source-o7s2), so the crash never
+     * happens; the test is kept because the image makes it.  `bls':
+     * unsigned.
      */
     if (OS_IODEFS_GUARD > SAU2_DISPLAY_MEM_BASE) {
         CRASH_SYSTEM(&os_$init_wired_too_big_err);

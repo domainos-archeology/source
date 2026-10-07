@@ -23,6 +23,11 @@
  *
  *   D52  F4FC00  IODEFS_GUARD       loaded at 25DF1A, size = 0
  *        FC0000  DISP1_MEM / IODEFS   ...   FFB400  MMU    FFB800  PFT
+ *
+ * IODEFS_GUARD itself is not defined here: it is VM_TABLES_END, the end of
+ * the kernel's run-time VM-table windows, a layout position rather than
+ * hardware, which sau2.ld defines past OS_PAGE_END and ASSERTs below
+ * DISP1_MEM (docs/rfc-cold-start.md section 8c, source-o7s2).
  *   D54  700000  PTT                loaded at 700000, size = 0
  *        CC0000  PROT
  *   D37       0  TRAP_PAGE          loaded at 0, size = 400

@@ -14,8 +14,11 @@
 
 #include "mst/mst_internal.h"
 
-/* Page table page origin: page_index * 0x400 + this base = page address */
-#define MST_PAGE_TABLE_ORIGIN  0xEF6000
+/* The page table page's address is MSTE_PAGES + page_index * 0x400 - 0x400
+ * (0x00E43FAA `movea.l #0xef6400,A0`, a fixup cell; 0x00E43FB6 `lea
+ * (0,A0,D4.l),A1` with D4 = page_index << 10 zero-extended; 0x00E43FBA
+ * `pea (-0x400,A1)`): MST_PAGE_TABLE_BASE, a link symbol since source-o7s2
+ * (it was the folded literal 0xEF6000). */
 #define MST_PAGE_SIZE          0x400
 #define MST_PAGE_BITMAP_COUNT  12
 
@@ -62,7 +65,8 @@ status_$t MST_$ALLOC_TABLE_PAGE(uint16_t asid, uint16_t flags, uint16_t *table_p
     *table_ptr = page_index;
 
     /* Initialize the page table page */
-    mst_$init_table_page((uint32_t)page_index * MST_PAGE_SIZE + MST_PAGE_TABLE_ORIGIN);
+    mst_$init_table_page(MST_PAGE_TABLE_BASE + (uint32_t)page_index * MST_PAGE_SIZE -
+                         MST_PAGE_SIZE);
 
     /* Track wired MST pages */
     MST_$MST_PAGES_WIRED++;

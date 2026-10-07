@@ -32,6 +32,13 @@ static int current_failed = 0;
 
 #include "mst/mst_internal.h"
 
+/* MST_PAGE_TABLE_BASE is ARCH_PTR_TO_VA(MSTE_PAGES), a sau2.ld symbol past
+ * OS_PAGE_END since source-o7s2 (docs/rfc-cold-start.md section 8c); this
+ * test stands in for the link with the map's value, `EF6400 MSTE_PAGES'
+ * (os/test/test_vm_tables.c checks the macro itself). */
+#undef MST_PAGE_TABLE_BASE
+#define MST_PAGE_TABLE_BASE 0x00EF6400u
+
 uint16_t MST[MST_TABLE_ENTRIES];
 uint16_t MST_ASID_BASE[MST_MAX_ASIDS];
 static uint8_t pte_pages[4 * 0x400] __attribute__((aligned(0x400)));

@@ -191,22 +191,34 @@ extern uint16_t MST_ASID_BASE[MST_MAX_ASIDS];
 /*
  * MST base - array of segment table indices, one word per segment
  *
- * Located at 0xEE5800.  The SAU2 map places MST at EE5800 and the next
- * object, PIT_PAGES, at EE6400, so the table is 0xC00 bytes = 0x600 words.
- * It lives in the uninitialised VM_TABLES region (Ghidra cannot read the
- * bytes), and MST_$INIT allocates and zeroes it a 0x400-byte page at a time
- * (`movea.l #0xee5800,A2` at 0x00E30BFA).
+ * Located at 0xEE5800 in the image.  The SAU2 map places MST at EE5800 and
+ * the next object, PIT_PAGES, at EE6400, so the table is 0xC00 bytes = 0x600
+ * words.  It lives in the uninitialised VM_TABLES region (Ghidra cannot read
+ * the bytes), and MST_$INIT allocates and zeroes it a 0x400-byte page at a
+ * time (`movea.l #0xee5800,A2` at 0x00E30BFA), so our link puts it in the
+ * run-time windows past OS_PAGE_END that COLD does not map (sau2.ld
+ * `.vm_tables', docs/rfc-cold-start.md section 8c, source-o7s2).
  */
 #define MST_TABLE_ENTRIES 0x600
 extern uint16_t MST[MST_TABLE_ENTRIES];
 
 /*
- * Page table area base
- * Located at 0xef6400
- * Contains mst_entry_t structures for each segment
- * Segment entries are at offset (MST[segno] * 0x400) relative to this base
+ * Page table area base: the map's MSTE_PAGES (`EF6400 MSTE_PAGES' in
+ * VM_TABLES; the image's `movea.l #0xef6400' / `move.l #0xef6400' at
+ * 0x00E30C16, 0x00E339FA, 0x00E42DC0, 0x00E43FAA, 0x00E4417A, ... are all
+ * fixup cells).  Contains mst_entry_t structures for each segment; segment
+ * entries are at offset (MST[segno] * 0x400) relative to this base, page 0
+ * being the one below it.
+ *
+ * A run-time window: virtual only, MST_$INIT and mst_$init_table_page
+ * install fresh pages there.  sau2.ld places it (layout_vm.ld) past
+ * OS_PAGE_END, at the map's offset from AREA_$RPMAP_CACHE (docs/
+ * rfc-cold-start.md section 8c, source-o7s2); it was the literal 0xEF6400,
+ * which in our link lay inside AST_$AOT.  A host test defines MSTE_PAGES
+ * (or replaces this macro) itself.
  */
-#define MST_PAGE_TABLE_BASE 0xef6400
+extern char MSTE_PAGES[];
+#define MST_PAGE_TABLE_BASE ARCH_PTR_TO_VA(MSTE_PAGES)
 
 /*
  * The most MSTE pages there can be: MST_$INIT clamps MST_$MST_PAGES_LIMIT to

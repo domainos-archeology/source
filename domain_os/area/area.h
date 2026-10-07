@@ -58,8 +58,12 @@
 
 /* First virtual address of the RPMAP cache window (0x00E2F44E `movea.l
  * #0xee4c00,A3` then `lea (0x400,A3),A3`, and the loop subtracts 0x400 back
- * off before each MMU_$INSTALL). */
-#define AREA_RPMAP_CACHE_VA         0x00EE4C00
+ * off before each MMU_$INSTALL): the map's AREA_$RPMAP_CACHE (EE4C00, the
+ * first of VM_TABLES' run-time windows, AST_PMAPS_END).  Virtual only;
+ * sau2.ld places it at OS_PAGE_END (layout_vm.ld, docs/rfc-cold-start.md
+ * section 8c, source-o7s2): the literal lay inside our MMAP_$MMAPE. */
+extern char AREA_$RPMAP_CACHE[];
+#define AREA_RPMAP_CACHE_VA         ARCH_PTR_TO_VA(AREA_$RPMAP_CACHE)
 
 /* Page size the loop steps by (0x00E2F4BA `addi.l #0x400,D4`). */
 #define AREA_RPMAP_PAGE_SIZE        0x400
@@ -67,8 +71,11 @@
 /* The overflow-slot page window of the seg-table pool: record i's page is
  * mapped at 0xEE6400 + i * 0x400 (area_$alloc_seg_table 0x00E09D6E
  * `movea.l #0xee6400,A0`, area_$free_seg_table 0x00E09E6E).  SAU2 map:
- * `EE6400  PIT_PAGES`. */
-#define AREA_PIT_PAGES_VA           0x00EE6400
+ * `EE6400  PIT_PAGES`, a run-time window of VM_TABLES that sau2.ld places
+ * past OS_PAGE_END at the map's offset from AREA_$RPMAP_CACHE
+ * (layout_vm.ld, docs section 8c, source-o7s2). */
+extern char PIT_PAGES[];
+#define AREA_PIT_PAGES_VA           ARCH_PTR_TO_VA(PIT_PAGES)
 
 /*
  * Area entry flags (in flags field at offset 0x2E)

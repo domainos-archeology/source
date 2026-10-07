@@ -3,7 +3,8 @@
  *
  * Called only from MST_$ALLOC_TABLE_PAGE (0xE43FBE) once a free page index
  * has been claimed; the argument is the page's virtual address, already
- * computed as 0xEF6000 + page_index * 0x400.
+ * computed as MSTE_PAGES (0xEF6400 in the image) + page_index * 0x400 -
+ * 0x400.
  *
  * Original address: 0x00E42CEC
  * Original size: 78 bytes

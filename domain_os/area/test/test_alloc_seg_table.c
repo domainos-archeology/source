@@ -31,6 +31,16 @@ static void reset_state(void);
 } while (0)
 
 #include "area/area_internal.h"
+
+/* AREA_RPMAP_CACHE_VA and AREA_PIT_PAGES_VA are ARCH_PTR_TO_VA of the
+ * sau2.ld symbols AREA_$RPMAP_CACHE and PIT_PAGES, past OS_PAGE_END since
+ * source-o7s2 (docs/rfc-cold-start.md section 8c); this test stands in for
+ * the link with the map's values (os/test/test_vm_tables.c checks the
+ * macros themselves). */
+#undef AREA_RPMAP_CACHE_VA
+#define AREA_RPMAP_CACHE_VA 0x00EE4C00u
+#undef AREA_PIT_PAGES_VA
+#define AREA_PIT_PAGES_VA 0x00EE6400u
 #include "wp/wp.h"
 #include "mmu/mmu.h"
 
