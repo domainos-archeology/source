@@ -19,6 +19,7 @@
 
 #include "rem_name/rem_name_internal.h"
 
+#include "time/time.h"     /* TIME_$CLOCKH */
 void LOCATE_SERVER(uint32_t *node_ret, uint32_t *net_ret, status_$t *status_ret)
 {
     uint32_t age;                                   /* D0 */

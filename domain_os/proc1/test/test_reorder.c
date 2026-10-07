@@ -16,7 +16,7 @@
 
 int __host_intr_disable_count = 0;
 
-proc1_t *PROC1_$READY_PCB;
+proc1_t proc1_$pcb_pool[PROC1_MAX_PROCESSES - 1];  /* PROC1_$READY_PCB = pool[1].nextp */
 uint16_t PROC1_$READY_COUNT;
 
 #include "../remove_from_ready_list.c"

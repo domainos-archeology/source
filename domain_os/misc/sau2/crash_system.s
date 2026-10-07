@@ -32,6 +32,10 @@
  *   0x00E1E82A  REMAP_DISPLAY
  */
 
+        .extern TIME_$CLOCKH_EC
+
+        .set    TIME_$CLOCKH, TIME_$CLOCKH_EC   /* the eventcount value word, map 0xE2B0D4 (time/time.h) */
+
         .section ".text.CRASH_SYSTEM","ax",@progbits
 
 /* -------------------------------------------------------------------------

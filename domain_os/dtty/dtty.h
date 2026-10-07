@@ -77,6 +77,10 @@ extern uint16_t DTTY_$DISP_TYPE;
  * Original address: 0x00E82744
  */
 extern void *DTTY_$STD_FONT_P;
+/* the three built-in fonts, 0x16C bytes each (dtty/dtty_data.c) */
+extern const uint8_t DTTY_$FONT1[0x16C];
+extern const uint8_t DTTY_$FONT2[0x16C];
+extern const uint8_t DTTY_$FONT3[0x16C];
 
 /*
  * ============================================================================

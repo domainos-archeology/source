@@ -65,7 +65,7 @@ MODULE_DATA_DEFINE(rip_$init_data_t, RIP_$INIT_DATA, 0x00E3502C);
 int8_t      NETWORK_$DISKLESS;
 uint32_t    NETWORK_$MOTHER_NODE;
 uint32_t    NODE_$ME;
-uint32_t    TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint32_t    ROUTE_$PORT;
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 

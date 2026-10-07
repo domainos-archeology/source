@@ -16,7 +16,7 @@
 /* Module data (normally win/win_data.c) and the globals WIN reaches   */
 /* ------------------------------------------------------------------ */
 MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /*
  * The host stand-in for the interrupt-advanced clock (see WIN_CLOCKH in

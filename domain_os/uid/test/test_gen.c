@@ -38,7 +38,7 @@ static int current_failed = 0;
 #include "time/time.h"
 #include "ml/ml.h"
 
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uid_t    UID_$GENERATOR_STATE;
 uint16_t UID_$GENERATOR_LOCK;
 

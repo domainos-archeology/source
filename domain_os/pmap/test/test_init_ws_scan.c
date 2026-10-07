@@ -36,7 +36,7 @@ static int tests_failed = 0;
 time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
 time_queue_t TIME_$RTEQ;
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static int set_ws_calls, removes, enters;
 static uint16_t set_ws_pid, set_ws_val;

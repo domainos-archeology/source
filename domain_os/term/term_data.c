@@ -13,6 +13,12 @@
  */
 
 #include "term/term_internal.h"
+/* the procedure cells below hold the link address of each routine (the
+ * image's literal is kept for the host build and the test) */
+#include "tty/tty.h"
+#include "sio/sio.h"
+#include "dtty/dtty.h"
+#include "kbd/kbd.h"
 #include "suma/suma.h"
 
 /*
@@ -36,26 +42,26 @@ term_data_t TERM_$DATA = {
     .w_0e = 0x000e,                      /* 0x00E2C9FE */
     .w_10 = 0x0003,                      /* 0x00E2CA00 */
     .w_12 = 0x0001,                      /* 0x00E2CA02 */
-    .ptr_tty_i_rcv   = 0x00E1B92A,       /* 0x00E2CA08 TTY_$I_RCV */
-    .ptr_tty_i_drain = 0x00E1B394,       /* 0x00E2CA0C TTY_$I_OUTPUT_BUFFER_DRAINED */
-    .ptr_tty_i_hup   = 0x00E1BECE,       /* 0x00E2CA10 TTY_$I_HUP */
-    .ptr_tty_i_int   = 0x00E1BEA8,       /* 0x00E2CA14 TTY_$I_INTERRUPT */
-    .ptr_tty_i_err   = 0x00E1BE08,       /* 0x00E2CA18 TTY_$I_ERR */
-    .ptr_sio_i_tstart       = 0x00E1C7A8,/* 0x00E2CA38 SIO_$I_TSTART */
-    .ptr_sio_i_inhibit_xmit = 0x00E1C9CE,/* 0x00E2CA3C SIO_$I_INHIBIT_XMIT */
-    .ptr_sio_i_inhibit_rcv  = 0x00E1C94A,/* 0x00E2CA40 SIO_$I_INHIBIT_RCV */
-    .ptr_sio_i_err          = 0x00E67D9C,/* 0x00E2CA44 SIO_$I_ERR */
+    .ptr_tty_i_rcv   = ARCH_PTR_TO_VA_STATIC(TTY_$I_RCV, 0x00E1B92A),       /* 0x00E2CA08 TTY_$I_RCV */
+    .ptr_tty_i_drain = ARCH_PTR_TO_VA_STATIC(TTY_$I_OUTPUT_BUFFER_DRAINED, 0x00E1B394),       /* 0x00E2CA0C TTY_$I_OUTPUT_BUFFER_DRAINED */
+    .ptr_tty_i_hup   = ARCH_PTR_TO_VA_STATIC(TTY_$I_HUP, 0x00E1BECE),       /* 0x00E2CA10 TTY_$I_HUP */
+    .ptr_tty_i_int   = ARCH_PTR_TO_VA_STATIC(TTY_$I_INTERRUPT, 0x00E1BEA8),       /* 0x00E2CA14 TTY_$I_INTERRUPT */
+    .ptr_tty_i_err   = ARCH_PTR_TO_VA_STATIC(TTY_$I_ERR, 0x00E1BE08),       /* 0x00E2CA18 TTY_$I_ERR */
+    .ptr_sio_i_tstart       = ARCH_PTR_TO_VA_STATIC(SIO_$I_TSTART, 0x00E1C7A8),/* 0x00E2CA38 SIO_$I_TSTART */
+    .ptr_sio_i_inhibit_xmit = ARCH_PTR_TO_VA_STATIC(SIO_$I_INHIBIT_XMIT, 0x00E1C9CE),/* 0x00E2CA3C SIO_$I_INHIBIT_XMIT */
+    .ptr_sio_i_inhibit_rcv  = ARCH_PTR_TO_VA_STATIC(SIO_$I_INHIBIT_RCV, 0x00E1C94A),/* 0x00E2CA40 SIO_$I_INHIBIT_RCV */
+    .ptr_sio_i_err          = ARCH_PTR_TO_VA_STATIC(SIO_$I_ERR, 0x00E67D9C),/* 0x00E2CA44 SIO_$I_ERR */
     .w_5a = 0x0009,                      /* 0x00E2CA4A */
     .w_64 = 0x0007,                      /* 0x00E2CA54 */
     .w_66 = 0x0007,                      /* 0x00E2CA56 */
     .w_68 = 0x0003,                      /* 0x00E2CA58 */
     .w_6a = 0x0001,                      /* 0x00E2CA5A */
     .w_6c = 0x0003,                      /* 0x00E2CA5C */
-    .ptr_dtty_tstart = 0x00E1D6D0,       /* 0x00E2CA68 DTTY_$TSTART */
-    .ptr_kbd_rcv     = 0x00E1CCC0,       /* 0x00E2CA78 KBD_$RCV */
-    .ptr_kbd_drain   = 0x00E1CE96,       /* 0x00E2CA7C KBD_$OUTPUT_BUFFER_DRAINED */
-    .ptr_sio_i_tstart_b4 = 0x00E1C7A8,   /* 0x00E2CAA4 SIO_$I_TSTART */
-    .ptr_tty_i_rcv_alt   = 0x00E1B92A,   /* 0x00E2CAB0 TTY_$I_RCV */
+    .ptr_dtty_tstart = ARCH_PTR_TO_VA_STATIC(DTTY_$TSTART, 0x00E1D6D0),       /* 0x00E2CA68 DTTY_$TSTART */
+    .ptr_kbd_rcv     = ARCH_PTR_TO_VA_STATIC(KBD_$RCV, 0x00E1CCC0),       /* 0x00E2CA78 KBD_$RCV */
+    .ptr_kbd_drain   = ARCH_PTR_TO_VA_STATIC(KBD_$OUTPUT_BUFFER_DRAINED, 0x00E1CE96),       /* 0x00E2CA7C KBD_$OUTPUT_BUFFER_DRAINED */
+    .ptr_sio_i_tstart_b4 = ARCH_PTR_TO_VA_STATIC(SIO_$I_TSTART, 0x00E1C7A8),   /* 0x00E2CAA4 SIO_$I_TSTART */
+    .ptr_tty_i_rcv_alt   = ARCH_PTR_TO_VA_STATIC(TTY_$I_RCV, 0x00E1B92A),   /* 0x00E2CAB0 TTY_$I_RCV */
     .b_138d = 0xff,                      /* 0x00E2DD7D; no reader in the image */
     .kbd_string_data = { 0xff, 0x00, 0xff, 0x12, 0x21 }, /* 0x00E2DD80 */
 };

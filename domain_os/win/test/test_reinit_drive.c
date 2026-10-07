@@ -38,7 +38,7 @@ static int tests_failed = 0;
 
 MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 uint32_t win_$host_clockh(void) { return 0; }
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint16_t WIN_ANSI_IN_PARAM;
 
 static uint8_t regs[0x10];

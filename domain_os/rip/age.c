@@ -13,6 +13,7 @@
 
 #include "rip/rip_internal.h"
 
+#include "time/time.h"     /* TIME_$CLOCKH */
 /*
  * RIP_$AGE - Age routing table entries
  *

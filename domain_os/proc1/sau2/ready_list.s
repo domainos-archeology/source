@@ -33,8 +33,11 @@
  * displacement matches the image.
  */
 
-        .extern PROC1_$READY_PCB
+        .extern proc1_$pcb_pool
         .extern PROC1_$READY_COUNT
+        /* PROC1_$READY_PCB (0xE1EC3A) is PCB 2's nextp: proc1_$pcb_pool + 0x68
+         * (proc1/proc1.h); a file-local alias, as for the other blocks */
+        .set    PROC1_$READY_PCB, proc1_$pcb_pool + 0x68
 
 /* ------------------------------------------------------------------ */
 /* 0x00E206D2: PROC1_$REMOVE_READY / proc1_$remove_from_ready_list_int    */

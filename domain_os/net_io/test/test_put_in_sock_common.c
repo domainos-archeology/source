@@ -47,7 +47,7 @@ uint16_t RING_$OVERFLOW_OVERFLOW;
 uint16_t RING_$FILE_OVERFLOW;
 uint16_t RING_$DELIVERY_FAILED;
 int8_t NETLOG_$OK_TO_LOG_SERVER;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static uint8_t arena[0x100] __attribute__((aligned(16)));
 static route_$port_t port;

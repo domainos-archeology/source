@@ -72,7 +72,7 @@ static void reset_mocks(void);
 
 uint32_t NODE_$ME;
 uint32_t ROUTE_$PORT;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint16_t PROC1_$AS_ID;
 uint32_t ASKNODE_$EMPTY_DATA;
 MODULE_DATA_DEFINE(asknode_$data_t, ASKNODE_$DATA, 0x00E82408);

@@ -57,7 +57,7 @@ MODULE_DATA_DEFINE(hint_globals_t, HINT_$DATA, 0x00E7DB50);
 
 ml_$exclusion_t HINT_$EXCLUSION_LOCK;
 
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static int excl_init_calls;
 static int excl_start_calls;

@@ -56,7 +56,7 @@ MODULE_DATA_DEFINE(msg_$unwired_data_t, MSG_$UNWIRED_DATA, 0x00E80D84);
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 
 uint16_t PROC1_$AS_ID;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 #include "fim/fim.h"
 MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);

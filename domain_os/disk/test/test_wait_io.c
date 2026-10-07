@@ -110,7 +110,7 @@ uint8_t *DISK_$DATA = mock_disk_data;
 uint16_t PROC1_$CURRENT = 1;
 
 /* TIME_$CLOCKH mock */
-uint32_t TIME_$CLOCKH = 1000;
+uint32_t TIME_$CLOCKH = 1000;   /* the test fakes TIME_H: the plain cell stands in for TIME_$CLOCKH_EC.value */
 
 /* ================================================================
  * EC_$WAIT mock

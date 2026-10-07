@@ -346,7 +346,7 @@ uint16_t PROC1_$CURRENT;
 int16_t CAL_$BOOT_VOLX;
 cal_$timezone_rec_t CAL_$TIMEZONE;
 uint16_t MST_$MST_PAGES_LIMIT;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint32_t TIME_$CURRENT_CLOCKH;
 uint32_t TIME_$BOOT_TIME;
 uint32_t TIME_$CURRENT_TIME;

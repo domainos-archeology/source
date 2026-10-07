@@ -59,7 +59,7 @@ uint16_t NETWORK_$REPLY_SEND_FLAGS;
 int16_t  NETWORK_$SERVICE_TIME;
 uint16_t NETWORK_$2LONG1;
 ec_$eventcount_t NETLOG_$EC;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 static sock_$sock_t sock1, sock6;
 
 /* ---- mocks ----------------------------------------------------------- */

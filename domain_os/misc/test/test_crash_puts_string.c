@@ -11,6 +11,7 @@
  *   "\r\n" "Crash_Status " 0xFF <long> "  PC " 0xFF <long> " pid " 0x00 <word> '%'
  */
 
+#include "time/time.h"     /* TIME_$CLOCKH_EC / TIME_$CLOCKH; before <stdio.h> (base.h uid_t) */
 #include <stdio.h>
 #include <string.h>
 
@@ -71,7 +72,7 @@ static void console_reset(void) { console_len = 0; console[0] = '\0'; }
 
 /* Referenced by the CRASH_SYSTEM model in crash_system.c */
 uint16_t PROC1_$CURRENT;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /* Code under test */
 #include "../crash_system.c"

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "time/time.h"     /* TIME_$CLOCKH_EC / TIME_$CLOCKH */
 #include "rip/rip_internal.h"
 
 /* ============================================================================
@@ -56,7 +57,7 @@ static int current_failed = 0;
  * ============================================================================ */
 
 MODULE_DATA_DEFINE(rip_$wired_data_t, RIP_$WIRED_DATA, 0x00E26258);
-uint32_t    TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static int lock_calls;
 static int unlock_calls;
@@ -99,6 +100,7 @@ static uint32_t rip_test_clock(void)
 #include "../age.c"
 
 #undef TIME_$CLOCKH
+#define TIME_$CLOCKH (*(uint32_t *)&TIME_$CLOCKH_EC.value)   /* back to time.h's view */
 
 /* ============================================================================
  * Helpers

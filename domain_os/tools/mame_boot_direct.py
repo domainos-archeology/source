@@ -65,7 +65,7 @@ def main():
     # step 10), so an early fault lands in the PROM; break there and log the
     # 68010 exception frame (sr, pc, format/vector word)
     rom = open(os.path.join(args.mame_dir, 'roms/dn300/300_BOOT.bin'), 'rb').read()
-    handlers = sorted({int.from_bytes(rom[v * 4:v * 4 + 4], 'big') for v in range(2, 64)})
+    handlers = sorted({int.from_bytes(rom[v * 4:v * 4 + 4], 'big') for v in range(2, 256)})
     handlers = [h for h in handlers if 0 < h < len(rom)]
     print('PROM exception handlers:', ' '.join('%X' % h for h in handlers))
 

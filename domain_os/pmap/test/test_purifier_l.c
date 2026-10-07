@@ -82,7 +82,7 @@ MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 #define SAU2_PFT_BASE pft_store   /* the SAU2 PFT (arch/m68k/sau2/hw.h) */
 
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /*
  * ========================================================================

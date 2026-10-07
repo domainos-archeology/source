@@ -77,7 +77,7 @@ uint32_t  NETWORK_$ALLOWED_SERVICE;      /* NETWORK_$CAPABLE_FLAGS is bits 16..2
 int8_t    NETWORK_$DISKLESS;
 uint32_t  NETWORK_$MOTHER_NODE;
 uint32_t  NODE_$ME;
-uint32_t  TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint8_t   REM_FILE_$DATA[0x1E];
 uint32_t  REM_FILE_$BUSY_RETRY_COUNT;
 uint16_t  REM_FILE_$COMPLETION_TIME = 20;

@@ -62,7 +62,7 @@ network_$failure_rec_t NETWORK_$FAILURE_REC;
 ec_$eventcount_t NETWORK_$RQST_DONE_EC, NETWORK_$RQST_QUIT_EC;
 ml_$exclusion_t REM_FILE_$SOCK_LOCK;
 const uint32_t network_$c_zero_long = 0;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint32_t NODE_$ME;
 uint16_t PROC1_$CURRENT;
 static sock_$sock_t sock2, sock4, sock8;

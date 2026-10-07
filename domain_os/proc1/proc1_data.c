@@ -23,12 +23,12 @@
  */
 
 #include "proc1/proc1_internal.h"
+#include "os/os.h"
 
 /*
  * Current process state
  */
-proc1_t *PROC1_$CURRENT_PCB = NULL;     /* Pointer to current process's PCB */
-proc1_t *PROC1_$READY_PCB = NULL;       /* Head of the ready list */
+proc1_t *PROC1_$CURRENT_PCB = &proc1_$pcb_pool[0]; /* 0xE1EAC8 = 0xE1EBD2: PCB 1 */
 /*
  * 0xE20608, inside the PROC1_ASM code segment; reached PC-relative from
  * proc1_$process_exit_handler (proc1/sau2/init_stack.s).  See
@@ -39,7 +39,7 @@ uint16_t PROC1_$CURRENT PROC1_ASM_DATA_SECTION = 0; /* PID of current process */
 /*
  * Ready list tracking
  */
-uint16_t PROC1_$READY_COUNT = 0;        /* Number of processes in ready list */
+uint16_t PROC1_$READY_COUNT = 1;        /* 0xE1EBD0: the image holds 1 (PCB 1 is on the list) */
 
 /*
  * Atomic operation and address space state
@@ -57,7 +57,163 @@ uint16_t PROC1_$AS_ID = 0;              /* Current address space ID */
  *   2: Idle/init process
  *   3-64: User processes (on SAU2)
  */
-proc1_t *PCBS[PROC1_MAX_PROCESSES] = { NULL };
+proc1_t *PCBS[PROC1_MAX_PROCESSES] = {
+    NULL,                               /* pid 0 */
+    &proc1_$pcb_pool[0],
+    &proc1_$pcb_pool[1],
+    &proc1_$pcb_pool[2],
+    &proc1_$pcb_pool[3],
+    &proc1_$pcb_pool[4],
+    &proc1_$pcb_pool[5],
+    &proc1_$pcb_pool[6],
+    &proc1_$pcb_pool[7],
+    &proc1_$pcb_pool[8],
+    &proc1_$pcb_pool[9],
+    &proc1_$pcb_pool[10],
+    &proc1_$pcb_pool[11],
+    &proc1_$pcb_pool[12],
+    &proc1_$pcb_pool[13],
+    &proc1_$pcb_pool[14],
+    &proc1_$pcb_pool[15],
+    &proc1_$pcb_pool[16],
+    &proc1_$pcb_pool[17],
+    &proc1_$pcb_pool[18],
+    &proc1_$pcb_pool[19],
+    &proc1_$pcb_pool[20],
+    &proc1_$pcb_pool[21],
+    &proc1_$pcb_pool[22],
+    &proc1_$pcb_pool[23],
+    &proc1_$pcb_pool[24],
+    &proc1_$pcb_pool[25],
+    &proc1_$pcb_pool[26],
+    &proc1_$pcb_pool[27],
+    &proc1_$pcb_pool[28],
+    &proc1_$pcb_pool[29],
+    &proc1_$pcb_pool[30],
+    &proc1_$pcb_pool[31],
+    &proc1_$pcb_pool[32],
+    &proc1_$pcb_pool[33],
+    &proc1_$pcb_pool[34],
+    &proc1_$pcb_pool[35],
+    &proc1_$pcb_pool[36],
+    &proc1_$pcb_pool[37],
+    &proc1_$pcb_pool[38],
+    &proc1_$pcb_pool[39],
+    &proc1_$pcb_pool[40],
+    &proc1_$pcb_pool[41],
+    &proc1_$pcb_pool[42],
+    &proc1_$pcb_pool[43],
+    &proc1_$pcb_pool[44],
+    &proc1_$pcb_pool[45],
+    &proc1_$pcb_pool[46],
+    &proc1_$pcb_pool[47],
+    &proc1_$pcb_pool[48],
+    &proc1_$pcb_pool[49],
+    &proc1_$pcb_pool[50],
+    &proc1_$pcb_pool[51],
+    &proc1_$pcb_pool[52],
+    &proc1_$pcb_pool[53],
+    &proc1_$pcb_pool[54],
+    &proc1_$pcb_pool[55],
+    &proc1_$pcb_pool[56],
+    &proc1_$pcb_pool[57],
+    &proc1_$pcb_pool[58],
+    &proc1_$pcb_pool[59],
+    &proc1_$pcb_pool[60],
+    &proc1_$pcb_pool[61],
+    &proc1_$pcb_pool[62],
+    &proc1_$pcb_pool[63]
+};
+
+/*
+ * proc1_$pcb_pool - the 64 PCBs at 0xE1EBD2..0xE205D2 with the image's
+ * initial contents (see proc1/proc1.h).  Image bytes (file offset =
+ * VA - 0xDFFC00): pid 1 at 0xE1EBD2 `00E1EC3A 00E1EC3A .. 0001 0001 FFFF
+ * .. 0010 0008 0001 0010'; pid 2 at 0xE1EC3A `00E1EBD2 00E1EBD2 .. (0x34)
+ * 00EB07FC .. 0002 .. FFFF .. (0x54) 0008'; pids 3..64 `(0x44) pid FFFF ..
+ * (0x52) 0010 .. 0001 0010'.  PCB 2's save_a7 is NULL_PC (0xEB07FC = NULLPROC's
+ * VA cell at the top of the null process stack, os_$stack_t.null_pc).
+ */
+#define PROC1_PCB_INIT(pid) \
+    [(pid) - 1] = { .mypid = (pid), .vtimer = -1, .state = 0x10, \
+                    .inh_count = 1, .sw_bsr = 0x10 }
+
+proc1_t proc1_$pcb_pool[PROC1_MAX_PROCESSES - 1] = {
+    [0] = { .nextp = &proc1_$pcb_pool[1], .prevp = &proc1_$pcb_pool[1],
+            .mypid = 1, .asid = 1, .vtimer = -1, .state = 0x10,
+            .pri_min = 0, .pri_max = 8, .inh_count = 1, .sw_bsr = 0x10 },
+    [1] = { .nextp = &proc1_$pcb_pool[0], .prevp = &proc1_$pcb_pool[0],
+            .save_a7 = ARCH_PTR_TO_VA_STATIC(&OS_$STACK.null_pc, 0x00EB07FC),
+            .mypid = 2, .vtimer = -1, .pri_min = 0, .pri_max = 8 },
+    PROC1_PCB_INIT(3),
+    PROC1_PCB_INIT(4),
+    PROC1_PCB_INIT(5),
+    PROC1_PCB_INIT(6),
+    PROC1_PCB_INIT(7),
+    PROC1_PCB_INIT(8),
+    PROC1_PCB_INIT(9),
+    PROC1_PCB_INIT(10),
+    PROC1_PCB_INIT(11),
+    PROC1_PCB_INIT(12),
+    PROC1_PCB_INIT(13),
+    PROC1_PCB_INIT(14),
+    PROC1_PCB_INIT(15),
+    PROC1_PCB_INIT(16),
+    PROC1_PCB_INIT(17),
+    PROC1_PCB_INIT(18),
+    PROC1_PCB_INIT(19),
+    PROC1_PCB_INIT(20),
+    PROC1_PCB_INIT(21),
+    PROC1_PCB_INIT(22),
+    PROC1_PCB_INIT(23),
+    PROC1_PCB_INIT(24),
+    PROC1_PCB_INIT(25),
+    PROC1_PCB_INIT(26),
+    PROC1_PCB_INIT(27),
+    PROC1_PCB_INIT(28),
+    PROC1_PCB_INIT(29),
+    PROC1_PCB_INIT(30),
+    PROC1_PCB_INIT(31),
+    PROC1_PCB_INIT(32),
+    PROC1_PCB_INIT(33),
+    PROC1_PCB_INIT(34),
+    PROC1_PCB_INIT(35),
+    PROC1_PCB_INIT(36),
+    PROC1_PCB_INIT(37),
+    PROC1_PCB_INIT(38),
+    PROC1_PCB_INIT(39),
+    PROC1_PCB_INIT(40),
+    PROC1_PCB_INIT(41),
+    PROC1_PCB_INIT(42),
+    PROC1_PCB_INIT(43),
+    PROC1_PCB_INIT(44),
+    PROC1_PCB_INIT(45),
+    PROC1_PCB_INIT(46),
+    PROC1_PCB_INIT(47),
+    PROC1_PCB_INIT(48),
+    PROC1_PCB_INIT(49),
+    PROC1_PCB_INIT(50),
+    PROC1_PCB_INIT(51),
+    PROC1_PCB_INIT(52),
+    PROC1_PCB_INIT(53),
+    PROC1_PCB_INIT(54),
+    PROC1_PCB_INIT(55),
+    PROC1_PCB_INIT(56),
+    PROC1_PCB_INIT(57),
+    PROC1_PCB_INIT(58),
+    PROC1_PCB_INIT(59),
+    PROC1_PCB_INIT(60),
+    PROC1_PCB_INIT(61),
+    PROC1_PCB_INIT(62),
+    PROC1_PCB_INIT(63),
+    PROC1_PCB_INIT(64)
+};
+#undef PROC1_PCB_INIT
+
+#if defined(ARCH_M68K)
+_Static_assert(sizeof(proc1_$pcb_pool) == 0xE205D2 - 0xE1EBD2,
+               "proc1_$pcb_pool: 64 PCBs end at PROC1_$TSVV");
+#endif
 
 /* Target only: the elements are pointers. */
 #if defined(ARCH_M68K)

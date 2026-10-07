@@ -98,7 +98,7 @@ typedef struct rip_$nexthop_t {
  * ============================================================================ */
 
 uid_t UID_$NIL = { 0, 0 };
-uint32_t TIME_$CLOCKH = 0;
+uint32_t TIME_$CLOCKH = 0;   /* the test fakes TIME_H: the plain cell stands in for TIME_$CLOCKH_EC.value */
 cal_$timezone_rec_t CAL_$TIMEZONE;
 uint32_t ROUTE_$PORT = 0;
 

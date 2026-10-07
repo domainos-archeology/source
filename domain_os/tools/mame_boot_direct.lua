@@ -101,7 +101,9 @@ local function set_breakpoints()
     dbg:command(string.format("bpset 0x%X,1,%s", a, exc_action()))
   end
   for _, a in ipairs(split(os.getenv("DOS_STOPS"))) do
-    dbg:command(string.format("bpset 0x%X,1,%s", a, regdump_action(nearest(a))))
+    local cmd = string.format("bpset 0x%X,1,%s", a, regdump_action(nearest(a)))
+    log("bp stop %08X %s (%d chars)", a, nearest(a), #cmd)
+    dbg:command(cmd)
   end
   for raw in (os.getenv("DOS_RAW_BPS") or ""):gmatch("[^|]+") do
     dbg:command("bpset " .. raw)

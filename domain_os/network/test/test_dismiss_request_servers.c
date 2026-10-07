@@ -39,7 +39,7 @@ static int tests_failed = 0;
 ec_$eventcount_t NETWORK_$RQST_DONE_EC;
 ec_$eventcount_t NETWORK_$RQST_QUIT_EC;
 int16_t NETWORK_$REQUEST_SERVER_CNT;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static char trace[8];
 static int nt;

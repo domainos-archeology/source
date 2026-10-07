@@ -55,7 +55,7 @@ static int current_failed = 0;
 audit_data_t AUDIT_$DATA;
 int8_t       AUDIT_$ENABLED;
 uint16_t     PROC1_$CURRENT;
-uint32_t     TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uid_t        UID_$NIL = { 0, 0 };
 
 /* ------------------------------------------------------------------ */

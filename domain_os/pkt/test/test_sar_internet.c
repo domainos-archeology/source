@@ -56,7 +56,7 @@ static int tests_run = 0;
  * ========================================================================== */
 
 uint32_t NODE_$ME = 0x00012345;
-uint32_t TIME_$CLOCKH = 1000;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(1000) };  /* TIME_$CLOCKH = its value */
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 #include "fim/fim.h"
 MODULE_DATA_DEFINE(fim_$wired_data_t, FIM_$WIRED_DATA, 0x00E21FE6);

@@ -361,7 +361,28 @@ MODULE_DATA_DECLARE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
  *   0xE2060E  PROC1_$ATOMIC_OP_DEPTH
  */
 extern proc1_t *PROC1_$CURRENT_PCB;     /* 0xE1EAC8: Current running process */
-extern proc1_t *PROC1_$READY_PCB;       /* 0xE1EC3A: Head of ready list */
+/*
+ * proc1_$pcb_pool - the 64 process control blocks, 0xE1EBD2..0xE205D2 in
+ * the PROC1_ASM block (no map symbol: between PROC1_$READY_COUNT 0xE1EBD0
+ * and PROC1_$TSVV 0xE205D2, 64 * 0x68 = 0x1A00 bytes).  PCBS[pid] points
+ * at pool[pid - 1].  The image initialises them (file bytes): every PCB
+ * has mypid = pid, vtimer = -1; pids 1 and 3..64 have state 0x10,
+ * inh_count 1, sw_bsr 0x10; pid 1 (the system process) also asid 1,
+ * pri_min 0 / pri_max 8, nextp = prevp = &pool[1]; pid 2 (the null
+ * process) has nextp = prevp = &pool[0], save_a7 = NULL_PC (0xEB07FC,
+ * os_$stack_t.null_pc), pri_min 0 / pri_max 8 and state 0 - the ready
+ * list is a ring of PCB 1 and PCB 2 from the start, and PROC1_$READY_COUNT
+ * starts at 1.
+ *
+ * PROC1_$READY_PCB (map 0xE1EC3A) is PCB 2's nextp field: the ready-list
+ * walkers load it as the first real process and the sentinel's zero
+ * resource_locks_held / state end every insertion (proc1_$add_ready_body
+ * 0x00E2082C, proc1/sau2/ready_list.s).  C reads and writes it through
+ * this macro; ready_list.s names the same cell with
+ * `.set PROC1_$READY_PCB, proc1_$pcb_pool + 0x68'.
+ */
+extern proc1_t proc1_$pcb_pool[PROC1_MAX_PROCESSES - 1];
+#define PROC1_$READY_PCB (proc1_$pcb_pool[1].nextp)   /* 0xE1EC3A */
 extern uint16_t PROC1_$CURRENT;         /* 0xE20608: Current process ID */
 extern uint16_t PROC1_$READY_COUNT;     /* 0xE1EBD0: Number of ready processes */
 extern uint16_t PROC1_$ATOMIC_OP_DEPTH; /* 0xE2060E: Atomic operation nesting */

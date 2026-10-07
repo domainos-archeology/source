@@ -54,7 +54,7 @@ static int tests_run = 0;
 
 int __host_intr_disable_count = 0;
 
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint16_t TIME_$CLOCKL;
 uint32_t TIME_$CURRENT_CLOCKH;
 uint16_t TIME_$CURRENT_CLOCKL;

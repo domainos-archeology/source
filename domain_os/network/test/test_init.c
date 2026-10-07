@@ -44,7 +44,7 @@ uint32_t NETWORK_$HDR_PAGE_PA;
 uint32_t NETWORK_$HDR_PAGE;
 route_$port_t ROUTE_$PORT_ARRAY[ROUTE_$MAX_PORTS];
 ec_$eventcount_t NETLOG_$EC;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static char log_buf[128];
 static void note(const char *s) { strcat(log_buf, s); }

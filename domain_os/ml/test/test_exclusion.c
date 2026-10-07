@@ -31,7 +31,7 @@ int __host_intr_disable_count = 0;
 
 static proc1_t mock_pcb;
 proc1_t *PROC1_$CURRENT_PCB = &mock_pcb;
-proc1_t *PROC1_$READY_PCB = NULL;
+proc1_t proc1_$pcb_pool[PROC1_MAX_PROCESSES - 1];  /* PROC1_$READY_PCB = pool[1].nextp */
 
 
 /* Call trace */

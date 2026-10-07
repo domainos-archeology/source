@@ -37,7 +37,8 @@
  * External references
  */
         .extern PROC1_$CURRENT_PCB
-        .extern PROC1_$READY_PCB
+        .extern proc1_$pcb_pool
+        .set    PROC1_$READY_PCB, proc1_$pcb_pool + 0x68  /* 0xE1EC3A: PCB 2 nextp (proc1/proc1.h) */
         .extern PROC1_$CURRENT
         .extern PROC1_$ATOMIC_OP_DEPTH
         .extern TIME_$VT_TIMER

@@ -37,7 +37,9 @@
         .section ".text.FIM_$SPURIOUS_INT","ax",@progbits
         .even
 
-        .extern TIME_$CLOCKH            /* uint32_t, time/time.h, map 0xE2B0D4 */
+        .extern TIME_$CLOCKH_EC
+
+        .set    TIME_$CLOCKH, TIME_$CLOCKH_EC   /* the eventcount value word, map 0xE2B0D4 (time/time.h) */
         .extern FIM_$CRASH              /* fim/sau2/crash.s, map 0xE1E864 */
         .extern FIM_$EXIT               /* fim/sau2/exit.s, map 0xE228BC */
 

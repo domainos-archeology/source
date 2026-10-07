@@ -37,7 +37,7 @@ static int tests_failed = 0;
 
 uint32_t NETWORK_$MOTHER_NODE;
 uint32_t NODE_$ME = 0x00000123;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 pkt_$info_t NETWORK_$REQUEST_PKT_INFO;
 clock_t NETWORK_$RETRY_DELAY = { 0, 0x09C4 };
 uint16_t NETWORK_$REQUEST_SEND_FLAGS = 1;

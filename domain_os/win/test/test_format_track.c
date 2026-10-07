@@ -33,7 +33,7 @@
 MODULE_DATA_DEFINE(win_$data_t, WIN_$DATA, 0x00E2B89C);
 /* The disk subsystem's per-process slot array; WIN clears one byte of it. */
 _Alignas(16) uint8_t DISK_$DATA[DISK_$DATA_SIZE];
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static uint8_t regs[0x10];
 

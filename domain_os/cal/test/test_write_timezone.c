@@ -21,7 +21,7 @@
 
 int8_t NETWORK_$DISKLESS;
 uid_t LV_LABEL_$UID = { 0x11111111, 0x22222222 };
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /* ==========================================================================
  * Mocked callees

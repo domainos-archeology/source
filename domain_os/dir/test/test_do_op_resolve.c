@@ -52,7 +52,7 @@ static int current_failed = 0;
 uint16_t     PROC1_$CURRENT;
 #include "proc1/proc1.h"
 MODULE_DATA_DEFINE(proc1_$data_t, PROC1_$DATA, 0x00E254E8);
-uint32_t     TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uid_t        UID_$NIL = { 0, 0 };
 name_$data_t NAME_$DATA;
 

@@ -50,7 +50,7 @@ static int tests_failed = 0;
  * Globals and mocks
  * ========================================================================== */
 
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static uint8_t va_arena[0x400];
 #define REGS_VA 0x100

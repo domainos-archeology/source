@@ -39,7 +39,7 @@ static int tests_failed = 0;
 
 MODULE_DATA_DEFINE(mmap_globals_t, MMAP_$DATA, 0x00E23284);
 MODULE_DATA_DEFINE(pmap_$data_t, PMAP_$DATA, 0x00E24D44);
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 /* The AST_ module blocks (ast/ast.h). */
 MODULE_DATA_DEFINE(ast_$data_t, AST_$DATA, 0x00E1DC80);
 MODULE_DATA_DEFINE(ast_$aot_t, AST_$AOT, 0x00EC5400);

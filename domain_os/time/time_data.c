@@ -36,7 +36,13 @@
  *
  * Original addresses: 0xE2B0D4 (high), 0xE2B0E0 (low)
  */
-uint32_t TIME_$CLOCKH = 0;
+ec_$eventcount_t TIME_$CLOCKH_EC = {                 /* 0xE2B0D4..0xE2B0E0 */
+    .value = 0,                                      /* TIME_$CLOCKH */
+    .waiter_list_head = (ec_$eventcount_waiter_t *)&TIME_$CLOCKH_EC,
+    .waiter_list_tail = (ec_$eventcount_waiter_t *)&TIME_$CLOCKH_EC,
+};
+_Static_assert(sizeof(TIME_$CLOCKH_EC) == 0x0C,
+               "TIME_$CLOCKH_EC: 0x00E2B0D4..0x00E2B0E0 (TIME_$CLOCKL)");
 uint16_t TIME_$CLOCKL = 0;
 
 /*

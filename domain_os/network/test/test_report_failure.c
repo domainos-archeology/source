@@ -38,7 +38,7 @@ network_$failure_rec_t NETWORK_$FAILURE_REC;
 pkt_$info_t NETWORK_$SERVER_PKT_INFO = { .flags = 8, .routing_type = 2, .protocol = 0x8031 };
 uint16_t NETWORK_$REPORT_SEND_FLAGS = 1;
 uint32_t NODE_$ME;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 static uint32_t gethdr_node;
 static int gethdr_calls, bld_calls, send_calls, rtn_calls;

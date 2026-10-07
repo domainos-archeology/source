@@ -62,7 +62,7 @@ static int tests_run = 0;
  * ================================================================ */
 
 uint16_t PROC1_$CURRENT = 2;
-uint32_t TIME_$CLOCKH = 0x11223344;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0x11223344) };  /* TIME_$CLOCKH = its value */
 int8_t NETLOG_$OK_TO_LOG = 0;
 
 /* Volume table: DISK_VOLUME_BASE is a fixed address on m68k, so the host

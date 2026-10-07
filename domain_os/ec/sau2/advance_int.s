@@ -52,6 +52,10 @@
  * Original address: 0x00e20728
  */
 
+        .extern TIME_$CLOCKH_EC
+
+        .set    TIME_$CLOCKH, TIME_$CLOCKH_EC   /* the eventcount value word, map 0xE2B0D4 (time/time.h) */
+
         .section ".text.ADVANCE","ax",@progbits
         .balign 2
 

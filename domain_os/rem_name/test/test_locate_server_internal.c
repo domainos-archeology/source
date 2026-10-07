@@ -9,6 +9,7 @@
  *   4. No contact, retry allowed -> delegate, and on success record contact
  */
 
+#include "time/time.h"     /* TIME_$CLOCKH_EC / TIME_$CLOCKH; before <stdio.h> (base.h uid_t) */
 #include <stdio.h>
 #include <stdint.h>
 
@@ -33,7 +34,7 @@ typedef struct rem_name_data_t {
 } rem_name_data_t;
 
 static rem_name_data_t rem_name_$data;
-static uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /* Stub for the exported entry point LOCATE_SERVER delegates to. */
 static int locate_calls;

@@ -72,7 +72,7 @@ static int current_failed = 0;
 
 smd_globals_t SMD_GLOBALS;
 uint16_t PROC1_$AS_ID;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 
 /* The two shared code-region cells, at their image values (smd/smd_data.c). */
 int16_t SMD_SYNC_LOCK_DATA = 1;         /* 0x00E6DFF8: "00 01" */

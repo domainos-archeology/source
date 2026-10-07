@@ -24,6 +24,7 @@
 
 #include "disk/disk_internal.h"
 
+#include "time/time.h"     /* TIME_$CLOCKH */
 void disk_$wait_io(uint16_t disk_mask, int32_t *io_wait_val, int32_t *error_wait_val)
 {
     uint8_t *data = DISK_$DATA;

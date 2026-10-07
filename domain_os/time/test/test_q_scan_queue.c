@@ -64,7 +64,7 @@ time_queue_t TIME_$VTQ[TIME_MAX_PROCESSES];
 time_queue_t TIME_$RTEQ;
 di_queue_elem_t TIME_$DI_VT;
 di_queue_elem_t TIME_$DI_RTE;
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint16_t TIME_$CLOCKL;
 uint32_t TIME_$CURRENT_CLOCKH;
 uint16_t TIME_$CURRENT_CLOCKL;

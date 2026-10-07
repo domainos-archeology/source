@@ -37,7 +37,7 @@ void TIME_$GET_EC(uint16_t *ec_id, void **ec_ret, status_$t *status)
     /* 0x00E1671E..0x00E16734: register 0xE2B0D4 (TIME_$CLOCKH_EC) once */
     if (time_$clock_ec_handle == NULL) {
         time_$clock_ec_handle =
-            EC2_$REGISTER_EC1((ec_$eventcount_t *)&TIME_$CLOCKH, status);
+            EC2_$REGISTER_EC1(&TIME_$CLOCKH_EC, status);
     }
 
     /* 0x00E16738..0x00E1674E: register 0xE2B0C8 (TIME_$FAST_CLOCK_EC) once */

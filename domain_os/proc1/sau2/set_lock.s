@@ -40,7 +40,8 @@
  * External references
  */
         .extern PROC1_$CURRENT_PCB
-        .extern PROC1_$READY_PCB
+        .extern proc1_$pcb_pool
+        .set    PROC1_$READY_PCB, proc1_$pcb_pool + 0x68  /* 0xE1EC3A: PCB 2 nextp (proc1/proc1.h) */
         .extern proc1_$reorder_if_needed_int
         .extern CRASH_SYSTEM
 

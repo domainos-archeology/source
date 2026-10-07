@@ -94,7 +94,7 @@ static int current_failed = 0;
  * Kernel data the function reads and writes
  * ========================================================================== */
 
-uint32_t TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 uint32_t NODE_$ME;
 MODULE_DATA_DEFINE(sock_$data_t, SOCK_$DATA, 0x00E27510);
 MODULE_DATA_DEFINE(ringlog_ctl_t, RINGLOG_$CTL, 0x00E2C32C);

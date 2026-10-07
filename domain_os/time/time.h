@@ -192,7 +192,17 @@ _Static_assert(__builtin_offsetof(time_queue_elem_t, interval_low) == 0x18, "tim
  * TIME_$CLOCKH: 0xE2B0D4 - High 32 bits
  * TIME_$CLOCKL: 0xE2B0E0 - Low 16 bits
  */
-extern uint32_t TIME_$CLOCKH;
+/*
+ * TIME_$CLOCKH_EC (map 0xE2B0D4, 12 bytes) is the eventcount advanced by
+ * the timer interrupt (time/sau2/timer_handler.s `lea TIME_$CLOCKH,a0; jmp
+ * PROC1_$INT_ADVANCE'); its value word IS TIME_$CLOCKH (the map lists both
+ * names at 0xE2B0D4), and the image initialises the waiter head and tail
+ * to the eventcount itself (bytes 00000000 00E2B0D4 00E2B0D4).  C reads
+ * and writes the clock high word through TIME_$CLOCKH as before; the
+ * assembly names the same cell with `.set TIME_$CLOCKH, TIME_$CLOCKH_EC'.
+ */
+extern ec_$eventcount_t TIME_$CLOCKH_EC;
+#define TIME_$CLOCKH (*(uint32_t *)&TIME_$CLOCKH_EC.value)   /* 0xE2B0D4 */
 extern uint16_t TIME_$CLOCKL;
 
 /*

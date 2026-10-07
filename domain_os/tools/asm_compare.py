@@ -113,6 +113,7 @@ import gen_layout_ld  # noqa: E402  (LinkMap, scan_sources, ANCHORS)
 # with a known image address, so a file that gathers code from several
 # places in the image is compared piece by piece.
 LOCAL_SYMBOLS = {
+    'proc1_$pcb_pool': 0xE1EBD2,   # the 64 PCBs after PROC1_$READY_COUNT
     'io_$probe': 0x00E29138,                # io/sau2/probe.s
     # io/sau2/trap.s: the first-level interrupt dispatcher in IO_$TBLS
     'io_$flih_dispatch': 0x00E2E85C,
@@ -909,6 +910,8 @@ def main():
             return asm_sym[(o.path, sym)], 'asm'
         if sym in linkmap.symbols:
             return linkmap.symbols[sym][0], 'map'
+        if sym in LOCAL_SYMBOLS:
+            return LOCAL_SYMBOLS[sym], 'local'
         if sym in block_addr:
             return block_addr[sym], 'block'
         if sym in IMAGE_ALIASES:

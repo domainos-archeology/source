@@ -66,7 +66,7 @@ uint32_t  NETWORK_$FILE_BACKLOG[NETWORK_FILE_BACKLOG_BUCKETS];
 uint32_t  network_file_backlog_tail[16];    /* buckets 1..8 plus slack */
 uint8_t  *NETWORK_$SERVICE_INFO_PTR;
 uint32_t  NODE_$ME;
-uint32_t  TIME_$CLOCKH;
+ec_$eventcount_t TIME_$CLOCKH_EC = { .value = (int32_t)(0) };  /* TIME_$CLOCKH = its value */
 int8_t    NETLOG_$OK_TO_LOG;
 int8_t    NETLOG_$OK_TO_LOG_SERVER;
 int8_t    AUDIT_$ENABLED;

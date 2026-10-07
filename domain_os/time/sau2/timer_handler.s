@@ -56,6 +56,10 @@
  * gas emits CMPI/SUBI (same length and operation).
  */
 
+        .extern TIME_$CLOCKH_EC
+
+        .set    TIME_$CLOCKH, TIME_$CLOCKH_EC   /* the eventcount value word, map 0xE2B0D4 (time/time.h) */
+
         .section ".text.TIME_$TIMER_HANDLER","ax",@progbits
         .even
 
