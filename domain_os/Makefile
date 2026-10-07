@@ -6,7 +6,19 @@ SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum c
 
 WARNING_FLAGS := -Werror
 
-SAU2_FLAGS := -DARCH_M68K -DCPU_M68020 -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68020 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
+# The SAU2 image is one binary for the DN300/DN320 (68010) and the DN330
+# (68020): the 10.2 kernel's compiled code is 68010-clean (no bit-field,
+# extb.l, 32-bit mul/div or scaled-index instructions; MST_$PRE_INIT at
+# 0xE309F4 is plain 68000 code) and takes the 68020 paths only behind
+# PROM_$MACHINE_ID checks in hand assembly.  C is therefore compiled for
+# the 68010; the transcribed assembly keeps whatever the image has, so the
+# assembler accepts 68020 and 68881 instructions (SAU2_ASFLAGS).  With
+# -mcpu=68010 gcc calls libgcc for 32-bit multiply, divide and modulo
+# (__mulsi3, __udivsi3, ...), the way the Pascal compiler called its own
+# M$ helpers; the m68000 multilib's libgcc.a supplies them (LIBGCC).
+SAU2_FLAGS := -DARCH_M68K -DSAU2 -DREVERSE_MAPPED_MMU -DHAS_TOKEN_RING -mcpu=68010 -nostdlib -ffreestanding -fno-builtin -fno-stack-protector
+SAU2_ASFLAGS := $(filter-out -mcpu=%,$(SAU2_FLAGS)) -mcpu=68020 -m68881
+LIBGCC := $(shell m68k-elf-gcc -mcpu=68010 -print-libgcc-file-name)
 
 # we assume local #include's will have fully qualified paths
 # -ffunction-sections / -fdata-sections: every C function is its own input
@@ -112,7 +124,7 @@ $(KERNEL_ELF): $(ALL_SUBSYSTEM_OBJS) sau2.ld $(LAYOUT_LD)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
 	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --emit-relocs --no-warn-rwx-segments \
-	    -o $@ $(ALL_SUBSYSTEM_OBJS)
+	    -o $@ $(ALL_SUBSYSTEM_OBJS) $(LIBGCC)
 
 $(DIST_DIR)/domain_os: $(KERNEL_ELF) $(RFC_FIXUPS) $(RFC_ELF)
 	@mkdir -p $(dir $@)
@@ -150,7 +162,7 @@ check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) --check-only $(ALL_SUBSYSTEM_OBJS)
 	@echo "[CHECK] layout: scratch link $(LAYOUT_CHECK_ELF)"
 	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --oformat elf32-m68k --no-warn-rwx-segments \
-	    --unresolved-symbols=ignore-all -o $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
+	    --unresolved-symbols=ignore-all -o $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS) $(LIBGCC)
 	@echo "[CHECK] layout: map order"
 	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) --check-elf $(LAYOUT_CHECK_ELF) $(ALL_SUBSYSTEM_OBJS)
 
@@ -232,7 +244,7 @@ $(BUILD_DIR)/%.o: %.c
 $(BUILD_DIR)/%.o: %.s
 	@mkdir -p $(dir $@)
 	@echo "[AS] $<"
-	@$(CC) $(SAU2_FLAGS) -c -o $@ $<
+	@$(CC) $(SAU2_ASFLAGS) -c -o $@ $<
 
 # Unit tests (host build)
 # Tests #include the .c under test and many headers; rebuild when any header changes.

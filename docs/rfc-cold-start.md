@@ -853,3 +853,57 @@ what the fixup windows do: +0x2F00000 moves the 0xE00000 kernel to
 and the 0x700000 window moves PTT references down to 0x400000.  The
 DN300/DN320 keep the 24-bit map (kernel at 0xE00000, I/O at 0xFFxxxx,
 PTT at 0x700000), which is why that path needs no fixups.
+
+## 10. Boot attempt log (source-uaea, 2026-10-07)
+
+**Harness.**  `domain_os/tools/mame_boot_direct.py` (with
+`mame_boot_direct.lua`) runs the owner's MAME fork headless
+(`-video none -debug -debugger none -autoboot_script`).  The DN300 PROM
+in the emulator never boots from disk: it parks in its console input loop
+(ROM 0x604..0x622 polling the SIO) because its keyboard handshake bytes are
+discarded (`[:sio:cha] write_tx transmitter not ready`), and the gdbstub
+crashes on every memory packet (source-b4jo).  So the
+Lua script does sysboot's job itself: after 30 frames it writes the image's
+pages into RAM with sysboot's placement (`Loader` in check_rfc.py), then
+replicates the PROM's *enter mapped mode* routine (ROM 0x10BA..0x1130:
+vectors copied to 0x100400, PTT cleared, PFT filled with self-linked
+end-of-chain entries, the map table at ROM 0x11E0 inserted with the same
+hash algorithm cold_map_pages uses, PID/PRIV = 1), builds the six-longword
+frame COLD pops (section 5) at 0x17CFE0 and sets PC = 0x101424, SR = 0x2700.
+The PROM map is required: COLD's first instruction group on the 68010 path
+writes the MMU word at **VA** 0xFFB400 (0x10154A), which only resolves to
+the register at physical 0x8000 through a map; sysboot re-enables the MMU
+with the PROM's tables right before it jumps (sysboot 0x17F668
+`move.w #1,0x8000`).  Breakpoints on the kernel's crash/fault entries and
+on the PROM's exception handlers (ROM vectors 2..63, which the trap page
+COLD builds still holds until FIM_$INIT) log a register dump to error.log;
+progress breakpoints log one line per subsystem init.  `--bp` passes raw
+`bpset` arguments.  `DOS_DUMP=phys:len,...` prints physical memory at the
+end.
+
+**Run 1.**  COLD completed (memory sizing bus errors at 0x10162E for the
+absent 0x80000/0xC0000 and 0x280000+ blocks are the expected probes) and
+OS_$INIT was entered, then an illegal-instruction exception at
+MST_$PRE_INIT+0x14: `bfextu`, a 68020 bit-field instruction.  The build
+compiled C with `-mcpu=68020`; the 10.2 image's compiled code is
+68010-clean (MST_$PRE_INIT at 0xE309F4 is plain 68000 code) and uses the
+68020 only behind PROM_$MACHINE_ID checks in hand assembly.  Fixed in the
+Makefile: C is compiled `-mcpu=68010`, the transcribed `.s` files are
+assembled for 68020/68881, and the m68000 multilib's libgcc.a supplies the
+32-bit multiply/divide helpers gcc now calls (5 absolute cells; the layout
+generator reserves 64 fixup entries of slack for them).  The image grew to
+851,738 bytes and 18,978 fixups; 428 `bfextu`, 113 `extb.l`, 96 `muls.l`
+and 1,683 scaled-index operands are gone.
+
+**Run 2.**  OS_$INIT -> MMU_$INIT -> MMAP_$INIT -> MST_$INIT, then a bus
+error whose frame has SR = 0x0000 and PC = fault address = 0xFF000000: the
+CPU was in user mode with IPL 0 fetching garbage.  The culprit is the
+calling convention of the hand-assembled routines: `ML_$SPIN_UNLOCK`
+(image bytes `move.w 8(sp),sr; rts`) reads its 16-bit token where Domain
+Pascal pushed a 2-byte slot, but gcc pushes a 4-byte slot with the value
+in the low half, so SR := 0.  The grep in source-nxtd lists about twenty
+hand-assembled routines with word or byte parameters that C calls the same
+way (MMU_$CLR_USED, MMU_$INSTALL_ASID, PROC1_$SET_LOCK, FIM_$FP_INIT,
+MMU_$INSTALL's asid/prot slot, ...).  The asm stays; the C side has to
+build the Pascal layout (a packing macro, slot-typed prototypes).  Next
+stop after that fix is unknown.

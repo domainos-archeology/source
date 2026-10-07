@@ -727,6 +727,9 @@ def data_fragment(layout, map_path):
     return '\n'.join(out)
 
 
+FIXUP_SLACK = 64   # entries beyond the inputs' count: libgcc.a members
+
+
 def bss_fragment(layout, map_path, nfixups):
     """build/sau2/layout_bss.ld: INCLUDEd inside sau2.ld's NOBITS `.bss'
     output section.  First the room for the fixup table, then the image's
@@ -754,7 +757,12 @@ def bss_fragment(layout, map_path, nfixups):
            '     * zeroes; ours is larger than ACL_$DATA, so it gets RAM of '
            'its own and',
            '     * clobbers no block (source-yheb). */',
-           '    RFC_FIXUP_TABLE_END = . + 2 + 4 * %d;' % max(nfixups, 1),
+           '    /* %d entries of slack cover the libgcc.a members the link '
+           'pulls in' % FIXUP_SLACK,
+           '     * (not inputs this generator sees: a handful of absolute '
+           'cells). */',
+           '    RFC_FIXUP_TABLE_END = . + 2 + 4 * %d;'
+           % (max(nfixups, 1) + FIXUP_SLACK),
            '    . = RFC_FIXUP_TABLE_END;',
            '']
     marks = list(BSS_MARKS)
