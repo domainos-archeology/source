@@ -63,7 +63,8 @@ aste_t *AST_$ACTIVATE_AND_WIRE(uid_t *uid, uint16_t seg, status_$t *status)
     result = aste;
 
 unlock:
-    /* 0x00E03044..0x00E03050: ML_$UNLOCK(0x12); return A2 in A0 */
+    /* 0x00E03044..0x00E03050: ML_$UNLOCK(0x12); return A2 in A0 (and D0) */
+    ARCH_RESULT_A0(result);
     ML_$UNLOCK(AST_LOCK_ID);
     return result;
 }

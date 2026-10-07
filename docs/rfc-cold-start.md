@@ -933,3 +933,45 @@ followed at 0xE1EC3A by an all-zero node whose link field *is*
 PROC1_$READY_PCB, the two linked in a ring; PROC1_$READY_COUNT (0xE1EBD0)
 starts at 1.  The zero node's 0 locks / 0 state end every insertion walk.
 Not a calling-convention problem; tracked as source-33u1.
+
+**Runs 6-8 (2026-10-07, after source-nxtd and source-33u1).**  Each run
+exposed one defect, fixed against the image: TERM_$DATA's procedure cells
+held image addresses (now `ARCH_PTR_TO_VA_STATIC(symbol, literal)`; the
+remaining 50 such cells are in the bead filed with commit 61c8ce5); the
+DTTY fonts were missing (transcribed, DTTY_$STD_FONT_P = DTTY_$FONT1);
+TIME_$CLOCKH is the value word of TIME_$CLOCKH_EC whose waiter ring the
+image initialises to itself (the timer interrupt looped on a zero head);
+NETBUF_$INIT wrote the free-list terminator into the head instead of the
+last slot (`move.l #-1,(0x2fc,A1)`), so the first NETBUF_$GETVA reported
+status_$network_out_of_blocks; ml/unlock.c and ml/exclusion_stop.c called
+the register-argument ADVANCE_INT through a C prototype (A0 held a stale
+ML_$SPIN_UNLOCK address): ec/ec.h now has explicit-register inline
+wrappers for ADVANCE_INT / ADVANCE_ALL_INT; the deferred-interrupt
+callbacks (TIME_$RTE_INT, TIME_$VT_INT) and the EC2 / AST functions whose
+assembly callers read a result in A0 set it with ARCH_RESULT_A0 (ledger
+source-uyvd).  The volume: BAT_$MOUNT marks the volume dirty at mount
+(label salvage flag 0xCE) and we never dismount, and CAL_$VERIFY compares
+the calendar with the label's last valid time (0xE6) while the emulated RTC
+reads early 1991; the harness patches both in the working-copy disk
+(`--clean-volume --last-valid`), which is harness-side, not kernel.
+
+With those, the kernel runs OS_$INIT through SOCK_$INIT, NETWORK_$INIT,
+PROC1_$INIT_LOADAV and FILE_$LOCK_INIT, creates the DXM helper process and
+takes its first genuine page fault in dir_$open_dir (a directory page
+window at 0xFB0000).  FIM_$BUS_ERR then jumps to the stale FIM_COM image
+literal (the FIM_UNWIRED block, map D E213A0 size 4F0, was never
+transcribed: source-k79b) and the fault cascades.
+
+**Oracle and the emulator.**  Running the original 10.2 image through the
+same loader (`--image ... --map ...`) answers whether a stop is ours: it
+prints its full banner ("Domain/OS kernel(2), revision 10.2, October 13,
+1989  11:47:27 am"), passes AST_$INIT and DISK_$INIT, and then idles in
+NULL_LOOP waiting for the disk.  Two emulator findings came out of this:
+PROM display output is slow (every character's blits wait a frame), so the
+harness's "fell into the PROM" heuristic is unreliable during printing
+(`DOS_ROM_FRAMES` relaxes it); and `ansi_disk_device::m_busy` is never
+initialised, so whether the drive accepts the kernel's first command is
+decided by heap garbage - both kernels stall at DISK_$INIT when it comes
+up busy (bead source-u2yq, reported to the owner).  No evidence so far
+blames the emulator's 68010 fault handling: that path has not been
+exercised by either kernel yet.

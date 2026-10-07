@@ -294,29 +294,30 @@ void EC_$ADVANCE_WITHOUT_DISPATCH(ec_$eventcount_t *ec);
 void ADVANCE(ec_$eventcount_t *ec);
 
 /*
- * Internal helper: ADVANCE_INT
- * Increments value and wakes eligible waiters.
- * Called with interrupts disabled.
- *
- * NOTE: hand-written assembly (ec/sau2/advance_int.s) that takes its argument
- * in %a0, not on the stack.  This prototype is the shape callers written in C
- * use; on m68k they must reach it through ADVANCE above.  Callers that are
- * themselves assembly (ml/unlock.c's 0xE20B84 site, proc1/sau2/int_handler.s)
- * branch to it directly.
- *
- * Original address: 0x00e2072c
+ * Internal helpers ADVANCE_INT (0x00E2072C) and ADVANCE_ALL_INT (0x00E207C6):
+ * hand-written assembly (ec/sau2/advance_int.s) that takes the eventcount in
+ * %a0, not on the stack, and is called with interrupts disabled.  The image's
+ * assembly callers do `lea ec,A0; bsr ADVANCE_INT'; on m68k a C caller does
+ * the same through the inline wrappers below (an explicit-register variable
+ * plus `jsr' to the entry's alias; the clobbers are the caller-saved
+ * registers the routine and its callees touch - it saves %d7/%a3 itself).
+ * The host build (tests, models) calls plain C functions of the same names.
  */
+#if defined(ARCH_M68K)
+static inline void ADVANCE_INT(ec_$eventcount_t *ec)
+{
+    register ec_$eventcount_t *a0 __asm__("a0") = ec;
+    __asm__ __volatile__("jsr ec_$advance_int_a0" : "+a"(a0) : : "d0", "d1", "a1", "cc", "memory");
+}
+static inline void ADVANCE_ALL_INT(ec_$eventcount_t *ec)
+{
+    register ec_$eventcount_t *a0 __asm__("a0") = ec;
+    __asm__ __volatile__("jsr ec_$advance_all_int_a0" : "+a"(a0) : : "d0", "d1", "a1", "cc", "memory");
+}
+#else
 void ADVANCE_INT(ec_$eventcount_t *ec);
-
-/*
- * Internal helper: ADVANCE_ALL_INT (implementation)
- * Slams value to 0x7FFFFFFF and rejoins ADVANCE_INT's waiter scan.
- *
- * NOTE: hand-written assembly (ec/sau2/advance_int.s); argument in %a0.
- *
- * Original address: 0x00e207c6
- */
 void ADVANCE_ALL_INT(ec_$eventcount_t *ec);
+#endif
 
 /*
  * EC_$WAIT_1 - Wait for a single eventcount with optional timeout

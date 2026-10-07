@@ -97,6 +97,7 @@ found:
     ML_$UNLOCK(EC2_LOCK_ID);
     *status_ret = status_$ok;
 
-    /* 0x00E42A7E-0x00E42A88: result in A0. */
+    /* 0x00E42A7E-0x00E42A88: result in A0 (and D0 for C callers). */
+    ARCH_RESULT_A0(result);
     return result;
 }

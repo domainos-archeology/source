@@ -37,5 +37,7 @@ void TIME_$RTE_INT(void)
     /* 0x00E163D0 */
     IN_RT_INT = 0;
 
-    /* 0x00E163D6: movea.l #0x0,A0 - a result no C caller sees */
+    /* 0x00E163D6: movea.l #0x0,A0 - the result the deferred-interrupt
+     * dispatcher reads (di_loop: an eventcount to advance, or 0) */
+    ARCH_RESULT_A0(NULL);
 }

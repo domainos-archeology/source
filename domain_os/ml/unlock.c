@@ -76,6 +76,8 @@ void ML_$UNLOCK(int16_t resource_id)
      */
     evp = &ML_$LOCK_EVENTS[resource_id];
     if (evp->ec.value != evp->wait_count) {
+        /* 0x00E20B84 `lea &ev->ec,A0; bsr ADVANCE_INT`: a register call,
+         * made from C through the inline wrapper in ec/ec.h (source-rg5a) */
         ADVANCE_INT(&evp->ec);
     }
 

@@ -68,6 +68,18 @@
 #define ARCH_PTR_TO_VA_STATIC(p, image_va) ARCH_PTR_TO_VA(p)
 
 /*
+ * ARCH_RESULT_A0(p) - also leave a pointer result in A0 for an assembly
+ * caller.  The image's Pascal routines hand some results to hand-written
+ * callers in A0 (the deferred-interrupt callbacks TIME_$RTE_INT /
+ * TIME_$VT_INT end with `movea.l #0,A0'; di_loop in proc1/sau2/int_handler.s
+ * does `move.l A0,D0 / beq / bsr ADVANCE_INT'); gcc returns pointers in D0,
+ * so the C translation sets A0 explicitly right before `return'.  Only the
+ * epilogue follows (unlk / rts), which does not touch A0.  Ledger:
+ * source-uyvd.
+ */
+#define ARCH_RESULT_A0(p) __asm__ __volatile__("movea.l %0,%%a0" : : "g"((const void *)(p)) : "a0")
+
+/*
  * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries
  *
  * The SAU2 68020 runs with VBR = 0, so the exception vector table is the

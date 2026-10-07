@@ -92,6 +92,7 @@ static inline uint32_t ARCH_PTR_TO_VA_FN(const void *p)
  * cell keeps the image's value; tests compare it against that.
  */
 #define ARCH_PTR_TO_VA_STATIC(p, image_va) ((uint32_t)(image_va))
+#define ARCH_RESULT_A0(p) ((void)(p))   /* m68k: the result also goes to A0 for assembly callers */
 
 /*
  * ARCH_VECTOR / ARCH_AUTOVECTOR - CPU exception vector table entries

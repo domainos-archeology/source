@@ -70,6 +70,7 @@ ec_$eventcount_t *EC2_$GET_EC1_ADDR(ec2_$eventcount_t *ec, status_$t *status_ret
     ML_$UNLOCK(EC2_LOCK_ID);
     *status_ret = status;
 
-    /* 0x00E42B26-0x00E42B30: result in A0. */
+    /* 0x00E42B26-0x00E42B30: result in A0 (and D0 for C callers). */
+    ARCH_RESULT_A0(result);
     return result;
 }

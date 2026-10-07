@@ -2,3 +2,4 @@
 .claude/reemit/
 __pycache__/
 domain_os/dist/
+tmp/

@@ -51,6 +51,8 @@ void ML_$EXCLUSION_STOP(ml_$exclusion_t *excl)
         SET_IPL7();
 
         /* 0x00E20E8E: the exclusion record's first 12 bytes are an EC */
+        /* 0x00E20E8E `bsr ADVANCE_INT` with A0 = excl: a register call, made
+         * from C through the inline wrapper in ec/ec.h (source-rg5a) */
         ADVANCE_INT((ec_$eventcount_t *)excl);
 
         /* 0x00E20E92 */

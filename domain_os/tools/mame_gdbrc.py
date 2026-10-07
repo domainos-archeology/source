@@ -160,7 +160,7 @@ def main():
             "-video", "none", "-sound", "none", "-log", "-skip_gameinfo", "-nothrottle",
             "-debug", "-debugger", "gdbstub", "-debugger_port", str(args.port),
         ]
-        env = dict(os.environ, DYLD_FRAMEWORK_PATH="/Library/Frameworks")
+        env = dict(os.environ, DYLD_FRAMEWORK_PATH="/Library/Frameworks", SDL_VIDEODRIVER="dummy")  # no window on macOS
         proc = subprocess.Popen(cmd, cwd=args.mame_dir, stdout=log, stderr=subprocess.STDOUT, env=env)
     try:
         stub = GdbStub("127.0.0.1", args.port, 60)

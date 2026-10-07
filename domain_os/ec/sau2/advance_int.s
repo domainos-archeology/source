@@ -89,6 +89,11 @@ _ADVANCE:
  * ADVANCE_INT - %a0 = eventcount.  Bumps the value and releases every waiter
  * whose wait_val has been reached.  Called with interrupts already disabled.
  */
+        /* names for the C inline wrappers in ec/ec.h (register call) */
+        .globl  ec_$advance_int_a0
+        .set    ec_$advance_int_a0, ADVANCE_INT
+        .globl  ec_$advance_all_int_a0
+        .set    ec_$advance_all_int_a0, ADVANCE_ALL_INT
 ADVANCE_INT:
 _ADVANCE_INT:
         move.l  %d7,-(%sp)              /* 0xE2072C  2f 07                 */

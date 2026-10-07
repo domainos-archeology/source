@@ -36,5 +36,7 @@ void TIME_$VT_INT(void)
     /* 0x00E16420 */
     IN_VT_INT = 0;
 
-    /* 0x00E16426: movea.l #0x0,A0 - a result no C caller sees */
+    /* 0x00E16426: movea.l #0x0,A0 - the result the deferred-interrupt
+     * dispatcher reads (di_loop: an eventcount to advance, or 0) */
+    ARCH_RESULT_A0(NULL);
 }

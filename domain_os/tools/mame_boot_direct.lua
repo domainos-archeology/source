@@ -231,7 +231,7 @@ emu.register_frame_done(function()
   if pc == last_pc then same_count = same_count + 1 else same_count = 0 end
   last_pc = pc
   if pc < 0x4000 then rom_count = rom_count + 1 else rom_count = 0 end
-  if rom_count >= 30 then finish(string.format("fell into the PROM (pc=%08X)", pc)) end
+  if rom_count >= (tonumber(os.getenv("DOS_ROM_FRAMES") or "30")) then finish(string.format("fell into the PROM (pc=%08X)", pc)) end
   if same_count >= 120 then finish(string.format("pc stuck at %08X (%s)", pc, nearest(pc))) end
   if frames - entered_at >= run_frames then finish("frame budget exhausted") end
 end)

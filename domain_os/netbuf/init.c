@@ -41,8 +41,15 @@ void NETBUF_$INIT(void)
         NETBUF_$VA_SLOTS[i] = i + 1;
     }
 
-    /* Terminate free list - last valid slot points to -1 */
-    NETBUF_$VA_TOP = (int32_t)-1;
+    /*
+     * 0x00E2F658..0x00E2F662  moveq #-1,D2 / move.l D2,(0x2fc,A1): the LAST
+     * slot (va_slots[191], offset 0x2FC) terminates the free list; the head
+     * va_top (0x32C) is not written and keeps the data block's 0, so the
+     * list is 0 -> 1 -> ... -> 191 -> -1.  (A previous translation wrote the
+     * -1 into va_top itself, which made the very first NETBUF_$GETVA report
+     * status_$network_out_of_blocks: boot run 6, source-uaea.)
+     */
+    NETBUF_$VA_SLOTS[NETBUF_VA_SLOTS - 1] = (uint32_t)-1;
 
     /* Set data buffer limit to half of pageable pages */
     NETBUF_$DAT_LIM = MMAP_$PAGEABLE_PAGES >> 1;
