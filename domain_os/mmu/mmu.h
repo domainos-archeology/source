@@ -384,6 +384,14 @@ int8_t MMU_$NORMAL_MODE(void);
 /* Check if power-off mode is active */
 int8_t MMU_$POWER_OFF(void);
 
+/*
+ * MMU_$INIT_BSR - map 0xE24294: the immediate word of MMU_$POWER_OFF's
+ * `eori.w #imm,%d0' (mmu/sau2/power_off.s), where COLD_START stores the
+ * power word (0xFFB402) it read at boot (cold/sau2/cold_start.s 0x1016C0).
+ * It lives in code; only the hand-written cold start writes it.
+ */
+extern uint16_t MMU_$INIT_BSR;
+
 /* Mark virtual address as cache-inhibited
  * Original address: 0x00e2429e
  */

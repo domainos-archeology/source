@@ -75,6 +75,27 @@
 # Check (make check):
 #
 #   python3 tools/asm_compare.py --map MAP --ref tools/asm_image_ref.txt OBJ...
+#
+# Regions the kernel's Ghidra program does not hold (source-gfn1): the RFC
+# header and COLD_START (cold/sau2/cold_start.s, image file 0x000..0x800,
+# image address 0x101400) and the DUMP page (dump/sau2/dump.s, file
+# 0x800..0xC00, VA 0xE00400) take their reference bytes from the image
+# file itself (sr10.2-install/install/ri.apollo.os.v.10.2/sau2/domain_os):
+#
+#   python3 tools/asm_compare.py --map MAP --ref tools/asm_image_ref.txt \
+#       --extract-file IMAGE:0x101400:0x0-0x800 \
+#       --extract-file IMAGE:0xDFFC00:0x800-0xC00 OBJ...      (make asm-ref-image)
+#
+# Each --extract-file IMAGE:BASE[:LO-HI] says that file byte `off' of IMAGE
+# is image address BASE + off, for file offsets LO..HI (default: the whole
+# file).  COLD is at 0x101400 + off; the DUMP page and the kernel follow the
+# map's `loaded at' rule, VA = off + 0xDFFC00 (0xCFE800 + 0x101400).  With
+# --ref and no --extract, every run of the objects that the reference file
+# does not cover and a window does is APPENDED to it, under a provenance
+# comment naming the file, offsets and base; existing lines are left alone
+# and nothing is checked.  With --extract, runs inside a window are read
+# from the file instead of from Ghidra.  The check mode does not care where
+# a line came from.
 
 import argparse
 import bisect
@@ -375,6 +396,50 @@ def ref_bytes(ref, addr, n):
     for a, data in ref:
         if a <= addr and addr + n <= a + len(data):
             return data[addr - a:addr - a + n]
+    return None
+
+
+class ImageFile:
+    """One --extract-file window: file offsets lo..hi of an image file,
+    file byte `off' at image address base + off."""
+    def __init__(self, spec):
+        parts = spec.split(':')
+        if len(parts) not in (2, 3):
+            raise SystemExit('asm_compare: --extract-file %s: expected '
+                             'IMAGE:BASE[:LO-HI]' % spec)
+        self.path = parts[0]
+        self.base = int(parts[1], 0)
+        with open(self.path, 'rb') as f:
+            self.data = f.read()
+        if len(parts) == 3:
+            lo, hi = parts[2].split('-')
+            self.lo, self.hi = int(lo, 0), int(hi, 0)
+        else:
+            self.lo, self.hi = 0, len(self.data)
+        if not 0 <= self.lo < self.hi <= len(self.data):
+            raise SystemExit('asm_compare: --extract-file %s: window outside '
+                             'the file (%d bytes)' % (spec, len(self.data)))
+
+    def covers(self, addr, n):
+        off = addr - self.base
+        return self.lo <= off and off + n <= self.hi
+
+    def read(self, addr, n):
+        off = addr - self.base
+        return self.data[off:off + n]
+
+    def provenance(self, addr, n):
+        off = addr - self.base
+        return ('# %06X..%06X: %s file 0x%X..0x%X (image address = file '
+                'offset + 0x%X), --extract-file'
+                % (addr, addr + n, os.path.basename(self.path), off, off + n,
+                   self.base))
+
+
+def image_file_for(files, addr, n):
+    for f in files:
+        if f.covers(addr, n):
+            return f
     return None
 
 
@@ -701,6 +766,11 @@ def main():
     ap.add_argument('--ref', help='reference image bytes (check mode)')
     ap.add_argument('--extract', metavar='OUT',
                     help='write the reference file from Ghidra (gsk read)')
+    ap.add_argument('--extract-file', metavar='IMAGE:BASE[:LO-HI]',
+                    action='append', default=[],
+                    help='take reference bytes from an image file window '
+                    '(file byte off = image address BASE + off); with --ref '
+                    'and no --extract, append the missing runs to REF')
     ap.add_argument('--root', default='.')
     ap.add_argument('--objdump', default='m68k-elf-objdump')
     ap.add_argument('-v', '--verbose', action='store_true')
@@ -727,6 +797,8 @@ def main():
     if errors:
         raise SystemExit('\n'.join('asm_compare: error: ' + e for e in errors))
 
+    files = [ImageFile(spec) for spec in args.extract_file]
+
     if args.extract:
         lines = ['# tools/asm_image_ref.txt - SAU2 image bytes under the '
                  'hand-written assembly', '# (written by tools/asm_compare.py '
@@ -739,10 +811,46 @@ def main():
                 if addr < 0 or (addr, n) in seen:
                     continue
                 seen.add((addr, n))
-                lines.append('%06X %X %s' % (addr, n, gsk_read(addr, n).hex()))
+                img = image_file_for(files, addr, n)
+                if img is not None:
+                    lines.append(img.provenance(addr, n))
+                    data = img.read(addr, n)
+                else:
+                    data = gsk_read(addr, n)
+                lines.append('%06X %X %s' % (addr, n, data.hex()))
         with open(args.extract, 'w') as f:
             f.write('\n'.join(lines) + '\n')
         print('asm_compare: wrote %d run(s) to %s' % (len(seen), args.extract))
+        return
+
+    if files:
+        # append mode: the runs the reference file lacks, from the image file
+        if not args.ref:
+            raise SystemExit('asm_compare: --extract-file needs --ref (append) '
+                             'or --extract (rewrite)')
+        ref = load_ref(args.ref) if os.path.exists(args.ref) else []
+        lines = []
+        seen = set()
+        missing = 0
+        for key in sorted(allruns):
+            for off, n, addr, name in allruns[key]:
+                if addr < 0 or (addr, n) in seen or \
+                        ref_bytes(ref, addr, n) is not None:
+                    continue
+                seen.add((addr, n))
+                img = image_file_for(files, addr, n)
+                if img is None:
+                    missing += 1
+                    continue
+                lines.append(img.provenance(addr, n))
+                lines.append('%06X %X %s' % (addr, n, img.read(addr, n).hex()))
+        if lines:
+            with open(args.ref, 'a') as f:
+                f.write('\n'.join(lines) + '\n')
+        print('asm_compare: appended %d run(s) from the image file to %s%s'
+              % (len(lines) // 2, args.ref,
+                 '; %d run(s) are in no window (use --extract)' % missing
+                 if missing else ''))
         return
 
     if not args.ref:

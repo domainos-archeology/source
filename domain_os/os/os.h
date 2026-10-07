@@ -76,8 +76,11 @@ extern void OS_$DATA_ZERO(void *ptr, uint32_t len);
 
 // OS_$INIT - Main OS initialization entry point
 // Called during system boot to initialize all subsystems
-// @param param_1: Boot parameters
-// @param param_2: Additional boot parameters
+// @param param_1: Boot parameters: cold_boot_params, 9 longwords
+//                 (cold/cold.h; COLD_START 0x101702 `pea (0x1018FC,PC)`)
+// @param param_2: Additional boot parameters: cold_diskless_info, 12
+//                 longwords overlapping the first (cold/cold.h; 0x1016FE)
+// Entered once, from COLD_START's `jsr (A0)' at 0x101716 on P1_STACK_BASE.
 extern void OS_$INIT(uint32_t *param_1, uint32_t *param_2);
 
 // OS_$BOOT_ERRCHK - Check and report boot errors

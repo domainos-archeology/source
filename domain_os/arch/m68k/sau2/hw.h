@@ -10,6 +10,15 @@
  * addressed absolutely (docs/design-per-process-data.md); only the cells
  * here are, because the hardware decodes them.
  *
+ * The hand-written cold-start code (cold/sau2/cold_start.s, dump/sau2/
+ * dump.s) cannot include this header: arch/m68k/sau2/iodefs.s restates
+ * the page bases it links against (SAU2_PTT_BASE, SAU2_DISPLAY_MEM_BASE,
+ * SAU2_DISPLAY_CTRL_REGS, SAU2_RING2_BASE, SAU2_DMAC_BASE, SAU2_DISK_BASE,
+ * SAU2_TIMER_BASE, SAU2_SIO_BASE, SAU2_MMU_REGS, SAU2_PFT_BASE) as absolute
+ * symbols under the map's names, and tools/check_iodefs.py (`make
+ * check-iodefs') fails if the two disagree.  This header is the source of
+ * truth.
+ *
  * Addresses move here as their modules are converted, not in one sweep.
  * Included by arch/m68k/arch.h.  The host build does not define these
  * names (arch/host/arch.h): a host test that runs code dereferencing one

@@ -47,17 +47,10 @@ MODULE_DATA_DEFINE_INIT(mmap_globals_t, MMAP_$DATA, 0x00E23284, {
 MODULE_DATA_DEFINE(mmap_$mmape_table_t, MMAP_$MMAPE, 0x00EB4800);
 
 /*
- * DUMP_$ADDRS - the two physical memory ranges MMAP_$INIT records for the
- * crash-dump code.  This one cell is image-initialised.
- *
- *   00e007ec  00 10 00 00  00 17 fc 00  00 00 00 00  00 00 00 00
- *
- * Original address: 0xE007EC (in the DUMP segment, not the MMAP_ block)
+ * DUMP_$ADDRS (0xE007EC, in the DUMP segment, not the MMAP_ block) is
+ * defined by dump/sau2/dump.s with the DUMP page it belongs to (bead
+ * source-gfn1); MMAP_$INIT fills it.
  */
-mem_range_t DUMP_$ADDRS[DUMP_ADDRS_RANGES] = {
-    { 0x00100000, 0x0017FC00 },
-    { 0, 0 },
-};
 
 /*
  * Constant status cell in the MMAP_ code segment, shared by MMAP_$AVAIL

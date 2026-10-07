@@ -2,7 +2,7 @@
 TARGET_SAU := sau2
 
 # List of all subsystems
-SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum ct dbuf di dir disk dma dtty dxm ec file fim flop flp fp gpu fm hint iic io kbd log lpr mac mac_os math mem misc ml mmap mmu msg mst mt name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rem_name rgyc ring rip route scsi sio sio2681 sio6509 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
+SUBSYSTEMS := acl app area as asknode arch ast audit base bat cache cal chksum cold ct dbuf di dir disk dma dtty dump dxm ec file fim flop flp fp gpu fm hint iic io kbd log lpr mac mac_os math mem misc ml mmap mmu msg mst mt name net netlog net_io netbuf network os osinfo pacct parity pas pbu pchist peb pkt pmap proc1 proc2 rem_file rem_name rgyc ring rip route scsi sio sio2681 sio6509 smd sock stop suma svc sysboot sysbus tape term time timer tone tpad tty uid vfmt volx vtoc win wp xns xpd
 
 WARNING_FLAGS := -Werror
 
@@ -47,7 +47,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm check-guards
+.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm check-guards check-iodefs
 
 all:: domain_os
 
@@ -80,6 +80,14 @@ ARCH_M68K_SRCS := $(wildcard arch/m68k/*.c)
 ARCH_M68K_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(ARCH_M68K_SRCS))
 ALL_SUBSYSTEM_OBJS += $(ARCH_M68K_OBJS)
 arch: $(ARCH_M68K_OBJS)
+
+# arch/m68k/sau2/*.s: per-SAU objects with no bytes (iodefs.s: the map's
+# absolute symbols - I/O pages, PTT, PROT, TRAP_PAGE - that the hand-written
+# cold-start code references by name so its cells are relocations).
+ARCH_M68K_SAU_ASM_SRCS := $(wildcard arch/m68k/$(TARGET_SAU)/*.s)
+ARCH_M68K_SAU_ASM_OBJS := $(patsubst %.s,$(BUILD_DIR)/%.o,$(ARCH_M68K_SAU_ASM_SRCS))
+ALL_SUBSYSTEM_OBJS += $(ARCH_M68K_SAU_ASM_OBJS)
+arch: $(ARCH_M68K_SAU_ASM_OBJS)
 
 # svc/sau2/*.s share instruction-encoding macros through a gas .include
 # (svc/sau2/svc_macros.inc, resolved relative to this directory).  The
@@ -115,7 +123,7 @@ $(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(SAU2_MAP)
 # first inversion, the number placed and what fell into the catch-all.  (The
 # ELF has one RWX segment because the module data blocks now sit among the
 # code in `.text'; the RFC image is flat binary, so that is expected.)
-check: check-layout check-asm check-guards
+check: check-layout check-asm check-guards check-iodefs
 
 check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	@echo "[CHECK] layout: static checks"
@@ -142,6 +150,19 @@ check-asm: $(ALL_ASM_OBJS) $(ASM_COMPARE) $(ASM_IMAGE_REF)
 	@echo "[CHECK] asm: relocation-aware compare with the image"
 	@python3 $(ASM_COMPARE) --map $(SAU2_MAP) --ref $(ASM_IMAGE_REF) $(ALL_ASM_OBJS)
 
+# The regions the kernel's Ghidra program does not hold (the RFC header and
+# COLD_START, file 0x000..0x800 = 0x101400; the DUMP page, file 0x800..0xC00
+# = VA 0xE00400) take their reference bytes from the image file itself:
+# `make asm-ref-image' appends the runs of those regions that the reference
+# file lacks (source-gfn1).  Like --extract, a maintenance step: its output
+# is checked in.
+SAU2_IMAGE ?= $(HOME)/src/domainos-archeology/sr10.2-install/install/ri.apollo.os.v.10.2/sau2/domain_os
+.PHONY: asm-ref-image
+asm-ref-image: $(ALL_ASM_OBJS) $(ASM_COMPARE)
+	@python3 $(ASM_COMPARE) --map $(SAU2_MAP) --ref $(ASM_IMAGE_REF) \
+	    --extract-file $(SAU2_IMAGE):0x101400:0x0-0x800 \
+	    --extract-file $(SAU2_IMAGE):0xDFFC00:0x800-0xC00 $(ALL_ASM_OBJS)
+
 # Architecture guards around data (source-702z, the last step of
 # docs/design-per-process-data.md): outside arch/, an #if/#ifdef on
 # ARCH_M68K or ARCH_HOST may not hold an object declaration or definition,
@@ -155,6 +176,16 @@ GUARD_CHECK := tools/check_guards.py
 check-guards: $(GUARD_CHECK)
 	@echo "[CHECK] guards: no architecture guards around data"
 	@python3 $(GUARD_CHECK)
+
+# arch/m68k/sau2/iodefs.s spells the I/O page, PTT, PROT and TRAP_PAGE
+# addresses a second time, as link-time absolute symbols for the hand-written
+# cold-start code; the C headers (arch/m68k/sau2/hw.h, svc/svc.h) are the
+# source of truth, and this check keeps the two equal (source-gfn1 review).
+IODEFS_CHECK := tools/check_iodefs.py
+
+check-iodefs: $(IODEFS_CHECK) arch/m68k/$(TARGET_SAU)/iodefs.s arch/m68k/$(TARGET_SAU)/hw.h svc/svc.h
+	@echo "[CHECK] iodefs: arch/m68k/$(TARGET_SAU)/iodefs.s agrees with hw.h"
+	@python3 $(IODEFS_CHECK)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c
