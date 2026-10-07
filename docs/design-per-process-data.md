@@ -131,7 +131,20 @@ scratch ELF and proves the order (0 inversions), counting what the map
 places and what falls into the catch-all. The list is generated from the
 map, the objects and the `MODULE_DATA_DEFINE` sites, so it cannot drift.
 (Superseded: the first implementation, 3db3e5b, pinned each block at its
-original address with one output section per block.) Blocks that contain the module's *code* as well (STOP: A5 = entry
+original address with one output section per block.)
+
+*The image's bss, 2026-10-06 (RFC step 3, source-yheb;
+docs/rfc-cold-start.md section 8a).* A zero-filled block
+(`MODULE_DATA_DEFINE`) is now the NOBITS input section
+`.bss.moddata.<name>`; `MODULE_DATA_DEFINE_INIT` keeps `.moddata.<name>`.
+Blocks keyed in the image's bss (RELOC 0xE88834 up to IODEFS_GUARD
+0xF4FC00: ACL_$DATA, RINGLOG_$DATA, XPD_$DATA, PROC2_$DATA, OS_$STACK,
+MMAP_$MMAPE, MMU_$PTTX, AST_$AOT, PMAP_$SEGMAP) are listed in
+`build/sau2/layout_bss.ld` inside the NOBITS `.bss` output section, still
+in map order and after every loaded byte, so they are out of the RFC file;
+a page-aligned key starts a page there. Every other zero-filled block stays
+in `layout.ld` at its map position and ld writes it as zeros in the file,
+as the image had it. The order check covers both parts. Blocks that contain the module's *code* as well (STOP: A5 = entry
 point; the constant cells reached by `pea (d,PC)`) stay as they are: the
 constants are file-static `const` objects, the block holds only data.
 

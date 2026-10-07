@@ -389,6 +389,10 @@ ACL_$INIT zeroes anyway).
 
 ## 8. What step 3 (the layout generator) must produce
 
+**Implemented 2026-10-06 (source-yheb, source-m4xs; check: source-j46b).**
+The rules chosen are in section 8a below; items 1..8 are the requirements
+as the review stated them.
+
 1. **Header**: `00101400 00101424 0002 0000`.
 2. **Info block**: `00000C00`, `<VA of first data block>`, `<VA of first
    kernel page>`, `FEED2B03`, `0000055F`, `00000600`.  Fields +4 and +8 are
@@ -454,6 +458,121 @@ ACL_$INIT zeroes anyway).
    0x17D000 and reads the first file block to 0x174C00.  The low piece holds
    at most 0x55C00 bytes of kernel.  Everything after it, RELOC included,
    lands at 0x180000 and up, and COLD maps pages up to OS_PAGE_END there.
+
+## 8a. The layout as built (step 3)
+
+Written by Claude Opus 5.5.  `domain_os/sau2.ld` links an ELF
+(`build/sau2/domain_os.elf`, `--emit-relocs`);
+`tools/gen_rfc_fixups.py` writes `dist/sau2/domain_os` from it
+(`objcopy -O binary` of the loaded sections, then the fixup table);
+`make check-rfc` (`tools/check_rfc.py`) checks the file.  The build of
+2026-10-06:
+
+| file | low | VMA | output section | what |
+|---|---|---|---|---|
+| 0x000 | 0x101400 | 0x101400 | `.cold` | header, info block, COLD (`.text.COLD`, 0x800 bytes) |
+| - | - | 0xE00000 | `.crash_record` (NOBITS) | CRASH_$RECORD, LOG_$LAST_ENTRY: the page COLD maps to PPN 0x400 |
+| 0x800 | 0x101C00 | 0xE00400 | `.dump` | the DUMP page (`.text.DUMP`, 0x400 bytes) |
+| 0xC00 | 0x102000 | 0xE00800 | `.text` | OS_PROC: code and the module data blocks with file bytes, map order (layout.ld) |
+| | | | `.rodata`, `.data` | C rodata; OS_DATA = the start of `.data`; then the C bss objects that are file zeros (layout_data.ld) |
+| 0xB5DA0 | 0x1B71A0 | 0xEB59A0 | (appended) | RELOC: the fixup table, 19,093 entries; the file ends with it (821,238 bytes) |
+| - | - | 0xEB59A0 | `.bss` (NOBITS) | RELOC..RFC_FIXUP_TABLE_END 0xEC83F6: room for the fixup table; then the image's own bss, map order (layout_bss.ld), to OS_PAGE_END 0xF0BC00 |
+
+* **VMA/LMA.**  LMA is the low address throughout.  `.cold`: VMA = LMA =
+  0x101400 (COLD runs there physically with the MMU off, so its A5- and
+  PC-relative cells and `movea.l #COLD` are 0x101400-based; the kernel
+  symbols it names get their kernel VMAs).  Every other loaded section:
+  LMA = VMA - 0xCFE800, one constant, so OS_PROC 0xE00800 is file 0xC00 =
+  PPN 0x408 and holes between sections are zero bytes in the file.
+* **bss rule** (`tools/gen_layout_ld.py`, IMAGE_BSS_START/END): NOBITS is
+  exactly what the image had no file bytes for.  A zero-filled block
+  (MODULE_DATA_DEFINE, now a `.bss.moddata.<name>` NOBITS input) keyed in
+  [RELOC 0xE88834, IODEFS_GUARD 0xF4FC00), and a C bss object defining a
+  map symbol in that range (only `MST` today), go to `.bss` in map order; a
+  key whose image address is page aligned starts a page (OS_$STACK, MMAP,
+  MMU_$PTTX, AST_$AOT, PMAP_$SEGMAP, MST).  Every other zero-filled block
+  stays among the code at its map position as zeros in the file (as the
+  image had them: PROC1_$DATA, PEB_$INFO, ...), and every other C bss
+  object is zeros at the end of `.data` (243 of them, ~110 KB: C code
+  that relies on zeroed bss keeps that guarantee for everything the image
+  itself had zeroed in its file).  Since every NOBITS key is past every
+  loaded key, the map order of the whole link is unchanged and `make
+  check-layout`'s order check covers the NOBITS part too (0 inversions).
+  The NOBITS part is not cleared by COLD (bar MMAP): each module's init
+  must zero its own block, as the Pascal ones do.
+* **The fixup table's RAM.**  The image let its 43 KB table overlay
+  ACL_$DATA (0xAD98 bytes at RELOC), which ACL_$INIT zeroes.  Ours (76 KB)
+  is larger than ACL_$DATA and would reach RINGLOG_$DATA, XPD_$DATA and
+  PROC2_$DATA, so `.bss` starts with room of its own for it:
+  RFC_FIXUP_TABLE_END = RELOC + 2 + 4 * N, N counted by the generator
+  from the inputs' R_68K_32 relocations; gen_rfc_fixups.py fails if the
+  table does not fit and check-rfc checks that no bss object lies under
+  it.  A deviation in addresses only; the order is the map's.
+  **[review 2026-10-06]** Confirmed against the map: RELOC 0xE88834 is
+  ACL_$DATA's first byte (`D69 E88834 ACL_$DATA size = AD98`), and the
+  image's table (2 + 4 * 10,960 = 43,842 bytes) ends at 0xE9343A, inside
+  ACL_$DATA (0xE935CC), so the binder simply let the table share the RAM
+  of the first bss block and ACL_$INIT's OS_$DATA_ZERO erases it after
+  COLD is done with it.  Ours (76,374 bytes) would end at 0xEC83F6 in the
+  original's arrangement, over RINGLOG_$DATA, XPD_$DATA and PROC2_$DATA.
+  The alternative, placing RELOC at ACL_$DATA as the image does and
+  letting ACL_$INIT zero it, would need ACL_$DATA padded to at least the
+  table's size (changing a record's size the map fixes at 0xAD98: not an
+  archivist's move) or a proof that every block under the table is zeroed
+  or fully written by its init before any read, which the table's growth
+  with every translated function would silently invalidate (the image's
+  trick only works because its table happened to be smaller than its
+  first bss block).  Decision: keep the reservation.  It is sized from the
+  inputs' R_68K_32 counts, the generator fails if the table outgrows it,
+  nothing in the kernel names that range (no symbol lies in it, and no
+  literal in the tree points into 0xEB59A0..0xEC83F6; the one in
+  mmu/sau2/*.s, 0xEC2800, is MMU_$PTTX's ordering key), and the image's
+  own arrangement is still reproduced in every other respect: RELOC is
+  the first byte after the last loaded byte and the first bss block
+  follows the table.
+* **Symbols** (sau2.ld; map names): OS_BEGIN 0xE00000, OS_PROC (first
+  kernel page), OS_DATA, RELOC (= the end of `.data` = the start of
+  `.bss`), OS_PAGE_END (the end of `.bss` rounded up to a page).
+  cold_start.s names them in the 11 cells that were literals, plus
+  `KERNEL_HI_VA = OS_PROC + 0x55C00` (`MAP_WIRED + KERNEL_HI_VA` is the
+  0x80E56400 cell); the 47 R_68K_32 cells of COLD and DUMP are exactly
+  the original's 47 (`check-rfc`).  The split constants (0x55F, 0x600,
+  0x157C00, 0x55C00, 0x102000) stay literals, as in the image.
+* **Info block** (this build): 0xC00, OS_DATA 0xE98454, OS_PROC 0xE00800,
+  0xFEED2B03, 0x55F, 0x600.
+* **COLD's page count** (section 5 step 12): (0xF0BC00 - 0xE00800) >> 10 =
+  0x42D pages > 0x157, so the low entry keeps its static 0x157 at PPN
+  0x408 and COLD stores 0x2D6 << 16 | 0x600 in the high entry (VA
+  OS_PROC + 0x55C00 = 0xE56400).  MMAP 0xEDB800, MMU_$PTTX 0xEE9800 and
+  P1_STACK_BASE 0xEDAC00 are in the high piece; MMAP's physical address
+  is 0x600 << 10 - 0xE00800 - 0x55C00 + 0xEDB800 = 0x205400.  The kernel
+  needs RAM through physical 0x235800 (10.2: 0x1EE400).  **[review]**
+  DN3xx RAM starts at physical 0x100000 (handbook 7-1; the MAME dn300
+  driver offers 512K, 1M and 1536K there, 0x100000..0x27FFFF at the
+  default 1536K), so the original fits a 1 MB machine (0x1EE400 <
+  0x200000) and ours needs the 1.5 MB one.  COLD's memory sizing (step
+  14) only records which pages exist, in MMAP, and runs after sysboot has
+  already written the file's pages: a machine with RAM ending below
+  0x235800 bus-errors in sysboot, not in COLD.  Nothing in COLD checks
+  that the kernel fits.
+* **Fixup table**: the R_68K_32 relocations of `.cold`, `.dump`, `.text`,
+  `.rodata` and `.data`, as low addresses, sorted; a placeholder entry
+  (0x101400, the header's own load address) if there were none, so the
+  count is never 0.  It cannot see literal addresses (C integer casts,
+  `.equ`): our table has 15 I/O and 1 PROT cells against the image's 205
+  and 56, because our C reaches the I/O pages through hw.h constants;
+  no R_68K_16/8 absolute relocations exist.  The 68010 path does not read
+  the table.
+* **Asserted at link time** (sau2.ld): COLD 0x800 bytes, DUMP 0x400 at
+  0xE00400, OS_PROC 0xE00800 at file 0xC00, RELOC's low address past
+  0x157C00, MMAP / MMU_$PTTX / P1_STACK_BASE in [OS_PROC + 0x55C00,
+  OS_PAGE_END).
+* **Not done here**: os/init.c still builds the address space from the
+  image's literal boundaries (OS_DATA_HIGH, OS_TEXT_LOW, OS_WIRED_END ...),
+  which no longer describe this link; and the image maps only up to its
+  OS_PAGE_END 0xEC4800, leaving AUDIT_LIST, AST_AOT and VM_TABLES to the
+  kernel, where our OS_PAGE_END covers all of `.bss` (the rule chosen
+  for this step; source-wh9b tracks the os/init.c boundaries).
 
 ## 9. Open questions (status after the review)
 

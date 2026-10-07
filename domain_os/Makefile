@@ -33,6 +33,12 @@ LAYOUT_GEN := tools/gen_layout_ld.py
 LAYOUT_LD := $(BUILD_DIR)/layout.ld
 LAYOUT_CHECK_ELF := $(BUILD_DIR)/layout-check.elf
 
+# The kernel ELF (sau2.ld; --emit-relocs keeps the relocations the fixup
+# table is made from) and the RFC image made from it (source-yheb).
+KERNEL_ELF := $(BUILD_DIR)/domain_os.elf
+RFC_FIXUPS := tools/gen_rfc_fixups.py
+RFC_ELF := tools/rfc_elf.py
+
 # Host-side unit tests.  Each <subsystem>/test/test_<function>.c is a
 # self-contained program (it #includes the .c under test directly) built
 # with the host compiler and run natively.
@@ -47,7 +53,7 @@ SUBSYSTEM_LIBS := $(foreach sub,$(SUBSYSTEMS),$(BUILD_DIR)/lib$(sub).a)
 
 ALL_SUBSYSTEM_OBJS :=
 
-.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm check-guards check-iodefs
+.PHONY: all clean domain_os test test-build clean-test check check-layout check-asm check-guards check-iodefs check-rfc
 
 all:: domain_os
 
@@ -97,33 +103,46 @@ $(svc_ASM_OBJS): svc/$(TARGET_SAU)/svc_macros.inc
 # Main target
 domain_os: $(DIST_DIR)/domain_os
 
-$(DIST_DIR)/domain_os: $(ALL_SUBSYSTEM_OBJS) sau2.ld $(LAYOUT_LD)
+# The RFC image (docs/rfc-cold-start.md section 8; source-yheb): link the
+# ELF, then tools/gen_rfc_fixups.py writes its loadable sections by load
+# address (objcopy -O binary: COLD at file 0, DUMP at 0x800, the kernel from
+# 0xC00) and appends the fixup table at RELOC: count.w, then the low address
+# of every R_68K_32 cell of COLD, DUMP and the kernel.
+$(KERNEL_ELF): $(ALL_SUBSYSTEM_OBJS) sau2.ld $(LAYOUT_LD)
 	@mkdir -p $(dir $@)
 	@echo "[LINK] $@"
-	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) -o $@ $(ALL_SUBSYSTEM_OBJS)
+	@$(LD) -L $(BUILD_DIR) $(LDFLAGS) --emit-relocs --no-warn-rwx-segments \
+	    -o $@ $(ALL_SUBSYSTEM_OBJS)
+
+$(DIST_DIR)/domain_os: $(KERNEL_ELF) $(RFC_FIXUPS) $(RFC_ELF)
+	@mkdir -p $(dir $@)
+	@echo "[RFC] $@"
+	@python3 $(RFC_FIXUPS) --elf $(KERNEL_ELF) -o $@
 
 # Link order (source-0i3; the owner's decision of 2026-09-28).  Code and
 # module data blocks are linked in the order of the SAU2 link map, not at
 # fixed addresses.  sau2.ld INCLUDEs layout.ld inside its `.text' output
 # section: one input-section statement per C function (-ffunction-sections),
 # hand-written routine and MODULE_DATA block, in map order, then the
-# catch-all.  tools/gen_layout_ld.py writes it from the map, the compiled
+# catch-all.  The generator also writes layout_data.ld (C bss objects that
+# are zero bytes in the file, end of `.data') and layout_bss.ld (the image's
+# own bss, NOBITS, in map order); see the bss rule in sau2.ld.  tools/gen_layout_ld.py writes it from the map, the compiled
 # objects' symbol tables and the MODULE_DATA_DEFINE sites (whose addresses
 # are now ordering keys), and refuses odd or non-literal block addresses and
 # duplicate block names.  It is regenerated before every link.
-$(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(SAU2_MAP)
+$(LAYOUT_LD): $(ALL_SUBSYSTEM_OBJS) $(LAYOUT_GEN) $(RFC_ELF) $(SAU2_MAP)
 	@mkdir -p $(dir $@)
 	@echo "[GEN] $@"
 	@python3 $(LAYOUT_GEN) --map $(SAU2_MAP) -o $@ $(ALL_SUBSYSTEM_OBJS)
 
-# `make check': static checks plus a scratch link.  The real link still has
-# hundreds of unresolved symbols, so the check links an ELF with
-# --unresolved-symbols=ignore-all and then verifies with m68k-elf-nm that
-# every placed map symbol and block appears in map order, reporting the
-# first inversion, the number placed and what fell into the catch-all.  (The
-# ELF has one RWX segment because the module data blocks now sit among the
-# code in `.text'; the RFC image is flat binary, so that is expected.)
-check: check-layout check-asm check-guards check-iodefs
+# `make check': static checks plus a scratch link.  The check links an ELF
+# with --unresolved-symbols=ignore-all (so it works while symbols are still
+# missing) and then verifies with m68k-elf-nm that every placed map symbol
+# and block appears in map order, reporting the first inversion, the number
+# placed and what fell into the catch-all.  (The ELF has an RWX segment
+# because the module data blocks sit among the code in `.text'; the RFC
+# image is made from the loaded bytes, so that is expected.)
+check: check-layout check-asm check-guards check-iodefs check-rfc
 
 check-layout: $(LAYOUT_LD) $(ALL_SUBSYSTEM_OBJS) sau2.ld
 	@echo "[CHECK] layout: static checks"
@@ -186,6 +205,21 @@ IODEFS_CHECK := tools/check_iodefs.py
 check-iodefs: $(IODEFS_CHECK) arch/m68k/$(TARGET_SAU)/iodefs.s arch/m68k/$(TARGET_SAU)/hw.h svc/svc.h
 	@echo "[CHECK] iodefs: arch/m68k/$(TARGET_SAU)/iodefs.s agrees with hw.h"
 	@python3 $(IODEFS_CHECK)
+
+# The RFC image against docs/rfc-cold-start.md section 8 (source-yheb,
+# source-j46b): header, info block, COLD and DUMP against the original
+# modulo relocations, the constant VA/LMA delta, every loaded section's
+# bytes, the fixup table, the MMAP/PTTX/stack constraints, and a dry-run
+# loader (sysboot's page placement + COLD's MMU map) that maps every kernel
+# VA to its physical page; the same loader is run over the original image as
+# the oracle (tools/rfc_segments.json, tools/asm_image_ref.txt).
+RFC_CHECK := tools/check_rfc.py
+
+check-rfc: $(DIST_DIR)/domain_os $(KERNEL_ELF) $(RFC_CHECK) $(RFC_ELF)
+	@echo "[CHECK] rfc: the load image and a dry-run of sysboot + COLD"
+	@python3 $(RFC_CHECK) --image $(DIST_DIR)/domain_os --elf $(KERNEL_ELF) \
+	    --orig $(SAU2_IMAGE) --segments tools/rfc_segments.json \
+	    --ref $(ASM_IMAGE_REF)
 
 # Generic C compilation rule
 $(BUILD_DIR)/%.o: %.c

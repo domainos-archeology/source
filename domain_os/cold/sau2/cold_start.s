@@ -31,10 +31,10 @@
  * the segment would let the linker pad and break all of them.  The map's
  * two symbols, COLD and MOVE_TO_PPN, both lie in it, so the layout
  * generator keys the section by COLD (0x101400), which is below every
- * kernel key: it is placed first.  The section is 0x800 bytes: the map's
- * 0x7FC plus the image's four zero bytes ahead of DUMP (file 0x800), so
- * that DUMP follows at its file offset; where the file is placed is
- * step 3 (source-yheb).  The A5 displacements are written as the .equ
+ * kernel key: it is placed first, and sau2.ld gives it an output section
+ * of its own, .cold, at VMA = LMA = 0x101400 (file 0; source-yheb).  The
+ * section is 0x800 bytes: the map's 0x7FC plus the image's four zero bytes
+ * ahead of DUMP (file 0x800), so that DUMP follows at its file offset.  The A5 displacements are written as the .equ
  * constants COLD_OFF_* (gas would give a forward label difference a
  * 32-bit displacement); the assertions at the end of the file tie each
  * one to its label.
@@ -51,11 +51,12 @@
  *   - the map's absolute symbols (IODEFS: PFT, MMU, SIO, TIMR, DISK,
  *     RING2, DISP1, DMA, DISP1_MEM; PTT, PROT, TRAP_PAGE), defined once as
  *     absolute globals in arch/m68k/sau2/iodefs.s with their hw.h names;
- *   - EXCEPT the eleven cells that name the kernel's own layout (OS_DATA,
- *     the first kernel page 0xE00800, RELOC, OS_BEGIN 0xE00000,
- *     OS_PAGE_END and the high-piece VA 0xE56400), which nothing in the
- *     tree defines yet: they stay literals marked TODO(source-m4xs),
- *     to become symbols when step 3 lays the load image out.
+ *   - the eleven cells that name the kernel's own layout: OS_DATA, the
+ *     first kernel page OS_PROC, RELOC, OS_BEGIN, OS_PAGE_END and the
+ *     high-piece VA KERNEL_HI_VA = OS_PROC + 0x55C00, symbols sau2.ld
+ *     defines (source-m4xs; map names, so tools/asm_compare.py resolves
+ *     them to the image's 0xE78400, 0xE00800, 0xE88834, 0xE00000,
+ *     0xEC4800 and 0xE56400).
  * Every other constant (physical addresses and page numbers, the window
  * bounds of the fixup loop, PROM cells, the MMU's physical registers
  * before the MMU is on) is a literal the binder did not relocate either,
@@ -86,19 +87,21 @@
         .set    P1_STACK_BASE,  OS_$STACK + 0x2000  /* map 0xEB2000, INT_STACK_GUARD / P1_STACK_BASE in OS_$STACK (os/os.h) */
         .set    MMAP,           MMAP_$MMAPE         /* map 0xEB4800, the MMAP page table (mmap/mmap.h) */
 
-/* ---- the kernel's layout: no symbol in the tree yet (TODO(source-m4xs)) -- */
-        .equ    OS_DATA_VA,     0x00E78400  /* map OS_DATA: VA of `.DATA', the end of kernel code */
-        .equ    OS_PROC_VA,     0x00E00800  /* map WIRED_PROC / OS_PROC segments: the first kernel page */
-        .equ    RELOC_VA,       0x00E88834  /* map RELOC: the first byte after the last loaded segment */
-        .equ    OS_BEGIN_VA,    0x00E00000  /* map OS_BEGIN: the bottom of the kernel's VA window */
-        .equ    OS_PAGE_END_VA, 0x00EC4800  /* map OS_PAGE_END: the end of the pages COLD maps */
-        .equ    KERNEL_HI_VA,   0x00E56400  /* OS_PROC_VA + KERNEL_LO_BYTES: the first VA of the high piece */
+/* ---- the kernel's layout: symbols sau2.ld defines (source-m4xs) -------- */
+/*      OS_DATA      map 0xE78400: VA of `.DATA' (ours: the start of .data)   */
+/*      OS_PROC      map 0xE00800: the first kernel page                      */
+/*      RELOC        map 0xE88834: the first byte after the last loaded byte  */
+/*      OS_BEGIN     map 0xE00000: the bottom of the kernel's VA window       */
+/*      OS_PAGE_END  map 0xEC4800: the end of the pages COLD maps             */
+/*      KERNEL_HI_VA OS_PROC + KERNEL_LO_BYTES (0xE56400): the high piece,    */
+/*                   defined below KERNEL_LO_BYTES                            */
 
 /* ---- physical layout of the loaded file (not relocated) ------------------ */
         .equ    COLD_LOW,       0x00101400  /* the RFC load address: file byte 0, COLD */
         .equ    KERNEL_LOW,     0x00102000  /* file 0xC00: the first kernel page, PPN 0x408 */
         .equ    SPLIT_LOW,      0x00157C00  /* 0x55F << 10: file pages from here on are loaded at MOVE_TO_PPN */
         .equ    KERNEL_LO_BYTES, 0x00055C00 /* SPLIT_LOW - KERNEL_LOW: kernel bytes in the low piece */
+        .set    KERNEL_HI_VA,   OS_PROC + KERNEL_LO_BYTES /* map 0xE56400: the first VA of the high piece */
         .equ    DUMP_PHYS,      0x00100C00  /* PPN 0x403: where COLD copies the DUMP page */
         .equ    TRAP_PAGE_PHYS, 0x00101000  /* PPN 0x404: the new trap page (VBR) */
         .equ    DUMP_LOW,       0x00101C00  /* file 0x800: the DUMP page as loaded */
@@ -159,8 +162,8 @@ COLD:
  */
 rfc_info_block:
         .long   0x00000C00              /* 10140c  file offset of the first kernel page (header + COLD + DUMP) */
-        .long   OS_DATA_VA              /* 101410  TODO(source-m4xs): OS_DATA; a RELOC cell */
-        .long   OS_PROC_VA              /* 101414  TODO(source-m4xs): the first kernel page; a RELOC cell */
+        .long   OS_DATA                 /* 101410  OS_DATA; a RELOC cell */
+        .long   OS_PROC                 /* 101414  the first kernel page; a RELOC cell */
         .long   0xFEED2B03              /* 101418  magic: word FEED, byte 2B, format version 0 */
         .long   0x0000055F              /* 10141c  split PPN (SPLIT_LOW >> 10) */
 MOVE_TO_PPN:
@@ -213,8 +216,8 @@ cold_enable_cache:
  * 32-bit VA cells, each moved into the DN330's 26-bit windows.
  */
 cold_reloc_fixup:
-        movea.l #RELOC_VA,%a0           /* 101494  TODO(source-m4xs): RELOC; a RELOC cell */
-        suba.l  #OS_PROC_VA,%a0         /* 10149a  TODO(source-m4xs): first kernel page; a RELOC cell */
+        movea.l #RELOC,%a0              /* 101494  RELOC; a RELOC cell */
+        suba.l  #OS_PROC,%a0            /* 10149a  first kernel page; a RELOC cell */
         adda.l  #KERNEL_LOW,%a0         /* 1014a0  = 0x18A034, RELOC's low address */
         cmpa.l  #SPLIT_LOW,%a0          /* 1014a6  the table must lie past the split */
         bgt.s   cold_reloc_phys         /* 1014ac */
@@ -234,7 +237,7 @@ cold_reloc_phys:
         move.l  #PROT,%d3               /* 1014d8  PROT window (a RELOC cell): */
         move.l  #PROT_WINDOW_020,%d6    /* 1014de      d6 = 0x2E00000 */
         sub.l   %d3,%d6                 /* 1014e4 */
-        move.l  #OS_BEGIN_VA,%d4        /* 1014e6  TODO(source-m4xs): OS_BEGIN; a RELOC cell */
+        move.l  #OS_BEGIN,%d4           /* 1014e6  OS_BEGIN; a RELOC cell */
         move.l  #OS_WINDOW_020,%d7      /* 1014ec  kernel window: */
         sub.l   %d4,%d7                 /* 1014f2      a3 = 0x2F00000 */
         movea.l %d7,%a3                 /* 1014f4 */
@@ -315,12 +318,12 @@ cold_build_trap_page_loop:
  * MOVE_TO_PPN as the count and PPN of the "kernel high" entry.
  */
 cold_count_kernel_pages:
-        move.l  #OS_PAGE_END_VA,%d4     /* 101590  TODO(source-m4xs): OS_PAGE_END; a RELOC cell */
+        move.l  #OS_PAGE_END,%d4        /* 101590  OS_PAGE_END; a RELOC cell */
         .short  0xd8bc                  /* 101596  add.l #0x3ff,%d4 (<ea>=#imm form) */
         .long   0x000003ff
         .short  0xc87c, 0xfc00          /* 10159c  and.w #0xfc00,%d4 (<ea>=#imm form) */
         .short  0x98bc                  /* 1015a0  sub.l #first kernel page,%d4 (<ea>=#imm form) */
-        .long   OS_PROC_VA              /*         TODO(source-m4xs); a RELOC cell */
+        .long   OS_PROC                 /*         first kernel page; a RELOC cell */
         .short  0xb8bc                  /* 1015a6  cmp.l #0x55c00,%d4 (<ea>=#imm form) */
         .long   KERNEL_LO_BYTES
         bhi.w   cold_count_kernel_hi    /* 1015ac */
@@ -347,7 +350,7 @@ cold_clear_mmap:
         lsl.l   #5,%d4                  /* 1015d4 */
         lsl.l   #5,%d4                  /* 1015d6 */
         .short  0x98bc                  /* 1015d8  sub.l #first kernel page,%d4 (<ea>=#imm form) */
-        .long   OS_PROC_VA              /*         TODO(source-m4xs); a RELOC cell */
+        .long   OS_PROC                 /*         first kernel page; a RELOC cell */
         .short  0x98bc                  /* 1015de  sub.l #0x55c00,%d4 (<ea>=#imm form) */
         .long   KERNEL_LO_BYTES
         .short  0xd8bc                  /* 1015e4  add.l #MMAP,%d4 (<ea>=#imm form) */
@@ -483,7 +486,7 @@ cold_clear_pft:
         lsl.l   #5,%d0                  /* 101756      of MMU_$PTTX */
         lsl.l   #5,%d0                  /* 101758 */
         .short  0x90bc                  /* 10175a  sub.l #first kernel page,%d0 (<ea>=#imm form) */
-        .long   OS_PROC_VA              /*         TODO(source-m4xs); a RELOC cell */
+        .long   OS_PROC                 /*         first kernel page; a RELOC cell */
         .short  0x90bc                  /* 101760  sub.l #0x55c00,%d0 (<ea>=#imm form) */
         .long   KERNEL_LO_BYTES
         movea.l %d0,%a1                 /* 101766 */
@@ -634,12 +637,12 @@ cold_map_table:
 cold_map_kernel_lo_count:
         .short  0x0157, 0x0408          /* 1018e6  kernel, low piece; the count is */
                                         /*         rewritten if the kernel fits */
-        .long   MAP_WIRED + OS_PROC_VA  /*         TODO(source-m4xs); a RELOC cell */
+        .long   MAP_WIRED + OS_PROC     /*         a RELOC cell */
         .short  0x0170
 cold_map_kernel_hi_count_ppn:
         .short  0x0000, 0x0000          /* 1018f0  kernel, high piece: count and */
                                         /*         PPN filled by COLD */
-        .long   MAP_WIRED + KERNEL_HI_VA /*        TODO(source-m4xs); a RELOC cell */
+        .long   MAP_WIRED + KERNEL_HI_VA /*        a RELOC cell */
         .short  0x0170
         .short  0x0000                  /* 1018fa  end */
 

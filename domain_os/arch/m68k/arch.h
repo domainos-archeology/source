@@ -110,7 +110,8 @@
  * (off,A5).  A block is modelled as a single C object of a struct type whose
  * fields sit at the A5 displacements (docs/design-per-process-data.md,
  * section 3).  MODULE_DATA_DEFINE puts it in its own input section
- * `.moddata.<name>', and the link-order fragment that tools/gen_layout_ld.py
+ * (`.moddata.<name>' or `.bss.moddata.<name>', below), and the link-order
+ * fragment that tools/gen_layout_ld.py
  * writes (build/sau2/layout.ld, INCLUDEd by sau2.ld) lists that section
  * among the code at the position its original address has in the SAU2 link
  * map - after its module's code when the image has it there.  `make check'
@@ -134,13 +135,24 @@
  * `addr' must be a literal (the generator reads it from the source text),
  * even (68000-family word alignment; the generator and the _Static_assert
  * below both refuse an odd one) and equal to the address in the block's
- * MODULE_DATA_DECLARE, which must be in scope.  The section is progbits
- * even for a zero-filled block, so the RFC image carries the block like any
- * other loaded byte.  `used' keeps an unreferenced block alive so its
- * position is still checked.
+ * MODULE_DATA_DECLARE, which must be in scope.  `used' keeps an
+ * unreferenced block alive so its position is still checked.
+ *
+ * A block with initial contents is the progbits section `.moddata.<name>'.
+ * A zero-filled block is the NOBITS section `.bss.moddata.<name>' (GCC
+ * makes a `.bss.' section name NOBITS), and the layout decides where its
+ * zeros live (source-yheb; tools/gen_layout_ld.py, IMAGE_BSS_START): a
+ * block the image had in its bss (address at or past the map's RELOC,
+ * 0xE88834: ACL_$DATA, OS_$STACK, MMAP_$MMAPE, PMAP_$SEGMAP ...) goes to
+ * the NOBITS `.bss' of the link, out of the RFC file, in map order; every
+ * other zero-filled block is listed among the code at its map position, so
+ * ld turns it into zero bytes in the file, as the image had them.
  */
 #define MODULE_DATA_ATTRS_(name) \
     __attribute__((section(".moddata." #name), aligned(2), used))
+
+#define MODULE_DATA_BSS_ATTRS_(name) \
+    __attribute__((section(".bss.moddata." #name), aligned(2), used))
 
 #define MODULE_DATA_CHECK_ADDR_(name, addr)                                  \
     _Static_assert(((addr) & 1u) == 0u,                                      \
@@ -150,7 +162,7 @@
 
 #define MODULE_DATA_DEFINE(T, name, addr)                                    \
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \
-    T name MODULE_DATA_ATTRS_(name)
+    T name MODULE_DATA_BSS_ATTRS_(name)
 
 #define MODULE_DATA_DEFINE_INIT(T, name, addr, ...)                          \
     MODULE_DATA_CHECK_ADDR_(name, addr);                                     \

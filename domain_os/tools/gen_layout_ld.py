@@ -23,9 +23,14 @@
 # This script reads the map into an address-ordered stream, finds every
 # code section of the link inputs and the map position of the symbols it
 # defines, merges in the module data blocks at their declared addresses,
-# and writes build/sau2/layout.ld: the ordered list of input-section
-# statements that sau2.ld INCLUDEs inside its one `.text' output section,
-# followed by the catch-all for code the map does not name.
+# and writes three fragments that sau2.ld INCLUDEs (source-yheb):
+#   build/sau2/layout.ld       inside `.text': the ordered list of
+#                              input-section statements, followed by the
+#                              catch-all for code the map does not name;
+#   build/sau2/layout_data.ld  at the end of `.data': the C bss objects that
+#                              are zero bytes in the file;
+#   build/sau2/layout_bss.ld   inside the NOBITS `.bss': the image's own bss
+#                              (the bss rule below), in map order.
 #
 # Placement rules:
 #   - A code section defining one or more map symbols is keyed by the
@@ -48,15 +53,17 @@
 # Modes:
 #
 #   gen_layout_ld.py --map MAP -o build/sau2/layout.ld OBJ...
-#       Scan, check and write the fragment (only if its text changed).
+#       Scan, check and write the three fragments (layout_data.ld and
+#       layout_bss.ld next to layout.ld; each only if its text changed).
 #
 #   gen_layout_ld.py --map MAP --check-only OBJ...
 #       The same checks, no output.
 #
 #   gen_layout_ld.py --map MAP --check-elf ELF OBJ...
 #       After a scratch link: every placed map symbol, every ANCHORS section
-#       (by its first symbol) and every block must appear in the ELF in map
-#       order; the first inversion fails the check.
+#       (by its first symbol), every block and the map symbols of the C bss
+#       objects in the image's bss must appear in the ELF in map order; the
+#       first inversion fails the check.
 #       Prints how many map symbols were placed and what fell into the
 #       catch-all.
 #
@@ -72,8 +79,51 @@ import re
 import subprocess
 import sys
 
-RFC_LOAD_ADDR = 0x00E00000
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rfc_elf  # noqa: E402
+
+RFC_LOAD_ADDR = 0x00E00000  # OS_BEGIN: the bottom of the kernel's VAs
 KERNEL_VA_END = 0x01000000  # 24-bit physical/virtual space of the SAU2
+
+# The image's RELOC (map `I20 E88834 RELOC'): the first byte after the last
+# loaded segment.  Everything the map places at or past it (ACL_$DATA,
+# FILE_$LOT_DATA, RINGLOG_$DATA, ..., OS_PMAPS, VM_TABLES) had no bytes in
+# the image file; it is the image's bss (docs/rfc-cold-start.md section 2).
+# The bss rule of this layout (source-yheb) follows it exactly:
+#   - a zero-filled block (MODULE_DATA_DEFINE, a `.bss.moddata.<name>'
+#     NOBITS input) whose ordering key is in [IMAGE_BSS_START,
+#     IMAGE_BSS_END), and a C bss object (`.bss.<symbol>') whose map symbols
+#     all lie there, go to the NOBITS `.bss' output section, in map order
+#     (build/sau2/layout_bss.ld), after the fixup table;
+#   - every other zero-filled block stays among the code at its map
+#     position as zero bytes in the file (the image had those zeros in the
+#     file: PROC1_$DATA, PEB_$INFO, ...), and every other C bss object
+#     (no map symbol, or one outside that range) is zero bytes in the
+#     file after the initialised data (build/sau2/layout_data.ld), so the
+#     C code's assumption that its bss starts zeroed holds for everything
+#     the image itself had zeroed in the file.
+# Since every key >= IMAGE_BSS_START is past every key of the loaded
+# stream, the map order of the whole link is unchanged and `--check-elf'
+# checks the NOBITS part with the rest.
+IMAGE_BSS_START = 0x00E88834
+# ... up to the map's IODEFS_GUARD (`D52 F4FC00', the end of the kernel's
+# wired VAs, OS_WIRED_END in os/init.c).  Map symbols past it (AST_$COPY_BUFF
+# 0xFF8800, AST_$ZERO_BUFF 0xFF8C00, ...) are absolute addresses outside
+# the image; a C object standing for one is file zeros like any other.
+IMAGE_BSS_END = 0x00F4FC00
+
+# Input sections sau2.ld places itself (output sections of their own at
+# fixed VMAs): COLD (.cold, 0x101400, file 0), the DUMP page (.dump,
+# 0xE00400, file 0x800) and the crash record page (.crash_record,
+# OS_BEGIN 0xE00000, NOBITS).  The fragments list them as comments only.
+SCRIPT_PLACED = {
+    '.text.COLD',
+    '.text.DUMP',
+    '.bss.CRASH_$RECORD',
+    '.bss.LOG_$LAST_ENTRY',
+}
+
+PAGE = 0x400
 
 # Sections holding image data whose C names are not the map's.  Keyed by the
 # image address of their first byte.
@@ -100,7 +150,7 @@ ANCHORS = {
 }
 
 SITE_RE = re.compile(
-    r'\bMODULE_DATA_DEFINE(?:_INIT)?\s*\(\s*'
+    r'\bMODULE_DATA_DEFINE(?P<init>_INIT)?\s*\(\s*'
     r'(?P<type>[^,()]+?)\s*,\s*'
     r'(?P<name>[A-Za-z_][A-Za-z0-9_$]*)\s*,\s*'
     r'(?P<addr>[^,()]+?)\s*[,)]')
@@ -182,16 +232,25 @@ def addr_key(addr):
 # ---------------------------------------------------------------------------
 
 class Block:
-    def __init__(self, name, ctype, addr, src, line):
+    def __init__(self, name, ctype, addr, src, line, init):
         self.name = name
         self.ctype = ctype
         self.addr = addr
         self.src = src
         self.line = line
+        self.init = init    # MODULE_DATA_DEFINE_INIT: has file contents
 
     @property
     def section(self):
-        return '.moddata.' + self.name
+        # arch/m68k/arch.h: a zero-filled block is NOBITS (`.bss.moddata.')
+        return ('.moddata.' if self.init else '.bss.moddata.') + self.name
+
+    @property
+    def nobits(self):
+        """Not in the file: a zero-filled block the image had as bss (its
+        address is at or past the image's RELOC)."""
+        return not self.init and \
+            IMAGE_BSS_START <= self.addr < IMAGE_BSS_END
 
     @property
     def where(self):
@@ -235,7 +294,8 @@ def scan_sources(root):
                     continue
                 addr = int(addr_text.rstrip('uUlL'), 0)
                 blocks.append(Block(m.group('name'), m.group('type').strip(),
-                                    addr, rel, line))
+                                    addr, rel, line,
+                                    m.group('init') is not None))
     return blocks, errors
 
 
@@ -286,21 +346,29 @@ def is_code_section(name):
     return name == '.text' or name.startswith('.text.')
 
 
+def is_c_bss_section(name):
+    """A C object's own zero-filled section (-fdata-sections), not a module
+    data block."""
+    return name.startswith('.bss.') and not name.startswith('.bss.moddata.')
+
+
 def read_object(objdump, obj):
-    """Code sections of one object with the symbols each defines."""
+    """Code sections and C bss sections of one object, each with the
+    symbols it defines: ([code Section], [bss Section])."""
     hdr = subprocess.run([objdump, '-h', obj], check=True,
                          capture_output=True, text=True).stdout
     secs = {}
     order = []
     for line in hdr.splitlines():
         f = line.split()
-        if len(f) >= 7 and f[0].isdigit() and is_code_section(f[1]):
+        if len(f) >= 7 and f[0].isdigit() and \
+                (is_code_section(f[1]) or is_c_bss_section(f[1])):
             size = int(f[2], 16)
             if size:
                 secs[f[1]] = Section(obj, f[1], size)
                 order.append(f[1])
     if not secs:
-        return []
+        return [], []
     tab = subprocess.run([objdump, '-t', obj], check=True,
                          capture_output=True, text=True).stdout
     syms = []
@@ -319,11 +387,13 @@ def read_object(objdump, obj):
             syms.append((int(m.group('value'), 16), name, sec))
     for value, name, sec in sorted(syms):
         secs[sec].symbols.append(name)
-    return [secs[n] for n in order]
+    return ([secs[n] for n in order if is_code_section(n)],
+            [secs[n] for n in order if is_c_bss_section(n)])
 
 
 def module_data_sections(objdump, objects):
-    """{section name: object} for every .moddata.* section of the inputs."""
+    """{section name: object} for every .moddata.* / .bss.moddata.* section
+    of the inputs."""
     found = {}
     for obj in objects:
         hdr = subprocess.run([objdump, '-h', obj], check=True,
@@ -331,7 +401,7 @@ def module_data_sections(objdump, objects):
         for line in hdr.splitlines():
             f = line.split()
             if len(f) >= 7 and f[0].isdigit() and \
-                    f[1].startswith('.moddata.'):
+                    f[1].startswith(('.moddata.', '.bss.moddata.')):
                 found.setdefault(f[1], obj)
     return found
 
@@ -343,10 +413,14 @@ class Layout:
         self.linkmap = linkmap
         self.blocks = blocks
         self.sections = []
+        self.bss = []       # C bss sections (-fdata-sections)
         self.errors = []
         for obj in objects:
-            self.sections += read_object(objdump, obj)
+            code, bss = read_object(objdump, obj)
+            self.sections += code
+            self.bss += [s for s in bss if s.name not in SCRIPT_PLACED]
         self._key_sections()
+        self._key_bss()
         self._patterns()
         self._check_blocks(objdump, objects)
 
@@ -401,11 +475,48 @@ class Layout:
                 else:
                     s.why = 'defines no map symbol'
 
+    def _key_bss(self):
+        """Key the C bss sections that hold image bss (a map symbol at or
+        past IMAGE_BSS_START); the rest are file zeros (key None)."""
+        lm = self.linkmap
+        for s in self.bss:
+            s.map_syms = sorted((lm.key(n), n) for n in s.symbols
+                                if n in lm.symbols)
+            def image_bss(key):
+                return IMAGE_BSS_START <= key[0] < IMAGE_BSS_END
+            if s.map_syms and all(image_bss(k) for k, _ in s.map_syms):
+                s.key = s.map_syms[0][0]
+            elif s.map_syms and any(image_bss(k) for k, _ in s.map_syms):
+                self.errors.append('%s: map symbols inside and outside the '
+                                   'image\'s bss 0x%06X..0x%06X'
+                                   % (s.label, IMAGE_BSS_START,
+                                      IMAGE_BSS_END))
+        for b in self.blocks:
+            if b.init and IMAGE_BSS_START <= b.addr < IMAGE_BSS_END:
+                self.errors.append('%s: %s at 0x%08X has initial contents '
+                                   'but lies in the image\'s bss (past '
+                                   'RELOC 0x%06X), which has no file bytes'
+                                   % (b.where, b.name, b.addr,
+                                      IMAGE_BSS_START))
+
+    def nobits(self):
+        """[(key, kind, item)] of the NOBITS part, in map order."""
+        items = [(addr_key(b.addr), (0, 0), 'block', b)
+                 for b in self.blocks if b.nobits]
+        items += [(s.key, (1, n), 'bss', s)
+                  for n, s in enumerate(self.bss) if s.key is not None]
+        items.sort(key=lambda t: (t[0], t[1]))
+        return items
+
+    def file_bss(self):
+        """C bss sections that are zero bytes in the file."""
+        return [s for s in self.bss if s.key is None]
+
     def _patterns(self):
         count = {}
-        for s in self.sections:
+        for s in self.sections + self.bss:
             count[s.name] = count.get(s.name, 0) + 1
-        for s in self.sections:
+        for s in self.sections + self.bss:
             if s.name != '.text' and count[s.name] == 1:
                 s.pattern = 'KEEP(*("%s"))' % s.name
             else:
@@ -425,7 +536,8 @@ class Layout:
         # tiebreaks are (rank, n) throughout so equal keys always compare:
         # a block first, then the section keyed there, then its followers
         for b in self.blocks:
-            items.append((addr_key(b.addr), (0, 0), 'block', b))
+            if not b.nobits:
+                items.append((addr_key(b.addr), (0, 0), 'block', b))
         for n, s in enumerate(self.sections):
             if s.key is None:
                 continue
@@ -479,6 +591,10 @@ def fragment(layout, map_path):
                     note += ' .. ' + item.map_syms[-1][1]
             else:
                 note = 'anchor'
+            if item.name in SCRIPT_PLACED:
+                out.append('    /* %s: placed by sau2.ld (%06X %s) */'
+                           % (item.name, addr, note))
+                continue
             out.append('    %s%s/* %06X %s */'
                        % (item.pattern, pad(item.pattern, 0), addr, note))
     out.append('')
@@ -489,6 +605,114 @@ def fragment(layout, map_path):
     out.append('    KEEP(*(.moddata.*))')
     out.append('')
     return '\n'.join(out)
+
+
+def data_fragment(layout, map_path):
+    """build/sau2/layout_data.ld: INCLUDEd at the end of sau2.ld's `.data'
+    output section.  The C bss objects that are zero bytes in the file."""
+    out = ['/*',
+           ' * layout_data.ld - GENERATED by tools/gen_layout_ld.py; do not '
+           'edit.',
+           ' * INCLUDEd at the end of the `.data\' output section of sau2.ld: '
+           'the C bss',
+           ' * objects (-fdata-sections) that the image did not have in its '
+           'bss (no map',
+           ' * symbol, or one outside 0x%06X..0x%06X), as zero bytes in the '
+           'file.' % (IMAGE_BSS_START, IMAGE_BSS_END),
+           ' */']
+    for s in layout.file_bss():
+        if s.map_syms:
+            note = '%06X %s' % (s.map_syms[0][0][0], s.map_syms[0][1])
+        else:
+            note = 'no map symbol'
+        out.append('    %s%s/* %s */' % (s.pattern, pad(s.pattern, 0), note))
+    out.append('    *(.bss)')
+    out.append('    *(COMMON)')
+    out.append('')
+    return '\n'.join(out)
+
+
+def bss_fragment(layout, map_path, nfixups):
+    """build/sau2/layout_bss.ld: INCLUDEd inside sau2.ld's NOBITS `.bss'
+    output section.  First the room for the fixup table, then the image's
+    own bss, in map order; a block or object whose image address is page
+    aligned starts a page here too."""
+    out = ['/*',
+           ' * layout_bss.ld - GENERATED by tools/gen_layout_ld.py; do not '
+           'edit.',
+           ' * INCLUDEd inside the NOBITS `.bss\' output section of sau2.ld: '
+           'the zero-filled',
+           ' * module data blocks and C bss objects at or past the image\'s '
+           'RELOC 0x%06X,' % IMAGE_BSS_START,
+           ' * in map order (%s).  Not in the file.  A page-aligned image '
+           'address' % os.path.basename(map_path),
+           ' * starts a page here too (stack guard pages, the MMAP and PTTX '
+           'tables).',
+           ' */',
+           '',
+           '    /* RELOC: room for the fixup table tools/gen_rfc_fixups.py '
+           'appends here',
+           '     * (count.w + %d longwords, one per R_68K_32 relocation of '
+           'the inputs).' % nfixups,
+           '     * The image let its table (43 KB) overlay ACL_$DATA, which '
+           'ACL_$INIT',
+           '     * zeroes; ours is larger than ACL_$DATA, so it gets RAM of '
+           'its own and',
+           '     * clobbers no block (source-yheb). */',
+           '    RFC_FIXUP_TABLE_END = . + 2 + 4 * %d;' % max(nfixups, 1),
+           '    . = RFC_FIXUP_TABLE_END;',
+           '']
+    for key, _, kind, item in layout.nobits():
+        addr = key[0]
+        if addr % PAGE == 0:
+            out.append('    . = ALIGN(0x%X);' % PAGE)
+        if kind == 'block':
+            stmt = 'KEEP(*("%s"))' % item.section
+            out.append('    %s%s/* %06X module data %s (%s) */'
+                       % (stmt, pad(stmt, 0), addr, item.name, item.where))
+        else:
+            note = item.map_syms[0][1]
+            if len(item.map_syms) > 1:
+                note += ' .. ' + item.map_syms[-1][1]
+            out.append('    %s%s/* %06X %s */'
+                       % (item.pattern, pad(item.pattern, 0), addr, note))
+    out.append('')
+    out.append('    /* not listed above (none expected) */')
+    out.append('    *(.bss.*)')
+    out.append('')
+    return '\n'.join(out)
+
+
+# Output sections sau2.ld discards: their relocations never reach the link.
+DISCARDED_PREFIXES = ('.comment', '.note', '.eh_frame', '.debug')
+
+
+def count_fixups(objects):
+    """The number of R_68K_32 relocations in the allocated, kept sections
+    of the link inputs: the entries tools/gen_rfc_fixups.py will write
+    (ld resolves every one of them into a 32-bit address cell)."""
+    n = 0
+    for obj in objects:
+        elf = rfc_elf.Elf(obj)
+        for sec, _, typ, _, _ in elf.relocations():
+            if typ == rfc_elf.R_68K_32 and \
+                    not sec.name.startswith(DISCARDED_PREFIXES):
+                n += 1
+    return n
+
+
+def write_if_changed(path, text):
+    try:
+        with open(path) as f:
+            if f.read() == text:
+                # unchanged: refresh the timestamp so make is satisfied
+                os.utime(path)
+                return
+    except FileNotFoundError:
+        pass
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(text)
 
 
 def pad(text, extra):
@@ -524,7 +748,9 @@ def check_elf(layout, elf, nm):
     syms = elf_symbols(nm, elf)
     errors = []
     rows = []   # (map key, name, elf address)
-    for key, _, kind, item in layout.ordered():
+    # the loaded stream, then the NOBITS part (the image's bss), which is
+    # in map order too (IMAGE_BSS_START): one check covers both
+    for key, _, kind, item in layout.ordered() + layout.nobits():
         if kind == 'block':
             addrs = syms.get(item.name)
             if not addrs:
@@ -559,7 +785,8 @@ def check_elf(layout, elf, nm):
             if len(addrs) > 1:
                 errors.append('%s is defined %d times in %s'
                               % (name, len(addrs), elf))
-            rows.append((mkey, name, addrs[0], 'symbol'))
+            rows.append((mkey, name, addrs[0],
+                         'bss' if kind == 'bss' else 'symbol'))
     rows.sort(key=lambda r: r[0])
     inversions = 0
     first = None
@@ -571,10 +798,16 @@ def check_elf(layout, elf, nm):
     nsym = sum(1 for r in rows if r[3] == 'symbol')
     nblk = sum(1 for r in rows if r[3] == 'block')
     nanc = sum(1 for r in rows if r[3] == 'anchor')
+    nbss = sum(1 for r in rows if r[3] == 'bss')
+    nnob = sum(1 for t in layout.nobits() if t[2] == 'block')
     print('gen_layout_ld: %d map symbols, %d anchored section(s) and %d '
           'module data block(s) placed in map order (of %d map symbols; the '
           'rest are not translated or live in .data/.bss)'
           % (nsym, nanc, nblk, len(lm.symbols)))
+    print('gen_layout_ld: of those, the image\'s bss (past RELOC 0x%06X, '
+          'NOBITS): %d block(s) and %d C bss map symbol(s); %d C bss '
+          'object(s) are file zeros'
+          % (IMAGE_BSS_START, nnob, nbss, len(layout.file_bss())))
     catch = layout.catch_all()
     nfun = sum(len(s.symbols) for s in catch)
     print('gen_layout_ld: %d code section(s) with %d symbol(s) in the '
@@ -610,6 +843,9 @@ def main():
     if not os.path.exists(args.map):
         fail(['link map %s not found (set SAU2_MAP)' % args.map])
     linkmap = LinkMap(args.map)
+    if linkmap.symbols.get('RELOC', (None,))[0] != IMAGE_BSS_START:
+        fail(['the map\'s RELOC is not 0x%06X (IMAGE_BSS_START)'
+              % IMAGE_BSS_START])
 
     blocks, errors = scan_sources(args.root)
     if errors:
@@ -630,26 +866,24 @@ def main():
         return
 
     if args.check_only:
+        nob = len(layout.nobits())
         print('gen_layout_ld: %d section(s) placed, %d block(s), '
-              '%d in the catch-all; checks passed'
-              % (len(layout.ordered()) - len(blocks), len(blocks),
-                 len(layout.catch_all())))
+              '%d in the catch-all, %d NOBITS item(s), %d C bss object(s) '
+              'as file zeros; checks passed'
+              % (sum(1 for t in layout.ordered() if t[2] == 'section'),
+                 len(blocks), len(layout.catch_all()), nob,
+                 len(layout.file_bss())))
         return
     if not args.output:
         fail(['-o, --check-only or --check-elf is required'])
 
-    text = fragment(layout, args.map)
-    try:
-        with open(args.output) as f:
-            if f.read() == text:
-                # unchanged: refresh the timestamp so make is satisfied
-                os.utime(args.output)
-                return
-    except FileNotFoundError:
-        pass
-    os.makedirs(os.path.dirname(args.output) or '.', exist_ok=True)
-    with open(args.output, 'w') as f:
-        f.write(text)
+    out_dir = os.path.dirname(args.output) or '.'
+    write_if_changed(args.output, fragment(layout, args.map))
+    write_if_changed(os.path.join(out_dir, 'layout_data.ld'),
+                     data_fragment(layout, args.map))
+    write_if_changed(os.path.join(out_dir, 'layout_bss.ld'),
+                     bss_fragment(layout, args.map,
+                                  count_fixups(args.objects)))
 
 
 if __name__ == '__main__':
